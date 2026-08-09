@@ -12,63 +12,70 @@ Bibou is a minimal, turn-based puzzle game on a small grid where you use tile-mo
 
 ## 3. Core loops
 
-1. Player observes the current grid state and identifies their goal position
-2. Player selects an action (move tile in a direction, or similar mechanic)
-3. Game applies the action and updates the grid
-4. Player checks if goal is reached; if not, repeat with new state to analyze
-5. (Escalate: later puzzles have more tiles, tighter spaces, or more complex interactions)
+1. Player observes the current grid state and counts remaining action budget
+2. Player selects an action: swap adjacent tiles, rotate a 2×2 square, or shift a row/column
+3. Game applies the action and updates the grid (action budget decreases by 1)
+4. Player checks if goal is reached; if yes, victory; if no and actions remain, loop to step 1
+5. If actions exhausted and goal not reached: retry puzzle from start
 
 ## 4. Core mechanics
 
 | Mechanic | Description | Input |
 |---|---|---|
-| Tile movement | Move a tile (or group of tiles) in a cardinal direction | Click/tap tile + arrow key or directional pad |
-| Character positioning | A character occupies a tile; moving that tile moves the character | Implicit (character is on a tile) |
-| Goal detection | Win condition is reached when the character's tile occupies a goal tile | Automatic check each turn |
+| Swap | Swap two adjacent tiles (horizontal or vertical) | Select first tile, select adjacent tile |
+| Rotate | Rotate four tiles in a 2×2 square 90° clockwise | Select center of 2×2 area, confirm rotation |
+| Shift | Shift an entire row or column one tile in a direction | Select row/column, select direction |
+| Character positioning | A character occupies a tile; affected by all tile actions | Implicit (character moves with its tile) |
+| Goal detection | Win condition triggered when character's tile reaches goal | Automatic check after each action |
+| Action budget | Limited number of actions per puzzle (exact number TBD per puzzle) | Displayed UI counter |
 
 ## 5. Constraints
 
 - Grid size: 5×5 (or similar small, digestible size)
+- Limited action budget per puzzle (exact count varies by puzzle design)
 - Turn-based only (no real-time pressure)
+- Three action types only in MVP: swap, rotate, shift
 - No build tooling: Phaser 3 loaded via CDN `<script>` tag, plain JS
 - Portrait/mobile aspect ratio (~9:16)
 
 ## 6. Win / lose conditions
 
-- **Win:** Character reaches the goal tile (treasure, exit, etc.)
-- **Lose:** (TBD — unclear if you lose, or just take more turns)
-- **Session end:** One puzzle per session; victory screen shows turn count and offers next puzzle
+- **Win:** Character reaches the goal tile within the action budget
+- **Lose:** Action budget exhausted before character reaches goal → retry puzzle from start
+- **Session end:** Player completes a puzzle (win) or gives up; victory screen shows action count used vs. budget and offers next puzzle
 
 ## 7. Controls
 
 | Action | Input (keyboard) | Input (touch/gamepad) |
 |---|---|---|
-| Select tile | Click tile | Tap tile |
-| Move tile up | Press ↑ or W | D-pad ↑ |
-| Move tile down | Press ↓ or S | D-pad ↓ |
-| Move tile left | Press ← or A | D-pad ← |
-| Move tile right | Press → or D | D-pad → |
-| Undo move | Press U or Ctrl+Z | Long-press tile (TBD) |
+| Select tile/area | Click tile | Tap tile |
+| Swap adjacent tiles | Select first tile, then adjacent tile + confirm | Tap first tile, tap adjacent, confirm |
+| Rotate 2×2 square | Select 2×2 area center, press R | Select center, tap rotate button |
+| Shift row/column | Select row/column, press direction key | Select row/column, tap direction |
+| Undo last action | Press U or Ctrl+Z | Undo button (if MVP supports) |
 
 ## 8. Scope — MVP vs. cut
 
 **MVP (must have to test if the core loop is fun):**
-- 5×5 grid rendering with visible tiles
-- One character tile and one goal tile
-- Tile movement in four cardinal directions (press arrow, tile moves)
-- Turn counter
-- Win detection (character reaches goal)
-- One playable puzzle
+- 5×5 grid rendering with tiles and visual identification
+- One character tile, one goal tile
+- Three action types: swap adjacent, rotate 2×2, shift row/column
+- Action budget counter (e.g., "5 / 8 actions used")
+- Win detection (character on goal)
+- Lose detection (budget exhausted, no win)
+- One hand-crafted puzzle that requires all three action types to solve
+- Retry button when puzzle is lost or won
 
 **Nice to have (only after MVP works):**
 - Undo / redo system
-- Multiple puzzle levels
-- A puzzle selector / level menu
-- Tile types (solid, slippery, springs, etc.)
-- Character animations during movement
+- Multiple puzzle levels with progressive difficulty
+- Puzzle selector / level menu
+- Visual tile types (solid blocks, obstacles, springs, etc.) with special behaviors
+- Character/goal animations
+- Tutorial or hints system
 
 **Explicitly out of scope:**
-- Sound effects or music (can add later)
+- Sound effects or music
 - Complex narrative or story
 - Leaderboards or scoring
 - Mobile app (web-only for now)

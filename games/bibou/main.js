@@ -17,7 +17,7 @@ class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.createButton(centerX, 460, 'Load');
+    this.createButton(centerX, 460, 'Start');
     this.createButton(centerX, 540, 'Settings');
   }
 

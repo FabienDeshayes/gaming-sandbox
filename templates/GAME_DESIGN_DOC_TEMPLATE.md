@@ -14,9 +14,10 @@ One sentence describing the game, the kind you'd say out loud to explain it.
 
 2-3 sentences: what the player does, why it's fun, what makes it different from similar games.
 
-## 3. Core loop
+## 3. Core loops
 
-The 10-30 second loop the player repeats. Be literal and specific.
+The 10-30 second loop(s) the player repeats. Be literal and specific. List more than one if the
+game has, e.g., a moment-to-moment loop and a session/meta loop.
 
 1. Player does X
 2. Game responds with Y
@@ -31,19 +32,26 @@ The 2-4 mechanics that actually matter. For a prototype, resist listing more tha
 |---|---|---|
 | | | |
 
-## 5. Win / lose conditions
+## 5. Constraints
+
+Hard limits the design has to work within — self-imposed or not. (e.g. no external assets,
+one-button input, must run at 60fps on mobile, build in a weekend.)
+
+-
+
+## 6. Win / lose conditions
 
 - **Win:** 
 - **Lose:** 
 - **Session end:** (e.g. score-based, timer, endless)
 
-## 6. Controls
+## 7. Controls
 
 | Action | Input (keyboard/mouse) | Input (touch/gamepad, if any) |
 |---|---|---|
 | | | |
 
-## 7. Scope — MVP vs. cut
+## 8. Scope — MVP vs. cut
 
 Be ruthless. Anything not in "MVP" doesn't get built until MVP is playable and fun.
 
@@ -56,29 +64,20 @@ Be ruthless. Anything not in "MVP" doesn't get built until MVP is playable and f
 **Explicitly out of scope:**
 -
 
-## 8. Art & audio style
+## 9. Art & audio style
 
 - **Visual style:** (e.g. flat-color shapes, pixel art, minimalist)
 - **Reference images/games:**
 - **Audio:** (sfx needed, music mood, or "none for prototype")
 
-## 9. Tech notes
+## 10. Theme
+
+What the game is "about," if anything, and how that shows up (setting, tone, narrative dressing).
+Fine to leave as "none — mechanics-first prototype."
+
+## 11. Tech notes
 
 - **Platform:** Web (2D)
 - **Engine/library:** (e.g. vanilla JS + Canvas, Phaser, Pixi.js)
 - **Screen size / aspect ratio:**
 - **Key technical risks:** (e.g. collision detection approach, performance with N entities)
-
-## 10. Milestones
-
-- [ ] Core loop playable (ugly is fine)
-- [ ] MVP feature-complete
-- [ ] Playtest pass #1
-- [ ] Polish (art/audio/juice)
-- [ ] Ship / share
-
-## 11. Open questions
-
-Things you're not sure about yet — revisit these during/after prototyping.
-
--

@@ -3,6 +3,11 @@
 > Mini puzzle game about moving tiles on a grid to reach a goal state.
 
 > See [`LEVEL_DESIGN.md`](./LEVEL_DESIGN.md) for the coordinate system, precise action specs, and per-level data.
+> See [`TESTING.md`](./TESTING.md) for how to drive the game in a headless browser and verify a level.
+
+> **Doc convention:** these docs describe the game *as it is now*. When something changes, edit the
+> relevant sections in place — don't leave "superseded"/"previously"/"was X, now Y" notes. Git history
+> is the changelog; this doc is the current source of truth.
 
 ## 1. One-liner
 

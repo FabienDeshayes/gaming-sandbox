@@ -3,6 +3,11 @@
 > Copy this file into your game's folder (e.g. `games/your-game-name/DESIGN.md`) and fill it in.
 > Keep it short. This is a working doc for a small prototype, not a pitch deck — if a section
 > doesn't matter for this game, delete it instead of leaving it blank.
+>
+> **Keep it current, not a changelog.** These docs describe the game *as it is now*. When a
+> decision changes, edit the affected sections in place so they read as the single source of
+> truth — don't append "superseded", "previously", or "was X, now Y" notes. Git history is the
+> record of what changed; the doc is the record of what's true.
 
 ## 1. One-liner
 

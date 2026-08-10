@@ -2,6 +2,8 @@
 
 > Companion to [`DESIGN.md`](./DESIGN.md). That document covers the pitch, loop, and scope. This one specifies the board, coordinate system, and action mechanics precisely enough to implement, and defines each level's data.
 
+> **Doc convention:** this doc describes the game *as it is now* — edit sections in place when things change, rather than logging what changed (see `DESIGN.md`). To verify a level actually plays as specified here, see [`TESTING.md`](./TESTING.md).
+
 ## 1. Board
 
 The **Board** is the whole 5×5 tile grid for a level — the union of both layers, at every coordinate.
@@ -40,14 +42,14 @@ Implementation note: store each layer as a 2D array indexed `grid[y][x]` (row-ma
 
 ### 2.1 Borderless wraparound
 
-The board has no edges — it loops. This applies to **any** entity movement on the board, regardless of which action causes it (Move today; Rotate/Shift once they're specified).
+The board has no edges — it loops. This applies to **any** entity movement on the board, regardless of which action causes it (Move and Rotate today; Shift once it's specified).
 
 - If a move would take a coordinate to index `5` (or beyond), it wraps to index `0`.
 - If a move would take a coordinate to index `-1` (or below), it wraps to index `4`.
 - Formally, for board size `N` (currently 5): `newCoord = ((coord + delta) % N + N) % N`.
 - Wraparound itself is unconditional — computing the wrapped destination never fails, and the edge itself never blocks a move. Whether the move actually succeeds still depends on what's at that destination: if the wrapped-to tile is a blocking Background-layer tile (e.g. a wall, §1.1), the move is illegal for the same reason a non-wrapped move onto a wall would be.
 
-This supersedes the "blocked by ... board edges" language for Move in `DESIGN.md` — moving off one side is always legal *as far as the edge is concerned* and lands on the opposite side, subject to the normal Background-layer legality check.
+Moving off one side of the board is therefore always legal *as far as the edge is concerned* and lands on the opposite side, subject only to the normal Background-layer legality check.
 
 ## 3. Entities
 

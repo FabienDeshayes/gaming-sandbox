@@ -2,6 +2,8 @@
 
 > Mini puzzle game about moving tiles on a grid to reach a goal state.
 
+> See [`LEVEL_DESIGN.md`](./LEVEL_DESIGN.md) for the coordinate system, precise action specs, and per-level data.
+
 ## 1. One-liner
 
 A turn-based grid puzzle game where you rearrange tiles to guide a character to their goal.
@@ -39,18 +41,19 @@ Selecting an action follows the same three-beat flow: **tap the card → tap the
 
 | Action | Effect on the board | Target selection |
 |---|---|---|
-| Move | Moves a single entity one cell in a cardinal direction, into an adjacent open cell. Blocked by walls and board edges. | Tap entity → tap direction |
+| Move | Moves a single entity one cell in a cardinal direction, into an adjacent open cell. Blocked by walls; the board is borderless and wraps, so moving past an edge is always legal. | Tap entity → tap direction |
 | Rotate | Rotates the contents of a 2×2 area 90° clockwise. Entities inside move with it; empty cells rotate too. | Tap the 2×2 area |
 | Shift | Shifts every entity in a row or column one cell in a direction. | Tap row/column → tap direction |
 
 Notes:
-- An action that would produce an illegal result (pushing an entity into a wall or off the grid) is rejected before confirmation, and costs nothing.
+- An action that would produce an illegal result (pushing an entity into a wall) is rejected before confirmation, and costs nothing. Moving off the grid is never illegal — the board wraps.
 - Rotate and Shift are in the MVP but only get interesting once there is more than one entity on the board — puzzle 1 is solvable with Move alone.
 - Post-MVP, this section is where new action types get added; the card UI is designed to accept more without changing the loop.
 
 ## 6. Constraints
 
 - Grid size: 5×5 (or similar small, digestible size)
+- Board is borderless and loops: an entity moving past index 4 wraps to index 0 (and vice versa) on both axes — there is no "off the grid"
 - Two-layer grid: static Board layer (floor/walls/goal) + movable Entity layer (character, later items) — actions only ever affect the Entity layer
 - Limited action budget per puzzle (exact count varies by puzzle design)
 - Turn-based only (no real-time pressure)

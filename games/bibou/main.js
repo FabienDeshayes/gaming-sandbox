@@ -10,6 +10,19 @@ const LEVEL_1 = {
   actionBudget: { move: 2 },
 };
 
+// Level 2 introduces Rotate (see LEVEL_DESIGN.md §5.3/§7). Solvable with two
+// rotations: char (1,2) → (2,2) via CW rotate around (2,3), then (2,2) → (2,3)
+// via CW rotate around (1,3).
+const LEVEL_2 = {
+  id: 2,
+  gridSize: 5,
+  background: { goal: { x: 2, y: 3 } },
+  entities: { character: { x: 1, y: 2 } },
+  actionBudget: { rotate: 2 },
+};
+
+const LEVELS = [LEVEL_1, LEVEL_2];
+
 // Direction deltas, per LEVEL_DESIGN.md §5.1.
 const DIRECTIONS = {
   Up: { x: 0, y: -1 },
@@ -17,6 +30,23 @@ const DIRECTIONS = {
   Left: { x: -1, y: 0 },
   Right: { x: 1, y: 0 },
 };
+
+// The 8 tiles surrounding a rotation center, listed in CLOCKWISE order starting
+// from the top-left. Rotate shifts each surrounding tile's contents one step
+// along this ring (clockwise, or the reverse for anticlockwise). See
+// LEVEL_DESIGN.md §5.3.
+const RING = [
+  { x: -1, y: -1 }, // TL (0)
+  { x: 0, y: -1 }, // T  (1)
+  { x: 1, y: -1 }, // TR (2)
+  { x: 1, y: 0 }, // R  (3)
+  { x: 1, y: 1 }, // BR (4)
+  { x: 0, y: 1 }, // B  (5)
+  { x: -1, y: 1 }, // BL (6)
+  { x: -1, y: 0 }, // L  (7)
+];
+
+const ACTION_LABELS = { move: 'Move', rotate: 'Rotate' };
 
 // --- Shared UI helper --------------------------------------------------------
 // A single interactive text button, reused by every scene. `onClick` is the
@@ -56,12 +86,44 @@ class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // Start and Test both lead to a level picker; Test carries the unlimited
+    // flag through so any chosen level runs with an unlimited action budget.
     createButton(this, centerX, 440, 'Start', () =>
-      this.scene.start('PuzzleScene', { level: LEVEL_1 })
+      this.scene.start('LevelSelectScene', { unlimited: false })
     );
     createButton(this, centerX, 520, 'Settings', () => {});
     createButton(this, centerX, 600, 'Test', () =>
-      this.scene.start('PuzzleScene', { level: LEVEL_1, unlimited: true })
+      this.scene.start('LevelSelectScene', { unlimited: true })
+    );
+  }
+}
+
+// --- Level selection ---------------------------------------------------------
+class LevelSelectScene extends Phaser.Scene {
+  constructor() {
+    super('LevelSelectScene');
+  }
+
+  create(data) {
+    const unlimited = data.unlimited === true;
+    const centerX = this.cameras.main.width / 2;
+
+    this.add
+      .text(centerX, 200, unlimited ? 'Test — Select Level' : 'Select Level', {
+        fontFamily: 'sans-serif',
+        fontSize: unlimited ? '38px' : '44px',
+        color: unlimited ? '#ffb74d' : '#ffffff',
+      })
+      .setOrigin(0.5);
+
+    LEVELS.forEach((level, i) => {
+      createButton(this, centerX, 320 + i * 90, `Level ${level.id}`, () =>
+        this.scene.start('PuzzleScene', { level, unlimited })
+      );
+    });
+
+    createButton(this, centerX, 320 + LEVELS.length * 90 + 40, 'Back', () =>
+      this.scene.start('TitleScene')
     );
   }
 }
@@ -87,11 +149,22 @@ class PuzzleScene extends Phaser.Scene {
     this.characterPos = { ...this.level.entities.character };
     this.goalPos = { ...this.level.background.goal };
     this.movesUsed = 0;
-    this.budget = this.unlimited ? Infinity : this.level.actionBudget.move;
 
-    this.selectedAction = null; // null | 'move'
-    this.targetSelected = false;
-    this.arrows = [];
+    // Available actions are the keys of actionBudget with a positive budget;
+    // the shared action pool is their sum (each action costs 1).
+    this.availableActions = Object.keys(this.level.actionBudget).filter(
+      (k) => this.level.actionBudget[k] > 0
+    );
+    const totalBudget = Object.values(this.level.actionBudget).reduce(
+      (a, b) => a + b,
+      0
+    );
+    this.budget = this.unlimited ? Infinity : totalBudget;
+
+    this.selectedAction = null; // null | 'move' | 'rotate'
+    this.targetSelected = false; // move: character tapped; rotate: center tapped
+    this.rotateCenter = null; // {x, y} once a rotation center is chosen
+    this.controls = []; // transient UI (arrows, highlights)
     this.gameOver = false;
 
     this.drawBackground();
@@ -101,7 +174,7 @@ class PuzzleScene extends Phaser.Scene {
     this.renderCharacter();
 
     this.buildHud();
-    this.buildActionCard();
+    this.buildActionCards();
     this.setupBoardInput();
   }
 
@@ -153,29 +226,47 @@ class PuzzleScene extends Phaser.Scene {
     this.hudText = this.add.text(
       BOARD_X,
       160,
-      `Moves: ${this.movesUsed} / ${budgetLabel}`,
+      `Actions: ${this.movesUsed} / ${budgetLabel}`,
       { fontFamily: 'sans-serif', fontSize: '28px', color: '#ffffff' }
     );
     if (this.unlimited) {
-      this.add.text(GAME_WIDTH - BOARD_X, 165, 'TEST', {
-        fontFamily: 'sans-serif',
-        fontSize: '22px',
-        color: '#ffb74d',
-      }).setOrigin(1, 0);
+      this.add
+        .text(GAME_WIDTH - BOARD_X, 165, 'TEST', {
+          fontFamily: 'sans-serif',
+          fontSize: '22px',
+          color: '#ffb74d',
+        })
+        .setOrigin(1, 0);
     }
   }
 
   updateHud() {
     const budgetLabel = this.unlimited ? '∞' : this.budget;
-    this.hudText.setText(`Moves: ${this.movesUsed} / ${budgetLabel}`);
+    this.hudText.setText(`Actions: ${this.movesUsed} / ${budgetLabel}`);
   }
 
-  buildActionCard() {
-    this.moveCard = createButton(this, GAME_WIDTH / 2, 720, 'Move', () =>
-      this.toggleMoveCard()
-    );
+  buildActionCards() {
+    // Lay the available action cards out in a centered row near the bottom.
+    this.actionCards = {};
+    const n = this.availableActions.length;
+    const spacing = 170;
+    const startX = GAME_WIDTH / 2 - ((n - 1) * spacing) / 2;
+    this.availableActions.forEach((action, i) => {
+      this.actionCards[action] = createButton(
+        this,
+        startX + i * spacing,
+        720,
+        ACTION_LABELS[action],
+        () => this.toggleActionCard(action)
+      );
+    });
+
+    this.beginHint =
+      n === 1
+        ? `Tap ${ACTION_LABELS[this.availableActions[0]]} to begin`
+        : 'Select an action to begin';
     this.hintText = this.add
-      .text(GAME_WIDTH / 2, 790, 'Tap Move to begin', {
+      .text(GAME_WIDTH / 2, 790, this.beginHint, {
         fontFamily: 'sans-serif',
         fontSize: '20px',
         color: '#aaaaaa',
@@ -187,25 +278,31 @@ class PuzzleScene extends Phaser.Scene {
     this.hintText.setText(msg);
   }
 
-  toggleMoveCard() {
+  toggleActionCard(action) {
     if (this.gameOver) return;
-    if (this.selectedAction === 'move') {
+    if (this.selectedAction === action) {
       this.clearSelection();
-      this.setHint('Tap Move to begin');
+      this.setHint(this.beginHint);
       return;
     }
-    this.selectedAction = 'move';
-    this.targetSelected = false;
-    this.clearArrows();
-    this.moveCard.setStyle({ backgroundColor: '#1565c0' });
-    this.setHint('Tap the character');
+    this.clearSelection();
+    this.selectedAction = action;
+    this.actionCards[action].setStyle({ backgroundColor: '#1565c0' });
+    this.setHint(
+      action === 'move'
+        ? 'Tap the character'
+        : 'Tap a tile for the rotation center'
+    );
   }
 
   clearSelection() {
     this.selectedAction = null;
     this.targetSelected = false;
-    this.clearArrows();
-    this.moveCard.setStyle({ backgroundColor: '#333333' });
+    this.rotateCenter = null;
+    this.clearControls();
+    Object.values(this.actionCards).forEach((c) =>
+      c.setStyle({ backgroundColor: '#333333' })
+    );
   }
 
   // --- Input ---
@@ -224,15 +321,20 @@ class PuzzleScene extends Phaser.Scene {
 
       // Swipe: only meaningful once a target is selected.
       if (this.targetSelected && dist >= SWIPE_THRESHOLD) {
-        const dir =
-          Math.abs(dx) > Math.abs(dy)
-            ? dx > 0
-              ? 'Right'
-              : 'Left'
-            : dy > 0
-            ? 'Down'
-            : 'Up';
-        this.applyMove(dir);
+        if (this.selectedAction === 'move') {
+          const dir =
+            Math.abs(dx) > Math.abs(dy)
+              ? dx > 0
+                ? 'Right'
+                : 'Left'
+              : dy > 0
+              ? 'Down'
+              : 'Up';
+          this.applyMove(dir);
+        } else if (this.selectedAction === 'rotate') {
+          // Right = clockwise, left = anticlockwise; vertical swipes are ignored.
+          if (Math.abs(dx) > Math.abs(dy)) this.applyRotate(dx > 0);
+        }
         return;
       }
 
@@ -244,7 +346,11 @@ class PuzzleScene extends Phaser.Scene {
   }
 
   handleBoardTap(cell) {
-    if (this.selectedAction !== 'move') return;
+    if (this.selectedAction === 'move') this.handleMoveTap(cell);
+    else if (this.selectedAction === 'rotate') this.handleRotateTap(cell);
+  }
+
+  handleMoveTap(cell) {
     const onCharacter =
       cell.x === this.characterPos.x && cell.y === this.characterPos.y;
 
@@ -259,13 +365,34 @@ class PuzzleScene extends Phaser.Scene {
     // Target already selected: tapping the character again cancels.
     if (onCharacter) {
       this.targetSelected = false;
-      this.clearArrows();
+      this.clearControls();
       this.setHint('Tap the character');
     }
   }
 
+  handleRotateTap(cell) {
+    if (!this.targetSelected) {
+      this.rotateCenter = { ...cell };
+      this.targetSelected = true;
+      this.showRotateControls();
+      this.setHint('Tap ↺ / ↻ or swipe left (CCW) / right (CW)');
+      return;
+    }
+    // Center already chosen: tapping it again cancels, tapping elsewhere
+    // re-centers the rotation on the new tile.
+    if (cell.x === this.rotateCenter.x && cell.y === this.rotateCenter.y) {
+      this.targetSelected = false;
+      this.rotateCenter = null;
+      this.clearControls();
+      this.setHint('Tap a tile for the rotation center');
+    } else {
+      this.rotateCenter = { ...cell };
+      this.showRotateControls();
+    }
+  }
+
   showArrows() {
-    this.clearArrows();
+    this.clearControls();
     const c = this.cellCenter(this.characterPos.x, this.characterPos.y);
     const offset = CELL * 0.7;
     const specs = [
@@ -289,21 +416,91 @@ class PuzzleScene extends Phaser.Scene {
         if (event) event.stopPropagation();
         this.applyMove(s.dir);
       });
-      this.arrows.push(arrow);
+      this.controls.push(arrow);
     });
   }
 
-  clearArrows() {
-    this.arrows.forEach((a) => a.destroy());
-    this.arrows = [];
+  showRotateControls() {
+    this.clearControls();
+    const c = this.cellCenter(this.rotateCenter.x, this.rotateCenter.y);
+
+    // Outline the center tile and the 8 surrounding tiles that will rotate.
+    const centerHl = this.add
+      .rectangle(c.px, c.py, CELL, CELL, 0x000000, 0)
+      .setStrokeStyle(3, 0xffb74d);
+    this.controls.push(centerHl);
+    RING.forEach((o) => {
+      const rx = this.wrap(this.rotateCenter.x + o.x);
+      const ry = this.wrap(this.rotateCenter.y + o.y);
+      const rc = this.cellCenter(rx, ry);
+      const ring = this.add
+        .rectangle(rc.px, rc.py, CELL - 6, CELL - 6, 0x000000, 0)
+        .setStrokeStyle(2, 0x1565c0);
+      this.controls.push(ring);
+    });
+
+    // Two rotation arrows above the center (drop below if there's no room).
+    let ay = c.py - CELL * 0.9;
+    if (ay < BOARD_Y + CELL * 0.2) ay = c.py + CELL * 0.9;
+    const specs = [
+      { glyph: '↺', dx: -30, clockwise: false }, // anticlockwise
+      { glyph: '↻', dx: 30, clockwise: true }, // clockwise
+    ];
+    specs.forEach((s) => {
+      const arrow = this.add
+        .text(c.px + s.dx, ay, s.glyph, {
+          fontFamily: 'sans-serif',
+          fontSize: '38px',
+          color: '#ffffff',
+          backgroundColor: '#1565c0',
+          padding: { x: 8, y: 2 },
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+      arrow.on('pointerdown', (pointer, lx, ly, event) => {
+        if (event) event.stopPropagation();
+        this.applyRotate(s.clockwise);
+      });
+      this.controls.push(arrow);
+    });
   }
 
-  // --- Move logic ---
+  clearControls() {
+    this.controls.forEach((a) => a.destroy());
+    this.controls = [];
+  }
+
+  // --- Shared helpers ---
   wrap(value) {
     const n = this.size;
     return ((value % n) + n) % n;
   }
 
+  isBlocked() {
+    // No blocking background tiles yet (walls are post-MVP).
+    return false;
+  }
+
+  // Spend an action and resolve the outcome (win → budget → continue).
+  finishAction() {
+    this.movesUsed += 1;
+    this.clearSelection();
+    this.renderCharacter();
+    this.updateHud();
+
+    if (
+      this.characterPos.x === this.goalPos.x &&
+      this.characterPos.y === this.goalPos.y
+    ) {
+      this.showOverlay(true);
+    } else if (this.movesUsed >= this.budget) {
+      this.showOverlay(false);
+    } else {
+      this.setHint('Select an action to continue');
+    }
+  }
+
+  // --- Move logic ---
   applyMove(direction) {
     if (this.gameOver || this.selectedAction !== 'move' || !this.targetSelected)
       return;
@@ -322,24 +519,42 @@ class PuzzleScene extends Phaser.Scene {
     }
 
     this.characterPos = dest;
-    this.movesUsed += 1;
-    this.clearSelection();
-    this.renderCharacter();
-    this.updateHud();
-
-    // Resolve outcome — win check first, then budget (never in test mode).
-    if (this.characterPos.x === this.goalPos.x && this.characterPos.y === this.goalPos.y) {
-      this.showOverlay(true);
-    } else if (this.movesUsed >= this.budget) {
-      this.showOverlay(false);
-    } else {
-      this.setHint('Tap Move to continue');
-    }
+    this.finishAction();
   }
 
-  isBlocked() {
-    // No blocking background tiles yet (walls are post-MVP).
-    return false;
+  // --- Rotate logic ---
+  // Rotates the 8 tiles around `rotateCenter` one step along the ring. Only the
+  // character is an entity today, so we relocate it if it sits on the ring;
+  // empty tiles rotate too, so the action is always legal and costs 1.
+  applyRotate(clockwise) {
+    if (
+      this.gameOver ||
+      this.selectedAction !== 'rotate' ||
+      !this.targetSelected
+    )
+      return;
+
+    const center = this.rotateCenter;
+    let idx = -1;
+    for (let i = 0; i < RING.length; i++) {
+      const rx = this.wrap(center.x + RING[i].x);
+      const ry = this.wrap(center.y + RING[i].y);
+      if (rx === this.characterPos.x && ry === this.characterPos.y) {
+        idx = i;
+        break;
+      }
+    }
+
+    if (idx !== -1) {
+      const n = RING.length;
+      const next = clockwise ? (idx + 1) % n : (idx - 1 + n) % n;
+      this.characterPos = {
+        x: this.wrap(center.x + RING[next].x),
+        y: this.wrap(center.y + RING[next].y),
+      };
+    }
+
+    this.finishAction();
   }
 
   // --- Overlay ---
@@ -352,7 +567,7 @@ class PuzzleScene extends Phaser.Scene {
       .setOrigin(0, 0);
 
     this.add
-      .text(GAME_WIDTH / 2, 300, won ? 'You win!' : 'Out of moves', {
+      .text(GAME_WIDTH / 2, 300, won ? 'You win!' : 'Out of actions', {
         fontFamily: 'sans-serif',
         fontSize: '44px',
         color: won ? '#a5d6a7' : '#ef9a9a',
@@ -364,7 +579,7 @@ class PuzzleScene extends Phaser.Scene {
       .text(
         GAME_WIDTH / 2,
         370,
-        `Moves used: ${this.movesUsed} / ${budgetLabel}`,
+        `Actions used: ${this.movesUsed} / ${budgetLabel}`,
         { fontFamily: 'sans-serif', fontSize: '26px', color: '#ffffff' }
       )
       .setOrigin(0.5);
@@ -372,7 +587,10 @@ class PuzzleScene extends Phaser.Scene {
     createButton(this, GAME_WIDTH / 2, 470, 'Retry', () =>
       this.scene.restart({ level: this.level, unlimited: this.unlimited })
     );
-    createButton(this, GAME_WIDTH / 2, 550, 'Back to title', () =>
+    createButton(this, GAME_WIDTH / 2, 550, 'Level select', () =>
+      this.scene.start('LevelSelectScene', { unlimited: this.unlimited })
+    );
+    createButton(this, GAME_WIDTH / 2, 630, 'Back to title', () =>
       this.scene.start('TitleScene')
     );
   }
@@ -391,5 +609,5 @@ new Phaser.Game({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
   },
-  scene: [TitleScene, PuzzleScene],
+  scene: [TitleScene, LevelSelectScene, PuzzleScene],
 });

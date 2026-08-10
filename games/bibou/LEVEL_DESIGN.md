@@ -96,7 +96,7 @@ Suggested shape for encoding a level, for whoever implements level loading:
   "id": 1,
   "gridSize": 5,
   "background": {
-    "goal": { "x": 1, "y": 4 }
+    "goal": { "x": 3, "y": 2 }
   },
   "entities": {
     "character": { "x": 1, "y": 2 }
@@ -119,13 +119,13 @@ The introductory level: solvable with Move alone, per `DESIGN.md`'s scope for Pu
 |---|---|
 | Grid | 5×5, no walls |
 | Character start | `(1, 2)` |
-| Goal | `(1, 4)` |
+| Goal | `(3, 2)` |
 | Available actions | Move only |
 | Action budget | 2 |
 
-**Intended solution:** the goal is 2 tiles straight down from the start (`y: 2 → 4`, same `x`). Moving `Down` twice solves it with zero slack:
+**Intended solution:** the goal is 2 tiles to the right of the start (`x: 1 → 3`, same `y`). Moving `Right` twice solves it with zero slack:
 
-1. Move `(1, 2)` `Down` → character now at `(1, 3)`
-2. Move `(1, 3)` `Down` → character now at `(1, 4)` = goal → **win**
+1. Move `(1, 2)` `Right` → character now at `(2, 2)`
+2. Move `(2, 2)` `Right` → character now at `(3, 2)` = goal → **win**
 
 The tight budget (exactly 2, no margin for a wrong move) is intentional: it teaches the Move action and the coordinate system without offering an easier alternate path. No wraparound is required to solve Level 1, since the shortest path stays within the grid — wraparound remains available but isn't needed here.

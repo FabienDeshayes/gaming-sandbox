@@ -42,7 +42,7 @@ Selecting an action follows a **tap the card → tap the target on the board →
 | Action | Effect on the board | Target selection |
 |---|---|---|
 | Move | Moves a single entity one cell in a cardinal direction, into an adjacent open cell. Blocked by walls; the board is borderless and wraps, so moving past an edge is always legal. | Tap entity → tap a direction arrow (or swipe) — the move executes on direction, no separate confirm |
-| Rotate | Rotates the contents of a 2×2 area 90° clockwise. Entities inside move with it; empty cells rotate too. | Tap the 2×2 area |
+| Rotate | Shifts the 8 tiles surrounding a chosen center tile one step around their ring, clockwise or anticlockwise. Entities inside move with it; empty cells rotate too; the center tile is untouched. See `LEVEL_DESIGN.md` §5.2 for the exact ring order. | Tap center tile → tap a rotation arrow (↺/↻) or swipe right (CW) / left (CCW) |
 | Shift | Shifts every entity in a row or column one cell in a direction. | Tap row/column → tap direction |
 
 Notes:
@@ -122,4 +122,5 @@ Mechanics-first prototype. "Bibou" could be a character name (the one you're mov
 - **Screen size / aspect ratio:** 480x854 (portrait, ~9:16), fixed size
 - **Grid rendering:** Canvas or Phaser Graphics API (simple rects + text)
 - **Key technical risks:** Tile movement input/state (ensuring clean tile-by-tile motion, not continuous)
-- **Test mode:** the title screen has a **Test** entry alongside Start. It launches a level (Level 1 for now) with an *unlimited* action budget, so the game can be explored freely for development/testing without the normal player-facing move limit. The lose condition never fires in test mode; the win condition still works.
+- **Level selection:** both **Start** and **Test** on the title screen lead to a level picker (currently Level 1 and Level 2) before the puzzle loads, so any level can be chosen directly. Start launches the chosen level with its normal budget; Test launches it with an unlimited budget.
+- **Test mode:** the title screen has a **Test** entry alongside Start. Via the level picker it launches any level (Level 1 or Level 2) with an *unlimited* action budget, so the game can be explored freely for development/testing without the normal player-facing move limit. The lose condition never fires in test mode; the win condition still works.

@@ -83,9 +83,39 @@ Direction deltas: `Up = (0, -1)`, `Down = (0, +1)`, `Left = (-1, 0)`, `Right = (
 
 Example: character at `(4, 2)` moves `Right` → destination `x = (4 + 1) % 5 = 0` → character ends at `(0, 2)`.
 
-### 5.2 Rotate, Shift
+### 5.2 Rotate
 
-Named and scoped in `DESIGN.md` §5 but not yet needed by any level below — they only matter once a level has more than one entity. Full parameter/effect specs will be added here once a level requires them, following the same table format as Move above.
+| Field | Value |
+|---|---|
+| Parameters | `center: (x, y)` — the tile at the middle of the rotation; `direction: Clockwise \| Anticlockwise` |
+| Effect | The 8 tiles surrounding `center` (its Chebyshev-distance-1 neighbours, with wraparound §2.1) form a ring. Each tile's Entity-layer contents shift **one step** around that ring in `direction`. The `center` tile itself is untouched, as is the Background layer. Empty ring tiles "rotate" too — they just carry nothing. |
+| Legality | Always legal in the MVP: there are no walls, and empty tiles are allowed to rotate. (Once walls exist, a rotation that would land an entity on a blocking Background tile is rejected and costs nothing, same rule as Move.) |
+| Cost | 1 |
+| Target selection | Tap the Rotate card → tap a tile to set the rotation **center** → two rotation arrows appear above the center (`↺` anticlockwise, `↻` clockwise); tap an arrow **or** swipe **right** (clockwise) / **left** (anticlockwise) to choose the direction and execute in one gesture. Tapping the center tile again cancels; tapping a different tile re-centers. |
+
+**Ring order.** The 8 surrounding tiles, in clockwise order starting from the top-left corner:
+
+```
+index:  0    1    2
+        TL   T    TR         TL=(cx-1,cy-1)  T=(cx,cy-1)  TR=(cx+1,cy-1)
+        7  center 3           L=(cx-1,cy)               R=(cx+1,cy)
+        L        R
+        6    5    4
+        BL   B    BR         BL=(cx-1,cy+1)  B=(cx,cy+1)  BR=(cx+1,cy+1)
+```
+
+Clockwise order is `TL → T → TR → R → BR → B → BL → L → (back to TL)` — i.e. ring indices `0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 0`.
+
+- **Clockwise:** the contents at ring index `i` move to index `(i + 1) mod 8`.
+- **Anticlockwise:** the contents at ring index `i` move to index `(i - 1 + 8) mod 8`.
+
+Because adjacent ring positions are always cardinally adjacent, a single rotation displaces any one entity by exactly **one cell in a cardinal direction** — a corner tile shifts to an edge tile and vice-versa. This is what makes Rotate usable to walk the character around the board.
+
+Example: `center = (2, 3)`, character at the top-left ring tile `(1, 2)` (index 0). A **clockwise** rotation moves it to index 1, the `T` tile → character ends at `(2, 2)`.
+
+### 5.3 Shift
+
+Named and scoped in `DESIGN.md` §5 but not yet needed by any level below — it only matters once a level has more than one entity. Full parameter/effect specs will be added here once a level requires it, following the same table format as Move above.
 
 ## 6. Level data format
 
@@ -129,3 +159,22 @@ The introductory level: solvable with Move alone, per `DESIGN.md`'s scope for Pu
 2. Move `(2, 2)` `Right` → character now at `(3, 2)` = goal → **win**
 
 The tight budget (exactly 2, no margin for a wrong move) is intentional: it teaches the Move action and the coordinate system without offering an easier alternate path. No wraparound is required to solve Level 1, since the shortest path stays within the grid — wraparound remains available but isn't needed here.
+
+### Level 2
+
+Introduces the Rotate action (§5.2). The only action available is Rotate; there is no Move.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5, no walls |
+| Character start | `(1, 2)` |
+| Goal | `(2, 3)` |
+| Available actions | Rotate only |
+| Action budget | 2 |
+
+**Intended solution:** the goal is one tile down-and-right of the start (a diagonal, `(1,2) → (2,3)`). A single rotation only moves the character one cardinal step (§5.2), so a diagonal takes two rotations:
+
+1. Rotate around center `(2, 3)` **clockwise** → the character sits at that center's top-left ring tile `(1, 2)` (index 0) and shifts to index 1, the `T` tile → character now at `(2, 2)`.
+2. Rotate around center `(1, 3)` **clockwise** → the character sits at that center's top-right ring tile `(2, 2)` (index 2) and shifts to index 3, the `R` tile → character now at `(2, 3)` = goal → **win**.
+
+Budget 2 is exactly the shortest solution length, mirroring Level 1's tightness — this time to teach that one rotation equals one cardinal step and that reaching a diagonal needs two of them.

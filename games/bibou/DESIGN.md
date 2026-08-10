@@ -37,11 +37,11 @@ The Board (the whole 5×5 grid) has two layers:
 
 Actions are the elements the player chooses to affect the tiled board. They are presented as cards at the bottom of the screen. Every action costs 1 from the action budget and only ever affects the Entity layer — the Background layer is untouchable.
 
-Selecting an action follows the same three-beat flow: **tap the card → tap the target on the board → confirm.**
+Selecting an action follows a **tap the card → tap the target on the board → confirm** flow. For **Move**, choosing the direction *is* the confirming beat — there is no separate Confirm button: after tapping the character, four directional arrows appear around it, and the player taps an arrow or swipes in a cardinal direction to pick the direction and execute the move in one gesture. (Rotate/Shift, when added, may reintroduce an explicit confirm if their target needs it.)
 
 | Action | Effect on the board | Target selection |
 |---|---|---|
-| Move | Moves a single entity one cell in a cardinal direction, into an adjacent open cell. Blocked by walls; the board is borderless and wraps, so moving past an edge is always legal. | Tap entity → tap direction |
+| Move | Moves a single entity one cell in a cardinal direction, into an adjacent open cell. Blocked by walls; the board is borderless and wraps, so moving past an edge is always legal. | Tap entity → tap a direction arrow (or swipe) — the move executes on direction, no separate confirm |
 | Rotate | Rotates the contents of a 2×2 area 90° clockwise. Entities inside move with it; empty cells rotate too. | Tap the 2×2 area |
 | Shift | Shifts every entity in a row or column one cell in a direction. | Tap row/column → tap direction |
 
@@ -68,15 +68,15 @@ Notes:
 
 ## 8. Controls
 
-Primary interaction is touch (card-based selection); keyboard/mouse is a secondary equivalent for desktop testing.
+Primary interaction is touch (card-based selection). Keyboard controls are not yet implemented — the Level 1 build is mobile-first (tap/swipe only); mouse works because clicks map to taps.
 
 | Action | Input (touch — primary) | Input (keyboard/mouse) |
 |---|---|---|
 | Select action card | Tap card at bottom of screen | Click card |
 | Select target (tile/entity/area/row/column) | Tap on grid | Click on grid |
-| Confirm action | Tap confirm | Press Enter or click confirm |
-| Cancel selection | Tap card again, or tap outside grid | Press Esc |
-| Undo last action | Undo button (if MVP supports) | Press U or Ctrl+Z |
+| Choose direction / confirm Move | Tap a direction arrow, or swipe in a cardinal direction (executes the move) | Click a direction arrow |
+| Cancel selection | Tap card again, or tap the character again to clear the arrows | Click card again |
+| Undo last action *(not in MVP)* | Undo button | Press U or Ctrl+Z |
 
 ## 9. Scope — MVP vs. cut
 
@@ -122,3 +122,4 @@ Mechanics-first prototype. "Bibou" could be a character name (the one you're mov
 - **Screen size / aspect ratio:** 480x854 (portrait, ~9:16), fixed size
 - **Grid rendering:** Canvas or Phaser Graphics API (simple rects + text)
 - **Key technical risks:** Tile movement input/state (ensuring clean tile-by-tile motion, not continuous)
+- **Test mode:** the title screen has a **Test** entry alongside Start. It launches a level (Level 1 for now) with an *unlimited* action budget, so the game can be explored freely for development/testing without the normal player-facing move limit. The lose condition never fires in test mode; the win condition still works.

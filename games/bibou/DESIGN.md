@@ -23,19 +23,19 @@ Getting the character to their goal tile through a series of actions.
 
 ## 4. Core mechanics
 
-The grid has two layers:
-- **Board layer** (static): floor tiles, walls, and the goal tile. Never moves. Defines where entities can and can't go.
+The Board (the whole 5×5 grid) has two layers:
+- **Background layer** (static): floor tiles, walls, and the goal tile. Never moves. Defines where entities can and can't go — including which tiles block entities regardless of the wraparound mechanic below.
 - **Entity layer** (movable): the character, and later (post-MVP) pushable items. This is the only layer actions ever affect.
 
 | Mechanic | Description |
 |---|---|
-| Board constraints | Walls block entity movement; the goal tile triggers a win when the character enters it. Static — defined by the puzzle layout. |
+| Background constraints | Walls block entity movement; the goal tile triggers a win when the character enters it. Static — defined by the puzzle layout. |
 | Goal detection | Win condition triggered when the character enters the goal tile. Checked automatically after each action resolves. |
 | Action budget | Each puzzle grants a limited number of actions (count varies per puzzle). Every action spends exactly 1. Shown as a UI counter. |
 
 ## 5. Actions
 
-Actions are the elements the player chooses to affect the tiled board. They are presented as cards at the bottom of the screen. Every action costs 1 from the action budget and only ever affects the Entity layer — the Board layer is untouchable.
+Actions are the elements the player chooses to affect the tiled board. They are presented as cards at the bottom of the screen. Every action costs 1 from the action budget and only ever affects the Entity layer — the Background layer is untouchable.
 
 Selecting an action follows the same three-beat flow: **tap the card → tap the target on the board → confirm.**
 
@@ -53,8 +53,8 @@ Notes:
 ## 6. Constraints
 
 - Grid size: 5×5 (or similar small, digestible size)
-- Board is borderless and loops: an entity moving past index 4 wraps to index 0 (and vice versa) on both axes — there is no "off the grid"
-- Two-layer grid: static Board layer (floor/walls/goal) + movable Entity layer (character, later items) — actions only ever affect the Entity layer
+- Board is borderless and loops: an entity moving past index 4 wraps to index 0 (and vice versa) on both axes — there is no "off the grid". Wraparound only affects how the destination coordinate is computed; a blocking tile on the Background layer (e.g. a wall) still blocks the move.
+- Two-layer grid: static Background layer (floor/walls/goal) + movable Entity layer (character, later items) — actions only ever affect the Entity layer
 - Limited action budget per puzzle (exact count varies by puzzle design)
 - Turn-based only (no real-time pressure)
 - Three action types only in MVP: move, rotate, shift
@@ -81,7 +81,7 @@ Primary interaction is touch (card-based selection); keyboard/mouse is a seconda
 ## 9. Scope — MVP vs. cut
 
 **MVP (must have to test if the core loop is fun):**
-- Two-layer grid rendering: static Board layer (floor, walls, goal tile) + movable Entity layer (character)
+- Two-layer grid rendering: static Background layer (floor, walls, goal tile) + movable Entity layer (character)
 - Card-based action UI: tap card → tap target → confirm
 - Move, Rotate, and Shift actions implemented on the Entity layer
 - Action budget counter (e.g., "5 / 8 actions used")
@@ -95,7 +95,7 @@ Primary interaction is touch (card-based selection); keyboard/mouse is a seconda
 - Multiple puzzle levels with progressive difficulty, including puzzles that require Rotate and Shift
 - Pushable items on the Entity layer (beyond just the character)
 - Puzzle selector / level menu
-- Board layer variety (obstacles, springs, etc.) with special behaviors
+- Background layer variety (obstacles, springs, etc.) with special behaviors
 - Character/goal animations
 - Tutorial or hints system
 
@@ -107,7 +107,7 @@ Primary interaction is touch (card-based selection); keyboard/mouse is a seconda
 
 ## 10. Art & audio style
 
-- **Visual style:** Flat colors, minimalist; Board layer tiles (floor/wall/goal) and Entity layer sprites (character) must read as visually distinct — the entity sits "on top of" whatever board tile is beneath it
+- **Visual style:** Flat colors, minimalist; Background layer tiles (floor/wall/goal) and Entity layer sprites (character) must read as visually distinct — the entity sits "on top of" whatever background tile is beneath it
 - **Reference images/games:** Sokoban (puzzle focus), Puzzle & Dragons (grid + turn-based), Threes (tile sliding)
 - **Audio:** None for prototype; can revisit after core loop works
 

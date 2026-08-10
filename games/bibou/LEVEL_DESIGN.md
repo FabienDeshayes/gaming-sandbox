@@ -4,10 +4,22 @@
 
 ## 1. Board
 
+The **Board** is the whole 5×5 tile grid for a level — the union of both layers, at every coordinate.
+
 - **Size:** 5×5 tiles, fixed for now (all levels in this doc use this size).
-- **Layers:** every tile has a cell on each of two layers, stacked at the same coordinate.
-  - **Board layer** (static): floor, walls (post-MVP), and the goal tile. Never changes during play. Defines where the Entity layer is allowed to end up and where the win condition fires.
-  - **Entity layer** (movable): the character, and later (post-MVP) pushable items. Every action reads and writes this layer only — the Board layer is read-only during play.
+- **Layers:** every tile on the Board has a cell on each of two layers, stacked at the same coordinate.
+  - **Background layer** (static): floor, walls (post-MVP), and the goal tile. Never changes during play. Defines where the Entity layer is allowed to end up and where the win condition fires.
+  - **Entity layer** (movable): the character, and later (post-MVP) pushable items. Every action reads and writes this layer only — the Background layer is read-only during play.
+
+### 1.1 Background tile types
+
+| Tile type | Blocks entities? | Notes |
+|---|---|---|
+| Floor | No | Default background tile; entities can freely move onto it. |
+| Wall *(post-MVP)* | Yes | An entity cannot end a move on a wall tile — see §5.1. Not used by any level in this doc yet. |
+| Goal | No | Triggers win when the character's Entity-layer cell lands on it (§4). |
+
+Whether a background tile blocks entities is a property of the tile type, independent of the wraparound mechanic (§2.1) — wraparound only changes *how a destination coordinate is computed*, never whether that destination is legal to land on.
 
 ## 2. Coordinate system
 
@@ -33,16 +45,16 @@ The board has no edges — it loops. This applies to **any** entity movement on 
 - If a move would take a coordinate to index `5` (or beyond), it wraps to index `0`.
 - If a move would take a coordinate to index `-1` (or below), it wraps to index `4`.
 - Formally, for board size `N` (currently 5): `newCoord = ((coord + delta) % N + N) % N`.
-- Wraparound is unconditional — it is not blocked by anything and always succeeds. Walls (post-MVP) are the only thing that can stop a move; the edge itself never does.
+- Wraparound itself is unconditional — computing the wrapped destination never fails, and the edge itself never blocks a move. Whether the move actually succeeds still depends on what's at that destination: if the wrapped-to tile is a blocking Background-layer tile (e.g. a wall, §1.1), the move is illegal for the same reason a non-wrapped move onto a wall would be.
 
-This supersedes the "blocked by ... board edges" language for Move in `DESIGN.md` — moving off one side is always legal and lands on the opposite side.
+This supersedes the "blocked by ... board edges" language for Move in `DESIGN.md` — moving off one side is always legal *as far as the edge is concerned* and lands on the opposite side, subject to the normal Background-layer legality check.
 
 ## 3. Entities
 
 | Entity | Layer | Notes |
 |---|---|---|
 | Character | Entity | The thing the player is trying to get onto the goal tile. One per level (MVP). |
-| Goal | Board | A single tile marked as the win condition. Static — part of the Board layer, not something that moves. |
+| Goal | Background | A single tile marked as the win condition. Static — part of the Background layer, not something that moves. |
 
 ## 4. Win condition
 
@@ -62,8 +74,8 @@ Every action is defined by:
 | Field | Value |
 |---|---|
 | Parameters | `startTile: (x, y)` — the tile to move; `direction: Up \| Down \| Left \| Right` |
-| Effect | Whatever occupies the Entity layer at `startTile` is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). `startTile` becomes empty; the destination takes its former contents. The Board layer is untouched. |
-| Legality | `startTile` must currently hold an entity on the Entity layer. The destination tile (after wraparound) must not be a wall on the Board layer. *(MVP has no walls, so this check is always satisfied until walls are added.)* |
+| Effect | Whatever occupies the Entity layer at `startTile` is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). `startTile` becomes empty; the destination takes its former contents. The Background layer is untouched. |
+| Legality | `startTile` must currently hold an entity on the Entity layer. The destination tile (after wraparound) must not be a blocking tile on the Background layer (§1.1 — e.g. a wall). *(MVP has no walls, so this check is always satisfied until walls are added.)* |
 | Cost | 1 |
 | Target selection | Tap entity → tap direction (per `DESIGN.md` §5) |
 
@@ -83,7 +95,7 @@ Suggested shape for encoding a level, for whoever implements level loading:
 {
   "id": 1,
   "gridSize": 5,
-  "board": {
+  "background": {
     "goal": { "x": 1, "y": 4 }
   },
   "entities": {

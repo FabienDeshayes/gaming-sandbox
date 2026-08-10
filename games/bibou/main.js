@@ -380,9 +380,16 @@ class PuzzleScene extends Phaser.Scene {
 
 new Phaser.Game({
   type: Phaser.AUTO,
-  width: GAME_WIDTH,
-  height: GAME_HEIGHT,
   parent: 'game',
   backgroundColor: '#111111',
+  // Keep the fixed 480x854 design space, but scale the canvas to fit the
+  // screen (preserving aspect ratio) and center it, so it never crops on
+  // narrower phone viewports.
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: GAME_WIDTH,
+    height: GAME_HEIGHT,
+  },
   scene: [TitleScene, PuzzleScene],
 });

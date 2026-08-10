@@ -1,6 +1,45 @@
 const GAME_WIDTH = 480;
 const GAME_HEIGHT = 854;
 
+// --- Levels (see LEVEL_DESIGN.md §6/§7) --------------------------------------
+const LEVEL_1 = {
+  id: 1,
+  gridSize: 5,
+  background: { goal: { x: 3, y: 2 } },
+  entities: { character: { x: 1, y: 2 } },
+  actionBudget: { move: 2 },
+};
+
+// Direction deltas, per LEVEL_DESIGN.md §5.1.
+const DIRECTIONS = {
+  Up: { x: 0, y: -1 },
+  Down: { x: 0, y: 1 },
+  Left: { x: -1, y: 0 },
+  Right: { x: 1, y: 0 },
+};
+
+// --- Shared UI helper --------------------------------------------------------
+// A single interactive text button, reused by every scene. `onClick` is the
+// action to run on tap/click — the template left this empty, we always wire it.
+function createButton(scene, x, y, label, onClick) {
+  const text = scene.add
+    .text(x, y, label, {
+      fontFamily: 'sans-serif',
+      fontSize: '32px',
+      color: '#ffffff',
+      backgroundColor: '#333333',
+      padding: { x: 24, y: 12 },
+    })
+    .setOrigin(0.5)
+    .setInteractive({ useHandCursor: true });
+
+  text.on('pointerover', () => text.setStyle({ backgroundColor: '#555555' }));
+  text.on('pointerout', () => text.setStyle({ backgroundColor: '#333333' }));
+  text.on('pointerdown', () => onClick && onClick());
+  return text;
+}
+
+// --- Title screen ------------------------------------------------------------
 class TitleScene extends Phaser.Scene {
   constructor() {
     super('TitleScene');
@@ -17,25 +56,325 @@ class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.createButton(centerX, 460, 'Start');
-    this.createButton(centerX, 540, 'Settings');
+    createButton(this, centerX, 440, 'Start', () =>
+      this.scene.start('PuzzleScene', { level: LEVEL_1 })
+    );
+    createButton(this, centerX, 520, 'Settings', () => {});
+    createButton(this, centerX, 600, 'Test', () =>
+      this.scene.start('PuzzleScene', { level: LEVEL_1, unlimited: true })
+    );
+  }
+}
+
+// --- Puzzle -----------------------------------------------------------------
+const CELL = 80;
+const BOARD_PX = CELL * 5; // 400
+const BOARD_X = (GAME_WIDTH - BOARD_PX) / 2; // 40
+const BOARD_Y = 230;
+const SWIPE_THRESHOLD = 24; // px — below this a pointer up is a tap, not a swipe
+
+class PuzzleScene extends Phaser.Scene {
+  constructor() {
+    super('PuzzleScene');
   }
 
-  createButton(x, y, label) {
-    const text = this.add
-      .text(x, y, label, {
-        fontFamily: 'sans-serif',
-        fontSize: '32px',
-        color: '#ffffff',
-        backgroundColor: '#333333',
-        padding: { x: 24, y: 12 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+  create(data) {
+    this.level = data.level;
+    this.unlimited = data.unlimited === true;
 
-    text.on('pointerover', () => text.setStyle({ backgroundColor: '#555555' }));
-    text.on('pointerout', () => text.setStyle({ backgroundColor: '#333333' }));
-    text.on('pointerdown', () => {});
+    const size = this.level.gridSize;
+    this.size = size;
+    this.characterPos = { ...this.level.entities.character };
+    this.goalPos = { ...this.level.background.goal };
+    this.movesUsed = 0;
+    this.budget = this.unlimited ? Infinity : this.level.actionBudget.move;
+
+    this.selectedAction = null; // null | 'move'
+    this.targetSelected = false;
+    this.arrows = [];
+    this.gameOver = false;
+
+    this.drawBackground();
+    this.characterSprite = this.add
+      .rectangle(0, 0, CELL * 0.6, CELL * 0.6, 0x4fc3f7)
+      .setStrokeStyle(3, 0xffffff);
+    this.renderCharacter();
+
+    this.buildHud();
+    this.buildActionCard();
+    this.setupBoardInput();
+  }
+
+  // --- Coordinate helpers ---
+  cellCenter(x, y) {
+    return {
+      px: BOARD_X + x * CELL + CELL / 2,
+      py: BOARD_Y + y * CELL + CELL / 2,
+    };
+  }
+
+  pointerToCell(pointer) {
+    const x = Math.floor((pointer.x - BOARD_X) / CELL);
+    const y = Math.floor((pointer.y - BOARD_Y) / CELL);
+    if (x < 0 || y < 0 || x >= this.size || y >= this.size) return null;
+    return { x, y };
+  }
+
+  // --- Rendering ---
+  drawBackground() {
+    const g = this.add.graphics();
+    for (let y = 0; y < this.size; y++) {
+      for (let x = 0; x < this.size; x++) {
+        const isGoal = x === this.goalPos.x && y === this.goalPos.y;
+        g.fillStyle(isGoal ? 0x2e7d32 : 0x222222, 1);
+        g.fillRect(BOARD_X + x * CELL, BOARD_Y + y * CELL, CELL, CELL);
+        g.lineStyle(2, 0x444444, 1);
+        g.strokeRect(BOARD_X + x * CELL, BOARD_Y + y * CELL, CELL, CELL);
+      }
+    }
+    // Goal marker on top of the goal cell so it reads as the target.
+    const goal = this.cellCenter(this.goalPos.x, this.goalPos.y);
+    this.add
+      .text(goal.px, goal.py, '★', {
+        fontFamily: 'sans-serif',
+        fontSize: '40px',
+        color: '#a5d6a7',
+      })
+      .setOrigin(0.5);
+  }
+
+  renderCharacter() {
+    const c = this.cellCenter(this.characterPos.x, this.characterPos.y);
+    this.characterSprite.setPosition(c.px, c.py);
+  }
+
+  buildHud() {
+    const budgetLabel = this.unlimited ? '∞' : this.budget;
+    this.hudText = this.add.text(
+      BOARD_X,
+      160,
+      `Moves: ${this.movesUsed} / ${budgetLabel}`,
+      { fontFamily: 'sans-serif', fontSize: '28px', color: '#ffffff' }
+    );
+    if (this.unlimited) {
+      this.add.text(GAME_WIDTH - BOARD_X, 165, 'TEST', {
+        fontFamily: 'sans-serif',
+        fontSize: '22px',
+        color: '#ffb74d',
+      }).setOrigin(1, 0);
+    }
+  }
+
+  updateHud() {
+    const budgetLabel = this.unlimited ? '∞' : this.budget;
+    this.hudText.setText(`Moves: ${this.movesUsed} / ${budgetLabel}`);
+  }
+
+  buildActionCard() {
+    this.moveCard = createButton(this, GAME_WIDTH / 2, 720, 'Move', () =>
+      this.toggleMoveCard()
+    );
+    this.hintText = this.add
+      .text(GAME_WIDTH / 2, 790, 'Tap Move to begin', {
+        fontFamily: 'sans-serif',
+        fontSize: '20px',
+        color: '#aaaaaa',
+      })
+      .setOrigin(0.5);
+  }
+
+  setHint(msg) {
+    this.hintText.setText(msg);
+  }
+
+  toggleMoveCard() {
+    if (this.gameOver) return;
+    if (this.selectedAction === 'move') {
+      this.clearSelection();
+      this.setHint('Tap Move to begin');
+      return;
+    }
+    this.selectedAction = 'move';
+    this.targetSelected = false;
+    this.clearArrows();
+    this.moveCard.setStyle({ backgroundColor: '#1565c0' });
+    this.setHint('Tap the character');
+  }
+
+  clearSelection() {
+    this.selectedAction = null;
+    this.targetSelected = false;
+    this.clearArrows();
+    this.moveCard.setStyle({ backgroundColor: '#333333' });
+  }
+
+  // --- Input ---
+  setupBoardInput() {
+    let downX = 0;
+    let downY = 0;
+    this.input.on('pointerdown', (pointer) => {
+      downX = pointer.x;
+      downY = pointer.y;
+    });
+    this.input.on('pointerup', (pointer) => {
+      if (this.gameOver) return;
+      const dx = pointer.x - downX;
+      const dy = pointer.y - downY;
+      const dist = Math.hypot(dx, dy);
+
+      // Swipe: only meaningful once a target is selected.
+      if (this.targetSelected && dist >= SWIPE_THRESHOLD) {
+        const dir =
+          Math.abs(dx) > Math.abs(dy)
+            ? dx > 0
+              ? 'Right'
+              : 'Left'
+            : dy > 0
+            ? 'Down'
+            : 'Up';
+        this.applyMove(dir);
+        return;
+      }
+
+      // Tap on the board.
+      const cell = this.pointerToCell(pointer);
+      if (!cell) return;
+      this.handleBoardTap(cell);
+    });
+  }
+
+  handleBoardTap(cell) {
+    if (this.selectedAction !== 'move') return;
+    const onCharacter =
+      cell.x === this.characterPos.x && cell.y === this.characterPos.y;
+
+    if (!this.targetSelected) {
+      if (onCharacter) {
+        this.targetSelected = true;
+        this.showArrows();
+        this.setHint('Tap an arrow or swipe a direction');
+      }
+      return;
+    }
+    // Target already selected: tapping the character again cancels.
+    if (onCharacter) {
+      this.targetSelected = false;
+      this.clearArrows();
+      this.setHint('Tap the character');
+    }
+  }
+
+  showArrows() {
+    this.clearArrows();
+    const c = this.cellCenter(this.characterPos.x, this.characterPos.y);
+    const offset = CELL * 0.7;
+    const specs = [
+      { dir: 'Up', glyph: '▲', dx: 0, dy: -offset },
+      { dir: 'Down', glyph: '▼', dx: 0, dy: offset },
+      { dir: 'Left', glyph: '◀', dx: -offset, dy: 0 },
+      { dir: 'Right', glyph: '▶', dx: offset, dy: 0 },
+    ];
+    specs.forEach((s) => {
+      const arrow = this.add
+        .text(c.px + s.dx, c.py + s.dy, s.glyph, {
+          fontFamily: 'sans-serif',
+          fontSize: '34px',
+          color: '#ffffff',
+          backgroundColor: '#1565c0',
+          padding: { x: 6, y: 2 },
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+      arrow.on('pointerdown', (pointer, lx, ly, event) => {
+        if (event) event.stopPropagation();
+        this.applyMove(s.dir);
+      });
+      this.arrows.push(arrow);
+    });
+  }
+
+  clearArrows() {
+    this.arrows.forEach((a) => a.destroy());
+    this.arrows = [];
+  }
+
+  // --- Move logic ---
+  wrap(value) {
+    const n = this.size;
+    return ((value % n) + n) % n;
+  }
+
+  applyMove(direction) {
+    if (this.gameOver || this.selectedAction !== 'move' || !this.targetSelected)
+      return;
+
+    const delta = DIRECTIONS[direction];
+    const dest = {
+      x: this.wrap(this.characterPos.x + delta.x),
+      y: this.wrap(this.characterPos.y + delta.y),
+    };
+
+    // Legality: no walls in the MVP, so any destination is legal. Structured
+    // this way so a blocking-tile check can be added later (LEVEL_DESIGN §5.1).
+    if (this.isBlocked(dest)) {
+      this.setHint('Blocked — try another direction');
+      return;
+    }
+
+    this.characterPos = dest;
+    this.movesUsed += 1;
+    this.clearSelection();
+    this.renderCharacter();
+    this.updateHud();
+
+    // Resolve outcome — win check first, then budget (never in test mode).
+    if (this.characterPos.x === this.goalPos.x && this.characterPos.y === this.goalPos.y) {
+      this.showOverlay(true);
+    } else if (this.movesUsed >= this.budget) {
+      this.showOverlay(false);
+    } else {
+      this.setHint('Tap Move to continue');
+    }
+  }
+
+  isBlocked() {
+    // No blocking background tiles yet (walls are post-MVP).
+    return false;
+  }
+
+  // --- Overlay ---
+  showOverlay(won) {
+    this.gameOver = true;
+    this.clearSelection();
+
+    this.add
+      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.72)
+      .setOrigin(0, 0);
+
+    this.add
+      .text(GAME_WIDTH / 2, 300, won ? 'You win!' : 'Out of moves', {
+        fontFamily: 'sans-serif',
+        fontSize: '44px',
+        color: won ? '#a5d6a7' : '#ef9a9a',
+      })
+      .setOrigin(0.5);
+
+    const budgetLabel = this.unlimited ? '∞' : this.budget;
+    this.add
+      .text(
+        GAME_WIDTH / 2,
+        370,
+        `Moves used: ${this.movesUsed} / ${budgetLabel}`,
+        { fontFamily: 'sans-serif', fontSize: '26px', color: '#ffffff' }
+      )
+      .setOrigin(0.5);
+
+    createButton(this, GAME_WIDTH / 2, 470, 'Retry', () =>
+      this.scene.restart({ level: this.level, unlimited: this.unlimited })
+    );
+    createButton(this, GAME_WIDTH / 2, 550, 'Back to title', () =>
+      this.scene.start('TitleScene')
+    );
   }
 }
 
@@ -45,5 +384,5 @@ new Phaser.Game({
   height: GAME_HEIGHT,
   parent: 'game',
   backgroundColor: '#111111',
-  scene: [TitleScene],
+  scene: [TitleScene, PuzzleScene],
 });

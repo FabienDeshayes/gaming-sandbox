@@ -77,7 +77,7 @@ Every action is defined by:
 | Effect | Whatever occupies the Entity layer at `startTile` is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). `startTile` becomes empty; the destination takes its former contents. The Background layer is untouched. |
 | Legality | `startTile` must currently hold an entity on the Entity layer. The destination tile (after wraparound) must not be a blocking tile on the Background layer (§1.1 — e.g. a wall). *(MVP has no walls, so this check is always satisfied until walls are added.)* |
 | Cost | 1 |
-| Target selection | Tap entity → tap direction (per `DESIGN.md` §5) |
+| Target selection | Tap the Move card → tap the entity (character) → four directional arrows appear around it; tap an arrow **or** swipe in a cardinal direction to choose the direction. Choosing the direction executes the move immediately — there is no separate confirm step (per `DESIGN.md` §5). |
 
 Direction deltas: `Up = (0, -1)`, `Down = (0, +1)`, `Left = (-1, 0)`, `Right = (+1, 0)`.
 

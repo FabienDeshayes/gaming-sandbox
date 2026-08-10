@@ -10,14 +10,14 @@ A turn-based grid puzzle game where you rearrange tiles to guide a character to 
 
 Bibou is a minimal, turn-based puzzle game on a small grid where you use tile-moving actions to get a character from their starting position to a goal (treasure chest, exit door, etc.). Each turn gives you time to think through your moves. The puzzle evolves as you discover how tiles interact and what sequences of moves lead to victory.
 
-## 3. Core loops
+## 3. Core loop
 
-1. Player observes the grid: the static Board layer (walls, goal tile) and the Entity layer (character position), plus remaining action budget
-2. Player taps an action card at the bottom of the screen (Move / Rotate / Shift) to select it
-3. Player taps the target tile(s) or entity the action applies to, then confirms with another tap
-4. Game applies the action to the Entity layer and decreases the action budget by 1
-5. Player checks if the character has reached the goal tile; if yes, victory; if no and actions remain, loop to step 1
-6. If actions are exhausted and the goal isn't reached: retry puzzle from start
+Getting the character to their goal tile through a series of actions.
+
+1. Player reads the board: where the character is, where the goal is, what's in the way, and how many actions are left
+2. Player picks an action, applies it to a target on the board, and confirms
+3. Board updates; the action budget drops by 1
+4. If the character is on the goal tile → win. If the budget is spent → retry. Otherwise, back to step 1.
 
 ## 4. Core mechanics
 
@@ -25,16 +25,30 @@ The grid has two layers:
 - **Board layer** (static): floor tiles, walls, and the goal tile. Never moves. Defines where entities can and can't go.
 - **Entity layer** (movable): the character, and later (post-MVP) pushable items. This is the only layer actions ever affect.
 
-| Mechanic | Description | Input |
-|---|---|---|
-| Move | Move a single entity one cell in a cardinal direction, into an adjacent open cell | Tap Move card → tap entity → tap direction → confirm |
-| Rotate | Rotate the entities within a 2×2 area 90° clockwise | Tap Rotate card → tap 2×2 area → confirm |
-| Shift | Shift all entities within a row/column one cell in a direction | Tap Shift card → tap row/column → tap direction → confirm |
-| Board constraints | Walls block entity movement; the goal tile triggers a win when the character enters it | Static — defined by puzzle layout, no player input |
-| Goal detection | Win condition triggered when the character enters the goal tile | Automatic check after each action |
-| Action budget | Limited number of card uses per puzzle (exact number TBD per puzzle) | Displayed UI counter |
+| Mechanic | Description |
+|---|---|
+| Board constraints | Walls block entity movement; the goal tile triggers a win when the character enters it. Static — defined by the puzzle layout. |
+| Goal detection | Win condition triggered when the character enters the goal tile. Checked automatically after each action resolves. |
+| Action budget | Each puzzle grants a limited number of actions (count varies per puzzle). Every action spends exactly 1. Shown as a UI counter. |
 
-## 5. Constraints
+## 5. Actions
+
+Actions are the elements the player chooses to affect the tiled board. They are presented as cards at the bottom of the screen. Every action costs 1 from the action budget and only ever affects the Entity layer — the Board layer is untouchable.
+
+Selecting an action follows the same three-beat flow: **tap the card → tap the target on the board → confirm.**
+
+| Action | Effect on the board | Target selection |
+|---|---|---|
+| Move | Moves a single entity one cell in a cardinal direction, into an adjacent open cell. Blocked by walls and board edges. | Tap entity → tap direction |
+| Rotate | Rotates the contents of a 2×2 area 90° clockwise. Entities inside move with it; empty cells rotate too. | Tap the 2×2 area |
+| Shift | Shifts every entity in a row or column one cell in a direction. | Tap row/column → tap direction |
+
+Notes:
+- An action that would produce an illegal result (pushing an entity into a wall or off the grid) is rejected before confirmation, and costs nothing.
+- Rotate and Shift are in the MVP but only get interesting once there is more than one entity on the board — puzzle 1 is solvable with Move alone.
+- Post-MVP, this section is where new action types get added; the card UI is designed to accept more without changing the loop.
+
+## 6. Constraints
 
 - Grid size: 5×5 (or similar small, digestible size)
 - Two-layer grid: static Board layer (floor/walls/goal) + movable Entity layer (character, later items) — actions only ever affect the Entity layer
@@ -42,15 +56,14 @@ The grid has two layers:
 - Turn-based only (no real-time pressure)
 - Three action types only in MVP: move, rotate, shift
 - No build tooling: Phaser 3 loaded via CDN `<script>` tag, plain JS
-- Portrait/mobile aspect ratio (~9:16)
 
-## 6. Win / lose conditions
+## 7. Win / lose conditions
 
 - **Win:** Character reaches the goal tile within the action budget
 - **Lose:** Action budget exhausted before character reaches goal → retry puzzle from start
 - **Session end:** Player completes a puzzle (win) or gives up; victory screen shows action count used vs. budget and offers next puzzle
 
-## 7. Controls
+## 8. Controls
 
 Primary interaction is touch (card-based selection); keyboard/mouse is a secondary equivalent for desktop testing.
 
@@ -62,7 +75,7 @@ Primary interaction is touch (card-based selection); keyboard/mouse is a seconda
 | Cancel selection | Tap card again, or tap outside grid | Press Esc |
 | Undo last action | Undo button (if MVP supports) | Press U or Ctrl+Z |
 
-## 8. Scope — MVP vs. cut
+## 9. Scope — MVP vs. cut
 
 **MVP (must have to test if the core loop is fun):**
 - Two-layer grid rendering: static Board layer (floor, walls, goal tile) + movable Entity layer (character)
@@ -89,17 +102,17 @@ Primary interaction is touch (card-based selection); keyboard/mouse is a seconda
 - Leaderboards or scoring
 - Mobile app (web-only for now)
 
-## 9. Art & audio style
+## 10. Art & audio style
 
 - **Visual style:** Flat colors, minimalist; Board layer tiles (floor/wall/goal) and Entity layer sprites (character) must read as visually distinct — the entity sits "on top of" whatever board tile is beneath it
 - **Reference images/games:** Sokoban (puzzle focus), Puzzle & Dragons (grid + turn-based), Threes (tile sliding)
 - **Audio:** None for prototype; can revisit after core loop works
 
-## 10. Theme
+## 11. Theme
 
 Mechanics-first prototype. "Bibou" could be a character name (the one you're moving), or just a working title. No narrative required yet — the puzzle is the game.
 
-## 11. Tech notes
+## 12. Tech notes
 
 - **Platform:** Web (2D)
 - **Engine/library:** Phaser 3, via CDN

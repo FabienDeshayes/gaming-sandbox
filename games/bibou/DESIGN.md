@@ -42,17 +42,17 @@ The Board (the whole 5×5 grid) has two layers:
 
 Actions are the elements the player chooses to affect the tiled board. They are presented as cards at the bottom of the screen. Every action costs 1 from the action budget and only ever affects the Entity layer — the Background layer is untouchable.
 
-Selecting an action follows a **tap the card → tap the target on the board → confirm** flow. For **Move**, choosing the direction *is* the confirming beat — there is no separate Confirm button: after tapping the character, four directional arrows appear around it, and the player taps an arrow or swipes in a cardinal direction to pick the direction and execute the move in one gesture. (Rotate/Shift, when added, may reintroduce an explicit confirm if their target needs it.)
+Selecting an action follows a **tap the card → tap the target on the board → confirm** flow. For **Move**, choosing the direction *is* the confirming beat — there is no separate Confirm button: after tapping the character, four directional arrows appear around it, and the player taps an arrow or swipes in a cardinal direction to pick the direction and execute the move in one gesture. **Shift** skips the target-tap step entirely: selecting the card immediately shows an inward-pointing arrow at every row/column edge, and tapping one both picks the row/column and executes the shift in one gesture.
 
 | Action | Effect on the board | Target selection |
 |---|---|---|
 | Move | Moves a single entity one cell in a cardinal direction, into an adjacent open cell. Blocked by walls; the board is borderless and wraps, so moving past an edge is always legal. | Tap entity → tap a direction arrow (or swipe) — the move executes on direction, no separate confirm |
 | Rotate | Shifts the 8 tiles surrounding a chosen center tile one step around their ring, clockwise or anticlockwise. Entities inside move with it; empty cells rotate too; the center tile is untouched. See `LEVEL_DESIGN.md` §5.2 for the exact ring order. | Tap center tile → tap a rotation arrow (↺/↻) or swipe right (CW) / left (CCW) |
-| Shift | Shifts every entity in a row or column one cell in a direction. | Tap row/column → tap direction |
+| Shift | Shifts every entity in a row or column one cell in a direction. | Tap Shift card → arrows appear pointing inward around every row/column edge → tap one to shift that row/column in that direction, no separate confirm |
 
 Notes:
 - An action that would produce an illegal result (pushing an entity into a wall) is rejected before confirmation, and costs nothing. Moving off the grid is never illegal — the board wraps.
-- Rotate and Shift are in the MVP but only get interesting once there is more than one entity on the board — puzzle 1 is solvable with Move alone.
+- Rotate and Shift are in the MVP; both are already useful with a single entity (moving it one cardinal step per use), and get more interesting once there is more than one entity on the board — puzzle 1 is solvable with Move alone.
 - Post-MVP, this section is where new action types get added; the card UI is designed to accept more without changing the loop.
 
 ## 6. Constraints
@@ -127,5 +127,5 @@ Mechanics-first prototype. "Bibou" could be a character name (the one you're mov
 - **Screen size / aspect ratio:** 480x854 (portrait, ~9:16), fixed size
 - **Grid rendering:** Canvas or Phaser Graphics API (simple rects + text)
 - **Key technical risks:** Tile movement input/state (ensuring clean tile-by-tile motion, not continuous)
-- **Level selection:** both **Start** and **Test** on the title screen lead to a level picker (currently Level 1 and Level 2) before the puzzle loads, so any level can be chosen directly. Start launches the chosen level with its normal budget; Test launches it with an unlimited budget.
-- **Test mode:** the title screen has a **Test** entry alongside Start. Via the level picker it launches any level (Level 1 or Level 2) with an *unlimited* action budget, so the game can be explored freely for development/testing without the normal player-facing move limit. The lose condition never fires in test mode; the win condition still works.
+- **Level selection:** both **Start** and **Test** on the title screen lead to a level picker (currently Level 1, Level 2, and Level 3) before the puzzle loads, so any level can be chosen directly. Start launches the chosen level with its normal budget; Test launches it with an unlimited budget.
+- **Test mode:** the title screen has a **Test** entry alongside Start. Via the level picker it launches any level (Level 1, 2, or 3) with an *unlimited* action budget, so the game can be explored freely for development/testing without the normal player-facing move limit. The lose condition never fires in test mode; the win condition still works.

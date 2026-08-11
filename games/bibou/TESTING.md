@@ -11,16 +11,28 @@ Phaser scene state back out. This doc gives you a ready-to-adapt harness.
 
 ## Two levels of checking
 
-1. **Ring math only (fast, no browser).** The Rotate mechanic is pure coordinate
-   math (see `LEVEL_DESIGN.md` §5.2). You can verify a solution's arithmetic in a
-   few lines of Node without launching anything — good for sanity-checking a new
-   level's intended solution before wiring the UI. See [Ring-math check](#ring-math-check).
+1. **Rule math only (fast, no browser).** Move, Rotate, and Shift are pure
+   coordinate math living in `src/core/rules.js` (see `LEVEL_DESIGN.md` §5). You can
+   import that module straight into Node and verify a solution's arithmetic without
+   launching anything — good for sanity-checking a new level's intended solution
+   before wiring the UI. See [Rule-math check](#rule-math-check).
 2. **Full browser smoke test (authoritative).** Actually loads `index.html`, clicks
    the cards/arrows, swipes, and asserts the win overlay appears. This is what
    proves a level is playable end to end. See [Browser smoke test](#browser-smoke-test).
 
 Prefer the browser test when claiming a level "works" — the math check can't catch
 input wiring, budget, or scene-flow bugs.
+
+## Source layout
+
+The game is split into ES modules under `src/` (see `DESIGN.md` §12 for the full
+table). Two facts matter for testing:
+
+- **`src/core/rules.js` is pure** — no Phaser, no scene state, plain `{x, y}` in and
+  out — so Node can import it directly.
+- **`index.html` loads `src/main.js` with `<script type="module">`.** The harness
+  below serves the directory over HTTP, so nested module paths resolve normally. ES
+  modules do *not* work over `file://`, so always go through the local server.
 
 ## Sandbox gotcha: the CDN is blocked
 
@@ -45,34 +57,44 @@ Chromium is preinstalled in the sandbox; find it under `/opt/pw-browsers/` (e.g.
 > the commit stays to source + docs:
 > `rm -rf node_modules package.json package-lock.json`
 
-## Ring-math check
+## Rule-math check
 
-Rotate shifts the 8 tiles around a center one step along the clockwise ring
-`TL→T→TR→R→BR→B→BL→L` (indices 0..7). Reproduce just that to check a solution's
-coordinates:
+Import the game's own rules — don't re-implement them, or you'll be testing your
+copy instead of the game. Rotate shifts the 8 tiles around a center one step along
+the clockwise ring `TL→T→TR→R→BR→B→BL→L` (indices 0..7). Every function takes and
+returns a plain `{x, y}`, and an entity an action doesn't touch (off the rotation
+ring, on another row) comes back unchanged.
+
+Write the check as an `.mjs` file so Node treats it as ESM:
 
 ```js
-const RING = [
-  { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 }, { x: 1, y: 0 },
-  { x: 1, y: 1 },  { x: 0, y: 1 },  { x: -1, y: 1 }, { x: -1, y: 0 },
-];
+// check.mjs — run from games/bibou with: node check.mjs
+import { moveEntity, rotateEntity, shiftEntity } from './src/core/rules.js';
+
 const N = 5;
-const wrap = (v) => ((v % N) + N) % N;
-function rotate(pos, center, clockwise) {
-  let i = -1;
-  for (let k = 0; k < 8; k++)
-    if (wrap(center.x + RING[k].x) === pos.x && wrap(center.y + RING[k].y) === pos.y) { i = k; break; }
-  if (i === -1) return { ...pos }; // char not on the ring — unaffected
-  const n = clockwise ? (i + 1) % 8 : (i + 7) % 8;
-  return { x: wrap(center.x + RING[n].x), y: wrap(center.y + RING[n].y) };
-}
+const eq = (a, b, label) =>
+  console.log(label, a, a.x === b.x && a.y === b.y ? 'OK' : `WRONG (want ${JSON.stringify(b)})`);
 
 // Level 2: (1,2) --CW around (2,3)--> (2,2) --CW around (1,3)--> (2,3) = goal
 let c = { x: 1, y: 2 };
-c = rotate(c, { x: 2, y: 3 }, true);
-c = rotate(c, { x: 1, y: 3 }, true);
-console.log(c, c.x === 2 && c.y === 3 ? 'OK' : 'WRONG');
+c = rotateEntity(c, { x: 2, y: 3 }, true, N);
+c = rotateEntity(c, { x: 1, y: 3 }, true, N);
+eq(c, { x: 2, y: 3 }, 'L2:');
+
+// Level 3: (2,3) --row-3 Right--> (3,3) --column-3 Up--> (3,2) = goal
+let s = { x: 2, y: 3 };
+s = shiftEntity(s, 'row', 3, 'Right', N);
+s = shiftEntity(s, 'column', 3, 'Up', N);
+eq(s, { x: 3, y: 2 }, 'L3:');
+
+// Wraparound (LEVEL_DESIGN.md §2.1)
+eq(moveEntity({ x: 4, y: 0 }, 'Right', N), { x: 0, y: 0 }, 'wrap:');
 ```
+
+> Node ≥ 22 detects module syntax, so importing `src/core/rules.js` works even
+> though the throwaway `package.json` from `npm i` has no `"type"` field — it just
+> prints a `MODULE_TYPELESS_PACKAGE_JSON` warning. Add `"type": "module"` to that
+> `package.json` to silence it (and to make the import work at all on older Node).
 
 ## Browser smoke test
 
@@ -83,7 +105,7 @@ cell, and read `characterPos` / the HUD out of the live `PuzzleScene`. Adapt the
 
 ### How it hangs together
 
-- **Capture the game instance.** `main.js` calls `new Phaser.Game(...)` but never
+- **Capture the game instance.** `src/main.js` calls `new Phaser.Game(...)` but never
   stores it globally. An `addInitScript` installs a setter trap on `window.Phaser`
   that wraps `Phaser.Game` in a `Proxy` so the constructed game lands on
   `window.__game`. From there, `window.__game.scene.getScene('PuzzleScene')` reaches
@@ -91,8 +113,13 @@ cell, and read `characterPos` / the HUD out of the live `PuzzleScene`. Adapt the
 - **Coordinate mapping.** The design space is fixed at 480×854 but the canvas is
   scaled with `Phaser.Scale.FIT`. Convert design coords → screen with the canvas's
   `getBoundingClientRect()` and the ratio `rect.width / game.scale.width`.
-- **Board cells.** `BOARD_X = 40`, `BOARD_Y = 230`, `CELL = 80`; a cell center in
-  design space is `(40 + x*80 + 40, 230 + y*80 + 40)`.
+- **Board cells.** `BOARD_X = 40`, `BOARD_Y = 230`, `CELL = 80` (all from
+  `src/config.js`); a cell center in design space is `(40 + x*80 + 40, 230 + y*80 + 40)`.
+- **Shift arrows share glyphs.** Each row's inward arrows are `▶` (left edge) and
+  `◀` (right edge), and each column's are `▼` (top) and `▲` (bottom) — so a glyph
+  lookup by text alone is ambiguous. Filter `children.list` for the glyph and index
+  into the result; the arrows are created row 0..4 then column 0..4, so the Nth `▶`
+  shifts row N right and the Nth `▲` shifts column N up.
 - **Reading text.** Buttons, arrows (`▲◀▶▼`, `↺`, `↻`), the HUD, and the win/lose
   overlay are all Phaser text objects — enumerate `scene.children.list` and read
   `.text`. `"You win!"` present ⇒ the level was solved; `"Out of actions"` ⇒ budget

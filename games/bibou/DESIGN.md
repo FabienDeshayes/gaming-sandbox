@@ -63,7 +63,7 @@ Notes:
 - Limited action budget per puzzle (exact count varies by puzzle design)
 - Turn-based only (no real-time pressure)
 - Three action types only in MVP: move, rotate, shift
-- No build tooling: Phaser 3 loaded via CDN `<script>` tag, plain JS
+- No build tooling: Phaser 3 loaded via CDN `<script>` tag; the game itself is plain ES modules, no bundler
 
 ## 7. Win / lose conditions
 
@@ -124,6 +124,17 @@ Mechanics-first prototype. "Bibou" could be a character name (the one you're mov
 
 - **Platform:** Web (2D)
 - **Engine/library:** Phaser 3, via CDN
+- **Source layout:** `index.html` loads `src/main.js` as an ES module (`<script type="module">`); there is no build step, the browser resolves the imports. Phaser stays a CDN global — classic scripts run before deferred modules, so `Phaser` is always defined by the time a module body runs. Because ES modules are blocked over `file://`, the game must be opened through a web server (static hosting, or any local server).
+
+  | Path | Holds |
+  |---|---|
+  | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
+  | `src/config.js` | Screen/board layout constants and the colour palette |
+  | `src/data/levels.js` | Level definitions and the `LEVELS` list — where a new level goes |
+  | `src/core/rules.js` | Pure grid math (`wrap`, `moveEntity`, `rotateEntity`, `shiftEntity`, `isBlocked`). No Phaser, no scene state, so it is importable from Node for tests |
+  | `src/ui/button.js` | The shared text button |
+  | `src/ui/BoardView.js` | Grid/goal/character rendering, cell↔pixel mapping, and the transient action arrows. Holds no game state |
+  | `src/scenes/` | `TitleScene`, `LevelSelectScene`, `PuzzleScene` |
 - **Screen size / aspect ratio:** 480x854 (portrait, ~9:16), fixed size
 - **Grid rendering:** Canvas or Phaser Graphics API (simple rects + text)
 - **Key technical risks:** Tile movement input/state (ensuring clean tile-by-tile motion, not continuous)

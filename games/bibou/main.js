@@ -21,7 +21,18 @@ const LEVEL_2 = {
   actionBudget: { rotate: 2 },
 };
 
-const LEVELS = [LEVEL_1, LEVEL_2];
+// Level 3 introduces Shift (see LEVEL_DESIGN.md §5.3/§7). Solvable with two
+// shifts: char (2,3) → (3,3) via row-3 Right, then (3,3) → (3,2) via
+// column-3 Up.
+const LEVEL_3 = {
+  id: 3,
+  gridSize: 5,
+  background: { goal: { x: 3, y: 2 } },
+  entities: { character: { x: 2, y: 3 } },
+  actionBudget: { shift: 2 },
+};
+
+const LEVELS = [LEVEL_1, LEVEL_2, LEVEL_3];
 
 // Direction deltas, per LEVEL_DESIGN.md §5.1.
 const DIRECTIONS = {
@@ -46,7 +57,11 @@ const RING = [
   { x: -1, y: 0 }, // L  (7)
 ];
 
-const ACTION_LABELS = { move: 'Move', rotate: 'Rotate' };
+const ACTION_LABELS = { move: 'Move', rotate: 'Rotate', shift: 'Shift' };
+
+// Distance from the board edge, in px, at which Shift's inward-pointing
+// arrows are drawn (see showShiftArrows). See LEVEL_DESIGN.md §5.3.
+const SHIFT_ARROW_EDGE = 20;
 
 // --- Shared UI helper --------------------------------------------------------
 // A single interactive text button, reused by every scene. `onClick` is the
@@ -288,11 +303,17 @@ class PuzzleScene extends Phaser.Scene {
     this.clearSelection();
     this.selectedAction = action;
     this.actionCards[action].setStyle({ backgroundColor: '#1565c0' });
-    this.setHint(
-      action === 'move'
-        ? 'Tap the character'
-        : 'Tap a tile for the rotation center'
-    );
+    if (action === 'move') {
+      this.setHint('Tap the character');
+    } else if (action === 'rotate') {
+      this.setHint('Tap a tile for the rotation center');
+    } else if (action === 'shift') {
+      // Unlike Move/Rotate, Shift has no separate target-tap step: the
+      // arrows themselves (one per row/column edge) are the target.
+      this.targetSelected = true;
+      this.showShiftArrows();
+      this.setHint('Tap an arrow to shift that row or column');
+    }
   }
 
   clearSelection() {
@@ -465,6 +486,49 @@ class PuzzleScene extends Phaser.Scene {
     });
   }
 
+  // Arrows around every row/column edge, pointing inward. One pair per row
+  // (left edge → shift right, right edge → shift left) and one pair per
+  // column (top edge → shift down, bottom edge → shift up).
+  showShiftArrows() {
+    this.clearControls();
+    for (let y = 0; y < this.size; y++) {
+      const c = this.cellCenter(0, y);
+      this.addShiftArrow(BOARD_X - SHIFT_ARROW_EDGE, c.py, '▶', () =>
+        this.applyShift('row', y, 'Right')
+      );
+      this.addShiftArrow(BOARD_X + BOARD_PX + SHIFT_ARROW_EDGE, c.py, '◀', () =>
+        this.applyShift('row', y, 'Left')
+      );
+    }
+    for (let x = 0; x < this.size; x++) {
+      const c = this.cellCenter(x, 0);
+      this.addShiftArrow(c.px, BOARD_Y - SHIFT_ARROW_EDGE, '▼', () =>
+        this.applyShift('column', x, 'Down')
+      );
+      this.addShiftArrow(c.px, BOARD_Y + BOARD_PX + SHIFT_ARROW_EDGE, '▲', () =>
+        this.applyShift('column', x, 'Up')
+      );
+    }
+  }
+
+  addShiftArrow(px, py, glyph, onPress) {
+    const arrow = this.add
+      .text(px, py, glyph, {
+        fontFamily: 'sans-serif',
+        fontSize: '20px',
+        color: '#ffffff',
+        backgroundColor: '#1565c0',
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    arrow.on('pointerdown', (pointer, lx, ly, event) => {
+      if (event) event.stopPropagation();
+      onPress();
+    });
+    this.controls.push(arrow);
+  }
+
   clearControls() {
     this.controls.forEach((a) => a.destroy());
     this.controls = [];
@@ -551,6 +615,30 @@ class PuzzleScene extends Phaser.Scene {
       this.characterPos = {
         x: this.wrap(center.x + RING[next].x),
         y: this.wrap(center.y + RING[next].y),
+      };
+    }
+
+    this.finishAction();
+  }
+
+  // --- Shift logic ---
+  // Shifts every entity on row `index` (axis 'row') or column `index` (axis
+  // 'column') one cell in `direction`, with wraparound. Only the character is
+  // an entity today; rows/columns it isn't on are unaffected but the action
+  // still costs 1, same as an empty Rotate ring.
+  applyShift(axis, index, direction) {
+    if (this.gameOver || this.selectedAction !== 'shift') return;
+
+    const delta = DIRECTIONS[direction];
+    if (axis === 'row' && this.characterPos.y === index) {
+      this.characterPos = {
+        x: this.wrap(this.characterPos.x + delta.x),
+        y: this.characterPos.y,
+      };
+    } else if (axis === 'column' && this.characterPos.x === index) {
+      this.characterPos = {
+        x: this.characterPos.x,
+        y: this.wrap(this.characterPos.y + delta.y),
       };
     }
 

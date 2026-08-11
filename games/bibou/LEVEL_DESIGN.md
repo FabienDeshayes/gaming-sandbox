@@ -117,7 +117,15 @@ Example: `center = (2, 3)`, character at the top-left ring tile `(1, 2)` (index 
 
 ### 5.3 Shift
 
-Named and scoped in `DESIGN.md` §5 but not yet needed by any level below — it only matters once a level has more than one entity. Full parameter/effect specs will be added here once a level requires it, following the same table format as Move above.
+| Field | Value |
+|---|---|
+| Parameters | `line: { axis: Row \| Column, index }` — which row (`y = index`) or column (`x = index`) to shift; `direction: Left \| Right` for a row, `Up \| Down` for a column |
+| Effect | Every entity currently on the Entity layer at `y = index` (row) or `x = index` (column) moves one cell in `direction`, with wraparound (§2.1). Tiles on that row/column not holding an entity stay empty; the Background layer is untouched. |
+| Legality | Always legal in the MVP: there are no walls, and a row/column with no entity on it "shifts" without visible effect. (Once walls exist, a shift that would land an entity on a blocking Background tile is rejected and costs nothing, same rule as Move/Rotate.) |
+| Cost | 1 |
+| Target selection | Tap the Shift card → arrows appear immediately around **every** row and column edge, pointing inward (`▶` on the left edge / `◀` on the right edge of each row; `▼` above / `▲` below each column) → tap one arrow to shift that row or column in that direction and execute immediately. Unlike Move/Rotate, there is no separate tap-a-target step first — which arrow you tap picks the row/column *and* the direction in one gesture. |
+
+Example: `line = { axis: Row, index: 3 }`, `direction = Right`, character at `(2, 3)` → destination `x = (2 + 1) % 5 = 3` → character ends at `(3, 3)`; a character on any other row is unaffected.
 
 ## 6. Level data format
 
@@ -180,3 +188,22 @@ Introduces the Rotate action (§5.2). The only action available is Rotate; there
 2. Rotate around center `(1, 3)` **clockwise** → the character sits at that center's top-right ring tile `(2, 2)` (index 2) and shifts to index 3, the `R` tile → character now at `(2, 3)` = goal → **win**.
 
 Budget 2 is exactly the shortest solution length, mirroring Level 1's tightness — this time to teach that one rotation equals one cardinal step and that reaching a diagonal needs two of them.
+
+### Level 3
+
+Introduces the Shift action (§5.3). The only action available is Shift; there is no Move or Rotate.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5, no walls |
+| Character start | `(2, 3)` |
+| Goal | `(3, 2)` |
+| Available actions | Shift only |
+| Action budget | 2 |
+
+**Intended solution:** the goal is one tile up-and-right of the start (a diagonal, `(2,3) → (3,2)`). A single shift only moves the character one cardinal step along its row or column (§5.3), so a diagonal takes two shifts:
+
+1. Shift row `y = 3` **Right** → character at `(2, 3)` is on that row, so `x = (2 + 1) % 5 = 3` → character now at `(3, 3)`.
+2. Shift column `x = 3` **Up** → character at `(3, 3)` is on that column, so `y = (3 - 1 + 5) % 5 = 2` → character now at `(3, 2)` = goal → **win**.
+
+Budget 2 is exactly the shortest solution length, mirroring Levels 1 and 2 — this time to teach that Shift moves an entity one cardinal step along a whole row/column at once, and that reaching a diagonal still needs two of them.

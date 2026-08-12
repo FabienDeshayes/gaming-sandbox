@@ -69,7 +69,14 @@ Write the check as an `.mjs` file so Node treats it as ESM:
 
 ```js
 // check.mjs — run from games/bibou with: node check.mjs
-import { moveEntity, rotateEntity, shiftEntity, flipEntity } from './src/core/rules.js';
+import {
+  moveEntity,
+  rotateEntity,
+  shiftEntity,
+  flipEntity,
+  resolveMoveChain,
+  applyMoveChain,
+} from './src/core/rules.js';
 
 const N = 5;
 const eq = (a, b, label) =>
@@ -107,6 +114,29 @@ eq(m, { x: 3, y: 3 }, 'L5:');
 
 // Wraparound (LEVEL_DESIGN.md §2.1)
 eq(moveEntity({ x: 4, y: 0 }, 'Right', N), { x: 0, y: 0 }, 'wrap:');
+
+// Level 6: full-loop push (LEVEL_DESIGN.md §5.1.1/§7) — row y=2 completely
+// full, character (1,2) moves Right and the whole row rotates by one.
+const level6 = { background: { goal: { x: 2, y: 2 } } };
+const l6entities = [
+  { kind: 'character', pos: { x: 1, y: 2 } },
+  { kind: 'crate', pos: { x: 0, y: 2 } },
+  { kind: 'crate', pos: { x: 2, y: 2 } },
+  { kind: 'crate', pos: { x: 3, y: 2 } },
+  { kind: 'crate', pos: { x: 4, y: 2 } },
+];
+const chain = resolveMoveChain(level6, l6entities, { x: 1, y: 2 }, 'Right', N);
+console.log(
+  'L6 chain:',
+  chain,
+  chain && chain.length === 6 ? 'OK' : 'WRONG (expected 6-tile loop back to start)'
+);
+applyMoveChain(l6entities, chain);
+eq(l6entities[0].pos, { x: 2, y: 2 }, 'L6 char (goal):');
+eq(l6entities[1].pos, { x: 1, y: 2 }, 'L6 crate 0,2 ->:');
+eq(l6entities[2].pos, { x: 3, y: 2 }, 'L6 crate 2,2 ->:');
+eq(l6entities[3].pos, { x: 4, y: 2 }, 'L6 crate 3,2 ->:');
+eq(l6entities[4].pos, { x: 0, y: 2 }, 'L6 crate 4,2 ->:');
 ```
 
 > Node ≥ 22 detects module syntax, so importing `src/core/rules.js` works even
@@ -309,6 +339,10 @@ const server = http.createServer((req, res) => {
 - **Crates move with the board:** on a level with crates, assert their positions
   after Rotate/Shift/Flip, and that Move can target a crate (tap the crate's cell,
   not the character's) without moving the character.
+- **Pushing resolves correctly:** on a level where a Move's destination is occupied,
+  assert every entity in the chain shifted by one, not just the one tapped — including
+  the full-loop case (Level 6, `LEVEL_DESIGN.md` §5.1.1/§7), where a fully-occupied
+  row/column rotates by one instead of the move being rejected.
 - **Both input styles:** exercise arrow taps *and* swipes (cardinal swipes for Move;
   right = clockwise / left = anticlockwise for Rotate; horizontal = column flip /
   vertical = row flip for Flip), since they're separate code paths.

@@ -85,6 +85,44 @@ export function shiftEntity(pos, axis, index, direction, size) {
   return { ...pos };
 }
 
+// Move push-chain resolution (LEVEL_DESIGN.md §3/§5.1): no two entities may
+// share a tile, so moving one into an occupied tile pushes whatever is there.
+// Walk the line of tiles starting at `pos` in `direction`, following whichever
+// entity occupies each tile in turn, until either an unoccupied tile is found
+// (the chain can resolve there) or — because the board wraps — the walk comes
+// back around to `pos` itself, meaning every tile on that line was occupied.
+// That closed-loop case still resolves: the whole line rotates by one, the
+// same as if it had been Shifted. Returns the ordered list of tiles the chain
+// passes through, `[pos, ..., destination]`, or `null` if a blocking
+// Background tile (post-MVP wall) stops the chain before it resolves.
+export function resolveMoveChain(level, entities, pos, direction, size) {
+  const path = [pos];
+  let current = pos;
+  for (let i = 0; i < size; i++) {
+    current = moveEntity(current, direction, size);
+    if (isBlocked(level, current)) return null;
+    path.push(current);
+    if (samePos(current, pos)) break; // full loop: line was entirely occupied
+    if (!entities.some((e) => samePos(e.pos, current))) break; // open tile
+  }
+  return path;
+}
+
+// Apply a chain resolved by resolveMoveChain: every entity along `path` except
+// the last tile shifts one step forward to the next tile in the chain. Every
+// occupant is looked up against the *original* entities first, before any
+// position is written, so the closed-loop case (where the last step lands back
+// on the mover's own starting tile) never matches the entity that's about to
+// be overwritten.
+export function applyMoveChain(entities, path) {
+  const occupants = path
+    .slice(0, -1)
+    .map((p) => entities.find((e) => samePos(e.pos, p)));
+  occupants.forEach((entity, i) => {
+    entity.pos = path[i + 1];
+  });
+}
+
 // Flip: mirror the whole entity layer across the board's middle line. `axis` is
 // the mirror line itself: 'row' mirrors across the middle row (y flips, the
 // board turns top-to-bottom), 'column' mirrors across the middle column (x

@@ -37,7 +37,8 @@ The Board (the whole 5×5 grid) has two layers:
 | Background constraints | Walls block entity movement; the goal tile triggers a win when the character enters it. Static — defined by the puzzle layout. |
 | Goal detection | Win condition triggered when the character enters the goal tile. Checked automatically after each action resolves. |
 | Action budget | Budgets are **per action type**: a puzzle grants each action it offers its own pool of uses, and spending one only draws down that action's pool. Each card shows its own remaining count; a spent action greys out while the others keep working. |
-| Crates | A second kind of entity. Crates have no rules of their own yet — every action moves them exactly like the character, and only the character can win. They exist so puzzles have something else on the board to rearrange. |
+| Crates | A second kind of entity. No rules of its own beyond pushing — every action moves it exactly like the character, and only the character can win. It exists so puzzles have something else on the board to rearrange, and something for Move to push. |
+| Pushing | No two entities may occupy the same tile. Moving an entity onto an occupied tile pushes whatever's there one step further in the same direction first, and so on down the chain if that tile is occupied too — a character can push a crate that pushes another crate. Rotate, Shift, and Flip never need this: they displace every affected entity at once as a single reshuffle, so entities never land on each other. |
 
 ## 5. Actions
 
@@ -47,7 +48,7 @@ Selecting an action follows a **tap the card → tap the target on the board →
 
 | Action | Effect on the board | Target selection |
 |---|---|---|
-| Move | Moves a single entity — the character *or* a crate — one cell in a cardinal direction, into an adjacent open cell. Blocked by walls; the board is borderless and wraps, so moving past an edge is always legal. | Tap entity → tap a direction arrow (or swipe) — the move executes on direction, no separate confirm |
+| Move | Moves a single entity — the character *or* a crate — one cell in a cardinal direction. If the destination is occupied, the entity there is pushed one step in the same direction first (and so on down the chain); blocked only by a wall the chain runs into. The board is borderless and wraps, so a push chain can wrap around — if it wraps all the way back to the mover's own tile (every tile on that line occupied), the whole line rotates by one instead of deadlocking. | Tap entity → tap a direction arrow (or swipe) — the move executes on direction, no separate confirm |
 | Rotate | Shifts the 8 tiles surrounding a chosen center tile one step around their ring, clockwise or anticlockwise. Entities inside move with it; empty cells rotate too; the center tile is untouched. See `LEVEL_DESIGN.md` §5.2 for the exact ring order. | Tap center tile → tap a rotation arrow (↺/↻) or swipe right (CW) / left (CCW) |
 | Shift | Shifts every entity in a row or column one cell in a direction. | Tap Shift card → arrows appear pointing inward around every row/column edge → tap one to shift that row/column in that direction, no separate confirm |
 | Flip | Mirrors the **whole** entity layer across the board's middle row or middle column — every entity on the board moves at once. The biggest-impact action in the game: it can cross the board in a single use, and it moves crates just as far as the character. | Tap Flip card → both mirror lines highlight, with `↔` above the middle column and `↕` beside the middle row → tap one (or swipe horizontally/vertically) to flip across that line, no separate confirm |
@@ -63,7 +64,7 @@ Notes:
 - Grid size: 5×5 (or similar small, digestible size)
 - Board is borderless and loops: an entity moving past index 4 wraps to index 0 (and vice versa) on both axes — there is no "off the grid". Wraparound only affects how the destination coordinate is computed; a blocking tile on the Background layer (e.g. a wall) still blocks the move.
 - Two-layer grid: static Background layer (floor/walls/goal) + movable Entity layer (character and crates) — actions only ever affect the Entity layer
-- Entities may share a cell: crates neither block nor push anything yet, so no action can be rejected because of another entity
+- No two entities may share a cell: Move pushes whatever occupies its destination, one step at a time down the chain; Rotate, Shift, and Flip move everything they affect at once, so they never produce a collision to resolve
 - Limited action budget per puzzle, granted **per action type** (exact counts vary by puzzle design)
 - Turn-based only (no real-time pressure)
 - Four action types: move, rotate, shift, flip
@@ -102,7 +103,7 @@ Primary interaction is touch (card-based selection). Keyboard controls are not y
 **Nice to have (only after MVP works):**
 - Undo / redo system
 - Multiple puzzle levels with progressive difficulty, including puzzles that require Rotate, Shift, and Flip
-- Rules for crates beyond being moved (pushing, blocking, crate-on-target goals)
+- Further crate rules beyond pushing/blocking (crate-on-target goals, crate-specific win conditions)
 - Puzzle selector / level menu
 - Background layer variety (obstacles, springs, etc.) with special behaviors
 - Character/goal animations

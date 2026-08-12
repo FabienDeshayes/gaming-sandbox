@@ -10,9 +10,9 @@ import {
   SWIPE_THRESHOLD,
 } from '../config.js';
 import {
+  applyMoveChain,
   flipEntity,
-  isBlocked,
-  moveEntity,
+  resolveMoveChain,
   rotateEntity,
   samePos,
   shiftEntity,
@@ -34,9 +34,9 @@ export class PuzzleScene extends Phaser.Scene {
     const size = this.level.gridSize;
     this.size = size;
 
-    // The entity layer: the character plus any crates, in render order. Crates
-    // carry no rules of their own yet — actions move them exactly like the
-    // character, and only the character can win (LEVEL_DESIGN.md §3).
+    // The entity layer: the character plus any crates, in render order. No two
+    // entities may share a tile — Move pushes whatever's in the way — and only
+    // the character can win (LEVEL_DESIGN.md §3).
     this.entities = [
       { kind: 'character', pos: { ...this.level.entities.character } },
       ...(this.level.entities.crates ?? []).map((pos) => ({
@@ -374,17 +374,22 @@ export class PuzzleScene extends Phaser.Scene {
     )
       return;
 
-    const dest = moveEntity(this.moveTarget.pos, direction, this.size);
-
-    // Legality: no walls in the MVP, so any destination is legal. Structured
-    // this way so a blocking-tile check can be added later (LEVEL_DESIGN §5.1).
-    // Entities may share a cell, so another entity never blocks a move.
-    if (isBlocked(this.level, dest)) {
+    // An entity in the way gets pushed first, and so on down the chain — see
+    // resolveMoveChain (LEVEL_DESIGN.md §5.1). Only a blocking Background tile
+    // (post-MVP wall) can make this illegal.
+    const chain = resolveMoveChain(
+      this.level,
+      this.entities,
+      this.moveTarget.pos,
+      direction,
+      this.size
+    );
+    if (!chain) {
       this.setHint('Blocked — try another direction');
       return;
     }
 
-    this.moveTarget.pos = dest;
+    applyMoveChain(this.entities, chain);
     this.finishAction('move');
   }
 

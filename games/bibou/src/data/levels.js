@@ -70,4 +70,26 @@ export const LEVEL_5 = {
   actionBudget: { move: 1, flip: 1 },
 };
 
-export const LEVELS = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
+// Level 6 tests crate pushing (see LEVEL_DESIGN.md §3/§5.1/§7). Row y=2 is
+// completely full — character at (1,2), crates at (0,2), (2,2), (3,2), (4,2) —
+// so a single Move Right pushes the whole chain around the wraparound board
+// and back into the character's own vacated tile: a full-loop push, which
+// resolves as the entire row rotating one step. That lands the character
+// exactly on the goal at (2,2).
+export const LEVEL_6 = {
+  id: 6,
+  gridSize: 5,
+  background: { goal: { x: 2, y: 2 } },
+  entities: {
+    character: { x: 1, y: 2 },
+    crates: [
+      { x: 0, y: 2 },
+      { x: 2, y: 2 },
+      { x: 3, y: 2 },
+      { x: 4, y: 2 },
+    ],
+  },
+  actionBudget: { move: 1 },
+};
+
+export const LEVELS = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5, LEVEL_6];

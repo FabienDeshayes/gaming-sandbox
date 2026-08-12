@@ -67,8 +67,9 @@ export class BoardView {
   }
 
   // One sprite per entity, in the same order as the list PuzzleScene owns.
-  // Crates sit below the character so an overlap still reads as "the character
-  // is here" (entities may share a cell — see LEVEL_DESIGN.md §3).
+  // Crates sit below the character in draw order — no two entities ever share
+  // a tile now (LEVEL_DESIGN.md §3), but this keeps the character legible if a
+  // future entity type ever does.
   createEntities(entities) {
     this.entitySprites = entities.map((entity) => {
       if (entity.kind === 'crate') {

@@ -56,12 +56,16 @@ Moving off one side of the board is therefore always legal *as far as the edge i
 | Entity | Layer | Notes |
 |---|---|---|
 | Character | Entity | The thing the player is trying to get onto the goal tile. One per level (MVP). |
-| Crate | Entity | Any number per level, optional. Carries **no rules of its own yet**: every action displaces a crate exactly as it displaces the character, a crate on the goal tile does nothing, and Move can target a crate as readily as the character. |
+| Crate | Entity | Any number per level, optional. Carries **no rules of its own beyond pushing**: every action displaces a crate exactly as it displaces the character, a crate on the goal tile does nothing, and Move can target a crate as readily as the character. |
 | Goal | Background | A single tile marked as the win condition. Static — part of the Background layer, not something that moves. |
 
-**Entities do not interact.** Two entities may occupy the same cell, and a crate never blocks or gets pushed by anything. This keeps every action's legality a question about the Background layer alone (§5), which is what lets Rotate, Shift, and Flip move several entities at once without needing a resolution order. Giving crates real rules — pushing, blocking, crate-on-target win conditions — is the obvious next step, and would be the point at which multi-entity actions need one.
+**No two entities may occupy the same tile.** When Move would displace an entity onto a tile another entity already occupies, the entity already there is pushed one step further in the same direction first — and if *that* tile is occupied too, the push cascades down the chain before anything actually moves. See §5.1 for exactly how a push chain resolves, including the case where the chain wraps all the way around the board.
 
-When entities share a cell the character is drawn on top, and a Move tap on that cell targets the character.
+Pushing is a Move-only concern. Rotate, Shift, and Flip each displace every entity they affect in one simultaneous reshuffle — a permutation of positions, not a sequence of single-entity displacements — so two entities can never end up sharing a tile as a result of those actions, whatever the layout going in. Move is the only action where one entity moves into a tile that isn't moving along with it, so it's the only one that ever needs to push.
+
+This section anticipates a future **collectible** entity type that would be picked up rather than pushed or blocked — not yet implemented, see `TODO.md`. Every entity in the MVP (character, crate) blocks and gets pushed.
+
+Since entities never share a tile outside of an in-progress push resolution, a Move tap on a cell always targets the one entity present there; the character is still drawn above crates in `BoardView` for legibility, but that no longer needs to break a tie.
 
 ## 4. Win condition
 
@@ -81,14 +85,28 @@ Every action is defined by:
 | Field | Value |
 |---|---|
 | Parameters | `startTile: (x, y)` — the tile to move; `direction: Up \| Down \| Left \| Right` |
-| Effect | The entity on the Entity layer at `startTile` — character or crate — is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). Only that one entity moves. The Background layer is untouched. |
-| Legality | `startTile` must currently hold an entity on the Entity layer. The destination tile (after wraparound) must not be a blocking tile on the Background layer (§1.1 — e.g. a wall). Another entity at the destination is *not* a blocker (§3). *(MVP has no walls, so this check is always satisfied until walls are added.)* |
+| Effect | The entity on the Entity layer at `startTile` — character or crate — is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). If that destination tile is occupied, the entity there is displaced one step further in `direction` first, and so on down the chain (§5.1.1) — every entity in the chain ends up shifted one step. The Background layer is untouched. |
+| Legality | `startTile` must currently hold an entity on the Entity layer. Walking the push chain from `startTile` in `direction` must not hit a blocking tile on the Background layer (§1.1 — e.g. a wall) before it resolves. *(MVP has no walls, so this check is always satisfied until walls are added.)* |
 | Cost | 1 Move |
 | Target selection | Tap the Move card → tap an entity (character or crate) → four directional arrows appear around it; tap an arrow **or** swipe in a cardinal direction to choose the direction. Choosing the direction executes the move immediately — there is no separate confirm step (per `DESIGN.md` §5). Tapping the selected entity again cancels; tapping a different entity re-targets the move. |
 
 Direction deltas: `Up = (0, -1)`, `Down = (0, +1)`, `Left = (-1, 0)`, `Right = (+1, 0)`.
 
-Example: character at `(4, 2)` moves `Right` → destination `x = (4 + 1) % 5 = 0` → character ends at `(0, 2)`.
+Example (no push): character at `(4, 2)` moves `Right` → destination `x = (4 + 1) % 5 = 0` → character ends at `(0, 2)`.
+
+#### 5.1.1 Push chains
+
+Moving an entity onto an occupied tile pushes a chain, not just one neighbour: starting at `startTile`, walk the line of tiles in `direction` — `startTile`, then one step further, then one step further again — following whichever entity occupies each tile, until one of three things happens:
+
+1. **An unoccupied tile is found.** The chain resolves there: every entity from `startTile` up to (but not including) that tile shifts one step forward into the next tile in the chain. This is the common case — pushing one crate, or a crate that pushes another crate.
+2. **A blocking Background tile is hit** (post-MVP wall). The whole move is illegal and nothing moves — same as any other illegal action (`DESIGN.md` §5).
+3. **The walk wraps all the way back to `startTile` itself**, because the board is borderless (§2.1) and every tile on that row/column is occupied by an entity. There is no open tile to resolve into, but this is *not* a deadlock: every entity in the chain still shifts one step forward, including the entity that was at `startTile` — the net effect is the entire line rotating by one, identical to a Shift on that line. This is the case Level 6 (§7) is built to exercise.
+
+Implementation: `resolveMoveChain` (in `src/core/rules.js`) walks the chain and returns the ordered list of tiles it passes through, or `null` for case 2; `applyMoveChain` shifts every entity in that list forward by one. Both cases 1 and 3 are the same function call — case 3 is simply what happens when the walk's terminating condition is "back at the start" instead of "found an empty tile".
+
+Example (push, no loop): row has crates at `(2, 2)` and `(3, 2)`, character at `(1, 2)`. Character moves `Right`: destination `(2, 2)` is occupied, so the chain walks to `(3, 2)` (also occupied), then to `(4, 2)` (open) — chain resolves. Character ends at `(2, 2)`, the first crate at `(3, 2)`, the second crate at `(4, 2)`.
+
+Example (full-loop push): see Level 6 (§7) — a row completely filled by 5 entities, where a single Move rotates the whole row by one.
 
 ### 5.2 Rotate
 
@@ -299,3 +317,28 @@ The first level offering **two** action types, each with its own budget (§6) �
 Note the character starts on the middle row (`y = 2`), so a **row** flip does nothing to it (§5.4) and wastes the level's only Flip. The crate at `(1, 0)` is off the middle column, so it visibly jumps to `(3, 0)` on the correct flip, giving the player feedback that the action did something even when they mis-target.
 
 This level is where the per-action budget teaches itself: spending the Move on the crate — which is legal, crates are movable entities (§3) — leaves the character able to reach only `(3, 2)`, one cell short, with Move already at `0`. The lose condition still waits until *both* pools are empty.
+
+### Level 6
+
+A push-chain test level, not a difficulty step: it exists to exercise the full-loop case in §5.1.1 — a row filled edge-to-edge by every entity on the board, so a single Move has to push all the way around the wraparound board and back into the mover's own tile.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5, no walls |
+| Character start | `(1, 2)` |
+| Crates | `(0, 2)`, `(2, 2)`, `(3, 2)`, `(4, 2)` |
+| Goal | `(2, 2)` |
+| Available actions | Move only |
+| Action budget | Move: 1 |
+
+Row `y = 2` holds five entities on a five-wide board — every tile on that row is occupied. `entities.crates` starts one of its four crates sitting on the goal tile itself, which is legal and does nothing (§4) — the goal only cares what the *character* is standing on.
+
+**Intended solution:** Move the character `Right`. `resolveMoveChain` walks `(1,2) → (2,2) → (3,2) → (4,2) → (0,2) → (1,2)` — six tiles, because the sixth step wraps back to the character's own starting tile, having visited every occupied tile on the row exactly once (§5.1.1 case 3). The chain resolves as a full-row rotation:
+
+- Character `(1, 2) → (2, 2)` = goal → **win**
+- Crate `(2, 2) → (3, 2)`
+- Crate `(3, 2) → (4, 2)`
+- Crate `(4, 2) → (0, 2)`
+- Crate `(0, 2) → (1, 2)`
+
+One Move, zero slack, and it only works because the full-loop case resolves as a rotation rather than rejecting the move — if it were treated as blocked instead, this exact level would be unsolvable with the budget given.

@@ -84,3 +84,15 @@ export function shiftEntity(pos, axis, index, direction, size) {
   }
   return { ...pos };
 }
+
+// Flip: mirror the whole entity layer across the board's middle line. `axis` is
+// the mirror line itself: 'row' mirrors across the middle row (y flips, the
+// board turns top-to-bottom), 'column' mirrors across the middle column (x
+// flips, the board turns left-to-right). Every entity moves, so this is the
+// only action that touches the whole board at once. No wraparound is involved —
+// mirroring never leaves the grid. See LEVEL_DESIGN.md §5.4.
+export function flipEntity(pos, axis, size) {
+  if (axis === 'row') return { x: pos.x, y: size - 1 - pos.y };
+  if (axis === 'column') return { x: size - 1 - pos.x, y: pos.y };
+  return { ...pos };
+}

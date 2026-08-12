@@ -11,7 +11,7 @@ The **Board** is the whole 5×5 tile grid for a level — the union of both laye
 - **Size:** 5×5 tiles, fixed for now (all levels in this doc use this size).
 - **Layers:** every tile on the Board has a cell on each of two layers, stacked at the same coordinate.
   - **Background layer** (static): floor, walls (post-MVP), and the goal tile. Never changes during play. Defines where the Entity layer is allowed to end up and where the win condition fires.
-  - **Entity layer** (movable): the character, and later (post-MVP) pushable items. Every action reads and writes this layer only — the Background layer is read-only during play.
+  - **Entity layer** (movable): the character and crates. Every action reads and writes this layer only — the Background layer is read-only during play.
 
 ### 1.1 Background tile types
 
@@ -42,7 +42,7 @@ Implementation note: store each layer as a 2D array indexed `grid[y][x]` (row-ma
 
 ### 2.1 Borderless wraparound
 
-The board has no edges — it loops. This applies to **any** entity movement on the board, regardless of which action causes it (Move and Rotate today; Shift once it's specified).
+The board has no edges — it loops. This applies to **any** entity movement on the board, regardless of which action causes it (Move, Rotate, and Shift). Flip (§5.4) is the exception, and only because it never needs wrapping: mirroring a coordinate inside the grid always lands inside the grid.
 
 - If a move would take a coordinate to index `5` (or beyond), it wraps to index `0`.
 - If a move would take a coordinate to index `-1` (or below), it wraps to index `4`.
@@ -56,7 +56,12 @@ Moving off one side of the board is therefore always legal *as far as the edge i
 | Entity | Layer | Notes |
 |---|---|---|
 | Character | Entity | The thing the player is trying to get onto the goal tile. One per level (MVP). |
+| Crate | Entity | Any number per level, optional. Carries **no rules of its own yet**: every action displaces a crate exactly as it displaces the character, a crate on the goal tile does nothing, and Move can target a crate as readily as the character. |
 | Goal | Background | A single tile marked as the win condition. Static — part of the Background layer, not something that moves. |
+
+**Entities do not interact.** Two entities may occupy the same cell, and a crate never blocks or gets pushed by anything. This keeps every action's legality a question about the Background layer alone (§5), which is what lets Rotate, Shift, and Flip move several entities at once without needing a resolution order. Giving crates real rules — pushing, blocking, crate-on-target win conditions — is the obvious next step, and would be the point at which multi-entity actions need one.
+
+When entities share a cell the character is drawn on top, and a Move tap on that cell targets the character.
 
 ## 4. Win condition
 
@@ -69,17 +74,17 @@ Every action is defined by:
 - **Parameters** — the inputs needed to fully specify one use of the action.
 - **Effect** — what it does to the Entity layer when executed.
 - **Legality** — conditions checked before the action is allowed to confirm; an illegal action is rejected and costs nothing (per `DESIGN.md` §5).
-- **Cost** — spent from the level's action budget on successful execution. All actions cost 1 (per `DESIGN.md` §4).
+- **Cost** — spent from **that action's own** budget on successful execution. Every action costs 1 use of itself and nothing from any other action's pool (§6).
 
 ### 5.1 Move
 
 | Field | Value |
 |---|---|
 | Parameters | `startTile: (x, y)` — the tile to move; `direction: Up \| Down \| Left \| Right` |
-| Effect | Whatever occupies the Entity layer at `startTile` is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). `startTile` becomes empty; the destination takes its former contents. The Background layer is untouched. |
-| Legality | `startTile` must currently hold an entity on the Entity layer. The destination tile (after wraparound) must not be a blocking tile on the Background layer (§1.1 — e.g. a wall). *(MVP has no walls, so this check is always satisfied until walls are added.)* |
-| Cost | 1 |
-| Target selection | Tap the Move card → tap the entity (character) → four directional arrows appear around it; tap an arrow **or** swipe in a cardinal direction to choose the direction. Choosing the direction executes the move immediately — there is no separate confirm step (per `DESIGN.md` §5). |
+| Effect | The entity on the Entity layer at `startTile` — character or crate — is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). Only that one entity moves. The Background layer is untouched. |
+| Legality | `startTile` must currently hold an entity on the Entity layer. The destination tile (after wraparound) must not be a blocking tile on the Background layer (§1.1 — e.g. a wall). Another entity at the destination is *not* a blocker (§3). *(MVP has no walls, so this check is always satisfied until walls are added.)* |
+| Cost | 1 Move |
+| Target selection | Tap the Move card → tap an entity (character or crate) → four directional arrows appear around it; tap an arrow **or** swipe in a cardinal direction to choose the direction. Choosing the direction executes the move immediately — there is no separate confirm step (per `DESIGN.md` §5). Tapping the selected entity again cancels; tapping a different entity re-targets the move. |
 
 Direction deltas: `Up = (0, -1)`, `Down = (0, +1)`, `Left = (-1, 0)`, `Right = (+1, 0)`.
 
@@ -92,7 +97,7 @@ Example: character at `(4, 2)` moves `Right` → destination `x = (4 + 1) % 5 = 
 | Parameters | `center: (x, y)` — the tile at the middle of the rotation; `direction: Clockwise \| Anticlockwise` |
 | Effect | The 8 tiles surrounding `center` (its Chebyshev-distance-1 neighbours, with wraparound §2.1) form a ring. Each tile's Entity-layer contents shift **one step** around that ring in `direction`. The `center` tile itself is untouched, as is the Background layer. Empty ring tiles "rotate" too — they just carry nothing. |
 | Legality | Always legal in the MVP: there are no walls, and empty tiles are allowed to rotate. (Once walls exist, a rotation that would land an entity on a blocking Background tile is rejected and costs nothing, same rule as Move.) |
-| Cost | 1 |
+| Cost | 1 Rotate |
 | Target selection | Tap the Rotate card → tap a tile to set the rotation **center** → two rotation arrows appear above the center (`↺` anticlockwise, `↻` clockwise); tap an arrow **or** swipe **right** (clockwise) / **left** (anticlockwise) to choose the direction and execute in one gesture. Tapping the center tile again cancels; tapping a different tile re-centers. |
 
 **Ring order.** The 8 surrounding tiles, in clockwise order starting from the top-left corner:
@@ -122,10 +127,38 @@ Example: `center = (2, 3)`, character at the top-left ring tile `(1, 2)` (index 
 | Parameters | `line: { axis: Row \| Column, index }` — which row (`y = index`) or column (`x = index`) to shift; `direction: Left \| Right` for a row, `Up \| Down` for a column |
 | Effect | Every entity currently on the Entity layer at `y = index` (row) or `x = index` (column) moves one cell in `direction`, with wraparound (§2.1). Tiles on that row/column not holding an entity stay empty; the Background layer is untouched. |
 | Legality | Always legal in the MVP: there are no walls, and a row/column with no entity on it "shifts" without visible effect. (Once walls exist, a shift that would land an entity on a blocking Background tile is rejected and costs nothing, same rule as Move/Rotate.) |
-| Cost | 1 |
+| Cost | 1 Shift |
 | Target selection | Tap the Shift card → arrows appear immediately around **every** row and column edge, pointing inward (`▶` on the left edge / `◀` on the right edge of each row; `▼` above / `▲` below each column) → tap one arrow to shift that row or column in that direction and execute immediately. Unlike Move/Rotate, there is no separate tap-a-target step first — which arrow you tap picks the row/column *and* the direction in one gesture. |
 
 Example: `line = { axis: Row, index: 3 }`, `direction = Right`, character at `(2, 3)` → destination `x = (2 + 1) % 5 = 3` → character ends at `(3, 3)`; a character on any other row is unaffected.
+
+### 5.4 Flip
+
+The board's highest-impact action: it mirrors the **entire** entity layer in one use, so every entity moves at once and an entity can cross the whole board in a single action.
+
+| Field | Value |
+|---|---|
+| Parameters | `axis: Row \| Column` — the **mirror line**, i.e. the middle row or the middle column of the board |
+| Effect | Every entity on the Entity layer is reflected across that middle line. `axis: Row` mirrors across the middle row, so `y` flips and the board turns top-to-bottom; `axis: Column` mirrors across the middle column, so `x` flips and the board turns left-to-right. The other coordinate is unchanged. The Background layer is untouched — the goal tile does **not** move. |
+| Legality | Always legal in the MVP: there are no walls, and mirroring never leaves the grid. (Once walls exist, a flip that would land an entity on a blocking Background tile is rejected and costs nothing, same rule as the other actions.) |
+| Cost | 1 Flip |
+| Target selection | Tap the Flip card → both mirror lines highlight, with `↔` above the middle column and `↕` to the left of the middle row → tap one arrow, **or** swipe horizontally (mirror across the middle column) / vertically (mirror across the middle row), to execute immediately. Like Shift, there is no separate tap-a-target step — Flip always affects the whole board, so the only choice is which line to mirror across. |
+
+**Formula.** For board size `N`, mirroring coordinate `c` gives `N - 1 - c`:
+
+- `axis: Row` → `(x, y)` becomes `(x, N - 1 - y)`
+- `axis: Column` → `(x, y)` becomes `(N - 1 - x, y)`
+
+No wraparound is involved (§2.1) — the mirror of an in-range coordinate is always in range.
+
+**Properties worth designing around:**
+
+- **Flip is its own inverse.** Flipping twice across the same line returns every entity to where it started, wasting two actions. This is the main way a player loses a Flip-only level.
+- **The middle line is a fixed point.** On the 5×5 board, an entity at `y = 2` is unmoved by a row flip, and one at `x = 2` is unmoved by a column flip. An entity at `(2, 2)` is unmoved by either. The two mirror lines are highlighted while Flip is selected precisely so this is visible before committing.
+- **Distance travelled depends on where you are.** An entity on an edge (`0` or `4`) jumps 4 cells; one adjacent to the middle jumps 2. Flip is strongest from the edges and weakest near the center.
+- **The goal never moves,** so a flip changes the character's relationship to the goal — unlike Rotate/Shift, it can close a large gap or open one just as fast.
+
+Example: `axis: Column` on a 5×5 board, character at `(1, 1)` → `x = 5 - 1 - 1 = 3` → character ends at `(3, 1)`. A crate at `(0, 0)` moves to `(4, 0)` in the same action.
 
 ## 6. Level data format
 
@@ -139,15 +172,26 @@ Suggested shape for encoding a level, for whoever implements level loading:
     "goal": { "x": 3, "y": 2 }
   },
   "entities": {
-    "character": { "x": 1, "y": 2 }
+    "character": { "x": 1, "y": 2 },
+    "crates": [{ "x": 0, "y": 0 }]
   },
   "actionBudget": {
-    "move": 2
+    "move": 2,
+    "flip": 1
   }
 }
 ```
 
-`actionBudget` is keyed per action type so a level can restrict which actions are available at all (an action type absent or `0` means it can't be used) — this is how Level 1 offers only Move.
+`entities.crates` is optional — omit it for a level with no crates. Each entry is one crate's starting position (§3).
+
+**`actionBudget` is per action type, in two senses:**
+
+1. **Which actions the level offers.** An action type absent from the map, or set to `0`, cannot be used at all — this is how Level 1 offers only Move. Only the listed actions get a card.
+2. **How many times each may be used.** Each key is that action's own private pool. Using Flip draws down `flip` and nothing else, so `{ "move": 1, "flip": 1 }` means *exactly one Move and exactly one Flip* — not "two actions, spend them however you like". A level is lost only when **every** listed action has hit `0` without the character reaching the goal.
+
+Each card displays its own remaining count and greys out when spent, while the level's HUD counter shows total actions used against the sum of all pools. In Test mode every pool is unlimited.
+
+This is the main knob for level difficulty: the *mix* matters as much as the total. Two of one action plays very differently from one each of two, since neither can cover for the other.
 
 ## 7. Levels
 
@@ -207,3 +251,51 @@ Introduces the Shift action (§5.3). The only action available is Shift; there i
 2. Shift column `x = 3` **Up** → character at `(3, 3)` is on that column, so `y = (3 - 1 + 5) % 5 = 2` → character now at `(3, 2)` = goal → **win**.
 
 Budget 2 is exactly the shortest solution length, mirroring Levels 1 and 2 — this time to teach that Shift moves an entity one cardinal step along a whole row/column at once, and that reaching a diagonal still needs two of them.
+
+### Level 4
+
+Introduces the Flip action (§5.4) **and** crates (§3). The only action available is Flip.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5, no walls |
+| Character start | `(1, 1)` |
+| Crates | `(0, 0)` and `(4, 2)` |
+| Goal | `(3, 3)` |
+| Available actions | Flip only |
+| Action budget | Flip: 2 |
+
+**Intended solution:** the goal sits diagonally opposite the start through the board's center (`(1,1) → (3,3)`), which is exactly one mirror per axis. The two flips commute, so either order works:
+
+1. Flip across the middle **column** → character `x = 5 - 1 - 1 = 3` → character now at `(3, 1)`.
+2. Flip across the middle **row** → character `y = 5 - 1 - 1 = 3` → character now at `(3, 3)` = goal → **win**.
+
+(Row first gives `(1, 3)` then `(3, 3)` — same result.)
+
+Budget 2 is exactly the shortest solution, matching Levels 1–3. The trap this level teaches is Flip's self-inverse property (§5.4): using the *same* axis twice returns the character to `(1, 1)` and loses the level, so the player has to notice that the two arrows do different things rather than tapping the same one twice.
+
+The two crates carry no rules — they're here to make Flip's whole-board reach visible. They travel with the character on every flip: on the column-then-row solution, `(0, 0) → (4, 0) → (4, 4)` and `(4, 2) → (0, 2) → (0, 2)`. That second crate starts on the middle row, so the row flip leaves it exactly where it is — the fixed-point rule from §5.4, demonstrated on the board while the player watches.
+
+### Level 5
+
+The first level offering **two** action types, each with its own budget (§6) — one Move and one Flip. Neither can substitute for the other, so the level can only be solved by using each exactly once.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5, no walls |
+| Character start | `(1, 2)` |
+| Crates | `(1, 0)` |
+| Goal | `(3, 3)` |
+| Available actions | Move and Flip |
+| Action budget | Move: 1, Flip: 1 |
+
+**Intended solution:** a column flip covers the horizontal gap (`x: 1 → 3`) and the single Move covers the remaining step down. Either order works:
+
+1. Flip across the middle **column** → character `x = 5 - 1 - 1 = 3` → character now at `(3, 2)`.
+2. Move `Down` → character now at `(3, 3)` = goal → **win**.
+
+(Move first gives `(1, 3)`, then the column flip gives `(3, 3)` — same result.)
+
+Note the character starts on the middle row (`y = 2`), so a **row** flip does nothing to it (§5.4) and wastes the level's only Flip. The crate at `(1, 0)` is off the middle column, so it visibly jumps to `(3, 0)` on the correct flip, giving the player feedback that the action did something even when they mis-target.
+
+This level is where the per-action budget teaches itself: spending the Move on the crate — which is legal, crates are movable entities (§3) — leaves the character able to reach only `(3, 2)`, one cell short, with Move already at `0`. The lose condition still waits until *both* pools are empty.

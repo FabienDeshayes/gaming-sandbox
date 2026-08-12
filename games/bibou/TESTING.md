@@ -11,7 +11,7 @@ Phaser scene state back out. This doc gives you a ready-to-adapt harness.
 
 ## Two levels of checking
 
-1. **Rule math only (fast, no browser).** Move, Rotate, and Shift are pure
+1. **Rule math only (fast, no browser).** Move, Rotate, Shift, and Flip are pure
    coordinate math living in `src/core/rules.js` (see `LEVEL_DESIGN.md` §5). You can
    import that module straight into Node and verify a solution's arithmetic without
    launching anything — good for sanity-checking a new level's intended solution
@@ -69,7 +69,7 @@ Write the check as an `.mjs` file so Node treats it as ESM:
 
 ```js
 // check.mjs — run from games/bibou with: node check.mjs
-import { moveEntity, rotateEntity, shiftEntity } from './src/core/rules.js';
+import { moveEntity, rotateEntity, shiftEntity, flipEntity } from './src/core/rules.js';
 
 const N = 5;
 const eq = (a, b, label) =>
@@ -86,6 +86,24 @@ let s = { x: 2, y: 3 };
 s = shiftEntity(s, 'row', 3, 'Right', N);
 s = shiftEntity(s, 'column', 3, 'Up', N);
 eq(s, { x: 3, y: 2 }, 'L3:');
+
+// Level 4: (1,1) --column flip--> (3,1) --row flip--> (3,3) = goal.
+// `axis` is the mirror line, so 'column' flips x and 'row' flips y.
+let f = { x: 1, y: 1 };
+f = flipEntity(f, 'column', N);
+f = flipEntity(f, 'row', N);
+eq(f, { x: 3, y: 3 }, 'L4:');
+
+// Flip is its own inverse, and the middle line is a fixed point (§5.4) — the
+// two ways a Flip level gets lost.
+eq(flipEntity(flipEntity({ x: 1, y: 1 }, 'row', N), 'row', N), { x: 1, y: 1 }, 'flip x2:');
+eq(flipEntity({ x: 0, y: 2 }, 'row', N), { x: 0, y: 2 }, 'mid row fixed:');
+
+// Level 5: one Flip + one Move, either order
+let m = { x: 1, y: 2 };
+m = flipEntity(m, 'column', N);
+m = moveEntity(m, 'Down', N);
+eq(m, { x: 3, y: 3 }, 'L5:');
 
 // Wraparound (LEVEL_DESIGN.md §2.1)
 eq(moveEntity({ x: 4, y: 0 }, 'Right', N), { x: 0, y: 0 }, 'wrap:');
@@ -119,11 +137,21 @@ cell, and read `characterPos` / the HUD out of the live `PuzzleScene`. Adapt the
   `◀` (right edge), and each column's are `▼` (top) and `▲` (bottom) — so a glyph
   lookup by text alone is ambiguous. Filter `children.list` for the glyph and index
   into the result; the arrows are created row 0..4 then column 0..4, so the Nth `▶`
-  shifts row N right and the Nth `▲` shifts column N up.
-- **Reading text.** Buttons, arrows (`▲◀▶▼`, `↺`, `↻`), the HUD, and the win/lose
-  overlay are all Phaser text objects — enumerate `scene.children.list` and read
-  `.text`. `"You win!"` present ⇒ the level was solved; `"Out of actions"` ⇒ budget
-  ran out.
+  shifts row N right and the Nth `▲` shifts column N up. Flip's two arrows (`↔`
+  above the middle column, `↕` left of the middle row) are unique, so a plain
+  lookup by glyph works for those.
+- **Reading text.** Buttons, arrows (`▲◀▶▼`, `↺`, `↻`, `↔`, `↕`), the HUD, the
+  per-card `"N left"` counters, and the win/lose overlay are all Phaser text
+  objects — enumerate `scene.children.list` and read `.text`. `"You win!"` present
+  ⇒ the level was solved; `"Out of actions"` ⇒ every action's budget ran out.
+- **Entity state.** `PuzzleScene.entities` is the entity layer: an array of
+  `{ kind: 'character' | 'crate', pos: {x, y} }`. `scene.characterPos` is a getter
+  onto the character's `pos`, so existing checks keep working, and crates read as
+  `s.entities.filter(e => e.kind === 'crate')`.
+- **Per-action budgets.** `scene.remaining` maps each offered action to its own
+  remaining uses (`Infinity` in Test mode, which serializes to `null` through
+  `page.evaluate` — compare inside the browser context if you need the value).
+  `scene.budget` is the sum of all pools, which is what the HUD counts against.
 
 ### Runnable harness
 
@@ -220,27 +248,34 @@ const server = http.createServer((req, res) => {
     await page.mouse.move(x0 + dx, y0 + dy, { steps: 5 }); await page.mouse.up();
     await page.waitForTimeout(250);
   };
-  const charPos = () => page.evaluate(() => {
+  const state = () => page.evaluate(() => {
     const s = window.__game.scene.getScene('PuzzleScene');
-    return { x: s.characterPos.x, y: s.characterPos.y, used: s.movesUsed, budget: s.unlimited ? 'inf' : s.budget };
+    return {
+      char: { x: s.characterPos.x, y: s.characterPos.y },
+      crates: s.entities.filter((e) => e.kind === 'crate').map((e) => ({ x: e.pos.x, y: e.pos.y })),
+      used: s.movesUsed,
+      remaining: s.remaining,          // per action type — Infinity arrives as null
+      budget: s.unlimited ? 'inf' : s.budget,
+    };
   });
   const texts = () => page.evaluate(() =>
     window.__game.scene.getScenes(true).slice(-1)[0].children.list.filter((c) => c.text !== undefined).map((c) => c.text));
 
-  // --- drive the level (example: Level 2, normal budget, solve with two CW rotations) ---
-  await clickText('Start');          // use 'Test' instead for an unlimited budget
-  await clickText('Level 2');
-  console.log('start:', await charPos());
+  // --- drive the level (example: Level 4, normal budget, solve with one flip per axis) ---
+  await clickText('Start');          // use 'Test' instead for unlimited budgets
+  await clickText('Level 4');
+  console.log('start:', await state());
 
-  await clickText('Rotate');
-  await clickCell(2, 3);             // rotation center
-  await clickText('↻');             // clockwise (or: await swipe(2, 3, 60, 0))
-  console.log('after r1:', await charPos());
+  await clickText('Flip');
+  await clickText('↔');              // mirror across the middle column
+  console.log('after f1:', await state());   // char (1,1) -> (3,1), crates moved too
 
-  await clickText('Rotate');
-  await clickCell(1, 3);
-  await clickText('↻');
-  console.log('after r2:', await charPos());
+  await clickText('Flip');
+  await swipe(2, 2, 0, 60);          // vertical swipe = mirror across the middle row
+  console.log('after f2:', await state());
+
+  // Level 2 for comparison (tap-a-target action):
+  //   await clickText('Rotate'); await clickCell(2, 3); await clickText('↻');
 
   const end = await texts();
   const won = end.includes('You win!');
@@ -255,18 +290,31 @@ const server = http.createServer((req, res) => {
 
 ## A good level test covers
 
-- **Setup:** character starts on the level's `entities.character`, goal renders on
-  `background.goal`, HUD shows `Actions: 0 / <budget>` (or `∞` in Test mode).
+- **Setup:** character starts on the level's `entities.character`, crates on
+  `entities.crates`, goal renders on `background.goal`, HUD shows
+  `Actions: 0 / <sum of budgets>`, and each card shows its own `"N left"` (or `∞`
+  in Test mode).
 - **Intended solution wins:** running the documented steps ends with `"You win!"`
   and `movesUsed` equal to the intended solution length.
-- **Budget is tight where intended:** if the level is meant to have no slack (Levels
-  1 and 2 both do), an extra/wrong action should trigger `"Out of actions"` rather
+- **Budget is tight where intended:** if the level is meant to have no slack (every
+  level so far does), an extra/wrong action should trigger `"Out of actions"` rather
   than leaving a second valid path — drive a deliberately wrong first action and
-  assert the loss.
+  assert the loss. For Flip levels the natural wrong path is flipping the same axis
+  twice, which returns the board to its starting state.
+- **Budgets are spent per action type:** after using one action, assert that only
+  *its* entry in `scene.remaining` dropped. A spent action's card must grey out and
+  stop responding (selecting it sets the hint `"No <Action> actions left"` and does
+  not increment `movesUsed`), while the other cards still work. The level must not
+  end until every pool is empty.
+- **Crates move with the board:** on a level with crates, assert their positions
+  after Rotate/Shift/Flip, and that Move can target a crate (tap the crate's cell,
+  not the character's) without moving the character.
 - **Both input styles:** exercise arrow taps *and* swipes (cardinal swipes for Move;
-  right = clockwise / left = anticlockwise for Rotate), since they're separate code
-  paths.
-- **Test-mode selection:** from the title, `Test → Level N` runs that level with an
-  unlimited budget (HUD shows `∞`, a `TEST` badge appears, and the lose condition
-  never fires).
-- **No console/page errors** across the whole run.
+  right = clockwise / left = anticlockwise for Rotate; horizontal = column flip /
+  vertical = row flip for Flip), since they're separate code paths.
+- **Test-mode selection:** from the title, `Test → Level N` runs that level with
+  every pool unlimited (HUD shows `∞`, each card shows `∞ left`, a `TEST` badge
+  appears, and the lose condition never fires).
+- **No console/page errors** across the whole run. Note the harness's own server
+  404s on `/favicon.ico` — that request comes from the browser, not the game, so
+  filter it out rather than chasing it.

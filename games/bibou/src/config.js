@@ -12,11 +12,30 @@ export const BOARD_Y = 230;
 // px — below this a pointer up is a tap, not a swipe
 export const SWIPE_THRESHOLD = 24;
 
-// Distance from the board edge, in px, at which Shift's inward-pointing
-// arrows are drawn (see BoardView.showShiftArrows). See LEVEL_DESIGN.md §5.3.
-export const SHIFT_ARROW_EDGE = 20;
+// Distance from the board edge, in px, at which the edge arrows are drawn —
+// Shift's inward-pointing row/column arrows and Flip's two mirror arrows (see
+// BoardView.showShiftArrows / showFlipControls). See LEVEL_DESIGN.md §5.3/§5.4.
+export const EDGE_ARROW_INSET = 20;
 
-export const ACTION_LABELS = { move: 'Move', rotate: 'Rotate', shift: 'Shift' };
+export const ACTION_LABELS = {
+  move: 'Move',
+  rotate: 'Rotate',
+  shift: 'Shift',
+  flip: 'Flip',
+};
+
+// Card row geometry, picked by how many action cards a level shows. A level can
+// offer up to four actions, and four full-size cards don't fit across 480px, so
+// the cards shrink as the row fills up. Keyed by card count.
+export const CARD_LAYOUTS = {
+  1: { spacing: 170, fontSize: 32, padX: 24 },
+  2: { spacing: 170, fontSize: 32, padX: 24 },
+  3: { spacing: 150, fontSize: 26, padX: 16 },
+  4: { spacing: 116, fontSize: 22, padX: 10 },
+};
+
+export const CARD_Y = 720;
+export const CARD_COUNT_Y = 672; // per-action budget counter, above its card
 
 // Flat palette (see DESIGN.md §10). CSS strings are for text styles, 0x values
 // for Graphics/Shape fills.
@@ -34,5 +53,9 @@ export const COLORS = {
   goalHex: 0x2e7d32,
   goalMark: '#a5d6a7',
   characterHex: 0x4fc3f7,
+  crateHex: 0x8d6e63, // crate body — deliberately unlike the character's blue
+  crateStrokeHex: 0x4e342e,
+  disabled: '#1c1c1c', // action card with no budget left
+  disabledText: '#666666',
   lose: '#ef9a9a',
 };

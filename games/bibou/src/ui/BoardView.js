@@ -4,7 +4,7 @@ import {
   BOARD_Y,
   CELL,
   COLORS,
-  SHIFT_ARROW_EDGE,
+  EDGE_ARROW_INSET,
 } from '../config.js';
 import { RING, wrap } from '../core/rules.js';
 
@@ -12,6 +12,7 @@ import { RING, wrap } from '../core/rules.js';
 const MOVE_ARROW = { fontSize: '34px', padding: { x: 6, y: 2 } };
 const ROTATE_ARROW = { fontSize: '38px', padding: { x: 8, y: 2 } };
 const SHIFT_ARROW = { fontSize: '20px', padding: { x: 4, y: 2 } };
+const FLIP_ARROW = { fontSize: '30px', padding: { x: 8, y: 2 } };
 
 // Everything anchored to the board: the static grid, the character sprite, the
 // design-space <-> cell coordinate mapping, and the transient controls (arrows
@@ -65,16 +66,30 @@ export class BoardView {
       .setOrigin(0.5);
   }
 
-  createCharacter() {
-    this.characterSprite = this.scene.add
-      .rectangle(0, 0, CELL * 0.6, CELL * 0.6, COLORS.characterHex)
-      .setStrokeStyle(3, 0xffffff);
-    return this.characterSprite;
+  // One sprite per entity, in the same order as the list PuzzleScene owns.
+  // Crates sit below the character so an overlap still reads as "the character
+  // is here" (entities may share a cell — see LEVEL_DESIGN.md §3).
+  createEntities(entities) {
+    this.entitySprites = entities.map((entity) => {
+      if (entity.kind === 'crate') {
+        return this.scene.add
+          .rectangle(0, 0, CELL * 0.62, CELL * 0.62, COLORS.crateHex)
+          .setStrokeStyle(3, COLORS.crateStrokeHex)
+          .setDepth(1);
+      }
+      return this.scene.add
+        .rectangle(0, 0, CELL * 0.6, CELL * 0.6, COLORS.characterHex)
+        .setStrokeStyle(3, 0xffffff)
+        .setDepth(2);
+    });
+    return this.entitySprites;
   }
 
-  renderCharacter(pos) {
-    const c = this.cellCenter(pos.x, pos.y);
-    this.characterSprite.setPosition(c.px, c.py);
+  renderEntities(entities) {
+    entities.forEach((entity, i) => {
+      const c = this.cellCenter(entity.pos.x, entity.pos.y);
+      this.entitySprites[i].setPosition(c.px, c.py);
+    });
   }
 
   // --- Transient controls ---
@@ -140,11 +155,11 @@ export class BoardView {
     this.clearControls();
     for (let y = 0; y < this.size; y++) {
       const c = this.cellCenter(0, y);
-      this.addControlArrow(BOARD_X - SHIFT_ARROW_EDGE, c.py, '▶', SHIFT_ARROW, () =>
+      this.addControlArrow(BOARD_X - EDGE_ARROW_INSET, c.py, '▶', SHIFT_ARROW, () =>
         onShift('row', y, 'Right')
       );
       this.addControlArrow(
-        BOARD_X + BOARD_PX + SHIFT_ARROW_EDGE,
+        BOARD_X + BOARD_PX + EDGE_ARROW_INSET,
         c.py,
         '◀',
         SHIFT_ARROW,
@@ -153,17 +168,50 @@ export class BoardView {
     }
     for (let x = 0; x < this.size; x++) {
       const c = this.cellCenter(x, 0);
-      this.addControlArrow(c.px, BOARD_Y - SHIFT_ARROW_EDGE, '▼', SHIFT_ARROW, () =>
+      this.addControlArrow(c.px, BOARD_Y - EDGE_ARROW_INSET, '▼', SHIFT_ARROW, () =>
         onShift('column', x, 'Down')
       );
       this.addControlArrow(
         c.px,
-        BOARD_Y + BOARD_PX + SHIFT_ARROW_EDGE,
+        BOARD_Y + BOARD_PX + EDGE_ARROW_INSET,
         '▲',
         SHIFT_ARROW,
         () => onShift('column', x, 'Up')
       );
     }
+  }
+
+  // The two mirror lines and their arrows. `↔` sits above the middle column and
+  // mirrors the board left-to-right; `↕` sits left of the middle row and mirrors
+  // it top-to-bottom. Both outlines are drawn so the player can see the two
+  // axes before committing. `onFlip` gets 'row' | 'column' — the mirror line.
+  showFlipControls(onFlip) {
+    this.clearControls();
+    const midPx = BOARD_X + BOARD_PX / 2;
+    const midPy = BOARD_Y + BOARD_PX / 2;
+
+    // Outline the middle column and middle row (only meaningful on an odd-sized
+    // board, where the mirror line runs through a line of cells rather than
+    // between two of them).
+    if (this.size % 2 === 1) {
+      const mid = Math.floor(this.size / 2);
+      const col = this.cellCenter(mid, 0);
+      const row = this.cellCenter(0, mid);
+      [
+        this.scene.add.rectangle(col.px, midPy, CELL, BOARD_PX, 0x000000, 0),
+        this.scene.add.rectangle(midPx, row.py, BOARD_PX, CELL, 0x000000, 0),
+      ].forEach((hl) => {
+        hl.setStrokeStyle(2, COLORS.accentHex);
+        this.controls.push(hl);
+      });
+    }
+
+    this.addControlArrow(midPx, BOARD_Y - EDGE_ARROW_INSET, '↔', FLIP_ARROW, () =>
+      onFlip('column')
+    );
+    this.addControlArrow(BOARD_X - EDGE_ARROW_INSET, midPy, '↕', FLIP_ARROW, () =>
+      onFlip('row')
+    );
   }
 
   // One tappable arrow glyph, tracked so clearControls() can destroy it. The

@@ -1,12 +1,16 @@
 import {
   ACTION_LABELS,
   BOARD_X,
+  CARD_COUNT_Y,
+  CARD_LAYOUTS,
+  CARD_Y,
   COLORS,
   GAME_HEIGHT,
   GAME_WIDTH,
   SWIPE_THRESHOLD,
 } from '../config.js';
 import {
+  flipEntity,
   isBlocked,
   moveEntity,
   rotateEntity,
@@ -29,45 +33,83 @@ export class PuzzleScene extends Phaser.Scene {
 
     const size = this.level.gridSize;
     this.size = size;
-    this.characterPos = { ...this.level.entities.character };
+
+    // The entity layer: the character plus any crates, in render order. Crates
+    // carry no rules of their own yet — actions move them exactly like the
+    // character, and only the character can win (LEVEL_DESIGN.md §3).
+    this.entities = [
+      { kind: 'character', pos: { ...this.level.entities.character } },
+      ...(this.level.entities.crates ?? []).map((pos) => ({
+        kind: 'crate',
+        pos: { ...pos },
+      })),
+    ];
     this.goalPos = { ...this.level.background.goal };
     this.movesUsed = 0;
 
-    // Available actions are the keys of actionBudget with a positive budget;
-    // the shared action pool is their sum (each action costs 1).
+    // Budgets are per action type: the keys of actionBudget with a positive
+    // budget are the actions this level offers, and each one has its own pool
+    // that only its own uses draw down (LEVEL_DESIGN.md §6).
     this.availableActions = Object.keys(this.level.actionBudget).filter(
       (k) => this.level.actionBudget[k] > 0
     );
-    const totalBudget = Object.values(this.level.actionBudget).reduce(
-      (a, b) => a + b,
-      0
-    );
-    this.budget = this.unlimited ? Infinity : totalBudget;
+    this.remaining = {};
+    this.availableActions.forEach((action) => {
+      this.remaining[action] = this.unlimited
+        ? Infinity
+        : this.level.actionBudget[action];
+    });
+    this.budget = this.unlimited
+      ? Infinity
+      : this.availableActions.reduce(
+          (sum, a) => sum + this.level.actionBudget[a],
+          0
+        );
 
-    this.selectedAction = null; // null | 'move' | 'rotate' | 'shift'
-    this.targetSelected = false; // move: character tapped; rotate: center tapped
+    this.selectedAction = null; // null | 'move' | 'rotate' | 'shift' | 'flip'
+    this.targetSelected = false; // move: entity tapped; rotate: center tapped
+    this.moveTarget = null; // the entity Move will displace, once tapped
     this.rotateCenter = null; // {x, y} once a rotation center is chosen
     this.gameOver = false;
 
     this.board = new BoardView(this, size, this.goalPos);
     this.board.drawBoard();
-    this.board.createCharacter();
-    this.board.renderCharacter(this.characterPos);
+    this.board.createEntities(this.entities);
+    this.board.renderEntities(this.entities);
 
     this.buildHud();
     this.buildActionCards();
     this.setupBoardInput();
   }
 
+  // The character is the only entity the win condition cares about, and the
+  // test harness reads it straight off the scene, so expose it by name.
+  get characterPos() {
+    return this.entities.find((e) => e.kind === 'character').pos;
+  }
+
+  get hasCrates() {
+    return this.entities.some((e) => e.kind === 'crate');
+  }
+
+  // Topmost entity on a cell — the character wins ties, since it is the one the
+  // player is most likely aiming for when entities share a cell.
+  entityAt(cell) {
+    return (
+      this.entities.find(
+        (e) => e.kind === 'character' && samePos(e.pos, cell)
+      ) ?? this.entities.find((e) => samePos(e.pos, cell))
+    );
+  }
+
   // --- HUD ---
   buildHud() {
-    const budgetLabel = this.unlimited ? '∞' : this.budget;
-    this.hudText = this.add.text(
-      BOARD_X,
-      160,
-      `Actions: ${this.movesUsed} / ${budgetLabel}`,
-      { fontFamily: 'sans-serif', fontSize: '28px', color: COLORS.text }
-    );
+    this.hudText = this.add.text(BOARD_X, 160, '', {
+      fontFamily: 'sans-serif',
+      fontSize: '28px',
+      color: COLORS.text,
+    });
+    this.updateHud();
     if (this.unlimited) {
       this.add
         .text(GAME_WIDTH - BOARD_X, 165, 'TEST', {
@@ -86,19 +128,32 @@ export class PuzzleScene extends Phaser.Scene {
 
   // --- Action cards ---
   buildActionCards() {
-    // Lay the available action cards out in a centered row near the bottom.
+    // Lay the available action cards out in a centered row near the bottom,
+    // shrinking them as the row fills up, with each card's own remaining budget
+    // printed above it.
     this.actionCards = {};
+    this.cardCounts = {};
     const n = this.availableActions.length;
-    const spacing = 170;
-    const startX = GAME_WIDTH / 2 - ((n - 1) * spacing) / 2;
+    const layout = CARD_LAYOUTS[n] ?? CARD_LAYOUTS[4];
+    const startX = GAME_WIDTH / 2 - ((n - 1) * layout.spacing) / 2;
+
     this.availableActions.forEach((action, i) => {
+      const x = startX + i * layout.spacing;
       this.actionCards[action] = createButton(
         this,
-        startX + i * spacing,
-        720,
+        x,
+        CARD_Y,
         ACTION_LABELS[action],
-        () => this.toggleActionCard(action)
+        () => this.toggleActionCard(action),
+        { fontSize: layout.fontSize, padX: layout.padX }
       );
+      this.cardCounts[action] = this.add
+        .text(x, CARD_COUNT_Y, '', {
+          fontFamily: 'sans-serif',
+          fontSize: '20px',
+          color: COLORS.hint,
+        })
+        .setOrigin(0.5);
     });
 
     this.beginHint =
@@ -112,6 +167,33 @@ export class PuzzleScene extends Phaser.Scene {
         color: COLORS.hint,
       })
       .setOrigin(0.5);
+
+    this.updateActionCards();
+  }
+
+  // Repaint each card from its own remaining budget: a spent action greys out
+  // and stops responding, while the others carry on.
+  updateActionCards() {
+    this.availableActions.forEach((action) => {
+      const left = this.remaining[action];
+      const spent = left <= 0;
+      const card = this.actionCards[action];
+      this.cardCounts[action].setText(
+        this.unlimited ? '∞ left' : `${left} left`
+      );
+      this.cardCounts[action].setColor(spent ? COLORS.disabledText : COLORS.hint);
+      if (spent) {
+        card.setBaseColor(COLORS.disabled);
+        card.setColor(COLORS.disabledText);
+      } else if (this.selectedAction !== action) {
+        card.setBaseColor(COLORS.button);
+        card.setColor(COLORS.text);
+      }
+    });
+  }
+
+  actionsLeft() {
+    return this.availableActions.some((a) => this.remaining[a] > 0);
   }
 
   setHint(msg) {
@@ -125,11 +207,15 @@ export class PuzzleScene extends Phaser.Scene {
       this.setHint(this.beginHint);
       return;
     }
+    if (this.remaining[action] <= 0) {
+      this.setHint(`No ${ACTION_LABELS[action]} actions left`);
+      return;
+    }
     this.clearSelection();
     this.selectedAction = action;
-    this.actionCards[action].setStyle({ backgroundColor: COLORS.accent });
+    this.actionCards[action].setBaseColor(COLORS.accent);
     if (action === 'move') {
-      this.setHint('Tap the character');
+      this.setHint(this.hasCrates ? 'Tap the character or a crate' : 'Tap the character');
     } else if (action === 'rotate') {
       this.setHint('Tap a tile for the rotation center');
     } else if (action === 'shift') {
@@ -140,17 +226,22 @@ export class PuzzleScene extends Phaser.Scene {
         this.applyShift(axis, index, dir)
       );
       this.setHint('Tap an arrow to shift that row or column');
+    } else if (action === 'flip') {
+      // Flip has no target either — it always mirrors the whole board, so the
+      // only choice is which of the two mirror lines to use.
+      this.targetSelected = true;
+      this.board.showFlipControls((axis) => this.applyFlip(axis));
+      this.setHint('Tap ↔ / ↕ or swipe to flip the board');
     }
   }
 
   clearSelection() {
     this.selectedAction = null;
     this.targetSelected = false;
+    this.moveTarget = null;
     this.rotateCenter = null;
     this.board.clearControls();
-    Object.values(this.actionCards).forEach((c) =>
-      c.setStyle({ backgroundColor: COLORS.button })
-    );
+    this.updateActionCards();
   }
 
   // --- Input ---
@@ -182,6 +273,11 @@ export class PuzzleScene extends Phaser.Scene {
         } else if (this.selectedAction === 'rotate') {
           // Right = clockwise, left = anticlockwise; vertical swipes are ignored.
           if (Math.abs(dx) > Math.abs(dy)) this.applyRotate(dx > 0);
+        } else if (this.selectedAction === 'flip') {
+          // The swipe direction is the direction the board's contents travel:
+          // a horizontal swipe mirrors across the middle column, a vertical one
+          // across the middle row.
+          this.applyFlip(Math.abs(dx) > Math.abs(dy) ? 'column' : 'row');
         }
         return;
       }
@@ -199,23 +295,27 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   handleMoveTap(cell) {
-    const onCharacter = samePos(cell, this.characterPos);
+    const entity = this.entityAt(cell);
 
     if (!this.targetSelected) {
-      if (onCharacter) {
+      if (entity) {
+        this.moveTarget = entity;
         this.targetSelected = true;
-        this.board.showMoveArrows(this.characterPos, (dir) =>
-          this.applyMove(dir)
-        );
+        this.board.showMoveArrows(entity.pos, (dir) => this.applyMove(dir));
         this.setHint('Tap an arrow or swipe a direction');
       }
       return;
     }
-    // Target already selected: tapping the character again cancels.
-    if (onCharacter) {
+    // Target already selected: tapping it again cancels, tapping a different
+    // entity re-targets the move.
+    if (entity === this.moveTarget) {
       this.targetSelected = false;
+      this.moveTarget = null;
       this.board.clearControls();
-      this.setHint('Tap the character');
+      this.setHint(this.hasCrates ? 'Tap the character or a crate' : 'Tap the character');
+    } else if (entity) {
+      this.moveTarget = entity;
+      this.board.showMoveArrows(entity.pos, (dir) => this.applyMove(dir));
     }
   }
 
@@ -247,16 +347,18 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // --- Actions ---
-  // Spend an action and resolve the outcome (win → budget → continue).
-  finishAction() {
+  // Spend one use of `action` from its own budget and resolve the outcome
+  // (win → out of actions → continue).
+  finishAction(action) {
     this.movesUsed += 1;
+    if (!this.unlimited) this.remaining[action] -= 1;
     this.clearSelection();
-    this.board.renderCharacter(this.characterPos);
+    this.board.renderEntities(this.entities);
     this.updateHud();
 
     if (samePos(this.characterPos, this.goalPos)) {
       this.showOverlay(true);
-    } else if (this.movesUsed >= this.budget) {
+    } else if (!this.actionsLeft()) {
       this.showOverlay(false);
     } else {
       this.setHint('Select an action to continue');
@@ -264,24 +366,30 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   applyMove(direction) {
-    if (this.gameOver || this.selectedAction !== 'move' || !this.targetSelected)
+    if (
+      this.gameOver ||
+      this.selectedAction !== 'move' ||
+      !this.targetSelected ||
+      !this.moveTarget
+    )
       return;
 
-    const dest = moveEntity(this.characterPos, direction, this.size);
+    const dest = moveEntity(this.moveTarget.pos, direction, this.size);
 
     // Legality: no walls in the MVP, so any destination is legal. Structured
     // this way so a blocking-tile check can be added later (LEVEL_DESIGN §5.1).
+    // Entities may share a cell, so another entity never blocks a move.
     if (isBlocked(this.level, dest)) {
       this.setHint('Blocked — try another direction');
       return;
     }
 
-    this.characterPos = dest;
-    this.finishAction();
+    this.moveTarget.pos = dest;
+    this.finishAction('move');
   }
 
-  // Only the character is an entity today, so we relocate it if it sits on the
-  // ring; empty tiles rotate too, so the action is always legal and costs 1.
+  // Every entity on the ring moves; entities elsewhere (and empty tiles) are
+  // unaffected, but the action still costs 1.
   applyRotate(clockwise) {
     if (
       this.gameOver ||
@@ -290,28 +398,32 @@ export class PuzzleScene extends Phaser.Scene {
     )
       return;
 
-    this.characterPos = rotateEntity(
-      this.characterPos,
-      this.rotateCenter,
-      clockwise,
-      this.size
-    );
-    this.finishAction();
+    this.entities.forEach((e) => {
+      e.pos = rotateEntity(e.pos, this.rotateCenter, clockwise, this.size);
+    });
+    this.finishAction('rotate');
   }
 
-  // Rows/columns the character isn't on are unaffected, but the action still
+  // Rows/columns with no entity on them are unaffected, but the action still
   // costs 1, same as an empty Rotate ring.
   applyShift(axis, index, direction) {
     if (this.gameOver || this.selectedAction !== 'shift') return;
 
-    this.characterPos = shiftEntity(
-      this.characterPos,
-      axis,
-      index,
-      direction,
-      this.size
-    );
-    this.finishAction();
+    this.entities.forEach((e) => {
+      e.pos = shiftEntity(e.pos, axis, index, direction, this.size);
+    });
+    this.finishAction('shift');
+  }
+
+  // Flip always moves the whole entity layer, so it never has nothing to do —
+  // though an entity sitting exactly on the mirror line stays put.
+  applyFlip(axis) {
+    if (this.gameOver || this.selectedAction !== 'flip') return;
+
+    this.entities.forEach((e) => {
+      e.pos = flipEntity(e.pos, axis, this.size);
+    });
+    this.finishAction('flip');
   }
 
   // --- Overlay ---
@@ -321,7 +433,8 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.add
       .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.72)
-      .setOrigin(0, 0);
+      .setOrigin(0, 0)
+      .setDepth(10);
 
     this.add
       .text(GAME_WIDTH / 2, 300, won ? 'You win!' : 'Out of actions', {
@@ -329,7 +442,8 @@ export class PuzzleScene extends Phaser.Scene {
         fontSize: '44px',
         color: won ? COLORS.goalMark : COLORS.lose,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(11);
 
     const budgetLabel = this.unlimited ? '∞' : this.budget;
     this.add
@@ -339,16 +453,17 @@ export class PuzzleScene extends Phaser.Scene {
         `Actions used: ${this.movesUsed} / ${budgetLabel}`,
         { fontFamily: 'sans-serif', fontSize: '26px', color: COLORS.text }
       )
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(11);
 
     createButton(this, GAME_WIDTH / 2, 470, 'Retry', () =>
       this.scene.restart({ level: this.level, unlimited: this.unlimited })
-    );
+    ).setDepth(11);
     createButton(this, GAME_WIDTH / 2, 550, 'Level select', () =>
       this.scene.start('LevelSelectScene', { unlimited: this.unlimited })
-    );
+    ).setDepth(11);
     createButton(this, GAME_WIDTH / 2, 630, 'Back to title', () =>
       this.scene.start('TitleScene')
-    );
+    ).setDepth(11);
   }
 }

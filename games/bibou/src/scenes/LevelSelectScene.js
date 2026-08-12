@@ -19,13 +19,14 @@ export class LevelSelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // 80px rows keep the whole list plus Back on screen as levels are added.
     LEVELS.forEach((level, i) => {
-      createButton(this, centerX, 320 + i * 90, `Level ${level.id}`, () =>
+      createButton(this, centerX, 310 + i * 80, `Level ${level.id}`, () =>
         this.scene.start('PuzzleScene', { level, unlimited })
       );
     });
 
-    createButton(this, centerX, 320 + LEVELS.length * 90 + 40, 'Back', () =>
+    createButton(this, centerX, 310 + LEVELS.length * 80 + 40, 'Back', () =>
       this.scene.start('TitleScene')
     );
   }

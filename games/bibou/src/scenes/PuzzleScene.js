@@ -1,12 +1,17 @@
 import {
   ACTION_LABELS,
   BOARD_X,
+  BUMP_TWEEN_MS,
   CARD_COUNT_Y,
   CARD_LAYOUTS,
   CARD_Y,
   COLORS,
+  FLIP_TWEEN_MS,
   GAME_HEIGHT,
   GAME_WIDTH,
+  GOAL_PULSE_MS,
+  MOVE_TWEEN_MS,
+  ROTATE_TWEEN_MS,
   SWIPE_THRESHOLD,
 } from '../config.js';
 import {
@@ -77,6 +82,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.targetSelected = false; // move: always true once selected; rotate: center tapped
     this.rotateCenter = null; // {x, y} once a rotation center is chosen
     this.gameOver = false;
+    this.animating = false; // true while a transition tween owns the entity sprites
 
     this.board = new BoardView(this, size, this.goalPos);
     this.board.drawBoard();
@@ -194,7 +200,7 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   toggleActionCard(action) {
-    if (this.gameOver) return;
+    if (this.gameOver || this.animating) return;
     if (this.selectedAction === action) {
       this.clearSelection();
       this.setHint(this.beginHint);
@@ -249,7 +255,7 @@ export class PuzzleScene extends Phaser.Scene {
       downY = pointer.y;
     });
     this.input.on('pointerup', (pointer) => {
-      if (this.gameOver) return;
+      if (this.gameOver || this.animating) return;
       const dx = pointer.x - downX;
       const dy = pointer.y - downY;
       const dist = Math.hypot(dx, dy);
@@ -318,7 +324,9 @@ export class PuzzleScene extends Phaser.Scene {
 
   // --- Actions ---
   // Spend one use of `action` from its own budget and resolve the outcome
-  // (win → out of actions → continue).
+  // (win → out of actions → continue). Called once the action's transition
+  // tween has finished, so it's the entity sprites' final resting state that
+  // updateHud/showOverlay follow.
   finishAction(action) {
     this.movesUsed += 1;
     if (!this.unlimited) this.remaining[action] -= 1;
@@ -327,7 +335,13 @@ export class PuzzleScene extends Phaser.Scene {
     this.updateHud();
 
     if (samePos(this.characterPos, this.goalPos)) {
-      this.showOverlay(true);
+      // Let the "that worked" pulse play before the overlay covers the board.
+      const idx = this.entities.findIndex((e) => e.kind === 'character');
+      this.animating = true;
+      this.board.pulseEntity(idx, GOAL_PULSE_MS, () => {
+        this.animating = false;
+        this.showOverlay(true);
+      });
     } else if (!this.actionsLeft()) {
       this.showOverlay(false);
     } else {
@@ -338,6 +352,7 @@ export class PuzzleScene extends Phaser.Scene {
   applyMove(direction) {
     if (
       this.gameOver ||
+      this.animating ||
       this.selectedAction !== 'move' ||
       !this.targetSelected
     )
@@ -355,11 +370,32 @@ export class PuzzleScene extends Phaser.Scene {
     );
     if (!chain) {
       this.setHint('Blocked by a wall — try another direction');
+      const idx = this.entities.findIndex((e) => e.kind === 'character');
+      this.animating = true;
+      this.board.animateBump(idx, direction, BUMP_TWEEN_MS, () => {
+        this.animating = false;
+      });
       return;
     }
 
+    // Capture each mover's start/end tile before applyMoveChain overwrites
+    // `pos`, so the transition can animate every entity in the chain at once.
+    const occupants = chain
+      .slice(0, -1)
+      .map((p) => this.entities.find((e) => samePos(e.pos, p)));
+    const moves = occupants.map((entity, i) => ({
+      index: this.entities.indexOf(entity),
+      from: { ...chain[i] },
+      to: { ...chain[i + 1] },
+    }));
+
     applyMoveChain(this.entities, chain);
-    this.finishAction('move');
+    this.animating = true;
+    this.board.clearControls();
+    this.board.animateEntitiesTo(moves, MOVE_TWEEN_MS, () => {
+      this.animating = false;
+      this.finishAction('move');
+    });
   }
 
   // Every entity on the ring moves; entities elsewhere (and empty tiles) are
@@ -369,6 +405,7 @@ export class PuzzleScene extends Phaser.Scene {
   applyRotate(clockwise) {
     if (
       this.gameOver ||
+      this.animating ||
       this.selectedAction !== 'rotate' ||
       !this.targetSelected
     )
@@ -381,16 +418,33 @@ export class PuzzleScene extends Phaser.Scene {
       return;
     }
 
-    this.entities.forEach((e) => {
-      e.pos = rotateEntity(e.pos, this.rotateCenter, clockwise, this.size);
+    // Every entity's destination is computed from the *original* positions
+    // first so the transition (all of them at once) matches the mutation.
+    const newPositions = this.entities.map((e) =>
+      rotateEntity(e.pos, this.rotateCenter, clockwise, this.size)
+    );
+    const moves = [];
+    this.entities.forEach((e, i) => {
+      if (!samePos(newPositions[i], e.pos)) {
+        moves.push({ index: i, from: { ...e.pos }, to: newPositions[i] });
+      }
     });
-    this.finishAction('rotate');
+    this.entities.forEach((e, i) => {
+      e.pos = newPositions[i];
+    });
+
+    this.animating = true;
+    this.board.clearControls();
+    this.board.animateEntitiesTo(moves, ROTATE_TWEEN_MS, () => {
+      this.animating = false;
+      this.finishAction('rotate');
+    });
   }
 
   // Rows/columns with no entity on them are unaffected, but the action still
   // costs 1, same as an empty Rotate ring. Same wall-rejection rule as Rotate.
   applyShift(axis, index, direction) {
-    if (this.gameOver || this.selectedAction !== 'shift') return;
+    if (this.gameOver || this.animating || this.selectedAction !== 'shift') return;
 
     if (isShiftBlocked(this.wallSet, this.entities, axis, index, direction, this.size)) {
       this.setHint('Blocked by a wall — try another edge');
@@ -404,14 +458,26 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // Flip always moves the whole entity layer, so it never has nothing to do —
-  // though an entity sitting exactly on the mirror line stays put.
+  // though an entity sitting exactly on the mirror line stays put. All of them
+  // flip in the same synchronized pass (LEVEL_DESIGN.md §5.4), never one at a
+  // time, since it's a single reflection of the whole board.
   applyFlip(axis) {
-    if (this.gameOver || this.selectedAction !== 'flip') return;
+    if (this.gameOver || this.animating || this.selectedAction !== 'flip') return;
 
-    this.entities.forEach((e) => {
-      e.pos = flipEntity(e.pos, axis, this.size);
+    const moves = this.entities.map((e) => ({
+      from: { ...e.pos },
+      to: flipEntity(e.pos, axis, this.size),
+    }));
+    this.entities.forEach((e, i) => {
+      e.pos = moves[i].to;
     });
-    this.finishAction('flip');
+
+    this.animating = true;
+    this.board.clearControls();
+    this.board.animateFlip(moves, axis, FLIP_TWEEN_MS, () => {
+      this.animating = false;
+      this.finishAction('flip');
+    });
   }
 
   // --- Overlay ---

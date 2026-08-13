@@ -19,47 +19,11 @@
     #game canvas {
       display: block;
     }
-    #exit-button {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      width: 40px;
-      height: 40px;
-      border: none;
-      border-radius: 50%;
-      background: rgba(0, 0, 0, 0.5);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      z-index: 10;
-    }
-    #exit-button:hover {
-      background: rgba(0, 0, 0, 0.75);
-    }
-    #exit-button svg {
-      width: 20px;
-      height: 20px;
-    }
   </style>
 </head>
 <body>
   <div id="game"></div>
-  <button id="exit-button" aria-label="Exit to home">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <line x1="6" y1="6" x2="18" y2="18"></line>
-      <line x1="18" y1="6" x2="6" y2="18"></line>
-    </svg>
-  </button>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <script type="module" src="src/main.js"></script>
-  <script>
-    document.getElementById('exit-button').addEventListener('click', () => {
-      if (window.confirm('Exit to home screen?')) {
-        window.location.href = '../../index.html';
-      }
-    });
-  </script>
 </body>
 </html>

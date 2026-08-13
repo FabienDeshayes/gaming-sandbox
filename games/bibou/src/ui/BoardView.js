@@ -6,7 +6,7 @@ import {
   COLORS,
   EDGE_ARROW_INSET,
 } from '../config.js';
-import { RING, wrap } from '../core/rules.js';
+import { DIRECTIONS, RING, wrap } from '../core/rules.js';
 
 // Per-action arrow styling, kept identical to the pre-split look.
 const MOVE_ARROW = { fontSize: '34px', padding: { x: 6, y: 2 } };
@@ -121,6 +121,154 @@ export class BoardView {
     entities.forEach((entity, i) => {
       const c = this.cellCenter(entity.pos.x, entity.pos.y);
       this.entitySprites[i].setPosition(c.px, c.py);
+    });
+  }
+
+  // --- Transitions ---
+  // Move and Rotate both resolve to a set of "this entity steps from tile A to
+  // tile B" pairs (§5.1/§5.3) — this is the shared engine behind both. Every
+  // pair in `moves` animates at once so a multi-entity chain or ring reads as
+  // one simultaneous motion rather than a sequence.
+  animateEntitiesTo(moves, duration, onComplete) {
+    if (moves.length === 0) {
+      onComplete?.();
+      return;
+    }
+    let remaining = moves.length;
+    moves.forEach(({ index, from, to }) => {
+      this.animateStep(this.entitySprites[index], from, to, duration, () => {
+        remaining -= 1;
+        if (remaining === 0) onComplete?.();
+      });
+    });
+  }
+
+  // One entity's one-cell step. Ordinarily a straight slide between the two
+  // cell centers, but a wraparound step (the board loops, LEVEL_DESIGN.md
+  // §2.1) lands on a tile that isn't anywhere near the source tile on screen —
+  // sliding straight there would drag the sprite across the whole board. So a
+  // wrapped step instead slides out through the near edge, jumps to the
+  // matching point on the far edge (invisible mid-tween, alpha 0), and slides
+  // in — reading as "exits here, enters there" rather than "teleports."
+  animateStep(sprite, fromPos, toPos, duration, onComplete) {
+    const from = this.cellCenter(fromPos.x, fromPos.y);
+    const to = this.cellCenter(toPos.x, toPos.y);
+    const dx = toPos.x - fromPos.x;
+    const dy = toPos.y - fromPos.y;
+    const wrapped = Math.abs(dx) > 1 || Math.abs(dy) > 1;
+
+    if (!wrapped) {
+      this.scene.tweens.add({
+        targets: sprite,
+        x: to.px,
+        y: to.py,
+        duration,
+        ease: 'Quad.easeInOut',
+        onComplete: () => onComplete?.(),
+      });
+      return;
+    }
+
+    const dirX = dx === 0 ? 0 : -Math.sign(dx);
+    const dirY = dy === 0 ? 0 : -Math.sign(dy);
+    const exitPx = from.px + dirX * CELL * 0.6;
+    const exitPy = from.py + dirY * CELL * 0.6;
+    const enterPx = to.px - dirX * CELL * 0.6;
+    const enterPy = to.py - dirY * CELL * 0.6;
+
+    this.scene.tweens.add({
+      targets: sprite,
+      x: exitPx,
+      y: exitPy,
+      alpha: 0,
+      duration: duration * 0.4,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        sprite.setPosition(enterPx, enterPy);
+        this.scene.tweens.add({
+          targets: sprite,
+          x: to.px,
+          y: to.py,
+          alpha: 1,
+          duration: duration * 0.6,
+          ease: 'Quad.easeOut',
+          onComplete: () => onComplete?.(),
+        });
+      },
+    });
+  }
+
+  // Blocked Move (LEVEL_DESIGN.md §5.1: a wall rejects the step before
+  // anything moves): the character nudges toward the wall and springs back,
+  // reading as bumping into it rather than the tap being silently ignored.
+  animateBump(index, direction, duration, onComplete) {
+    const sprite = this.entitySprites[index];
+    const delta = DIRECTIONS[direction];
+    const startX = sprite.x;
+    const startY = sprite.y;
+    this.scene.tweens.add({
+      targets: sprite,
+      x: startX + delta.x * CELL * 0.28,
+      y: startY + delta.y * CELL * 0.28,
+      duration: duration / 2,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onComplete: () => {
+        sprite.setPosition(startX, startY);
+        onComplete?.();
+      },
+    });
+  }
+
+  // Flip (LEVEL_DESIGN.md §5.4): every entity's sprite squashes flat along the
+  // mirrored axis, swaps to its reflected tile at the flattest instant (so the
+  // position jump is hidden behind zero width/height), then unsquashes — the
+  // whole layer reads as one mirror pass rather than entities teleporting.
+  animateFlip(moves, axis, duration, onComplete) {
+    if (moves.length === 0) {
+      onComplete?.();
+      return;
+    }
+    const scaleProp = axis === 'column' ? 'scaleX' : 'scaleY';
+    let remaining = moves.length;
+    moves.forEach(({ to }, i) => {
+      const sprite = this.entitySprites[i];
+      const toCenter = this.cellCenter(to.x, to.y);
+      this.scene.tweens.add({
+        targets: sprite,
+        [scaleProp]: 0,
+        duration: duration / 2,
+        ease: 'Quad.easeIn',
+        onComplete: () => {
+          sprite.setPosition(toCenter.px, toCenter.py);
+          this.scene.tweens.add({
+            targets: sprite,
+            [scaleProp]: 1,
+            duration: duration / 2,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+              remaining -= 1;
+              if (remaining === 0) onComplete?.();
+            },
+          });
+        },
+      });
+    });
+  }
+
+  // Reaching the goal (finishAction's win check): the character grows and
+  // settles back before the win overlay appears, reading as "that worked"
+  // rather than the game just freezing on the spot.
+  pulseEntity(index, duration, onComplete) {
+    const sprite = this.entitySprites[index];
+    this.scene.tweens.add({
+      targets: sprite,
+      scaleX: 1.35,
+      scaleY: 1.35,
+      duration: duration / 2,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onComplete: () => onComplete?.(),
     });
   }
 

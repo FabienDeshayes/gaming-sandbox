@@ -12,6 +12,16 @@ export const BOARD_Y = 230;
 // px — below this a pointer up is a tap, not a swipe
 export const SWIPE_THRESHOLD = 24;
 
+// Tween durations, ms (LEVEL_DESIGN.md nice-to-have: character/goal
+// animations). Each is the *full* time the effect takes on screen — a bump or
+// a pulse plays out-and-back within it, a wraparound slide splits it between
+// its exit and entry halves.
+export const MOVE_TWEEN_MS = 160; // one entity, one cell, straight slide
+export const ROTATE_TWEEN_MS = 220; // every ring entity slides at once
+export const FLIP_TWEEN_MS = 260; // squash to 0 (the "mirror"), then back
+export const BUMP_TWEEN_MS = 240; // blocked move: nudge toward the wall, spring back
+export const GOAL_PULSE_MS = 340; // reaching the goal: grow, then settle back
+
 // Distance from the board edge, in px, at which the edge arrows are drawn —
 // Shift's inward-pointing row/column arrows and Flip's two mirror arrows (see
 // BoardView.showShiftArrows / showFlipControls). See LEVEL_DESIGN.md §5.3/§5.4.

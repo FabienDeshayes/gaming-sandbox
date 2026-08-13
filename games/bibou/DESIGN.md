@@ -118,7 +118,7 @@ Primary interaction is touch (card-based selection). Keyboard controls are not y
 
 ## 10. Art & audio style
 
-- **Visual style:** Flat colors, minimalist; Background layer tiles (floor/goal) and Entity layer sprites (character, crates) must read as visually distinct — the entity sits "on top of" whatever background tile is beneath it. The character is a light-blue square with a white outline, crates are brown with a dark outline, and the character draws above crates so a shared cell still reads as "the character is here". Walls draw as a red line on the edge they block — a placeholder while the game is in prototype (see `LEVEL_DESIGN.md` §1.2).
+- **Visual style:** Dark, low-saturation palette with flat colors elsewhere, minimalist; Background layer tiles (floor/goal) and Entity layer sprites (character, crates) must read as visually distinct — the entity sits "on top of" whatever background tile is beneath it. The character is a light-blue square with a white outline; crates are a small pixel-art sprite (`assets/sprites/crate.png`, nearest-filtered so it stays crisp when scaled up) so they read as a different material from the character's flat shape; the character draws above crates so a shared cell still reads as "the character is here". Walls draw as a brick-coloured band with mortar joints on the edge they block — a placeholder while the game is in prototype (see `LEVEL_DESIGN.md` §1.2). The transient action-preview arrows (Move/Rotate/Shift/Flip targets) always draw above every board/entity layer (`CONTROL_DEPTH` in `config.js`) and use a deliberately low-contrast translucent style so they read as a preview overlay, not another entity.
 - **Reference images/games:** Sokoban (puzzle focus), Puzzle & Dragons (grid + turn-based), Threes (tile sliding)
 - **Audio:** None for prototype; can revisit after core loop works
 
@@ -138,9 +138,11 @@ Mechanics-first prototype. "Bibou" could be a character name (the one you're mov
   | `src/config.js` | Screen/board layout constants and the colour palette |
   | `src/data/levels.js` | Level definitions and the `LEVELS` list — where a new level goes |
   | `src/core/rules.js` | Pure grid math (`wrap`, `moveEntity`, `rotateEntity`, `shiftEntity`, `flipEntity`) and wall logic (`isValidWallPair`, `validateLevelWalls`, `buildWallSet`, `isWallBetween`, `isRotateBlocked`, `isShiftBlocked`). No Phaser, no scene state, so it is importable from Node for tests |
-  | `src/ui/button.js` | The shared text button, with a resting colour callers can change (idle / selected / out of budget) |
+  | `src/ui/button.js` | The shared text button (nav/overlay buttons), with a resting colour callers can change (idle / selected / out of budget) |
+  | `src/ui/actionCard.js` | The bordered "playable card" control used for the four action buttons — a Graphics panel behind a plain interactive Text, same resting-colour shape as `button.js` |
   | `src/ui/BoardView.js` | Grid/goal/wall/entity rendering, cell↔pixel mapping, and the transient action arrows. Holds no game state |
   | `src/scenes/` | `TitleScene`, `LevelSelectScene`, `PuzzleScene` |
+  | `assets/sprites/` | Image assets loaded via `this.load.image` (currently just the crate sprite) |
 - **Screen size / aspect ratio:** 480x854 (portrait, ~9:16), fixed size
 - **Grid rendering:** Canvas or Phaser Graphics API (simple rects + text)
 - **Key technical risks:** Tile movement input/state (ensuring clean tile-by-tile motion, not continuous)

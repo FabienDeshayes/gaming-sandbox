@@ -47,26 +47,45 @@ export const CARD_LAYOUTS = {
 export const CARD_Y = 720;
 export const CARD_COUNT_Y = 672; // per-action budget counter, above its card
 
-// Flat palette (see DESIGN.md §10). CSS strings are for text styles, 0x values
-// for Graphics/Shape fills.
+// Depth every transient control (direction/rotate/shift/flip arrows and their
+// highlight outlines, BoardView's `controls` array) is drawn at, so they
+// always sit above the board, walls, and entities regardless of draw order.
+export const CONTROL_DEPTH = 50;
+
+// Dark, low-saturation palette (see DESIGN.md §10). CSS strings are for text
+// styles, 0x values for Graphics/Shape fills.
 export const COLORS = {
   text: '#ffffff',
   hint: '#aaaaaa',
-  button: '#333333',
-  buttonHover: '#555555',
+  button: '#242628',
+  buttonHover: '#3a3d40',
   accent: '#1565c0', // selected card, arrows, ring outlines
   accentHex: 0x1565c0,
   highlight: '#ffb74d', // test mode, rotation center outline
   highlightHex: 0xffb74d,
-  floorHex: 0x222222,
-  gridLineHex: 0x444444,
-  goalHex: 0x2e7d32,
+  floorHex: 0x17191c,
+  gridLineHex: 0x2a2d31,
+  goalHex: 0x1b5e20,
   goalMark: '#a5d6a7',
   characterHex: 0x4fc3f7,
-  crateHex: 0x8d6e63, // crate body — deliberately unlike the character's blue
-  crateStrokeHex: 0x4e342e,
-  wallHex: 0xe53935, // red — walls, prototype styling (DESIGN.md §10)
+  wallHex: 0x9c4a35, // brick — walls, prototype styling (DESIGN.md §10)
+  wallMortarHex: 0x4a3428, // mortar joints on the brick wall segments
   disabled: '#1c1c1c', // action card with no budget left
   disabledText: '#666666',
   lose: '#ef9a9a',
+
+  // Action-card panels (BoardView-adjacent ui/actionCard.js): a stronger,
+  // bordered "playable card" look distinct from the plain nav buttons.
+  cardFillHex: 0x1b2027,
+  cardBorderHex: 0x3c4652, // idle
+  cardBorderHoverHex: 0x55636f,
+  cardBorderDisabledHex: 0x242428, // spent action
+
+  // Transient control arrows (BoardView.addControlArrow): deliberately
+  // low-contrast so they read as a preview overlay, not another entity.
+  controlBg: 'rgba(18,20,24,0.6)',
+  controlGlyph: '#8fb8e6',
 };
+
+export const CRATE_TEXTURE_KEY = 'crate';
+export const CRATE_TEXTURE_PATH = 'assets/sprites/crate.png';

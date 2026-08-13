@@ -6,7 +6,7 @@ import { TitleScene } from './scenes/TitleScene.js';
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  backgroundColor: '#111111',
+  backgroundColor: '#101214',
   // Keep the fixed 480x854 design space, but scale the canvas to fit the
   // screen (preserving aspect ratio) and center it, so it never crops on
   // narrower phone viewports.

@@ -118,6 +118,74 @@ export class PuzzleScene extends Phaser.Scene {
         })
         .setOrigin(1, 0);
     }
+    this.buildExitButton();
+  }
+
+  // Top-right icon button, tappable any time play isn't already blocked
+  // (gameOver/animating/exitConfirmOpen) — it opens showExitConfirm rather
+  // than leaving immediately, so an accidental tap doesn't drop a run.
+  buildExitButton() {
+    this.exitButton = this.add
+      .text(GAME_WIDTH - 20, 20, '✕', {
+        fontFamily: 'sans-serif',
+        fontSize: '26px',
+        color: COLORS.text,
+        backgroundColor: COLORS.button,
+        padding: { x: 10, y: 6 },
+      })
+      .setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(5);
+    this.exitButton.on('pointerover', () =>
+      this.exitButton.setStyle({ backgroundColor: COLORS.buttonHover })
+    );
+    this.exitButton.on('pointerout', () =>
+      this.exitButton.setStyle({ backgroundColor: COLORS.button })
+    );
+    this.exitButton.on('pointerdown', (pointer, lx, ly, event) => {
+      if (event) event.stopPropagation();
+      this.showExitConfirm();
+    });
+  }
+
+  // In-canvas confirmation panel — mirrors showOverlay's dim-background +
+  // buttons look. Exit always returns to *this* level's LevelSelectScene
+  // (real vs. test, per `unlimited`), same destination as the overlay's own
+  // "Level select" button.
+  showExitConfirm() {
+    if (this.gameOver || this.animating || this.exitConfirmOpen) return;
+    this.exitConfirmOpen = true;
+    this.board.clearControls();
+
+    const panel = [];
+    panel.push(
+      this.add
+        .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.72)
+        .setOrigin(0, 0)
+        .setDepth(20)
+        .setInteractive()
+    );
+    panel.push(
+      this.add
+        .text(GAME_WIDTH / 2, 340, 'Exit to level select?', {
+          fontFamily: 'sans-serif',
+          fontSize: '34px',
+          color: COLORS.text,
+        })
+        .setOrigin(0.5)
+        .setDepth(21)
+    );
+    panel.push(
+      createButton(this, GAME_WIDTH / 2, 430, 'Exit', () =>
+        this.scene.start('LevelSelectScene', { unlimited: this.unlimited })
+      ).setDepth(21)
+    );
+    panel.push(
+      createButton(this, GAME_WIDTH / 2, 510, 'Cancel', () => {
+        this.exitConfirmOpen = false;
+        panel.forEach((p) => p.destroy());
+      }).setDepth(21)
+    );
   }
 
   updateHud() {
@@ -200,7 +268,7 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   toggleActionCard(action) {
-    if (this.gameOver || this.animating) return;
+    if (this.gameOver || this.animating || this.exitConfirmOpen) return;
     if (this.selectedAction === action) {
       this.clearSelection();
       this.setHint(this.beginHint);
@@ -255,7 +323,7 @@ export class PuzzleScene extends Phaser.Scene {
       downY = pointer.y;
     });
     this.input.on('pointerup', (pointer) => {
-      if (this.gameOver || this.animating) return;
+      if (this.gameOver || this.animating || this.exitConfirmOpen) return;
       const dx = pointer.x - downX;
       const dy = pointer.y - downY;
       const dist = Math.hypot(dx, dy);

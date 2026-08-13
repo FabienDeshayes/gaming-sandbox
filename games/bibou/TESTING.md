@@ -76,6 +76,9 @@ import {
   flipEntity,
   resolveMoveChain,
   applyMoveChain,
+  buildWallSet,
+  isRotateBlocked,
+  isShiftBlocked,
 } from './src/core/rules.js';
 
 const N = 5;
@@ -117,7 +120,9 @@ eq(moveEntity({ x: 4, y: 0 }, 'Right', N), { x: 0, y: 0 }, 'wrap:');
 
 // Level 6: full-loop push (LEVEL_DESIGN.md §5.1.1/§7) — row y=2 completely
 // full, character (1,2) moves Right and the whole row rotates by one.
-const level6 = { background: { goal: { x: 2, y: 2 } } };
+// resolveMoveChain takes a wall lookup (buildWallSet), not the raw level —
+// no walls here, so an empty set.
+const noWalls = buildWallSet([]);
 const l6entities = [
   { kind: 'character', pos: { x: 1, y: 2 } },
   { kind: 'crate', pos: { x: 0, y: 2 } },
@@ -125,7 +130,7 @@ const l6entities = [
   { kind: 'crate', pos: { x: 3, y: 2 } },
   { kind: 'crate', pos: { x: 4, y: 2 } },
 ];
-const chain = resolveMoveChain(level6, l6entities, { x: 1, y: 2 }, 'Right', N);
+const chain = resolveMoveChain(noWalls, l6entities, { x: 1, y: 2 }, 'Right', N);
 console.log(
   'L6 chain:',
   chain,
@@ -137,6 +142,46 @@ eq(l6entities[1].pos, { x: 1, y: 2 }, 'L6 crate 0,2 ->:');
 eq(l6entities[2].pos, { x: 3, y: 2 }, 'L6 crate 2,2 ->:');
 eq(l6entities[3].pos, { x: 4, y: 2 }, 'L6 crate 3,2 ->:');
 eq(l6entities[4].pos, { x: 0, y: 2 }, 'L6 crate 4,2 ->:');
+
+// Level 7: a wall directly between the character and the goal blocks the
+// 1-move direct path; the 3-move detour around it is unaffected.
+const l7walls = buildWallSet([[{ x: 1, y: 2 }, { x: 2, y: 2 }]]);
+const l7entities = [{ kind: 'character', pos: { x: 1, y: 2 } }];
+console.log(
+  'L7 direct move blocked:',
+  resolveMoveChain(l7walls, l7entities, { x: 1, y: 2 }, 'Right', N) === null ? 'OK' : 'WRONG'
+);
+let w = { x: 1, y: 2 };
+w = moveEntity(w, 'Up', N);
+w = moveEntity(w, 'Right', N);
+w = moveEntity(w, 'Down', N);
+eq(w, { x: 2, y: 2 }, 'L7 detour:');
+
+// Level 8: a wraparound wall on the x=0/x=4 seam of row y=2 blocks the wrap
+// shortcut; the long way around the row is unaffected.
+const l8walls = buildWallSet([[{ x: 0, y: 2 }, { x: 4, y: 2 }]]);
+const l8entities = [{ kind: 'character', pos: { x: 0, y: 2 } }];
+console.log(
+  'L8 wraparound move blocked:',
+  resolveMoveChain(l8walls, l8entities, { x: 0, y: 2 }, 'Left', N) === null ? 'OK' : 'WRONG'
+);
+
+// Rotate/Shift reject the whole action when any entity's one-step move would
+// cross a wall (LEVEL_DESIGN.md §5.2/§5.3) — checked before anything moves.
+const ringWall = buildWallSet([[{ x: 2, y: 1 }, { x: 3, y: 1 }]]); // T -> TR step
+console.log(
+  'Rotate blocked by ring-step wall:',
+  isRotateBlocked(ringWall, [{ pos: { x: 2, y: 1 } }], { x: 2, y: 2 }, true, N) === true
+    ? 'OK'
+    : 'WRONG'
+);
+const shiftWall = buildWallSet([[{ x: 2, y: 2 }, { x: 3, y: 2 }]]);
+console.log(
+  'Shift blocked by wall:',
+  isShiftBlocked(shiftWall, [{ pos: { x: 2, y: 2 } }], 'row', 2, 'Right', N) === true
+    ? 'OK'
+    : 'WRONG'
+);
 ```
 
 > Node ≥ 22 detects module syntax, so importing `src/core/rules.js` works even
@@ -343,6 +388,11 @@ const server = http.createServer((req, res) => {
   assert every entity in the chain shifted by one, not just the one tapped — including
   the full-loop case (Level 6, `LEVEL_DESIGN.md` §5.1.1/§7), where a fully-occupied
   row/column rotates by one instead of the move being rejected.
+- **Walls block correctly, and only where drawn:** on a level with walls (Levels 7–8,
+  `LEVEL_DESIGN.md` §1.2/§7), assert the blocked direction stays illegal (hint changes,
+  `movesUsed`/`scene.remaining` don't change, entity doesn't move) and that the
+  documented detour still succeeds. For the wraparound case (Level 8), also assert
+  the *other* direction across the same seam (where no wall was placed) still works.
 - **Both input styles:** exercise arrow taps *and* swipes (cardinal swipes for Move;
   right = clockwise / left = anticlockwise for Rotate; horizontal = column flip /
   vertical = row flip for Flip), since they're separate code paths.

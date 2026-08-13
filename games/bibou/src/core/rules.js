@@ -34,11 +34,89 @@ export function samePos(a, b) {
   return a.x === b.x && a.y === b.y;
 }
 
-// No blocking background tiles yet (walls are post-MVP). Kept as the seam that
-// LEVEL_DESIGN.md §5.1 anticipates, so Move already routes through a legality
-// check.
-export function isBlocked(level, pos) {
-  return false;
+// --- Walls (LEVEL_DESIGN.md §1.2) -------------------------------------------
+// A wall is a pair of tile coordinates naming the edge between two cardinally
+// adjacent tiles — including the wraparound case, where the tiles sit at the
+// two opposite extremes of a row/column and touch through the loop (§2.1). A
+// wall blocks entity movement between exactly that pair of tiles, both
+// directions; it says nothing about any other pair, however close.
+
+// True if `u` and `v` (two values on the same axis) are one cardinal step
+// apart, wraparound included. Wraparound only connects the two extreme
+// indices (0 and size - 1) — any other pair the same distance apart is just
+// far away, not touching.
+function isAdjacentOnAxis(u, v, size) {
+  const d = Math.abs(u - v);
+  if (d === 1) return true;
+  return (
+    d === size - 1 && ((u === 0 && v === size - 1) || (u === size - 1 && v === 0))
+  );
+}
+
+// True if `a` and `b` are a legal wall endpoint pair for a board of `size`:
+// aligned on exactly one axis, one cardinal step apart on it (wraparound
+// counts). Rejects diagonals, the same tile twice, and tiles that are merely
+// far apart.
+export function isValidWallPair(a, b, size) {
+  if (samePos(a, b)) return false;
+  if (a.x !== b.x && a.y !== b.y) return false; // not aligned on either axis
+  if (a.x !== b.x) return isAdjacentOnAxis(a.x, b.x, size);
+  return isAdjacentOnAxis(a.y, b.y, size);
+}
+
+// Throws if any entry in `level.walls` isn't a legal wall pair (§1.2) — called
+// when levels are loaded (see src/data/levels.js) so a bad level definition
+// fails fast instead of silently drawing or blocking the wrong thing.
+export function validateLevelWalls(level) {
+  (level.walls ?? []).forEach(([a, b]) => {
+    if (!isValidWallPair(a, b, level.gridSize)) {
+      throw new Error(
+        `Level ${level.id}: invalid wall between (${a.x},${a.y}) and (${b.x},${b.y}) — ` +
+          'walls must connect two cardinally adjacent tiles (including the wraparound edge).'
+      );
+    }
+  });
+}
+
+// Order-independent key for a pair of positions, so a wall (or a step through
+// one) can be looked up regardless of which side it's queried from.
+function wallKey(a, b) {
+  const ka = `${a.x},${a.y}`;
+  const kb = `${b.x},${b.y}`;
+  return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+}
+
+// Builds a lookup from a level's `walls` list for fast "is there a wall
+// between these two tiles" checks. Levels are assumed already validated
+// (validateLevelWalls) by the time this runs.
+export function buildWallSet(walls) {
+  return new Set((walls ?? []).map(([a, b]) => wallKey(a, b)));
+}
+
+// True if a wall separates `a` and `b`. Only meaningful for cardinally
+// adjacent tiles (including the wraparound case) — a wall never applies to
+// any other pair.
+export function isWallBetween(wallSet, a, b) {
+  return wallSet.has(wallKey(a, b));
+}
+
+// True if rotating everything on the ring around `center` in `direction`
+// would move any entity across a wall — checked up front so an illegal
+// rotation is rejected atomically, before anything moves (DESIGN.md §5).
+export function isRotateBlocked(wallSet, entities, center, clockwise, size) {
+  return entities.some((e) => {
+    const dest = rotateEntity(e.pos, center, clockwise, size);
+    return !samePos(dest, e.pos) && isWallBetween(wallSet, e.pos, dest);
+  });
+}
+
+// True if shifting `axis`/`index` in `direction` would move any entity across
+// a wall — same atomic-rejection rule as isRotateBlocked.
+export function isShiftBlocked(wallSet, entities, axis, index, direction, size) {
+  return entities.some((e) => {
+    const dest = shiftEntity(e.pos, axis, index, direction, size);
+    return !samePos(dest, e.pos) && isWallBetween(wallSet, e.pos, dest);
+  });
 }
 
 // Move: one cell in a cardinal direction, wrapping past the edges.
@@ -93,14 +171,15 @@ export function shiftEntity(pos, axis, index, direction, size) {
 // back around to `pos` itself, meaning every tile on that line was occupied.
 // That closed-loop case still resolves: the whole line rotates by one, the
 // same as if it had been Shifted. Returns the ordered list of tiles the chain
-// passes through, `[pos, ..., destination]`, or `null` if a blocking
-// Background tile (post-MVP wall) stops the chain before it resolves.
-export function resolveMoveChain(level, entities, pos, direction, size) {
+// passes through, `[pos, ..., destination]`, or `null` if a wall (§1.2) stops
+// the chain from taking its next step before it resolves.
+export function resolveMoveChain(wallSet, entities, pos, direction, size) {
   const path = [pos];
   let current = pos;
   for (let i = 0; i < size; i++) {
-    current = moveEntity(current, direction, size);
-    if (isBlocked(level, current)) return null;
+    const next = moveEntity(current, direction, size);
+    if (isWallBetween(wallSet, current, next)) return null;
+    current = next;
     path.push(current);
     if (samePos(current, pos)) break; // full loop: line was entirely occupied
     if (!entities.some((e) => samePos(e.pos, current))) break; // open tile

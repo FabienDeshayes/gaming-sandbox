@@ -251,6 +251,11 @@ export class BoardView {
   // mirrored axis, swaps to its reflected tile at the flattest instant (so the
   // position jump is hidden behind zero width/height), then unsquashes — the
   // whole layer reads as one mirror pass rather than entities teleporting.
+  //
+  // Each sprite unsquashes back to *its own* resting scale, which is not 1 for
+  // anything sized with setDisplaySize: the crate is a 16px texture shown at
+  // 48px, so it rests at scale 3 and springing back to 1 would leave it a
+  // third of its width for the rest of the level.
   animateFlip(moves, axis, duration, onComplete) {
     if (moves.length === 0) {
       onComplete?.();
@@ -260,6 +265,7 @@ export class BoardView {
     let remaining = moves.length;
     moves.forEach(({ to }, i) => {
       const sprite = this.entitySprites[i];
+      const restingScale = sprite[scaleProp];
       const toCenter = this.cellCenter(to.x, to.y);
       this.scene.tweens.add({
         targets: sprite,
@@ -270,7 +276,7 @@ export class BoardView {
           sprite.setPosition(toCenter.px, toCenter.py);
           this.scene.tweens.add({
             targets: sprite,
-            [scaleProp]: 1,
+            [scaleProp]: restingScale,
             duration: duration / 2,
             ease: 'Quad.easeOut',
             onComplete: () => {
@@ -285,13 +291,14 @@ export class BoardView {
 
   // Reaching the goal (finishAction's win check): the character grows and
   // settles back before the win overlay appears, reading as "that worked"
-  // rather than the game just freezing on the spot.
+  // rather than the game just freezing on the spot. Scaled relative to the
+  // sprite's own resting scale, for the same reason animateFlip is.
   pulseEntity(index, duration, onComplete) {
     const sprite = this.entitySprites[index];
     this.scene.tweens.add({
       targets: sprite,
-      scaleX: 1.35,
-      scaleY: 1.35,
+      scaleX: sprite.scaleX * 1.35,
+      scaleY: sprite.scaleY * 1.35,
       duration: duration / 2,
       ease: 'Quad.easeOut',
       yoyo: true,

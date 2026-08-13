@@ -94,6 +94,11 @@ export class PuzzleScene extends Phaser.Scene {
     this.rotateCenter = null; // {x, y} once a rotation center is chosen
     this.gameOver = false;
     this.animating = false; // true while a transition tween owns the entity sprites
+    // Phaser reuses one Scene instance across scene.start, so every flag that
+    // gate-keeps input has to be reset here, not just where it's set. Exiting
+    // from the confirm panel leaves this true, and a stale `true` would make
+    // the *next* run of this scene silently ignore every tap.
+    this.exitConfirmOpen = false;
 
     this.board = new BoardView(this, size, this.goalPos);
     this.board.drawBoard();

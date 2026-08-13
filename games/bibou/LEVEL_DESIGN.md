@@ -104,11 +104,11 @@ Every action is defined by:
 
 | Field | Value |
 |---|---|
-| Parameters | `startTile: (x, y)` — the tile to move; `direction: Up \| Down \| Left \| Right` |
-| Effect | The entity on the Entity layer at `startTile` — character or crate — is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). If that destination tile is occupied, the entity there is displaced one step further in `direction` first, and so on down the chain (§5.1.1) — every entity in the chain ends up shifted one step. The Background and Wall layers are untouched. |
-| Legality | `startTile` must currently hold an entity on the Entity layer. Walking the push chain from `startTile` in `direction` must not cross a wall (§1.2) before it resolves. |
+| Parameters | `startTile: (x, y)` — always the character's current tile (see Target selection); `direction: Up \| Down \| Left \| Right` |
+| Effect | The character, at `startTile`, is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). If that destination tile is occupied, the entity there is displaced one step further in `direction` first, and so on down the chain (§5.1.1) — every entity in the chain ends up shifted one step. The Background and Wall layers are untouched. |
+| Legality | Walking the push chain from `startTile` in `direction` must not cross a wall (§1.2) before it resolves. |
 | Cost | 1 Move |
-| Target selection | Tap the Move card → tap an entity (character or crate) → four directional arrows appear around it; tap an arrow **or** swipe in a cardinal direction to choose the direction. Choosing the direction executes the move immediately — there is no separate confirm step (per `DESIGN.md` §5). Tapping the selected entity again cancels; tapping a different entity re-targets the move. |
+| Target selection | Move always targets the character — there is only ever one, so there's no tap-to-select step. Tapping the Move card immediately shows four directional arrows around the character; tap an arrow **or** swipe in a cardinal direction to choose the direction. Choosing the direction executes the move immediately — there is no separate confirm step (per `DESIGN.md` §5). Crates cannot be targeted directly; they only move when the character's push chain (§5.1.1) reaches them. |
 
 Direction deltas: `Up = (0, -1)`, `Down = (0, +1)`, `Left = (-1, 0)`, `Right = (+1, 0)`.
 

@@ -382,10 +382,10 @@ const server = http.createServer((req, res) => {
   not increment `movesUsed`), while the other cards still work. The level must not
   end until every pool is empty.
 - **Crates move with the board:** on a level with crates, assert their positions
-  after Rotate/Shift/Flip, and that Move can target a crate (tap the crate's cell,
-  not the character's) without moving the character.
+  after Rotate/Shift/Flip. Move always targets the character — there is no way to
+  select a crate directly.
 - **Pushing resolves correctly:** on a level where a Move's destination is occupied,
-  assert every entity in the chain shifted by one, not just the one tapped — including
+  assert every entity in the chain shifted by one, not just the character — including
   the full-loop case (Level 6, `LEVEL_DESIGN.md` §5.1.1/§7), where a fully-occupied
   row/column rotates by one instead of the move being rejected.
 - **Walls block correctly, and only where drawn:** on a level with walls (Levels 7–8,

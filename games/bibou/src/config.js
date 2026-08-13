@@ -55,6 +55,7 @@ export const COLORS = {
   characterHex: 0x4fc3f7,
   crateHex: 0x8d6e63, // crate body — deliberately unlike the character's blue
   crateStrokeHex: 0x4e342e,
+  wallHex: 0xe53935, // red — walls, prototype styling (DESIGN.md §10)
   disabled: '#1c1c1c', // action card with no budget left
   disabledText: '#666666',
   lose: '#ef9a9a',

@@ -5,6 +5,11 @@
 // `entities.crates` is optional — a level without it just has no crates.
 // `actionBudget` is per action type: each key is an action the level offers and
 // its own private pool of uses (LEVEL_DESIGN.md §6).
+// `walls` is optional — a level without it just has no walls (LEVEL_DESIGN.md
+// §1.2). Each entry is a `[a, b]` pair of cardinally adjacent tile
+// coordinates; every level's walls are validated below, at load time.
+
+import { validateLevelWalls } from '../core/rules.js';
 
 export const LEVEL_1 = {
   id: 1,
@@ -92,4 +97,51 @@ export const LEVEL_6 = {
   actionBudget: { move: 1 },
 };
 
-export const LEVELS = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5, LEVEL_6];
+// Level 7 introduces walls (see LEVEL_DESIGN.md §1.2/§7). A wall sits directly
+// between the character and the adjacent goal tile, so the 1-move direct
+// approach is illegal — the shortest legal path is a 3-move detour one row up
+// and back down (going the other way around the board via wraparound would
+// take 4 moves, per §2.1, so it isn't the shortcut here).
+export const LEVEL_7 = {
+  id: 7,
+  gridSize: 5,
+  background: { goal: { x: 2, y: 2 } },
+  entities: { character: { x: 1, y: 2 } },
+  walls: [
+    [
+      { x: 1, y: 2 },
+      { x: 2, y: 2 },
+    ],
+  ],
+  actionBudget: { move: 3 },
+};
+
+// Level 8 exercises a wraparound wall (LEVEL_DESIGN.md §2.1/§1.2): the wall
+// sits on the seam between x=0 and x=4 on row y=2, so the short way around the
+// loop is blocked and the level needs the long way across the row instead.
+export const LEVEL_8 = {
+  id: 8,
+  gridSize: 5,
+  background: { goal: { x: 4, y: 2 } },
+  entities: { character: { x: 1, y: 2 } },
+  walls: [
+    [
+      { x: 0, y: 2 },
+      { x: 4, y: 2 },
+    ],
+  ],
+  actionBudget: { move: 3 },
+};
+
+export const LEVELS = [
+  LEVEL_1,
+  LEVEL_2,
+  LEVEL_3,
+  LEVEL_4,
+  LEVEL_5,
+  LEVEL_6,
+  LEVEL_7,
+  LEVEL_8,
+];
+
+LEVELS.forEach(validateLevelWalls);

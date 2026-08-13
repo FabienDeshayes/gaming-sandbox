@@ -66,6 +66,37 @@ export class BoardView {
       .setOrigin(0.5);
   }
 
+  // Walls (LEVEL_DESIGN.md §1.2): a red line on the edge shared by the two
+  // tiles a wall connects. A wraparound wall (its two tiles sit at opposite
+  // extremes of a row/column) has no shared edge on screen, so it draws on
+  // *both* tiles' outer board edge instead — the two segments are one logical
+  // wall, split across the two places it visually touches.
+  drawWalls(walls) {
+    const g = this.scene.add.graphics();
+    g.lineStyle(4, COLORS.wallHex, 1);
+    (walls ?? []).forEach(([a, b]) => {
+      if (a.y === b.y) {
+        const y0 = BOARD_Y + a.y * CELL;
+        if (Math.abs(a.x - b.x) === 1) {
+          const x = BOARD_X + Math.max(a.x, b.x) * CELL;
+          g.lineBetween(x, y0, x, y0 + CELL);
+        } else {
+          g.lineBetween(BOARD_X, y0, BOARD_X, y0 + CELL);
+          g.lineBetween(BOARD_X + BOARD_PX, y0, BOARD_X + BOARD_PX, y0 + CELL);
+        }
+      } else {
+        const x0 = BOARD_X + a.x * CELL;
+        if (Math.abs(a.y - b.y) === 1) {
+          const y = BOARD_Y + Math.max(a.y, b.y) * CELL;
+          g.lineBetween(x0, y, x0 + CELL, y);
+        } else {
+          g.lineBetween(x0, BOARD_Y, x0 + CELL, BOARD_Y);
+          g.lineBetween(x0, BOARD_Y + BOARD_PX, x0 + CELL, BOARD_Y + BOARD_PX);
+        }
+      }
+    });
+  }
+
   // One sprite per entity, in the same order as the list PuzzleScene owns.
   // Crates sit below the character in draw order — no two entities ever share
   // a tile now (LEVEL_DESIGN.md §3), but this keeps the character legible if a

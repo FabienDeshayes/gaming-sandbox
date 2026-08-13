@@ -6,22 +6,42 @@
 
 ## 1. Board
 
-The **Board** is the whole 5×5 tile grid for a level — the union of both layers, at every coordinate.
+The **Board** is the whole 5×5 tile grid for a level — the union of all three layers.
 
 - **Size:** 5×5 tiles, fixed for now (all levels in this doc use this size).
-- **Layers:** every tile on the Board has a cell on each of two layers, stacked at the same coordinate.
-  - **Background layer** (static): floor, walls (post-MVP), and the goal tile. Never changes during play. Defines where the Entity layer is allowed to end up and where the win condition fires.
-  - **Entity layer** (movable): the character and crates. Every action reads and writes this layer only — the Background layer is read-only during play.
+- **Layers:**
+  - **Background layer** (static): floor and the goal tile, indexed by tile coordinate like the Entity layer. Never changes during play.
+  - **Wall layer** (static): a set of *edges* between adjacent tiles — see §1.2. Not indexed by tile coordinate at all; this is the layer that "doesn't follow the same coordinate system" the other two do.
+  - **Entity layer** (movable): the character and crates. Every action reads and writes this layer only — the Background and Wall layers are read-only during play.
 
 ### 1.1 Background tile types
 
-| Tile type | Blocks entities? | Notes |
-|---|---|---|
-| Floor | No | Default background tile; entities can freely move onto it. |
-| Wall *(post-MVP)* | Yes | An entity cannot end a move on a wall tile — see §5.1. Not used by any level in this doc yet. |
-| Goal | No | Triggers win when the character's Entity-layer cell lands on it (§4). |
+| Tile type | Notes |
+|---|---|
+| Floor | Default background tile; entities can freely move onto it. |
+| Goal | Triggers win when the character's Entity-layer cell lands on it (§4). |
 
-Whether a background tile blocks entities is a property of the tile type, independent of the wraparound mechanic (§2.1) — wraparound only changes *how a destination coordinate is computed*, never whether that destination is legal to land on.
+### 1.2 Wall layer
+
+A **wall** blocks entity movement between exactly two tiles, in both directions. It is expressed as a pair of tile coordinates — the two tiles it sits between — rather than as a coordinate of its own, since a wall lives on the edge shared by two tiles, not on a tile:
+
+```json
+{ "walls": [[{ "x": 0, "y": 1 }, { "x": 0, "y": 2 }]] }
+```
+
+This one wall stops an entity moving between `(0,1)` and `(0,2)` in either direction; it says nothing about any other pair of tiles, including ones that are diagonally or otherwise near it.
+
+**Validity.** A wall's two coordinates must be **cardinally adjacent** — exactly one cell apart on exactly one axis. Two exceptions/clarifications:
+
+- **Diagonal pairs are invalid.** A wall never connects two tiles that differ on both axes.
+- **Non-adjacent pairs are invalid.** A wall never connects two tiles that are more than one step apart on the same row/column (e.g. `(0,0)` and `(2,0)`).
+- **Wraparound is the one case where "one step apart" isn't "adjacent indices."** Because the board loops (§2.1), the tile at index `0` and the tile at index `size - 1` on the same row/column are cardinally adjacent through the seam, even though their coordinates are `size - 1` apart. A wall between them is valid, and it is the *only* combination of far-apart indices that is: for a fixed `size`, index pairs `size - 1` apart are exactly `{0, size - 1}`, so no other "distance `size - 1`" pair can occur on an in-range board.
+
+Levels are checked against these rules when they're loaded (`validateLevelWalls` in `src/core/rules.js`, called for every entry in `src/data/levels.js`'s `LEVELS`) — an invalid wall throws immediately rather than silently drawing or blocking the wrong thing.
+
+**Rendering.** A wall draws as a red line (prototype styling, `DESIGN.md` §10) on the edge its two tiles share. A wraparound wall has no shared edge on screen — its two tiles are drawn on opposite sides of the board — so it draws as two line segments instead, one on each tile's outer board edge. Both segments are one logical wall; see `BoardView.drawWalls`.
+
+**Legality by action.** Move, Rotate, and Shift each move an entity exactly one cardinal step at a time, so each checks the wall between an entity's current tile and the tile it's about to step onto — see §5.1/§5.2/§5.3 for exactly how. Flip does not check walls at all: it reflects an entity directly to its mirrored coordinate rather than stepping it across the board, so it never crosses an edge in the sense a wall guards — see §5.4.
 
 ## 2. Coordinate system
 
@@ -47,9 +67,9 @@ The board has no edges — it loops. This applies to **any** entity movement on 
 - If a move would take a coordinate to index `5` (or beyond), it wraps to index `0`.
 - If a move would take a coordinate to index `-1` (or below), it wraps to index `4`.
 - Formally, for board size `N` (currently 5): `newCoord = ((coord + delta) % N + N) % N`.
-- Wraparound itself is unconditional — computing the wrapped destination never fails, and the edge itself never blocks a move. Whether the move actually succeeds still depends on what's at that destination: if the wrapped-to tile is a blocking Background-layer tile (e.g. a wall, §1.1), the move is illegal for the same reason a non-wrapped move onto a wall would be.
+- Wraparound itself is unconditional — computing the wrapped destination never fails, and the edge itself never blocks a move. Whether the move actually succeeds still depends on what's between the source and destination tile: a wraparound wall (§1.2) blocks a wrapped step for exactly the same reason a regular wall blocks a non-wrapped one.
 
-Moving off one side of the board is therefore always legal *as far as the edge is concerned* and lands on the opposite side, subject only to the normal Background-layer legality check.
+Moving off one side of the board is therefore always legal *as far as the edge is concerned* and lands on the opposite side, subject only to the normal wall legality check (§1.2).
 
 ## 3. Entities
 
@@ -85,8 +105,8 @@ Every action is defined by:
 | Field | Value |
 |---|---|
 | Parameters | `startTile: (x, y)` — the tile to move; `direction: Up \| Down \| Left \| Right` |
-| Effect | The entity on the Entity layer at `startTile` — character or crate — is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). If that destination tile is occupied, the entity there is displaced one step further in `direction` first, and so on down the chain (§5.1.1) — every entity in the chain ends up shifted one step. The Background layer is untouched. |
-| Legality | `startTile` must currently hold an entity on the Entity layer. Walking the push chain from `startTile` in `direction` must not hit a blocking tile on the Background layer (§1.1 — e.g. a wall) before it resolves. *(MVP has no walls, so this check is always satisfied until walls are added.)* |
+| Effect | The entity on the Entity layer at `startTile` — character or crate — is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). If that destination tile is occupied, the entity there is displaced one step further in `direction` first, and so on down the chain (§5.1.1) — every entity in the chain ends up shifted one step. The Background and Wall layers are untouched. |
+| Legality | `startTile` must currently hold an entity on the Entity layer. Walking the push chain from `startTile` in `direction` must not cross a wall (§1.2) before it resolves. |
 | Cost | 1 Move |
 | Target selection | Tap the Move card → tap an entity (character or crate) → four directional arrows appear around it; tap an arrow **or** swipe in a cardinal direction to choose the direction. Choosing the direction executes the move immediately — there is no separate confirm step (per `DESIGN.md` §5). Tapping the selected entity again cancels; tapping a different entity re-targets the move. |
 
@@ -99,10 +119,10 @@ Example (no push): character at `(4, 2)` moves `Right` → destination `x = (4 +
 Moving an entity onto an occupied tile pushes a chain, not just one neighbour: starting at `startTile`, walk the line of tiles in `direction` — `startTile`, then one step further, then one step further again — following whichever entity occupies each tile, until one of three things happens:
 
 1. **An unoccupied tile is found.** The chain resolves there: every entity from `startTile` up to (but not including) that tile shifts one step forward into the next tile in the chain. This is the common case — pushing one crate, or a crate that pushes another crate.
-2. **A blocking Background tile is hit** (post-MVP wall). The whole move is illegal and nothing moves — same as any other illegal action (`DESIGN.md` §5).
+2. **A wall is hit** (§1.2) — the next step in the walk would cross a wall. The whole move is illegal and nothing moves — same as any other illegal action (`DESIGN.md` §5). Level 7 (§7) is built to exercise this case, including the wraparound wall variant in Level 8.
 3. **The walk wraps all the way back to `startTile` itself**, because the board is borderless (§2.1) and every tile on that row/column is occupied by an entity. There is no open tile to resolve into, but this is *not* a deadlock: every entity in the chain still shifts one step forward, including the entity that was at `startTile` — the net effect is the entire line rotating by one, identical to a Shift on that line. This is the case Level 6 (§7) is built to exercise.
 
-Implementation: `resolveMoveChain` (in `src/core/rules.js`) walks the chain and returns the ordered list of tiles it passes through, or `null` for case 2; `applyMoveChain` shifts every entity in that list forward by one. Both cases 1 and 3 are the same function call — case 3 is simply what happens when the walk's terminating condition is "back at the start" instead of "found an empty tile".
+Implementation: `resolveMoveChain` (in `src/core/rules.js`, taking a wall lookup built by `buildWallSet` rather than the raw level) walks the chain and returns the ordered list of tiles it passes through, or `null` for case 2; `applyMoveChain` shifts every entity in that list forward by one. Both cases 1 and 3 are the same function call — case 3 is simply what happens when the walk's terminating condition is "back at the start" instead of "found an empty tile".
 
 Example (push, no loop): row has crates at `(2, 2)` and `(3, 2)`, character at `(1, 2)`. Character moves `Right`: destination `(2, 2)` is occupied, so the chain walks to `(3, 2)` (also occupied), then to `(4, 2)` (open) — chain resolves. Character ends at `(2, 2)`, the first crate at `(3, 2)`, the second crate at `(4, 2)`.
 
@@ -113,8 +133,8 @@ Example (full-loop push): see Level 6 (§7) — a row completely filled by 5 ent
 | Field | Value |
 |---|---|
 | Parameters | `center: (x, y)` — the tile at the middle of the rotation; `direction: Clockwise \| Anticlockwise` |
-| Effect | The 8 tiles surrounding `center` (its Chebyshev-distance-1 neighbours, with wraparound §2.1) form a ring. Each tile's Entity-layer contents shift **one step** around that ring in `direction`. The `center` tile itself is untouched, as is the Background layer. Empty ring tiles "rotate" too — they just carry nothing. |
-| Legality | Always legal in the MVP: there are no walls, and empty tiles are allowed to rotate. (Once walls exist, a rotation that would land an entity on a blocking Background tile is rejected and costs nothing, same rule as Move.) |
+| Effect | The 8 tiles surrounding `center` (its Chebyshev-distance-1 neighbours, with wraparound §2.1) form a ring. Each tile's Entity-layer contents shift **one step** around that ring in `direction`. The `center` tile itself is untouched, as are the Background and Wall layers. Empty ring tiles "rotate" too — they just carry nothing. |
+| Legality | Empty tiles are always allowed to rotate. If any occupied ring tile's one-step move to its next ring position would cross a wall (§1.2), the **whole** rotation is illegal and rejected before anything moves — same all-or-nothing rule as Move's push chain, just checked across every entity on the ring instead of one chain. |
 | Cost | 1 Rotate |
 | Target selection | Tap the Rotate card → tap a tile to set the rotation **center** → two rotation arrows appear above the center (`↺` anticlockwise, `↻` clockwise); tap an arrow **or** swipe **right** (clockwise) / **left** (anticlockwise) to choose the direction and execute in one gesture. Tapping the center tile again cancels; tapping a different tile re-centers. |
 
@@ -143,8 +163,8 @@ Example: `center = (2, 3)`, character at the top-left ring tile `(1, 2)` (index 
 | Field | Value |
 |---|---|
 | Parameters | `line: { axis: Row \| Column, index }` — which row (`y = index`) or column (`x = index`) to shift; `direction: Left \| Right` for a row, `Up \| Down` for a column |
-| Effect | Every entity currently on the Entity layer at `y = index` (row) or `x = index` (column) moves one cell in `direction`, with wraparound (§2.1). Tiles on that row/column not holding an entity stay empty; the Background layer is untouched. |
-| Legality | Always legal in the MVP: there are no walls, and a row/column with no entity on it "shifts" without visible effect. (Once walls exist, a shift that would land an entity on a blocking Background tile is rejected and costs nothing, same rule as Move/Rotate.) |
+| Effect | Every entity currently on the Entity layer at `y = index` (row) or `x = index` (column) moves one cell in `direction`, with wraparound (§2.1). Tiles on that row/column not holding an entity stay empty; the Background and Wall layers are untouched. |
+| Legality | A row/column with no entity on it "shifts" without visible effect and is always legal. If any occupied tile's one-step move would cross a wall (§1.2), the whole shift is illegal and rejected before anything moves — same all-or-nothing rule as Rotate. |
 | Cost | 1 Shift |
 | Target selection | Tap the Shift card → arrows appear immediately around **every** row and column edge, pointing inward (`▶` on the left edge / `◀` on the right edge of each row; `▼` above / `▲` below each column) → tap one arrow to shift that row or column in that direction and execute immediately. Unlike Move/Rotate, there is no separate tap-a-target step first — which arrow you tap picks the row/column *and* the direction in one gesture. |
 
@@ -157,8 +177,8 @@ The board's highest-impact action: it mirrors the **entire** entity layer in one
 | Field | Value |
 |---|---|
 | Parameters | `axis: Row \| Column` — the **mirror line**, i.e. the middle row or the middle column of the board |
-| Effect | Every entity on the Entity layer is reflected across that middle line. `axis: Row` mirrors across the middle row, so `y` flips and the board turns top-to-bottom; `axis: Column` mirrors across the middle column, so `x` flips and the board turns left-to-right. The other coordinate is unchanged. The Background layer is untouched — the goal tile does **not** move. |
-| Legality | Always legal in the MVP: there are no walls, and mirroring never leaves the grid. (Once walls exist, a flip that would land an entity on a blocking Background tile is rejected and costs nothing, same rule as the other actions.) |
+| Effect | Every entity on the Entity layer is reflected across that middle line. `axis: Row` mirrors across the middle row, so `y` flips and the board turns top-to-bottom; `axis: Column` mirrors across the middle column, so `x` flips and the board turns left-to-right. The other coordinate is unchanged. The Background and Wall layers are untouched — the goal tile does **not** move. |
+| Legality | Always legal: mirroring never leaves the grid, and Flip never checks walls (§1.2). A wall blocks movement between two adjacent tiles that an entity steps across; Flip reflects an entity straight to its mirrored coordinate without stepping through anything in between, so there's no edge for a wall to guard here — unlike Move, Rotate, and Shift, which all move one cardinal step at a time. |
 | Cost | 1 Flip |
 | Target selection | Tap the Flip card → both mirror lines highlight, with `↔` above the middle column and `↕` to the left of the middle row → tap one arrow, **or** swipe horizontally (mirror across the middle column) / vertically (mirror across the middle row), to execute immediately. Like Shift, there is no separate tap-a-target step — Flip always affects the whole board, so the only choice is which line to mirror across. |
 
@@ -189,6 +209,9 @@ Suggested shape for encoding a level, for whoever implements level loading:
   "background": {
     "goal": { "x": 3, "y": 2 }
   },
+  "walls": [
+    [{ "x": 0, "y": 1 }, { "x": 0, "y": 2 }]
+  ],
   "entities": {
     "character": { "x": 1, "y": 2 },
     "crates": [{ "x": 0, "y": 0 }]
@@ -201,6 +224,8 @@ Suggested shape for encoding a level, for whoever implements level loading:
 ```
 
 `entities.crates` is optional — omit it for a level with no crates. Each entry is one crate's starting position (§3).
+
+`walls` is optional — omit it for a level with no walls. Each entry is a `[a, b]` pair of cardinally adjacent tile coordinates naming one wall (§1.2); `validateLevelWalls` (`src/core/rules.js`) rejects an invalid pair when the level loads.
 
 **`actionBudget` is per action type, in two senses:**
 
@@ -342,3 +367,45 @@ Row `y = 2` holds five entities on a five-wide board — every tile on that row 
 - Crate `(0, 2) → (1, 2)`
 
 One Move, zero slack, and it only works because the full-loop case resolves as a rotation rather than rejecting the move — if it were treated as blocked instead, this exact level would be unsolvable with the budget given.
+
+### Level 7
+
+Introduces walls (§1.2). A wall sits directly between the character and the goal, so the 1-move direct approach is illegal.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(1, 2)` |
+| Goal | `(2, 2)` |
+| Walls | `(1, 2)`–`(2, 2)` |
+| Available actions | Move only |
+| Action budget | Move: 3 |
+
+**Intended solution:** the wall blocks the 1-move direct path, so the character detours one row up, across, and back down:
+
+1. Move `Up` → `(1, 2) → (1, 1)`.
+2. Move `Right` → `(1, 1) → (2, 1)`.
+3. Move `Down` → `(2, 1) → (2, 2)` = goal → **win**.
+
+Going the other way around the board via wraparound (§2.1) would take 4 moves — the "long way" around a 5-wide row from an adjacent tile is `size - 1 = 4` steps — so it isn't a shortcut here; the 3-move detour through the next row is the actual shortest legal path, which is why the budget is exactly 3.
+
+### Level 8
+
+Exercises a **wraparound** wall (§1.2/§2.1): the wall sits on the seam between `x = 0` and `x = 4` on row `y = 2`, so the short way around the loop is blocked.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(1, 2)` |
+| Goal | `(4, 2)` |
+| Walls | `(0, 2)`–`(4, 2)` (wraparound) |
+| Available actions | Move only |
+| Action budget | Move: 3 |
+
+Without the wall, the shortest path would be leftward through the wraparound seam — `(1,2) → (0,2) → (4,2)`, 2 moves. The wall sits on exactly that seam, so the second of those two moves is illegal; the character has to go the long way instead:
+
+1. Move `Right` → `(1, 2) → (2, 2)`.
+2. Move `Right` → `(2, 2) → (3, 2)`.
+3. Move `Right` → `(3, 2) → (4, 2)` = goal → **win**.
+
+Zero slack: 3 is the shortest path once the wraparound shortcut is blocked, and none of these three rightward moves cross the wall (it only ever blocks the specific `(0,2)`–`(4,2)` step).

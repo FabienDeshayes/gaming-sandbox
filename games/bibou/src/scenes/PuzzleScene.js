@@ -11,7 +11,10 @@ import {
 } from '../config.js';
 import {
   applyMoveChain,
+  buildWallSet,
   flipEntity,
+  isRotateBlocked,
+  isShiftBlocked,
   resolveMoveChain,
   rotateEntity,
   samePos,
@@ -45,6 +48,10 @@ export class PuzzleScene extends Phaser.Scene {
       })),
     ];
     this.goalPos = { ...this.level.background.goal };
+    // Walls are their own layer, keyed by tile-pair edges rather than tile
+    // coordinates (LEVEL_DESIGN.md §1.2). Levels are validated at load time
+    // (src/data/levels.js), so this set can be trusted here.
+    this.wallSet = buildWallSet(this.level.walls);
     this.movesUsed = 0;
 
     // Budgets are per action type: the keys of actionBudget with a positive
@@ -74,6 +81,7 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.board = new BoardView(this, size, this.goalPos);
     this.board.drawBoard();
+    this.board.drawWalls(this.level.walls);
     this.board.createEntities(this.entities);
     this.board.renderEntities(this.entities);
 
@@ -375,17 +383,17 @@ export class PuzzleScene extends Phaser.Scene {
       return;
 
     // An entity in the way gets pushed first, and so on down the chain — see
-    // resolveMoveChain (LEVEL_DESIGN.md §5.1). Only a blocking Background tile
-    // (post-MVP wall) can make this illegal.
+    // resolveMoveChain (LEVEL_DESIGN.md §5.1). Only a wall (§1.2) can make
+    // this illegal.
     const chain = resolveMoveChain(
-      this.level,
+      this.wallSet,
       this.entities,
       this.moveTarget.pos,
       direction,
       this.size
     );
     if (!chain) {
-      this.setHint('Blocked — try another direction');
+      this.setHint('Blocked by a wall — try another direction');
       return;
     }
 
@@ -394,7 +402,9 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // Every entity on the ring moves; entities elsewhere (and empty tiles) are
-  // unaffected, but the action still costs 1.
+  // unaffected, but the action still costs 1. If a wall (§1.2) would stop any
+  // one entity's one-step move around the ring, the whole rotation is illegal
+  // and rejected before anything moves — same rule as Move (DESIGN.md §5).
   applyRotate(clockwise) {
     if (
       this.gameOver ||
@@ -403,6 +413,13 @@ export class PuzzleScene extends Phaser.Scene {
     )
       return;
 
+    if (
+      isRotateBlocked(this.wallSet, this.entities, this.rotateCenter, clockwise, this.size)
+    ) {
+      this.setHint('Blocked by a wall — try the other direction');
+      return;
+    }
+
     this.entities.forEach((e) => {
       e.pos = rotateEntity(e.pos, this.rotateCenter, clockwise, this.size);
     });
@@ -410,9 +427,14 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // Rows/columns with no entity on them are unaffected, but the action still
-  // costs 1, same as an empty Rotate ring.
+  // costs 1, same as an empty Rotate ring. Same wall-rejection rule as Rotate.
   applyShift(axis, index, direction) {
     if (this.gameOver || this.selectedAction !== 'shift') return;
+
+    if (isShiftBlocked(this.wallSet, this.entities, axis, index, direction, this.size)) {
+      this.setHint('Blocked by a wall — try another edge');
+      return;
+    }
 
     this.entities.forEach((e) => {
       e.pos = shiftEntity(e.pos, axis, index, direction, this.size);

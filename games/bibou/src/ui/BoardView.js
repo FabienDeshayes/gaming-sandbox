@@ -4,15 +4,19 @@ import {
   BOARD_Y,
   CELL,
   COLORS,
+  CONTROL_DEPTH,
+  CRATE_TEXTURE_KEY,
   EDGE_ARROW_INSET,
 } from '../config.js';
 import { DIRECTIONS, RING, wrap } from '../core/rules.js';
 
-// Per-action arrow styling, kept identical to the pre-split look.
-const MOVE_ARROW = { fontSize: '34px', padding: { x: 6, y: 2 } };
-const ROTATE_ARROW = { fontSize: '38px', padding: { x: 8, y: 2 } };
-const SHIFT_ARROW = { fontSize: '20px', padding: { x: 4, y: 2 } };
-const FLIP_ARROW = { fontSize: '30px', padding: { x: 8, y: 2 } };
+// Per-action arrow styling — deliberately small and low-contrast so the
+// preview reads as an overlay rather than another board entity (DESIGN.md
+// §10); actual on-top-ness comes from CONTROL_DEPTH, not size.
+const MOVE_ARROW = { fontSize: '28px', padding: { x: 6, y: 3 } };
+const ROTATE_ARROW = { fontSize: '32px', padding: { x: 7, y: 3 } };
+const SHIFT_ARROW = { fontSize: '17px', padding: { x: 4, y: 2 } };
+const FLIP_ARROW = { fontSize: '26px', padding: { x: 7, y: 3 } };
 
 // Everything anchored to the board: the static grid, the character sprite, the
 // design-space <-> cell coordinate mapping, and the transient controls (arrows
@@ -66,47 +70,70 @@ export class BoardView {
       .setOrigin(0.5);
   }
 
-  // Walls (LEVEL_DESIGN.md §1.2): a red line on the edge shared by the two
-  // tiles a wall connects. A wraparound wall (its two tiles sit at opposite
-  // extremes of a row/column) has no shared edge on screen, so it draws on
-  // *both* tiles' outer board edge instead — the two segments are one logical
-  // wall, split across the two places it visually touches.
+  // Walls (LEVEL_DESIGN.md §1.2): a brick-coloured band on the edge shared by
+  // the two tiles a wall connects. A wraparound wall (its two tiles sit at
+  // opposite extremes of a row/column) has no shared edge on screen, so it
+  // draws on *both* tiles' outer board edge instead — the two segments are
+  // one logical wall, split across the two places it visually touches.
   drawWalls(walls) {
     const g = this.scene.add.graphics();
-    g.lineStyle(4, COLORS.wallHex, 1);
     (walls ?? []).forEach(([a, b]) => {
       if (a.y === b.y) {
         const y0 = BOARD_Y + a.y * CELL;
         if (Math.abs(a.x - b.x) === 1) {
           const x = BOARD_X + Math.max(a.x, b.x) * CELL;
-          g.lineBetween(x, y0, x, y0 + CELL);
+          this.drawBrickSegment(g, x, y0, x, y0 + CELL);
         } else {
-          g.lineBetween(BOARD_X, y0, BOARD_X, y0 + CELL);
-          g.lineBetween(BOARD_X + BOARD_PX, y0, BOARD_X + BOARD_PX, y0 + CELL);
+          this.drawBrickSegment(g, BOARD_X, y0, BOARD_X, y0 + CELL);
+          this.drawBrickSegment(g, BOARD_X + BOARD_PX, y0, BOARD_X + BOARD_PX, y0 + CELL);
         }
       } else {
         const x0 = BOARD_X + a.x * CELL;
         if (Math.abs(a.y - b.y) === 1) {
           const y = BOARD_Y + Math.max(a.y, b.y) * CELL;
-          g.lineBetween(x0, y, x0 + CELL, y);
+          this.drawBrickSegment(g, x0, y, x0 + CELL, y);
         } else {
-          g.lineBetween(x0, BOARD_Y, x0 + CELL, BOARD_Y);
-          g.lineBetween(x0, BOARD_Y + BOARD_PX, x0 + CELL, BOARD_Y + BOARD_PX);
+          this.drawBrickSegment(g, x0, BOARD_Y, x0 + CELL, BOARD_Y);
+          this.drawBrickSegment(g, x0, BOARD_Y + BOARD_PX, x0 + CELL, BOARD_Y + BOARD_PX);
         }
       }
     });
   }
 
+  // One wall segment as a short run of coursed brick: a solid brick-red band
+  // plus perpendicular mortar ticks and a hairline mortar seam down the
+  // middle — enough to read as a different material from the floor grid at
+  // this scale, without needing an actual texture asset.
+  drawBrickSegment(g, x0, y0, x1, y1) {
+    const thickness = 6;
+    const horizontal = y0 === y1;
+
+    g.fillStyle(COLORS.wallHex, 1);
+    if (horizontal) g.fillRect(x0, y0 - thickness / 2, x1 - x0, thickness);
+    else g.fillRect(x0 - thickness / 2, y0, thickness, y1 - y0);
+
+    g.lineStyle(1, COLORS.wallMortarHex, 0.9);
+    const len = horizontal ? x1 - x0 : y1 - y0;
+    for (let d = CELL / 4; d < len; d += CELL / 4) {
+      if (horizontal) g.lineBetween(x0 + d, y0 - thickness / 2, x0 + d, y0 + thickness / 2);
+      else g.lineBetween(x0 - thickness / 2, y0 + d, x0 + thickness / 2, y0 + d);
+    }
+    if (horizontal) g.lineBetween(x0, y0, x1, y0);
+    else g.lineBetween(x0, y0, x0, y1);
+  }
+
   // One sprite per entity, in the same order as the list PuzzleScene owns.
   // Crates sit below the character in draw order — no two entities ever share
   // a tile now (LEVEL_DESIGN.md §3), but this keeps the character legible if a
-  // future entity type ever does.
+  // future entity type ever does. Crates use the pixel-art crate texture
+  // (PuzzleScene.preload loads it); NEAREST filtering keeps its small source
+  // pixels crisp at the scaled-up display size instead of blurring.
   createEntities(entities) {
     this.entitySprites = entities.map((entity) => {
       if (entity.kind === 'crate') {
         return this.scene.add
-          .rectangle(0, 0, CELL * 0.62, CELL * 0.62, COLORS.crateHex)
-          .setStrokeStyle(3, COLORS.crateStrokeHex)
+          .image(0, 0, CRATE_TEXTURE_KEY)
+          .setDisplaySize(48, 48)
           .setDepth(1);
       }
       return this.scene.add
@@ -301,7 +328,8 @@ export class BoardView {
     // Outline the center tile and the 8 surrounding tiles that will rotate.
     const centerHl = this.scene.add
       .rectangle(c.px, c.py, CELL, CELL, 0x000000, 0)
-      .setStrokeStyle(3, COLORS.highlightHex);
+      .setStrokeStyle(3, COLORS.highlightHex)
+      .setDepth(CONTROL_DEPTH);
     this.controls.push(centerHl);
     RING.forEach((o) => {
       const rx = wrap(center.x + o.x, this.size);
@@ -309,7 +337,8 @@ export class BoardView {
       const rc = this.cellCenter(rx, ry);
       const ring = this.scene.add
         .rectangle(rc.px, rc.py, CELL - 6, CELL - 6, 0x000000, 0)
-        .setStrokeStyle(2, COLORS.accentHex);
+        .setStrokeStyle(2, COLORS.accentHex)
+        .setDepth(CONTROL_DEPTH);
       this.controls.push(ring);
     });
 
@@ -381,7 +410,7 @@ export class BoardView {
         this.scene.add.rectangle(col.px, midPy, CELL, BOARD_PX, 0x000000, 0),
         this.scene.add.rectangle(midPx, row.py, BOARD_PX, CELL, 0x000000, 0),
       ].forEach((hl) => {
-        hl.setStrokeStyle(2, COLORS.accentHex);
+        hl.setStrokeStyle(2, COLORS.accentHex).setDepth(CONTROL_DEPTH);
         this.controls.push(hl);
       });
     }
@@ -396,16 +425,20 @@ export class BoardView {
 
   // One tappable arrow glyph, tracked so clearControls() can destroy it. The
   // pointerdown is stopped so the board's own tap handler doesn't also fire.
+  // Depth is forced above every board/entity layer so a preview arrow never
+  // renders underneath a crate or the character; background/text colour are
+  // deliberately low-contrast so it reads as a preview, not another entity.
   addControlArrow(px, py, glyph, style, onPress) {
     const arrow = this.scene.add
       .text(px, py, glyph, {
         fontFamily: 'sans-serif',
         fontSize: style.fontSize,
-        color: COLORS.text,
-        backgroundColor: COLORS.accent,
+        color: COLORS.controlGlyph,
+        backgroundColor: COLORS.controlBg,
         padding: style.padding,
       })
       .setOrigin(0.5)
+      .setDepth(CONTROL_DEPTH)
       .setInteractive({ useHandCursor: true });
     arrow.on('pointerdown', (pointer, lx, ly, event) => {
       if (event) event.stopPropagation();

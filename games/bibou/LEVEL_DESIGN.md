@@ -39,7 +39,7 @@ This one wall stops an entity moving between `(0,1)` and `(0,2)` in either direc
 
 Levels are checked against these rules when they're loaded (`validateLevelWalls` in `src/core/rules.js`, called for every entry in `src/data/levels.js`'s `LEVELS`) — an invalid wall throws immediately rather than silently drawing or blocking the wrong thing.
 
-**Rendering.** A wall draws as a red line (prototype styling, `DESIGN.md` §10) on the edge its two tiles share. A wraparound wall has no shared edge on screen — its two tiles are drawn on opposite sides of the board — so it draws as two line segments instead, one on each tile's outer board edge. Both segments are one logical wall; see `BoardView.drawWalls`.
+**Rendering.** A wall draws as a brick-coloured band with mortar joints (prototype styling, `DESIGN.md` §10) on the edge its two tiles share. A wraparound wall has no shared edge on screen — its two tiles are drawn on opposite sides of the board — so it draws as two segments instead, one on each tile's outer board edge. Both segments are one logical wall; see `BoardView.drawWalls`/`drawBrickSegment`.
 
 **Legality by action.** Move, Rotate, and Shift each move an entity exactly one cardinal step at a time, so each checks the wall between an entity's current tile and the tile it's about to step onto — see §5.1/§5.2/§5.3 for exactly how. Flip does not check walls at all: it reflects an entity directly to its mirrored coordinate rather than stepping it across the board, so it never crosses an edge in the sense a wall guards — see §5.4.
 

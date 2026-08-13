@@ -6,6 +6,8 @@ import {
   CARD_LAYOUTS,
   CARD_Y,
   COLORS,
+  CRATE_TEXTURE_KEY,
+  CRATE_TEXTURE_PATH,
   FLIP_TWEEN_MS,
   GAME_HEIGHT,
   GAME_WIDTH,
@@ -26,6 +28,7 @@ import {
   shiftEntity,
 } from '../core/rules.js';
 import { BoardView } from '../ui/BoardView.js';
+import { createActionCard } from '../ui/actionCard.js';
 import { createButton } from '../ui/button.js';
 
 // Owns the puzzle's state and the action selection flow. Board drawing and the
@@ -35,7 +38,15 @@ export class PuzzleScene extends Phaser.Scene {
     super('PuzzleScene');
   }
 
+  preload() {
+    this.load.image(CRATE_TEXTURE_KEY, CRATE_TEXTURE_PATH);
+  }
+
   create(data) {
+    // Pixel-art crate texture: keep its small source pixels crisp when
+    // scaled up instead of letting the renderer blur them.
+    this.textures.get(CRATE_TEXTURE_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST);
+
     this.level = data.level;
     this.unlimited = data.unlimited === true;
 
@@ -206,7 +217,7 @@ export class PuzzleScene extends Phaser.Scene {
 
     this.availableActions.forEach((action, i) => {
       const x = startX + i * layout.spacing;
-      this.actionCards[action] = createButton(
+      this.actionCards[action] = createActionCard(
         this,
         x,
         CARD_Y,
@@ -250,10 +261,10 @@ export class PuzzleScene extends Phaser.Scene {
       );
       this.cardCounts[action].setColor(spent ? COLORS.disabledText : COLORS.hint);
       if (spent) {
-        card.setBaseColor(COLORS.disabled);
+        card.setBaseColor(COLORS.cardBorderDisabledHex);
         card.setColor(COLORS.disabledText);
       } else if (this.selectedAction !== action) {
-        card.setBaseColor(COLORS.button);
+        card.setBaseColor(COLORS.cardBorderHex);
         card.setColor(COLORS.text);
       }
     });
@@ -280,7 +291,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
     this.clearSelection();
     this.selectedAction = action;
-    this.actionCards[action].setBaseColor(COLORS.accent);
+    this.actionCards[action].setBaseColor(COLORS.accentHex);
     if (action === 'move') {
       // Move only ever acts on the character (there's exactly one), so there's
       // no target-tap step — the arrows appear immediately.

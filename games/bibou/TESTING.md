@@ -5,9 +5,36 @@
 > should, the action budget is right, the intended solution wins, and no wrong
 > path sneaks in under budget.
 
-Bibou is plain Phaser-via-CDN with no build step, so there's no test runner wired
-up. Testing is done by **driving the real game in a headless browser** and reading
-Phaser scene state back out. This doc gives you a ready-to-adapt harness.
+Bibou is plain Phaser-via-CDN with no build step, so testing is done by **driving
+the real game in a headless browser** and reading Phaser scene state back out.
+
+## The committed suite: `npm test`
+
+`tests/` holds a small regression suite covering the things that break the game
+outright — booting, navigating between scenes, each action type, budgets, walls,
+and *staying responsive after the player exits a level*. Run it from `games/bibou`:
+
+```bash
+npm install     # playwright-core + phaser, both from the allowed npm registry
+npm test
+```
+
+Chromium is preinstalled in the sandbox; the harness finds it under
+`/opt/pw-browsers/` on its own (override with `CHROMIUM_PATH`). Do **not** run
+`playwright install`.
+
+- `tests/harness.js` — the local server, the browser driver (click a label, tap a
+  cell, swipe, read scene state), and a minimal runner/assertions.
+- `tests/game.test.js` — the tests themselves. `unit(...)` tests are pure
+  `src/core/rules.js` math and need no browser; `test(...)` tests each get a fresh
+  page driving the real canvas.
+
+`node_modules/` is gitignored; `package.json` is committed and test-only — the game
+itself still needs no build step and runs straight from `index.html`.
+
+Add a test here whenever you fix a bug that a player could hit by just playing.
+The rest of this doc is for **per-level verification**, which the suite
+deliberately doesn't try to cover exhaustively.
 
 ## Two levels of checking
 
@@ -45,17 +72,14 @@ only in the test's local server.
 
 ```bash
 cd games/bibou
-npm i playwright-core phaser@3     # both resolve from the allowed npm registry
+npm install     # playwright-core + phaser, both from the allowed npm registry
 ```
 
 Chromium is preinstalled in the sandbox; find it under `/opt/pw-browsers/` (e.g.
 `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`) and pass it as
-`executablePath` — do not run `playwright install`.
-
-> **Clean up before committing.** `node_modules/`, `package.json`, and
-> `package-lock.json` are test-only scaffolding. Remove them once you're done so
-> the commit stays to source + docs:
-> `rm -rf node_modules package.json package-lock.json`
+`executablePath` — do not run `playwright install`. `tests/harness.js` already does
+both of these things, so a one-off level check is usually easiest written against
+it rather than from scratch.
 
 ## Rule-math check
 
@@ -184,10 +208,10 @@ console.log(
 );
 ```
 
-> Node ≥ 22 detects module syntax, so importing `src/core/rules.js` works even
-> though the throwaway `package.json` from `npm i` has no `"type"` field — it just
-> prints a `MODULE_TYPELESS_PACKAGE_JSON` warning. Add `"type": "module"` to that
-> `package.json` to silence it (and to make the import work at all on older Node).
+> `package.json` sets `"type": "module"`, so a plain `.js` file in this directory
+> is already ESM and can `import` the game's modules directly — the `.mjs`
+> extension isn't required, and a scratch file written as CommonJS (`require`)
+> will *not* run here.
 
 ## Browser smoke test
 
@@ -230,8 +254,13 @@ cell, and read `characterPos` / the HUD out of the live `PuzzleScene`. Adapt the
 
 ### Runnable harness
 
+`tests/harness.js` is the maintained version of everything below — for a one-off
+check, prefer importing it (`import { startServer, launchBrowser, openGame } from
+'./tests/harness.js'`) over copying this. The standalone listing is kept because it
+shows, in one place, *why* each piece is there.
+
 ```js
-// node smoke.js  — run from games/bibou after `npm i playwright-core phaser@3`
+// node smoke.cjs — standalone (CommonJS, hence .cjs: package.json is type:module)
 const { chromium } = require('./node_modules/playwright-core');
 const http = require('http');
 const fs = require('fs');
@@ -399,6 +428,10 @@ const server = http.createServer((req, res) => {
 - **Test-mode selection:** from the title, `Test → Level N` runs that level with
   every pool unlimited (HUD shows `∞`, each card shows `∞ left`, a `TEST` badge
   appears, and the lose condition never fires).
+- **Transitions leave sprites as they found them:** an animation that squashes or
+  grows a sprite (Flip, the goal pulse) must restore its *own* resting scale, not a
+  hardcoded 1 — the crate is a 16px texture shown at 48px, so it rests at scale 3.
+  Assert `displayWidth`/`displayHeight` are unchanged once the tween has settled.
 - **No console/page errors** across the whole run. Note the harness's own server
   404s on `/favicon.ico` — that request comes from the browser, not the game, so
   filter it out rather than chasing it.

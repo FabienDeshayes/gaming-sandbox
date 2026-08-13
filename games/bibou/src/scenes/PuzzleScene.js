@@ -74,8 +74,7 @@ export class PuzzleScene extends Phaser.Scene {
         );
 
     this.selectedAction = null; // null | 'move' | 'rotate' | 'shift' | 'flip'
-    this.targetSelected = false; // move: entity tapped; rotate: center tapped
-    this.moveTarget = null; // the entity Move will displace, once tapped
+    this.targetSelected = false; // move: always true once selected; rotate: center tapped
     this.rotateCenter = null; // {x, y} once a rotation center is chosen
     this.gameOver = false;
 
@@ -94,20 +93,6 @@ export class PuzzleScene extends Phaser.Scene {
   // test harness reads it straight off the scene, so expose it by name.
   get characterPos() {
     return this.entities.find((e) => e.kind === 'character').pos;
-  }
-
-  get hasCrates() {
-    return this.entities.some((e) => e.kind === 'crate');
-  }
-
-  // Topmost entity on a cell — the character wins ties, since it is the one the
-  // player is most likely aiming for when entities share a cell.
-  entityAt(cell) {
-    return (
-      this.entities.find(
-        (e) => e.kind === 'character' && samePos(e.pos, cell)
-      ) ?? this.entities.find((e) => samePos(e.pos, cell))
-    );
   }
 
   // --- HUD ---
@@ -223,7 +208,11 @@ export class PuzzleScene extends Phaser.Scene {
     this.selectedAction = action;
     this.actionCards[action].setBaseColor(COLORS.accent);
     if (action === 'move') {
-      this.setHint(this.hasCrates ? 'Tap the character or a crate' : 'Tap the character');
+      // Move only ever acts on the character (there's exactly one), so there's
+      // no target-tap step — the arrows appear immediately.
+      this.targetSelected = true;
+      this.board.showMoveArrows(this.characterPos, (dir) => this.applyMove(dir));
+      this.setHint('Tap an arrow or swipe a direction');
     } else if (action === 'rotate') {
       this.setHint('Tap a tile for the rotation center');
     } else if (action === 'shift') {
@@ -246,7 +235,6 @@ export class PuzzleScene extends Phaser.Scene {
   clearSelection() {
     this.selectedAction = null;
     this.targetSelected = false;
-    this.moveTarget = null;
     this.rotateCenter = null;
     this.board.clearControls();
     this.updateActionCards();
@@ -298,33 +286,7 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   handleBoardTap(cell) {
-    if (this.selectedAction === 'move') this.handleMoveTap(cell);
-    else if (this.selectedAction === 'rotate') this.handleRotateTap(cell);
-  }
-
-  handleMoveTap(cell) {
-    const entity = this.entityAt(cell);
-
-    if (!this.targetSelected) {
-      if (entity) {
-        this.moveTarget = entity;
-        this.targetSelected = true;
-        this.board.showMoveArrows(entity.pos, (dir) => this.applyMove(dir));
-        this.setHint('Tap an arrow or swipe a direction');
-      }
-      return;
-    }
-    // Target already selected: tapping it again cancels, tapping a different
-    // entity re-targets the move.
-    if (entity === this.moveTarget) {
-      this.targetSelected = false;
-      this.moveTarget = null;
-      this.board.clearControls();
-      this.setHint(this.hasCrates ? 'Tap the character or a crate' : 'Tap the character');
-    } else if (entity) {
-      this.moveTarget = entity;
-      this.board.showMoveArrows(entity.pos, (dir) => this.applyMove(dir));
-    }
+    if (this.selectedAction === 'rotate') this.handleRotateTap(cell);
   }
 
   handleRotateTap(cell) {
@@ -377,8 +339,7 @@ export class PuzzleScene extends Phaser.Scene {
     if (
       this.gameOver ||
       this.selectedAction !== 'move' ||
-      !this.targetSelected ||
-      !this.moveTarget
+      !this.targetSelected
     )
       return;
 
@@ -388,7 +349,7 @@ export class PuzzleScene extends Phaser.Scene {
     const chain = resolveMoveChain(
       this.wallSet,
       this.entities,
-      this.moveTarget.pos,
+      this.characterPos,
       direction,
       this.size
     );

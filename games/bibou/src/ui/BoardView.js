@@ -376,10 +376,14 @@ export class BoardView {
       { glyph: '↺', dx: -30, clockwise: false }, // anticlockwise
       { glyph: '↻', dx: 30, clockwise: true }, // clockwise
     ];
+    // Flipped 180° from the glyphs' natural orientation: unrotated, ↺/↻ read
+    // as starting from the top, which reads backwards sitting above the
+    // rotation center — flipping them points the arrowhead the way the ring
+    // actually turns from that position.
     specs.forEach((s) => {
       this.addControlArrow(c.px + s.dx, ay, s.glyph, ROTATE_ARROW, () =>
         onRotate(s.clockwise)
-      );
+      ).setAngle(180);
     });
   }
 

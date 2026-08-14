@@ -304,6 +304,7 @@ export class PuzzleScene extends Phaser.Scene {
       this.board.showMoveArrows(this.characterPos, (dir) => this.applyMove(dir));
       this.setHint('Tap an arrow or swipe a direction');
     } else if (action === 'rotate') {
+      this.board.showRotateCenterHints();
       this.setHint('Tap a tile for the rotation center');
     } else if (action === 'shift') {
       // Unlike Move/Rotate, Shift has no separate target-tap step: the
@@ -392,7 +393,7 @@ export class PuzzleScene extends Phaser.Scene {
     if (samePos(cell, this.rotateCenter)) {
       this.targetSelected = false;
       this.rotateCenter = null;
-      this.board.clearControls();
+      this.board.showRotateCenterHints();
       this.setHint('Tap a tile for the rotation center');
     } else {
       this.rotateCenter = { ...cell };

@@ -326,6 +326,26 @@ export class BoardView {
     });
   }
 
+  // Rotate's target step doesn't restrict which tile can become the center —
+  // any tile works as one (LEVEL_DESIGN.md §5.2), unlike Move's arrows or
+  // Shift's edges which only ever offer specific targets. So as soon as
+  // Rotate is selected, every cell gets a light tappable wash to make that
+  // "anywhere works" legible before the player commits to one, the same way
+  // the other actions show their own targets immediately on selection.
+  showRotateCenterHints() {
+    this.clearControls();
+    for (let y = 0; y < this.size; y++) {
+      for (let x = 0; x < this.size; x++) {
+        const c = this.cellCenter(x, y);
+        const hint = this.scene.add
+          .rectangle(c.px, c.py, CELL - 4, CELL - 4, COLORS.accentHex, 0.22)
+          .setStrokeStyle(2, COLORS.accentHex, 0.7)
+          .setDepth(CONTROL_DEPTH);
+        this.controls.push(hint);
+      }
+    }
+  }
+
   // Highlights the rotation center plus its 8-tile ring, and shows the two
   // rotation arrows. `onRotate` gets `true` for clockwise.
   showRotateControls(center, onRotate) {

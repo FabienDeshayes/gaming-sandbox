@@ -17,9 +17,11 @@ import {
   buildWallSet,
   flipEntity,
   moveEntity,
+  resolveCycleOutcome,
   resolveMoveChain,
   rotateEntity,
   shiftEntity,
+  shiftOrder,
 } from '../src/core/rules.js';
 
 const N = 5;
@@ -54,14 +56,62 @@ unit('flip mirrors across the middle line and is its own inverse', () => {
 unit('a wall makes the move across it illegal', () => {
   const walls = buildWallSet([[{ x: 1, y: 2 }, { x: 2, y: 2 }]]);
   const entities = [{ kind: 'character', pos: { x: 1, y: 2 } }];
-  assert(
-    resolveMoveChain(walls, entities, { x: 1, y: 2 }, 'Right', N) === null,
-    'blocked direction should resolve to null'
+  assertEqual(
+    resolveMoveChain(walls, entities, { x: 1, y: 2 }, 'Right', N).kind,
+    'illegal',
+    'blocked direction should resolve as illegal'
   );
-  assert(
-    resolveMoveChain(walls, entities, { x: 1, y: 2 }, 'Up', N) !== null,
-    'unblocked direction should still resolve'
+  assertEqual(
+    resolveMoveChain(walls, entities, { x: 1, y: 2 }, 'Up', N).kind,
+    'open',
+    'unblocked direction should resolve normally'
   );
+});
+
+// --- Rule math: destructible crates & collectibles (LEVEL_DESIGN.md §5.5) --
+
+unit('a crate crushed against an indestructible collectible is destroyed', () => {
+  const walls = buildWallSet([[{ x: 3, y: 2 }, { x: 4, y: 2 }]]);
+  const entities = [
+    { kind: 'character', pos: { x: 1, y: 2 } },
+    { kind: 'crate', pos: { x: 2, y: 2 } },
+    { kind: 'collectible', type: 'key', pos: { x: 3, y: 2 } },
+  ];
+  const result = resolveMoveChain(walls, entities, { x: 1, y: 2 }, 'Right', N);
+  assertEqual(result.kind, 'destroy', 'crate crushed against a stuck key');
+  assertEqual(result.victim.kind, 'crate', 'the crate is the victim, not the key');
+});
+
+unit('the character always picks up a collectible instead of pushing it', () => {
+  const entities = [
+    { kind: 'character', pos: { x: 1, y: 2 } },
+    { kind: 'collectible', type: 'key', pos: { x: 2, y: 2 } },
+  ];
+  const result = resolveMoveChain(buildWallSet([]), entities, { x: 1, y: 2 }, 'Right', N);
+  assertEqual(result.kind, 'pickup', 'stepping onto a collectible is a pickup, not a push');
+});
+
+unit('resolveCycleOutcome: Shift crushes a crate pushed into a stuck key', () => {
+  const walls = buildWallSet([[{ x: 3, y: 2 }, { x: 4, y: 2 }]]);
+  const entities = [
+    { kind: 'crate', pos: { x: 2, y: 2 } },
+    { kind: 'collectible', type: 'key', pos: { x: 3, y: 2 } },
+  ];
+  const outcomes = resolveCycleOutcome(walls, entities, shiftOrder('row', 2, 'Right', N));
+  const byKind = Object.fromEntries(outcomes.map((o) => [o.entity.kind, o.outcome]));
+  assertEqual(byKind.crate, 'destroy', 'crate destroyed');
+  assertEqual(byKind.collectible, 'stay', 'key stays put, unmoved and undestroyed');
+});
+
+unit('resolveCycleOutcome: the character collects a key stuck at a wall', () => {
+  const walls = buildWallSet([[{ x: 3, y: 2 }, { x: 4, y: 2 }]]);
+  const entities = [
+    { kind: 'collectible', type: 'key', pos: { x: 3, y: 2 } },
+    { kind: 'character', pos: { x: 2, y: 2 } },
+  ];
+  const outcomes = resolveCycleOutcome(walls, entities, shiftOrder('row', 2, 'Right', N));
+  const byKind = Object.fromEntries(outcomes.map((o) => [o.entity.kind, o.outcome]));
+  assertEqual(byKind.character, 'pickup', 'character always yields to nothing, not even a stuck key');
 });
 
 // --- Boot and navigation ----------------------------------------------------
@@ -311,6 +361,162 @@ test('exiting from Test mode returns to the Test level list', async (game) => {
 });
 
 // --- Regression: level select from the win overlay --------------------------
+
+// --- Collectibles: the key gates the goal --------------------------------
+
+test('reaching the goal without the required key does not win', async (game) => {
+  await game.clickText('Start');
+  await game.clickText('Level 9');
+  await game.waitForScene('PuzzleScene');
+  assert((await game.texts()).some((t) => t.startsWith('Objective:')), 'objective line shown');
+
+  // Walk straight to the goal, ignoring the key.
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+
+  let s = await game.state();
+  assertEqual(s.char, { x: 3, y: 2 }, 'character reached the goal tile');
+  assertEqual(s.gameOver, false, 'standing on a locked goal does not win');
+  assert(
+    (await game.texts()).some((t) => t.includes('Get the key first')),
+    'hint explains the goal is locked'
+  );
+
+  // Budget was exactly 6 and 2 were just spent going nowhere — the remaining
+  // 4 aren't enough to fetch the key and come back (that alone takes 6), so
+  // the level is now unwinnable; spend the rest and confirm a normal loss.
+  for (let i = 0; i < 4; i++) {
+    await game.clickText('Move');
+    await game.clickText('▲');
+    await game.settle();
+  }
+  assert((await game.texts()).includes('Out of actions'), 'runs out of budget without the key');
+});
+
+test('collecting the key first unlocks the goal and wins', async (game) => {
+  await game.clickText('Start');
+  await game.clickText('Level 9');
+  await game.waitForScene('PuzzleScene');
+
+  await game.clickText('Move');
+  await game.clickText('▲');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▲');
+  await game.settle();
+
+  let s = await game.state();
+  assertEqual(s.char, { x: 1, y: 0 }, 'character on the key tile');
+  assert(
+    (await game.texts()).includes('Objective: reach the goal'),
+    'objective updates once the key is collected'
+  );
+
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▼');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▼');
+  await game.settle();
+
+  s = await game.state();
+  assertEqual(s.char, { x: 3, y: 2 }, 'character on the goal');
+  assert((await game.texts()).includes('You win!'), 'level 9 solved with the key in hand');
+});
+
+// --- Destructible crates: a crate crushed against a stuck key ------------
+
+test('pushing a crate into a wall-stuck key destroys the crate', async (game) => {
+  await game.clickText('Start');
+  await game.clickText('Level 10');
+  await game.waitForScene('PuzzleScene');
+
+  const before = await game.state();
+  assertEqual(before.crates, [{ x: 1, y: 2 }], 'crate starts between character and key');
+
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+
+  let s = await game.state();
+  assertEqual(s.char, { x: 0, y: 2 }, 'nothing behind a crushed crate advances');
+  assertEqual(s.crates, [], 'the crate is destroyed');
+  assertEqual(s.movesUsed, 1, 'destroying the crate still costs the move');
+
+  // Walk up to and through the now-empty tile, collect the key, then detour
+  // around the wall to the goal.
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 2, y: 2 }, 'character walked onto the key tile and collected it');
+
+  await game.clickText('Move');
+  await game.clickText('▲');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▼');
+  await game.settle();
+
+  s = await game.state();
+  assertEqual(s.char, { x: 3, y: 2 }, 'character on the goal');
+  assertEqual(s.movesUsed, 6, 'zero slack: exactly six moves');
+  assert((await game.texts()).includes('You win!'), 'level 10 solved');
+});
+
+test('Shift destroys a crushed crate exactly like Move does', async (game) => {
+  await game.clickText('Start');
+  await game.clickText('Level 11');
+  await game.waitForScene('PuzzleScene');
+
+  await game.clickText('Shift');
+  await game.clickText('▶', 2); // row y=2's right-pointing (left-edge) arrow
+  await game.settle();
+
+  let s = await game.state();
+  assertEqual(s.char, { x: 0, y: 2 }, 'nothing behind the crushed crate advances, same as Move');
+  assertEqual(s.crates, [], 'the crate is destroyed via Shift too');
+  assertEqual(s.remaining.shift, 0, 'shift budget spent destroying the crate');
+
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 2, y: 2 }, 'walked through the gap and collected the key');
+
+  await game.clickText('Move');
+  await game.clickText('▲');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▼');
+  await game.settle();
+
+  s = await game.state();
+  assertEqual(s.char, { x: 3, y: 2 }, 'character on the goal');
+  assert((await game.texts()).includes('You win!'), 'level 11 solved');
+});
 
 test('Level select from the win overlay leaves the next level playable', async (game) => {
   await game.clickText('Start');

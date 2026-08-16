@@ -100,23 +100,20 @@ export function isWallBetween(wallSet, a, b) {
   return wallSet.has(wallKey(a, b));
 }
 
-// True if rotating everything on the ring around `center` in `direction`
-// would move any entity across a wall — checked up front so an illegal
-// rotation is rejected atomically, before anything moves (DESIGN.md §5).
-export function isRotateBlocked(wallSet, entities, center, clockwise, size) {
-  return entities.some((e) => {
-    const dest = rotateEntity(e.pos, center, clockwise, size);
-    return !samePos(dest, e.pos) && isWallBetween(wallSet, e.pos, dest);
-  });
+// --- Destructible / collectible entities (LEVEL_DESIGN.md §3/§5.5) ---------
+// A crate is destructible: if it's crushed against something that can never
+// move out of its way (a wall, or an entity that itself can't move), it's
+// destroyed instead of the whole action being rejected. A collectible is the
+// opposite — indestructible, so when it can't move it just becomes an
+// obstruction — except for the character, which never treats a collectible
+// as an obstacle at all: it always picks one up rather than being blocked by
+// or pushing it.
+export function isDestructible(entity) {
+  return entity.kind === 'crate';
 }
 
-// True if shifting `axis`/`index` in `direction` would move any entity across
-// a wall — same atomic-rejection rule as isRotateBlocked.
-export function isShiftBlocked(wallSet, entities, axis, index, direction, size) {
-  return entities.some((e) => {
-    const dest = shiftEntity(e.pos, axis, index, direction, size);
-    return !samePos(dest, e.pos) && isWallBetween(wallSet, e.pos, dest);
-  });
+export function isCollectible(entity) {
+  return entity.kind === 'collectible';
 }
 
 // Move: one cell in a cardinal direction, wrapping past the edges.
@@ -166,25 +163,59 @@ export function shiftEntity(pos, axis, index, direction, size) {
 // Move push-chain resolution (LEVEL_DESIGN.md §3/§5.1): no two entities may
 // share a tile, so moving one into an occupied tile pushes whatever is there.
 // Walk the line of tiles starting at `pos` in `direction`, following whichever
-// entity occupies each tile in turn, until either an unoccupied tile is found
-// (the chain can resolve there) or — because the board wraps — the walk comes
-// back around to `pos` itself, meaning every tile on that line was occupied.
-// That closed-loop case still resolves: the whole line rotates by one, the
-// same as if it had been Shifted. Returns the ordered list of tiles the chain
-// passes through, `[pos, ..., destination]`, or `null` if a wall (§1.2) stops
-// the chain from taking its next step before it resolves.
+// entity occupies each tile in turn, until one of:
+//   - an unoccupied tile is found ({ kind: 'open', path }) — the common case;
+//   - the walk wraps all the way back to `pos` ({ kind: 'loop', path }) —
+//     every tile on the line was occupied, so the whole line rotates by one,
+//     same as a Shift;
+//   - the character's own very next step lands directly on a collectible
+//     ({ kind: 'pickup', path, collectible }) — the character never pushes a
+//     collectible, it always collects it instead, so the chain stops there
+//     regardless of what (if anything) sits beyond it;
+//   - a wall stops the next step before the chain resolves — see
+//     resolveBlockedMoveChain (§5.5) for how a destructible entity crushed
+//     against the wall (or against something else that can't move) gets
+//     destroyed instead of the whole move being rejected
+//     ({ kind: 'destroy', victim }), or, if nothing in the chain can be
+//     sacrificed, the whole move is illegal ({ kind: 'illegal' }).
 export function resolveMoveChain(wallSet, entities, pos, direction, size) {
   const path = [pos];
   let current = pos;
   for (let i = 0; i < size; i++) {
     const next = moveEntity(current, direction, size);
-    if (isWallBetween(wallSet, current, next)) return null;
+    if (isWallBetween(wallSet, current, next)) {
+      return resolveBlockedMoveChain(entities, path);
+    }
     current = next;
     path.push(current);
-    if (samePos(current, pos)) break; // full loop: line was entirely occupied
-    if (!entities.some((e) => samePos(e.pos, current))) break; // open tile
+    if (samePos(current, pos)) return { kind: 'loop', path }; // full loop
+    const occupant = entities.find((e) => samePos(e.pos, current));
+    if (!occupant) return { kind: 'open', path }; // open tile
+    if (path.length === 2 && isCollectible(occupant)) {
+      // The character's own immediate destination is a collectible: pick it
+      // up rather than pushing it, whatever sits beyond it on the line.
+      return { kind: 'pickup', path, collectible: occupant };
+    }
   }
-  return path;
+  return { kind: 'open', path };
+}
+
+// A wall stopped the chain from extending past `path`'s last tile. `path[0]`
+// is the mover (the character); `path[1..]` are the entities queued to be
+// pushed, in push order — closest to the mover first, closest to the wall
+// last. Peel from the tile touching the wall backward: the first destructible
+// entity found (a crate) is destroyed and the peel stops there — nothing else
+// in the chain moves or is destroyed (§5.5's single-casualty rule). If every
+// entity between the mover and the wall is indestructible (a collectible —
+// the character itself is never in this list, see resolveMoveChain's own
+// pickup case above), there's nothing to sacrifice and the whole move is
+// illegal, exactly as an unconditionally-blocked move always was.
+function resolveBlockedMoveChain(entities, path) {
+  const occupants = path.slice(1).map((p) => entities.find((e) => samePos(e.pos, p)));
+  for (let i = occupants.length - 1; i >= 0; i--) {
+    if (isDestructible(occupants[i])) return { kind: 'destroy', victim: occupants[i] };
+  }
+  return { kind: 'illegal' };
 }
 
 // Apply a chain resolved by resolveMoveChain: every entity along `path` except
@@ -200,6 +231,128 @@ export function applyMoveChain(entities, path) {
   occupants.forEach((entity, i) => {
     entity.pos = path[i + 1];
   });
+}
+
+// --- Shift / Rotate resolution (LEVEL_DESIGN.md §5.2/§5.3/§5.5) ------------
+// Shift and Rotate both move every entity on a fixed cycle of tiles (a
+// row/column, wrapping at the board edge; the 8-tile ring around a rotation
+// center) one step around that cycle. With no wall on the cycle this is a
+// simple permutation — nothing can ever collide, since every occupant moves
+// together — so `resolveCycleOutcome` short-circuits to that in the common
+// case. A wall breaks the cycle into one or more open arcs; the arc(s) that
+// end at the wall need the same destructible/collectible peeling Move uses,
+// scoped to just the entities running into that specific wall.
+
+// Builds the 8 ring positions around `center`, in the *travel* direction: the
+// occupant of `order[i]` moves to `order[i + 1]` (wrapping). Reversing the
+// normal clockwise `RING` order encodes anticlockwise travel (LEVEL_DESIGN.md
+// §5.2's `(idx - 1 + n) % n` step, just expressed as a walk direction instead
+// of an index delta).
+export function rotationOrder(center, clockwise, size) {
+  const ring = RING.map((o) => ({
+    x: wrap(center.x + o.x, size),
+    y: wrap(center.y + o.y, size),
+  }));
+  return clockwise ? ring : ring.slice().reverse();
+}
+
+// Builds the `size` row/column positions, in the travel direction: the
+// occupant of `order[i]` moves to `order[i + 1]` (wrapping). Right/Down walk
+// index ascending; Left/Up walk it descending, matching shiftEntity's delta.
+export function shiftOrder(axis, index, direction, size) {
+  const positions = [];
+  for (let k = 0; k < size; k++) {
+    positions.push(axis === 'row' ? { x: k, y: index } : { x: index, y: k });
+  }
+  const forward = direction === 'Right' || direction === 'Down';
+  return forward ? positions : positions.slice().reverse();
+}
+
+// Resolves one full trip around `order` (an 8-tile ring for Rotate, or a
+// `size`-tile row/column for Shift) into a list of outcomes, one per occupied
+// tile: `{ entity, outcome: 'move', dest }` (moves to the next tile in
+// `order`), `{ entity, outcome: 'stay' }` (blocked, doesn't move, not
+// destroyed), `{ entity, outcome: 'destroy' }` (a crate crushed against
+// something that can't move — removed from the board), or
+// `{ entity, outcome: 'pickup', collectible }` (the character's own forced
+// step lands on a stuck collectible — it's collected, and the character does
+// move there; this is the one outcome where the *previous* tile's occupant
+// also relocates, since it's the pre-existing pickup rule, not the new
+// destruction one). An empty/all-open cycle returns `[]` — still a legal,
+// budget-costing no-op (LEVEL_DESIGN.md §5.2/§5.3).
+export function resolveCycleOutcome(wallSet, entities, order) {
+  const n = order.length;
+  const occupantAt = (pos) => entities.find((e) => samePos(e.pos, pos));
+  const blockedAfter = order.map((p, i) => isWallBetween(wallSet, p, order[(i + 1) % n]));
+
+  if (!blockedAfter.some(Boolean)) {
+    // No wall anywhere on this cycle: a pure permutation, always collision-free.
+    return order
+      .map((p, i) => ({ entity: occupantAt(p), dest: order[(i + 1) % n] }))
+      .filter(({ entity }) => entity)
+      .map(({ entity, dest }) => ({ entity, outcome: 'move', dest }));
+  }
+
+  const outcomes = [];
+  const resolved = new Array(n).fill(false);
+
+  for (let i = 0; i < n; i++) {
+    if (!blockedAfter[i] || resolved[i]) continue;
+
+    // Collect the contiguous occupied run ending at order[i] (touching the
+    // wall), front (closest to the wall) to back.
+    const run = [];
+    let j = i;
+    for (;;) {
+      const e = occupantAt(order[j]);
+      if (!e) break;
+      run.push(e);
+      resolved[j] = true;
+      const prevIdx = (j - 1 + n) % n;
+      if (blockedAfter[prevIdx]) break; // that step is its own separate run boundary
+      j = prevIdx;
+      if (j === i) break; // safety net against a pathological full-cycle wrap
+    }
+
+    // Peel front-to-back. The frontmost tile is directly blocked by the wall;
+    // every tile behind it is blocked only because the one ahead of it didn't
+    // move. At most one entity in the whole run is destroyed or picked up —
+    // everything else just stays (LEVEL_DESIGN.md §5.5's single-casualty rule).
+    let settled = false;
+    run.forEach((entity, k) => {
+      if (settled) {
+        outcomes.push({ entity, outcome: 'stay' });
+        return;
+      }
+      const ahead = k === 0 ? null : run[k - 1];
+      if (k === 0) {
+        if (isDestructible(entity)) {
+          outcomes.push({ entity, outcome: 'destroy' });
+          settled = true;
+        } else {
+          outcomes.push({ entity, outcome: 'stay' });
+        }
+      } else if (entity.kind === 'character' && isCollectible(ahead)) {
+        outcomes.push({ entity, outcome: 'pickup', collectible: ahead });
+        settled = true;
+      } else if (isDestructible(entity)) {
+        outcomes.push({ entity, outcome: 'destroy' });
+        settled = true;
+      } else {
+        outcomes.push({ entity, outcome: 'stay' });
+      }
+    });
+  }
+
+  // Every occupied tile not part of a blocked run has an open tile ahead of
+  // it and simply moves there, exactly like the no-wall fast path above.
+  order.forEach((p, i) => {
+    if (resolved[i]) return;
+    const e = occupantAt(p);
+    if (e) outcomes.push({ entity: e, outcome: 'move', dest: order[(i + 1) % n] });
+  });
+
+  return outcomes;
 }
 
 // Flip: mirror the whole entity layer across the board's middle line. `axis` is

@@ -21,7 +21,8 @@ export const ROTATE_TWEEN_MS = 220; // every ring entity slides at once
 export const FLIP_TWEEN_MS = 260; // squash to 0 (the "mirror"), then back
 export const BUMP_TWEEN_MS = 240; // blocked move: nudge toward the wall, spring back
 export const GOAL_PULSE_MS = 340; // reaching the goal: grow, then settle back
-export const DESTROY_TWEEN_MS = 220; // a crushed crate: shrink and fade in place
+export const CRUSH_NUDGE_MS = 160; // a crushed crate: nudge toward what it hit, spring back
+export const EXPLOSION_TWEEN_MS = 260; // a crushed crate: fragments burst outward and fade
 export const PICKUP_TWEEN_MS = 220; // a collected collectible: grow and fade in place
 
 // Distance from the board edge, in px, at which the edge arrows are drawn —
@@ -72,6 +73,7 @@ export const COLORS = {
   characterHex: 0x4fc3f7,
   wallHex: 0x9c4a35, // brick — walls, prototype styling (DESIGN.md §10)
   wallMortarHex: 0x4a3428, // mortar joints on the brick wall segments
+  explosionHex: 0xff8a50, // fragments when a crushed crate is destroyed
   disabled: '#1c1c1c', // action card with no budget left
   disabledText: '#666666',
   lose: '#ef9a9a',

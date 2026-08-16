@@ -243,11 +243,13 @@ export class PuzzleScene extends Phaser.Scene {
 
   // --- Collectibles & destruction (LEVEL_DESIGN.md §3/§5.5) ---
   // Removes a crushed crate from the board with a "crushed" flourish, then
-  // calls `onComplete`. Used whenever Move/Shift/Rotate resolves a crate as
-  // destroyed instead of moved.
-  destroyEntity(entity, onComplete) {
+  // calls `onComplete`. `dest` is the tile the crate was crushed trying (and
+  // failing) to reach — the crushed flourish nudges toward it first, reading
+  // as "it tried to push through," before it explodes. Used whenever
+  // Move/Shift/Rotate resolves a crate as destroyed instead of moved.
+  destroyEntity(entity, dest, onComplete) {
     const index = this.entities.indexOf(entity);
-    this.board.vanishEntitySprite(index, () => {
+    this.board.destroyEntitySprite(index, entity.pos, dest, () => {
       this.entities.splice(index, 1);
       this.board.removeEntitySpriteAt(index);
       onComplete?.();
@@ -553,7 +555,7 @@ export class PuzzleScene extends Phaser.Scene {
       // crate advances) — only the crate is removed.
       this.animating = true;
       this.board.clearControls();
-      this.destroyEntity(result.victim, () => {
+      this.destroyEntity(result.victim, result.dest, () => {
         this.animating = false;
         this.finishAction('move');
       });
@@ -695,7 +697,7 @@ export class PuzzleScene extends Phaser.Scene {
 
     destroyOutcomes.forEach((o) => {
       pending += 1;
-      this.destroyEntity(o.entity, finishOnce);
+      this.destroyEntity(o.entity, o.dest, finishOnce);
     });
     pickupOutcomes.forEach((o) => {
       pending += 1;

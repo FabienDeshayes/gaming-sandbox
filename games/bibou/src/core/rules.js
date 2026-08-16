@@ -184,7 +184,7 @@ export function resolveMoveChain(wallSet, entities, pos, direction, size) {
   for (let i = 0; i < size; i++) {
     const next = moveEntity(current, direction, size);
     if (isWallBetween(wallSet, current, next)) {
-      return resolveBlockedMoveChain(entities, path);
+      return resolveBlockedMoveChain(entities, path, direction, size);
     }
     current = next;
     path.push(current);
@@ -205,15 +205,25 @@ export function resolveMoveChain(wallSet, entities, pos, direction, size) {
 // pushed, in push order — closest to the mover first, closest to the wall
 // last. Peel from the tile touching the wall backward: the first destructible
 // entity found (a crate) is destroyed and the peel stops there — nothing else
-// in the chain moves or is destroyed (§5.5's single-casualty rule). If every
-// entity between the mover and the wall is indestructible (a collectible —
-// the character itself is never in this list, see resolveMoveChain's own
-// pickup case above), there's nothing to sacrifice and the whole move is
-// illegal, exactly as an unconditionally-blocked move always was.
-function resolveBlockedMoveChain(entities, path) {
+// in the chain moves or is destroyed (§5.5's single-casualty rule). Every
+// entity in the chain moves in the same `direction`, so the victim's own
+// attempted (never reached) destination is just one step past its own tile —
+// `dest` is reported so the UI can show it trying to push through before it's
+// destroyed. If every entity between the mover and the wall is indestructible
+// (a collectible — the character itself is never in this list, see
+// resolveMoveChain's own pickup case above), there's nothing to sacrifice and
+// the whole move is illegal, exactly as an unconditionally-blocked move
+// always was.
+function resolveBlockedMoveChain(entities, path, direction, size) {
   const occupants = path.slice(1).map((p) => entities.find((e) => samePos(e.pos, p)));
   for (let i = occupants.length - 1; i >= 0; i--) {
-    if (isDestructible(occupants[i])) return { kind: 'destroy', victim: occupants[i] };
+    if (isDestructible(occupants[i])) {
+      return {
+        kind: 'destroy',
+        victim: occupants[i],
+        dest: moveEntity(occupants[i].pos, direction, size),
+      };
+    }
   }
   return { kind: 'illegal' };
 }
@@ -272,14 +282,15 @@ export function shiftOrder(axis, index, direction, size) {
 // `size`-tile row/column for Shift) into a list of outcomes, one per occupied
 // tile: `{ entity, outcome: 'move', dest }` (moves to the next tile in
 // `order`), `{ entity, outcome: 'stay' }` (blocked, doesn't move, not
-// destroyed), `{ entity, outcome: 'destroy' }` (a crate crushed against
-// something that can't move — removed from the board), or
-// `{ entity, outcome: 'pickup', collectible }` (the character's own forced
-// step lands on a stuck collectible — it's collected, and the character does
-// move there; this is the one outcome where the *previous* tile's occupant
-// also relocates, since it's the pre-existing pickup rule, not the new
-// destruction one). An empty/all-open cycle returns `[]` — still a legal,
-// budget-costing no-op (LEVEL_DESIGN.md §5.2/§5.3).
+// destroyed), `{ entity, outcome: 'destroy', dest }` (a crate crushed against
+// something that can't move — removed from the board; `dest` is the tile it
+// was trying, and failing, to reach, for the UI's "it tried to push through
+// first" animation), or `{ entity, outcome: 'pickup', collectible }` (the
+// character's own forced step lands on a stuck collectible — it's collected,
+// and the character does move there; this is the one outcome where the
+// *previous* tile's occupant also relocates, since it's the pre-existing
+// pickup rule, not the new destruction one). An empty/all-open cycle returns
+// `[]` — still a legal, budget-costing no-op (LEVEL_DESIGN.md §5.2/§5.3).
 export function resolveCycleOutcome(wallSet, entities, order) {
   const n = order.length;
   const occupantAt = (pos) => entities.find((e) => samePos(e.pos, pos));
@@ -300,13 +311,15 @@ export function resolveCycleOutcome(wallSet, entities, order) {
     if (!blockedAfter[i] || resolved[i]) continue;
 
     // Collect the contiguous occupied run ending at order[i] (touching the
-    // wall), front (closest to the wall) to back.
+    // wall), front (closest to the wall) to back — each entry keeps its own
+    // index into `order` so a destroyed entity's attempted destination
+    // (order[idx + 1]) can still be reported even though it never moves there.
     const run = [];
     let j = i;
     for (;;) {
       const e = occupantAt(order[j]);
       if (!e) break;
-      run.push(e);
+      run.push({ entity: e, idx: j });
       resolved[j] = true;
       const prevIdx = (j - 1 + n) % n;
       if (blockedAfter[prevIdx]) break; // that step is its own separate run boundary
@@ -319,15 +332,16 @@ export function resolveCycleOutcome(wallSet, entities, order) {
     // move. At most one entity in the whole run is destroyed or picked up —
     // everything else just stays (LEVEL_DESIGN.md §5.5's single-casualty rule).
     let settled = false;
-    run.forEach((entity, k) => {
+    run.forEach(({ entity, idx }, k) => {
+      const dest = order[(idx + 1) % n];
       if (settled) {
         outcomes.push({ entity, outcome: 'stay' });
         return;
       }
-      const ahead = k === 0 ? null : run[k - 1];
+      const ahead = k === 0 ? null : run[k - 1].entity;
       if (k === 0) {
         if (isDestructible(entity)) {
-          outcomes.push({ entity, outcome: 'destroy' });
+          outcomes.push({ entity, outcome: 'destroy', dest });
           settled = true;
         } else {
           outcomes.push({ entity, outcome: 'stay' });
@@ -336,7 +350,7 @@ export function resolveCycleOutcome(wallSet, entities, order) {
         outcomes.push({ entity, outcome: 'pickup', collectible: ahead });
         settled = true;
       } else if (isDestructible(entity)) {
-        outcomes.push({ entity, outcome: 'destroy' });
+        outcomes.push({ entity, outcome: 'destroy', dest });
         settled = true;
       } else {
         outcomes.push({ entity, outcome: 'stay' });

@@ -7,8 +7,9 @@ import {
   COLORS,
   CONTROL_DEPTH,
   CRATE_TEXTURE_KEY,
-  DESTROY_TWEEN_MS,
+  CRUSH_NUDGE_MS,
   EDGE_ARROW_INSET,
+  EXPLOSION_TWEEN_MS,
   GOAL_LOCKED_GLYPH,
   GOAL_UNLOCKED_GLYPH,
   PICKUP_TWEEN_MS,
@@ -187,18 +188,57 @@ export class BoardView {
   }
 
   // A crate crushed against something that can't move (LEVEL_DESIGN.md §5.5):
-  // shrinks and fades in place, reading as "destroyed" rather than pushed.
-  vanishEntitySprite(index, onComplete) {
+  // nudges toward the tile it was crushed trying (and failing) to reach — the
+  // same "hit something solid" read as animateBump's wall-blocked nudge —
+  // then bursts into fragments (explodeAt) instead of just fading away.
+  // `fromPos`/`toPos` are tile coordinates; the sprite's actual position never
+  // changes, since the entity that owned it never moved.
+  destroyEntitySprite(index, fromPos, toPos, onComplete) {
     const sprite = this.entitySprites[index];
+    const dx = toPos.x - fromPos.x;
+    const dy = toPos.y - fromPos.y;
+    const startX = sprite.x;
+    const startY = sprite.y;
     this.scene.tweens.add({
       targets: sprite,
-      scaleX: 0,
-      scaleY: 0,
-      alpha: 0,
-      duration: DESTROY_TWEEN_MS,
-      ease: 'Quad.easeIn',
-      onComplete: () => onComplete?.(),
+      x: startX + dx * CELL * 0.28,
+      y: startY + dy * CELL * 0.28,
+      duration: CRUSH_NUDGE_MS / 2,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onComplete: () => {
+        sprite.setPosition(startX, startY).setVisible(false);
+        this.explodeAt(startX, startY, sprite.depth);
+        onComplete?.();
+      },
     });
+  }
+
+  // A handful of small fragments burst outward from a point and fade —
+  // reading as an explosion rather than the entity quietly vanishing.
+  // Fire-and-forget: each fragment manages its own lifetime and this doesn't
+  // block the caller, since the entity is already gone from the board logic
+  // by the time this plays.
+  explodeAt(px, py, depth) {
+    const FRAGMENTS = 8;
+    const radius = CELL * 0.55;
+    for (let i = 0; i < FRAGMENTS; i++) {
+      const angle = (Math.PI * 2 * i) / FRAGMENTS;
+      const frag = this.scene.add
+        .rectangle(px, py, 10, 10, COLORS.explosionHex)
+        .setDepth(depth + 1);
+      this.scene.tweens.add({
+        targets: frag,
+        x: px + Math.cos(angle) * radius,
+        y: py + Math.sin(angle) * radius,
+        alpha: 0,
+        scaleX: 0,
+        scaleY: 0,
+        duration: EXPLOSION_TWEEN_MS,
+        ease: 'Quad.easeOut',
+        onComplete: () => frag.destroy(),
+      });
+    }
   }
 
   // A collectible the character just picked up: grows and fades in place —

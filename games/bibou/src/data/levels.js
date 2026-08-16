@@ -2,6 +2,9 @@
 // Add new levels here and append them to LEVELS; the level picker and the
 // puzzle scene read everything they need off these objects.
 //
+// `description` is a short one-line summary shown under the level's button in
+// LevelSelectScene — what the level teaches or the twist it adds, not a
+// solution. Optional, but every level so far has one.
 // `entities.crates` is optional — a level without it just has no crates.
 // `entities.collectibles` is optional too — each entry is `{ x, y, type,
 // required }`; `required: true` locks the goal until that collectible is
@@ -17,6 +20,7 @@ import { validateLevelWalls } from '../core/rules.js';
 export const LEVEL_1 = {
   id: 1,
   gridSize: 5,
+  description: 'Learn Move: walk straight to the goal.',
   background: { goal: { x: 3, y: 2 } },
   entities: { character: { x: 1, y: 2 } },
   actionBudget: { move: 2 },
@@ -28,6 +32,7 @@ export const LEVEL_1 = {
 export const LEVEL_2 = {
   id: 2,
   gridSize: 5,
+  description: 'Learn Rotate: turn a center to step around it.',
   background: { goal: { x: 2, y: 3 } },
   entities: { character: { x: 1, y: 2 } },
   actionBudget: { rotate: 2 },
@@ -39,6 +44,7 @@ export const LEVEL_2 = {
 export const LEVEL_3 = {
   id: 3,
   gridSize: 5,
+  description: 'Learn Shift: slide a whole row or column.',
   background: { goal: { x: 3, y: 2 } },
   entities: { character: { x: 2, y: 3 } },
   actionBudget: { shift: 2 },
@@ -52,6 +58,7 @@ export const LEVEL_3 = {
 export const LEVEL_4 = {
   id: 4,
   gridSize: 5,
+  description: 'Learn Flip: mirror the whole board across an axis.',
   background: { goal: { x: 3, y: 3 } },
   entities: {
     character: { x: 1, y: 1 },
@@ -70,6 +77,7 @@ export const LEVEL_4 = {
 export const LEVEL_5 = {
   id: 5,
   gridSize: 5,
+  description: 'Combine Move and Flip — each usable only once.',
   background: { goal: { x: 3, y: 3 } },
   entities: {
     character: { x: 1, y: 2 },
@@ -87,6 +95,7 @@ export const LEVEL_5 = {
 export const LEVEL_6 = {
   id: 6,
   gridSize: 5,
+  description: 'Push a fully packed row all the way around the board.',
   background: { goal: { x: 2, y: 2 } },
   entities: {
     character: { x: 1, y: 2 },
@@ -108,6 +117,7 @@ export const LEVEL_6 = {
 export const LEVEL_7 = {
   id: 7,
   gridSize: 5,
+  description: 'A wall blocks the direct path — find the detour.',
   background: { goal: { x: 2, y: 2 } },
   entities: { character: { x: 1, y: 2 } },
   walls: [
@@ -125,6 +135,7 @@ export const LEVEL_7 = {
 export const LEVEL_8 = {
   id: 8,
   gridSize: 5,
+  description: 'A wall on the wraparound seam blocks the shortcut.',
   background: { goal: { x: 4, y: 2 } },
   entities: { character: { x: 1, y: 2 } },
   walls: [
@@ -145,6 +156,7 @@ export const LEVEL_8 = {
 export const LEVEL_9 = {
   id: 9,
   gridSize: 5,
+  description: 'Grab the required key before the goal will open.',
   background: { goal: { x: 3, y: 2 } },
   entities: {
     character: { x: 1, y: 2 },
@@ -161,6 +173,7 @@ export const LEVEL_9 = {
 export const LEVEL_10 = {
   id: 10,
   gridSize: 5,
+  description: 'Crush a crate against a stuck key to clear the way.',
   background: { goal: { x: 3, y: 2 } },
   entities: {
     character: { x: 0, y: 2 },
@@ -185,6 +198,7 @@ export const LEVEL_10 = {
 export const LEVEL_11 = {
   id: 11,
   gridSize: 5,
+  description: 'Same puzzle as Level 10 — crush the crate with Shift instead.',
   background: { goal: { x: 3, y: 2 } },
   entities: {
     character: { x: 0, y: 2 },

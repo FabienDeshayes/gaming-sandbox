@@ -28,6 +28,7 @@ import {
   samePos,
   shiftOrder,
 } from '../core/rules.js';
+import { LEVELS } from '../data/levels.js';
 import { BoardView } from '../ui/BoardView.js';
 import { createActionCard } from '../ui/actionCard.js';
 import { createButton } from '../ui/button.js';
@@ -668,11 +669,20 @@ export class PuzzleScene extends Phaser.Scene {
       from: { ...o.entity.pos },
       to: { ...o.dest },
     }));
+    // Ordinarily the character is the one who advances onto the collectible's
+    // tile. When `characterStays` is set (rules.js: the collectible was queued
+    // behind a character already stuck at the wall), it's the reverse — the
+    // character doesn't move, so the collectible is reported as sliding onto
+    // *its* tile instead, purely for the animation; either way the character
+    // ends up holding the collectible.
     pickupOutcomes.forEach((o) => {
+      const [mover, dest] = o.characterStays
+        ? [o.collectible, o.entity.pos]
+        : [o.entity, o.collectible.pos];
       moves.push({
-        index: this.entities.indexOf(o.entity),
-        from: { ...o.entity.pos },
-        to: { ...o.collectible.pos },
+        index: this.entities.indexOf(mover),
+        from: { ...mover.pos },
+        to: { ...dest },
       });
     });
 
@@ -680,7 +690,11 @@ export class PuzzleScene extends Phaser.Scene {
       o.entity.pos = { ...o.dest };
     });
     pickupOutcomes.forEach((o) => {
-      o.entity.pos = { ...o.collectible.pos };
+      if (o.characterStays) {
+        o.collectible.pos = { ...o.entity.pos };
+      } else {
+        o.entity.pos = { ...o.collectible.pos };
+      }
     });
 
     this.animating = true;
@@ -765,13 +779,28 @@ export class PuzzleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(11);
 
-    createButton(this, GAME_WIDTH / 2, 470, 'Retry', () =>
+    // Offer to continue straight into the next level, but only when there is
+    // one — the last level in LEVELS gets the ordinary three buttons.
+    const nextLevel = won
+      ? LEVELS[LEVELS.findIndex((l) => l.id === this.level.id) + 1]
+      : undefined;
+
+    let y = 470;
+    if (nextLevel) {
+      createButton(this, GAME_WIDTH / 2, y, 'Next level', () =>
+        this.scene.restart({ level: nextLevel, unlimited: this.unlimited })
+      ).setDepth(11);
+      y += 80;
+    }
+    createButton(this, GAME_WIDTH / 2, y, 'Retry', () =>
       this.scene.restart({ level: this.level, unlimited: this.unlimited })
     ).setDepth(11);
-    createButton(this, GAME_WIDTH / 2, 550, 'Level select', () =>
+    y += 80;
+    createButton(this, GAME_WIDTH / 2, y, 'Level select', () =>
       this.scene.start('LevelSelectScene', { unlimited: this.unlimited })
     ).setDepth(11);
-    createButton(this, GAME_WIDTH / 2, 630, 'Back to title', () =>
+    y += 80;
+    createButton(this, GAME_WIDTH / 2, y, 'Back to title', () =>
       this.scene.start('TitleScene')
     ).setDepth(11);
   }

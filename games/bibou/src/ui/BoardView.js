@@ -21,7 +21,7 @@ import { DIRECTIONS, RING, wrap } from '../core/rules.js';
 // §10); actual on-top-ness comes from CONTROL_DEPTH, not size.
 const MOVE_ARROW = { fontSize: '28px', padding: { x: 6, y: 3 } };
 const ROTATE_ARROW = { fontSize: '32px', padding: { x: 7, y: 3 } };
-const SHIFT_ARROW = { fontSize: '17px', padding: { x: 4, y: 2 } };
+const SHIFT_ARROW = { fontSize: '24px', padding: { x: 5, y: 2 } };
 const FLIP_ARROW = { fontSize: '26px', padding: { x: 7, y: 3 } };
 
 // Everything anchored to the board: the static grid, the character sprite, the
@@ -166,9 +166,46 @@ export class BoardView {
         .setOrigin(0.5)
         .setDepth(1);
     }
+    return this.createCharacterSprite();
+  }
+
+  // The character: a light-blue ball with two eyes and a smile (DESIGN.md
+  // §10). Built as a container so the whole face moves/scales/fades as one
+  // under the same tweens every other entity sprite gets (x/y/scaleX/scaleY/
+  // alpha are all Container properties) — animateBump, pulseEntity, and
+  // animateFlip don't need to know the character isn't a single shape.
+  // `setSize` gives the container a display size so entitySizes-style reads
+  // (sprite.displayWidth/Height) still report something meaningful, matching
+  // the plain shapes used for crates/collectibles.
+  createCharacterSprite() {
+    const diameter = CELL * 0.6;
+    const radius = diameter / 2;
+    const face = 0x1a1a1a;
+
+    const ball = this.scene.add
+      .circle(0, 0, radius, COLORS.characterHex)
+      .setStrokeStyle(3, 0xffffff);
+    const eyeRadius = radius * 0.14;
+    const eyeOffsetX = radius * 0.4;
+    const eyeOffsetY = radius * -0.15;
+    const leftEye = this.scene.add.circle(-eyeOffsetX, eyeOffsetY, eyeRadius, face);
+    const rightEye = this.scene.add.circle(eyeOffsetX, eyeOffsetY, eyeRadius, face);
+    const smile = this.scene.add.graphics();
+    smile.lineStyle(3, face, 1);
+    smile.beginPath();
+    smile.arc(
+      0,
+      radius * -0.05,
+      radius * 0.5,
+      Phaser.Math.DegToRad(25),
+      Phaser.Math.DegToRad(155),
+      false
+    );
+    smile.strokePath();
+
     return this.scene.add
-      .rectangle(0, 0, CELL * 0.6, CELL * 0.6, COLORS.characterHex)
-      .setStrokeStyle(3, 0xffffff)
+      .container(0, 0, [ball, leftEye, rightEye, smile])
+      .setSize(diameter, diameter)
       .setDepth(2);
   }
 

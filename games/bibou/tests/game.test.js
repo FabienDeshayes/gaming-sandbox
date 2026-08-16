@@ -114,6 +114,22 @@ unit('resolveCycleOutcome: the character collects a key stuck at a wall', () => 
   assertEqual(byKind.character, 'pickup', 'character always yields to nothing, not even a stuck key');
 });
 
+// Level 11's bug: shifting the same row enough times eventually queues the
+// key *behind* a character that's already stuck at the wall, rather than the
+// character stepping onto the key. The pickup rule has to hold in this
+// direction too, or the shift just silently does nothing.
+unit('resolveCycleOutcome: a collectible pushed into a stuck character is still a pickup', () => {
+  const walls = buildWallSet([[{ x: 3, y: 2 }, { x: 4, y: 2 }]]);
+  const character = { kind: 'character', pos: { x: 3, y: 2 } };
+  const collectible = { kind: 'collectible', type: 'key', pos: { x: 2, y: 2 } };
+  const outcomes = resolveCycleOutcome(walls, [character, collectible], shiftOrder('row', 2, 'Right', N));
+  const pickup = outcomes.find((o) => o.outcome === 'pickup');
+  assert(pickup, 'the key catching up to the stuck character should be a pickup, not a silent no-op');
+  assertEqual(pickup.entity, character, 'the character ends up holding the key');
+  assertEqual(pickup.collectible, collectible, 'the key is the thing collected');
+  assertEqual(pickup.characterStays, true, 'the character does not move — it was already at the wall');
+});
+
 // --- Boot and navigation ----------------------------------------------------
 
 test('the game boots to the title screen', async (game) => {
@@ -137,6 +153,33 @@ test('Start leads to the level list and a level starts', async (game) => {
   assertEqual(s.char, { x: 1, y: 2 }, 'character starts where the level says');
   assertEqual(s.movesUsed, 0, 'no actions used yet');
   assert((await game.texts()).includes('Actions: 0 / 2'), 'HUD shows the budget');
+});
+
+// The list holds every level's description plus a Back button regardless of
+// scroll position (texts() lists every label on screen, not just the
+// currently visible ones — see harness.js) — scrollToLevel only has to move a
+// level's row into the tappable viewport, which "Shift destroys a crushed
+// crate..." etc. already rely on to reach Level 11.
+test('the level list shows a description per level and stays scrollable', async (game) => {
+  await game.clickText('Start');
+  await game.waitForScene('LevelSelectScene');
+
+  let texts = await game.texts();
+  assert(
+    texts.includes('Learn Move: walk straight to the goal.'),
+    'Level 1 shows its description'
+  );
+  assert(texts.includes('Back'), 'Back is always present');
+
+  await game.scrollToLevel(11);
+  texts = await game.texts();
+  assert(
+    texts.includes('Same puzzle as Level 10 — crush the crate with Shift instead.'),
+    'Level 11 still shows its description after scrolling to it'
+  );
+
+  await game.clickText('Back');
+  await game.waitForScene('TitleScene');
 });
 
 test('Test mode runs a level with unlimited budgets', async (game) => {
@@ -213,6 +256,7 @@ test('budgets are per action, and a spent card stops responding', async (game) =
 
 test('a wall blocks the move and costs nothing', async (game) => {
   await game.clickText('Start');
+  await game.scrollToLevel(7);
   await game.clickText('Level 7');
   await game.waitForScene('PuzzleScene');
 
@@ -366,6 +410,7 @@ test('exiting from Test mode returns to the Test level list', async (game) => {
 
 test('reaching the goal without the required key does not win', async (game) => {
   await game.clickText('Start');
+  await game.scrollToLevel(9);
   await game.clickText('Level 9');
   await game.waitForScene('PuzzleScene');
   assert((await game.texts()).some((t) => t.startsWith('Objective:')), 'objective line shown');
@@ -399,6 +444,7 @@ test('reaching the goal without the required key does not win', async (game) => 
 
 test('collecting the key first unlocks the goal and wins', async (game) => {
   await game.clickText('Start');
+  await game.scrollToLevel(9);
   await game.clickText('Level 9');
   await game.waitForScene('PuzzleScene');
 
@@ -438,6 +484,7 @@ test('collecting the key first unlocks the goal and wins', async (game) => {
 
 test('pushing a crate into a wall-stuck key destroys the crate', async (game) => {
   await game.clickText('Start');
+  await game.scrollToLevel(10);
   await game.clickText('Level 10');
   await game.waitForScene('PuzzleScene');
 
@@ -482,6 +529,7 @@ test('pushing a crate into a wall-stuck key destroys the crate', async (game) =>
 
 test('Shift destroys a crushed crate exactly like Move does', async (game) => {
   await game.clickText('Start');
+  await game.scrollToLevel(11);
   await game.clickText('Level 11');
   await game.waitForScene('PuzzleScene');
 
@@ -516,6 +564,59 @@ test('Shift destroys a crushed crate exactly like Move does', async (game) => {
   s = await game.state();
   assertEqual(s.char, { x: 3, y: 2 }, 'character on the goal');
   assert((await game.texts()).includes('You win!'), 'level 11 solved');
+  assert(
+    !(await game.texts()).includes('Next level'),
+    'level 11 is the last level, so the win overlay offers no Next level button'
+  );
+});
+
+test('Winning offers a Next level button that loads the following level', async (game) => {
+  await game.clickText('Start');
+  await game.clickText('Level 1');
+  await game.waitForScene('PuzzleScene');
+
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  assert((await game.texts()).includes('You win!'), 'level 1 solved');
+  assert((await game.texts()).includes('Next level'), 'level 2 exists, so the button shows');
+
+  await game.clickText('Next level');
+  await game.waitForScene('PuzzleScene');
+
+  const s = await game.state();
+  assertEqual(s.gameOver, false, 'the next level is not already over');
+  assertEqual(Object.keys(s.remaining), ['rotate'], 'level 2 loaded, offering only Rotate');
+});
+
+// Reproduces the reported bug: repeatedly shifting the same row left (well
+// past the single Shift the level budgets — this is what Test mode's
+// unlimited budget is for) eventually queues the key *behind* the character
+// once it's stuck at the wall, instead of the character stepping onto the
+// key. That has to resolve as a pickup too, or the shift just silently does
+// nothing forever.
+test('Test mode: shifting left repeatedly still lets the key catch up to a stuck character', async (game) => {
+  await game.clickText('Test');
+  await game.scrollToLevel(11);
+  await game.clickText('Level 11');
+  await game.waitForScene('PuzzleScene');
+
+  for (let i = 0; i < 5; i++) {
+    await game.clickText('Shift');
+    await game.clickText('◀', 2); // row y=2's left-pointing (right-edge) arrow
+    await game.settle();
+  }
+
+  const s = await game.state();
+  assertEqual(s.char, { x: 3, y: 2 }, 'character stayed put at the wall through the whole run');
+  assertEqual(s.crates, [], 'the crate was crushed along the way');
+  assert(
+    (await game.texts()).includes('You win!'),
+    'the key catching up to the stuck character is picked up, winning the level'
+  );
 });
 
 test('Level select from the win overlay leaves the next level playable', async (game) => {

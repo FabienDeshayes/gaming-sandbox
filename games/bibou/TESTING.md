@@ -269,6 +269,14 @@ cell, and read `characterPos` / the HUD out of the live `PuzzleScene`. Adapt the
   shifts row N right and the Nth `▲` shifts column N up. Flip's two arrows (`↔`
   above the middle column, `↕` left of the middle row) are unique, so a plain
   lookup by glyph works for those.
+- **The level list scrolls.** `LevelSelectScene` gives every level a fixed-height
+  row (button + description) and scrolls instead of shrinking to fit, so only the
+  first several levels are within the tappable viewport when the scene loads —
+  `clickText('Level 4')` above works because Level 4 happens to start on-screen,
+  but a level further down needs the list scrolled first. `tests/harness.js`
+  exposes `scrollToLevel(id)` for this (jumps straight to a level's row rather
+  than simulating a drag); the standalone snippet below doesn't reproduce it, so
+  copy that helper too if you're checking a level below the fold.
 - **Reading text.** Buttons, arrows (`▲◀▶▼`, `↺`, `↻`, `↔`, `↕`), the HUD, the
   per-card `"N left"` counters, and the win/lose overlay are all Phaser text
   objects — enumerate `scene.children.list` and read `.text`. `"You win!"` present

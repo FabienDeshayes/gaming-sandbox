@@ -285,12 +285,16 @@ export function shiftOrder(axis, index, direction, size) {
 // destroyed), `{ entity, outcome: 'destroy', dest }` (a crate crushed against
 // something that can't move — removed from the board; `dest` is the tile it
 // was trying, and failing, to reach, for the UI's "it tried to push through
-// first" animation), or `{ entity, outcome: 'pickup', collectible }` (the
-// character's own forced step lands on a stuck collectible — it's collected,
-// and the character does move there; this is the one outcome where the
-// *previous* tile's occupant also relocates, since it's the pre-existing
-// pickup rule, not the new destruction one). An empty/all-open cycle returns
-// `[]` — still a legal, budget-costing no-op (LEVEL_DESIGN.md §5.2/§5.3).
+// first" animation), or `{ entity, outcome: 'pickup', collectible }` (a
+// character and a collectible end up adjacent in a jammed run — always a
+// pickup regardless of which one of the two was queued closer to the wall:
+// either the character's forced step lands on a stuck collectible ahead of
+// it, in which case the character moves onto the collectible's tile, or a
+// collectible is pushed into a character that's stuck at the wall ahead of
+// *it*, in which case the character stays put and the collectible is the one
+// that's reported as having moved, via `characterStays: true`). An empty/
+// all-open cycle returns `[]` — still a legal, budget-costing no-op
+// (LEVEL_DESIGN.md §5.2/§5.3).
 export function resolveCycleOutcome(wallSet, entities, order) {
   const n = order.length;
   const occupantAt = (pos) => entities.find((e) => samePos(e.pos, pos));
@@ -348,6 +352,15 @@ export function resolveCycleOutcome(wallSet, entities, order) {
         }
       } else if (entity.kind === 'character' && isCollectible(ahead)) {
         outcomes.push({ entity, outcome: 'pickup', collectible: ahead });
+        settled = true;
+      } else if (isCollectible(entity) && ahead.kind === 'character') {
+        // Reversed pairing: the collectible is the one queued behind, being
+        // pushed into a character that's already stuck at the wall ahead of
+        // it. Still a pickup — the character never treats a collectible as
+        // an obstacle — but here it's the collectible that's reported as the
+        // mover (onto the character's tile) since the character itself isn't
+        // going anywhere.
+        outcomes.push({ entity: ahead, outcome: 'pickup', collectible: entity, characterStays: true });
         settled = true;
       } else if (isDestructible(entity)) {
         outcomes.push({ entity, outcome: 'destroy', dest });

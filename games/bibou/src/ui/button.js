@@ -1,9 +1,17 @@
-import { COLORS } from '../config.js';
+import { COLORS, SWIPE_THRESHOLD } from '../config.js';
 
 // A single interactive text button, reused by every scene. `onClick` is the
 // action to run on tap/click — the template left this empty, we always wire it.
 // `style` overrides the default sizing, so a crowded action card row can shrink
 // its cards (see CARD_LAYOUTS in config.js).
+//
+// The click fires on release, not on press, and only if the pointer hasn't
+// travelled more than a tap's worth (SWIPE_THRESHOLD, the same tolerance
+// PuzzleScene's own tap/swipe split uses) since it went down — `pointer.
+// getDistance()` is Phaser's own tracking of that, no local state needed.
+// This is what lets a button sit inside a scrollable list (LevelSelectScene):
+// a drag that starts on top of one scrolls the list instead of also firing
+// the button underneath it.
 export function createButton(scene, x, y, label, onClick, style = {}) {
   const { fontSize = 32, padX = 24, padY = 12 } = style;
 
@@ -31,6 +39,8 @@ export function createButton(scene, x, y, label, onClick, style = {}) {
 
   text.on('pointerover', () => text.setStyle({ backgroundColor: COLORS.buttonHover }));
   text.on('pointerout', () => text.setStyle({ backgroundColor: text.baseColor }));
-  text.on('pointerdown', () => onClick && onClick());
+  text.on('pointerup', (pointer) => {
+    if (pointer.getDistance() < SWIPE_THRESHOLD) onClick && onClick();
+  });
   return text;
 }

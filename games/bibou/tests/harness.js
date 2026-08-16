@@ -262,6 +262,16 @@ export async function openGame(browser, port) {
 
     clickCell: (x, y) => clickAt(BOARD_X + x * CELL + CELL / 2, BOARD_Y + y * CELL + CELL / 2),
 
+    // LevelSelectScene's list only shows a handful of rows at a time once
+    // there are enough levels to need scrolling; this jumps straight to a
+    // level's row via the scene's own scrollToLevel rather than simulating a
+    // pixel-perfect drag, so clickText can find and click it afterward
+    // exactly like any other on-screen level.
+    scrollToLevel: (id) =>
+      page.evaluate((id) => {
+        window.__game.scene.getScene('LevelSelectScene').scrollToLevel(id);
+      }, id),
+
     swipeFrom: async (x, y, dx, dy) => {
       const R = await rect();
       const x0 = R.left + (BOARD_X + x * CELL + CELL / 2) * R.sx;

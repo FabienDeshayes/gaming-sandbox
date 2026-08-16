@@ -3,6 +3,9 @@
 // puzzle scene read everything they need off these objects.
 //
 // `entities.crates` is optional — a level without it just has no crates.
+// `entities.collectibles` is optional too — each entry is `{ x, y, type,
+// required }`; `required: true` locks the goal until that collectible is
+// picked up (LEVEL_DESIGN.md §3/§4).
 // `actionBudget` is per action type: each key is an action the level offers and
 // its own private pool of uses (LEVEL_DESIGN.md §6).
 // `walls` is optional — a level without it just has no walls (LEVEL_DESIGN.md
@@ -133,6 +136,23 @@ export const LEVEL_8 = {
   actionBudget: { move: 3 },
 };
 
+// Level 9 introduces collectibles (see LEVEL_DESIGN.md §3/§7): a `required`
+// key the character must pick up before the goal will accept them. The goal
+// sits 2 moves directly right of the start — the same shape as Level 1 — but
+// the key sits off that direct line, so reaching the goal first does nothing
+// (the marker shows 🔒 and the HUD explains why): the budget only has enough
+// slack for the key-first route, not for a direct attempt plus a recovery.
+export const LEVEL_9 = {
+  id: 9,
+  gridSize: 5,
+  background: { goal: { x: 3, y: 2 } },
+  entities: {
+    character: { x: 1, y: 2 },
+    collectibles: [{ x: 1, y: 0, type: 'key', required: true }],
+  },
+  actionBudget: { move: 6 },
+};
+
 export const LEVELS = [
   LEVEL_1,
   LEVEL_2,
@@ -142,6 +162,7 @@ export const LEVELS = [
   LEVEL_6,
   LEVEL_7,
   LEVEL_8,
+  LEVEL_9,
 ];
 
 LEVELS.forEach(validateLevelWalls);

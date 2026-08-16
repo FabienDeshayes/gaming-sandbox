@@ -312,6 +312,78 @@ test('exiting from Test mode returns to the Test level list', async (game) => {
 
 // --- Regression: level select from the win overlay --------------------------
 
+// --- Collectibles: the key gates the goal --------------------------------
+
+test('reaching the goal without the required key does not win', async (game) => {
+  await game.clickText('Start');
+  await game.clickText('Level 9');
+  await game.waitForScene('PuzzleScene');
+  assert((await game.texts()).some((t) => t.startsWith('Objective:')), 'objective line shown');
+
+  // Walk straight to the goal, ignoring the key.
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+
+  let s = await game.state();
+  assertEqual(s.char, { x: 3, y: 2 }, 'character reached the goal tile');
+  assertEqual(s.gameOver, false, 'standing on a locked goal does not win');
+  assert(
+    (await game.texts()).some((t) => t.includes('Get the key first')),
+    'hint explains the goal is locked'
+  );
+
+  // Budget was exactly 6 and 2 were just spent going nowhere — the remaining
+  // 4 aren't enough to fetch the key and come back (that alone takes 6), so
+  // the level is now unwinnable; spend the rest and confirm a normal loss.
+  for (let i = 0; i < 4; i++) {
+    await game.clickText('Move');
+    await game.clickText('▲');
+    await game.settle();
+  }
+  assert((await game.texts()).includes('Out of actions'), 'runs out of budget without the key');
+});
+
+test('collecting the key first unlocks the goal and wins', async (game) => {
+  await game.clickText('Start');
+  await game.clickText('Level 9');
+  await game.waitForScene('PuzzleScene');
+
+  await game.clickText('Move');
+  await game.clickText('▲');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▲');
+  await game.settle();
+
+  let s = await game.state();
+  assertEqual(s.char, { x: 1, y: 0 }, 'character on the key tile');
+  assert(
+    (await game.texts()).includes('Objective: reach the goal'),
+    'objective updates once the key is collected'
+  );
+
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▼');
+  await game.settle();
+  await game.clickText('Move');
+  await game.clickText('▼');
+  await game.settle();
+
+  s = await game.state();
+  assertEqual(s.char, { x: 3, y: 2 }, 'character on the goal');
+  assert((await game.texts()).includes('You win!'), 'level 9 solved with the key in hand');
+});
+
 test('Level select from the win overlay leaves the next level playable', async (game) => {
   await game.clickText('Start');
   await game.clickText('Level 1');

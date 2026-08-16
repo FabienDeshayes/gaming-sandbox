@@ -33,13 +33,16 @@ The Board (the whole 5×5 grid) has three layers:
 - **Wall layer** (static): a set of edges between adjacent tiles that block entity movement across them. Unlike the other two layers it isn't indexed by tile coordinates — each wall names the pair of adjacent tiles it sits between. See `LEVEL_DESIGN.md` §1.2.
 - **Entity layer** (movable): the character and crates. This is the only layer actions ever affect.
 
+Collectibles (the key, and future pickups) sit at their own fixed positions like the goal does — static, never moved by any action, never blocking or getting pushed. They're removed from the board the moment the character's Entity-layer cell lands on their tile. See `LEVEL_DESIGN.md` §3.
+
 | Mechanic | Description |
 |---|---|
 | Wall constraints | A wall blocks entity movement between the two specific tiles it connects, in both directions. Static — defined by the puzzle layout. |
-| Goal detection | Win condition triggered when the character enters the goal tile. Checked automatically after each action resolves. |
+| Goal detection | Win condition triggered when the character enters the goal tile, provided every `required` collectible the level places has already been picked up. Checked automatically after each action resolves. |
 | Action budget | Budgets are **per action type**: a puzzle grants each action it offers its own pool of uses, and spending one only draws down that action's pool. Each card shows its own remaining count; a spent action greys out while the others keep working. |
 | Crates | A second kind of entity. No rules of its own beyond pushing — every action moves it exactly like the character, and only the character can win. It exists so puzzles have something else on the board to rearrange, and something for Move to push. |
 | Pushing | No two entities may occupy the same tile. Moving an entity onto an occupied tile pushes whatever's there one step further in the same direction first, and so on down the chain if that tile is occupied too — a character can push a crate that pushes another crate. Rotate, Shift, and Flip never need this: they displace every affected entity at once as a single reshuffle, so entities never land on each other. |
+| Collectibles | Static pickups (e.g. the key) placed on the board; the character picks one up automatically on arrival. A collectible marked `required` must be collected before the character can win: the goal marker shows 🔒 instead of ★, and the HUD prints an objective line naming what's still missing, until every required collectible is gone. Collectibles never block or get pushed — an entity can move straight through one. |
 
 ## 5. Actions
 
@@ -73,7 +76,7 @@ Notes:
 
 ## 7. Win / lose conditions
 
-- **Win:** Character reaches the goal tile within the action budget (crates on the goal do nothing)
+- **Win:** Character reaches the goal tile within the action budget, having picked up every `required` collectible the level places (crates on the goal do nothing)
 - **Lose:** Every action's budget exhausted before the character reaches the goal → retry puzzle from start. A level is only lost once *no* action has uses left, so a spent Move doesn't end the puzzle while Flip still has a use.
 - **Session end:** Player completes a puzzle (win) or gives up; victory screen shows action count used vs. budget and offers next puzzle
 

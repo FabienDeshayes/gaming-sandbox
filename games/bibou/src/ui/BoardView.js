@@ -3,10 +3,13 @@ import {
   BOARD_X,
   BOARD_Y,
   CELL,
+  COLLECTIBLE_GLYPHS,
   COLORS,
   CONTROL_DEPTH,
   CRATE_TEXTURE_KEY,
   EDGE_ARROW_INSET,
+  GOAL_LOCKED_GLYPH,
+  GOAL_UNLOCKED_GLYPH,
 } from '../config.js';
 import { DIRECTIONS, RING, wrap } from '../core/rules.js';
 
@@ -48,7 +51,10 @@ export class BoardView {
   }
 
   // --- Rendering ---
-  drawBoard() {
+  // `goalLocked` starts the goal marker as 🔒 instead of ★ when the level has
+  // a `required` collectible outstanding (LEVEL_DESIGN.md §4) — setGoalLocked
+  // swaps it later as collectibles get picked up.
+  drawBoard(goalLocked = false) {
     const g = this.scene.add.graphics();
     for (let y = 0; y < this.size; y++) {
       for (let x = 0; x < this.size; x++) {
@@ -61,13 +67,21 @@ export class BoardView {
     }
     // Goal marker on top of the goal cell so it reads as the target.
     const goal = this.cellCenter(this.goalPos.x, this.goalPos.y);
-    this.scene.add
-      .text(goal.px, goal.py, '★', {
+    this.goalMarker = this.scene.add
+      .text(goal.px, goal.py, goalLocked ? GOAL_LOCKED_GLYPH : GOAL_UNLOCKED_GLYPH, {
         fontFamily: 'sans-serif',
         fontSize: '40px',
-        color: COLORS.goalMark,
+        color: goalLocked ? COLORS.objective : COLORS.goalMark,
       })
       .setOrigin(0.5);
+  }
+
+  // Swaps the goal marker between locked (🔒, a required collectible is still
+  // outstanding) and unlocked (★, ready to win). Called whenever a collectible
+  // is picked up — see PuzzleScene.updateObjective.
+  setGoalLocked(locked) {
+    this.goalMarker.setText(locked ? GOAL_LOCKED_GLYPH : GOAL_UNLOCKED_GLYPH);
+    this.goalMarker.setColor(locked ? COLORS.objective : COLORS.goalMark);
   }
 
   // Walls (LEVEL_DESIGN.md §1.2): a brick-coloured band on the edge shared by
@@ -149,6 +163,29 @@ export class BoardView {
       const c = this.cellCenter(entity.pos.x, entity.pos.y);
       this.entitySprites[i].setPosition(c.px, c.py);
     });
+  }
+
+  // Collectibles (LEVEL_DESIGN.md §3) are static markers, not part of the
+  // movable/pushable entity layer — one sprite per collectible, indexed in
+  // step with PuzzleScene.collectibles so removeCollectibleAt can find its
+  // sprite by the same index a pickup splices out of that array.
+  createCollectibles(collectibles) {
+    this.collectibleSprites = collectibles.map((c) => {
+      const p = this.cellCenter(c.pos.x, c.pos.y);
+      return this.scene.add
+        .text(p.px, p.py, COLLECTIBLE_GLYPHS[c.type] ?? '?', {
+          fontFamily: 'sans-serif',
+          fontSize: '34px',
+        })
+        .setOrigin(0.5)
+        .setDepth(1);
+    });
+    return this.collectibleSprites;
+  }
+
+  removeCollectibleAt(index) {
+    const [sprite] = this.collectibleSprites.splice(index, 1);
+    sprite?.destroy();
   }
 
   // --- Transitions ---

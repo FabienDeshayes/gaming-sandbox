@@ -77,19 +77,20 @@ Moving off one side of the board is therefore always legal *as far as the edge i
 |---|---|---|
 | Character | Entity | The thing the player is trying to get onto the goal tile. One per level (MVP). |
 | Crate | Entity | Any number per level, optional. Carries **no rules of its own beyond pushing**: every action displaces a crate exactly as it displaces the character, a crate on the goal tile does nothing, and Move can target a crate as readily as the character. |
+| Collectible | Entity position, static | Any number per level, optional (`entities.collectibles`, §6). Sits at a fixed tile like the goal does — Rotate/Shift/Flip never move it, and Move never pushes it or treats its tile as occupied, so any entity can step straight onto (or through, via a push chain) a collectible's tile. The moment the character's tile matches a collectible's, it's picked up and removed from the board. A collectible with `required: true` gates the win condition — see §4. Not yet pickable by crates; per the game's design notes, only the character (and, later, enemies) can collect one. |
 | Goal | Background | A single tile marked as the win condition. Static — part of the Background layer, not something that moves. |
 
-**No two entities may occupy the same tile.** When Move would displace an entity onto a tile another entity already occupies, the entity already there is pushed one step further in the same direction first — and if *that* tile is occupied too, the push cascades down the chain before anything actually moves. See §5.1 for exactly how a push chain resolves, including the case where the chain wraps all the way around the board.
+**No two entities may occupy the same tile.** When Move would displace an entity onto a tile another entity already occupies, the entity already there is pushed one step further in the same direction first — and if *that* tile is occupied too, the push cascades down the chain before anything actually moves. See §5.1 for exactly how a push chain resolves, including the case where the chain wraps all the way around the board. Collectibles sit outside this rule entirely — they're never part of the occupied/unoccupied check a push chain walks, so they can never block or get pushed.
 
 Pushing is a Move-only concern. Rotate, Shift, and Flip each displace every entity they affect in one simultaneous reshuffle — a permutation of positions, not a sequence of single-entity displacements — so two entities can never end up sharing a tile as a result of those actions, whatever the layout going in. Move is the only action where one entity moves into a tile that isn't moving along with it, so it's the only one that ever needs to push.
-
-This section anticipates a future **collectible** entity type that would be picked up rather than pushed or blocked — not yet implemented, see `TODO.md`. Every entity in the MVP (character, crate) blocks and gets pushed.
 
 Since entities never share a tile outside of an in-progress push resolution, a Move tap on a cell always targets the one entity present there; the character is still drawn above crates in `BoardView` for legibility, but that no longer needs to break a tie.
 
 ## 4. Win condition
 
-Checked automatically after every action resolves: if the Entity-layer cell holding the character has the same `(x, y)` as the Board-layer goal tile, the level is won.
+Checked automatically after every action resolves: if the Entity-layer cell holding the character has the same `(x, y)` as the Board-layer goal tile, **and** every `required` collectible the level places has already been picked up, the level is won.
+
+Reaching the goal while a required collectible is still outstanding does nothing — no win, no penalty, the action is still spent. The goal marker itself reflects this: it draws as 🔒 while any required collectible remains, and swaps to ★ the instant the last one is picked up (`BoardView.setGoalLocked`), so a player standing on a locked goal can see why nothing happened without reading the hint text. A level with no collectibles, or none marked `required`, behaves exactly as before this section existed — the goal is always ★ and any entry is a win.
 
 ## 5. Actions
 
@@ -214,7 +215,8 @@ Suggested shape for encoding a level, for whoever implements level loading:
   ],
   "entities": {
     "character": { "x": 1, "y": 2 },
-    "crates": [{ "x": 0, "y": 0 }]
+    "crates": [{ "x": 0, "y": 0 }],
+    "collectibles": [{ "x": 1, "y": 0, "type": "key", "required": true }]
   },
   "actionBudget": {
     "move": 2,
@@ -224,6 +226,8 @@ Suggested shape for encoding a level, for whoever implements level loading:
 ```
 
 `entities.crates` is optional — omit it for a level with no crates. Each entry is one crate's starting position (§3).
+
+`entities.collectibles` is optional — omit it for a level with no collectibles. Each entry is `{ x, y, type, required }` (§3): `type` selects the on-board glyph and the HUD label (`src/config.js`'s `COLLECTIBLE_GLYPHS`/`COLLECTIBLE_LABELS` — `"key"` is the only type so far); `required` (default `false` if omitted) marks whether the goal stays locked until that collectible is picked up (§4).
 
 `walls` is optional — omit it for a level with no walls. Each entry is a `[a, b]` pair of cardinally adjacent tile coordinates naming one wall (§1.2); `validateLevelWalls` (`src/core/rules.js`) rejects an invalid pair when the level loads.
 
@@ -409,3 +413,29 @@ Without the wall, the shortest path would be leftward through the wraparound sea
 3. Move `Right` → `(3, 2) → (4, 2)` = goal → **win**.
 
 Zero slack: 3 is the shortest path once the wraparound shortcut is blocked, and none of these three rightward moves cross the wall (it only ever blocks the specific `(0,2)`–`(4,2)` step).
+
+### Level 9
+
+Introduces collectibles (§3/§4): a `required` key the character must pick up before the goal will accept them.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5, no walls |
+| Character start | `(1, 2)` |
+| Collectibles | key at `(1, 0)`, `required: true` |
+| Goal | `(3, 2)` |
+| Available actions | Move only |
+| Action budget | Move: 6 |
+
+The goal sits directly 2 moves to the right of the start — the same shape as Level 1 — but the key sits off that line, so a player who ignores it and walks straight to the goal finds it locked (🔒, and the hint reads "Get the key first"): the 2 direct moves do nothing but spend the budget.
+
+**Intended solution:** collect the key first, then go to the goal — either order of axes works once at the key:
+
+1. Move `Up` → `(1, 2) → (1, 1)`.
+2. Move `Up` → `(1, 1) → (1, 0)` = key → picked up; the HUD objective updates and the goal marker flips to ★.
+3. Move `Right` → `(1, 0) → (2, 0)`.
+4. Move `Right` → `(2, 0) → (3, 0)`.
+5. Move `Down` → `(3, 0) → (3, 1)`.
+6. Move `Down` → `(3, 1) → (3, 2)` = goal, key already held → **win**.
+
+Zero slack: 6 is the shortest path that visits the key before the goal (2 moves up to the key, then 2 right + 2 down to the goal), and the budget doesn't leave room to try the direct 2-move path first and still recover — reaching the goal without the key wastes those moves rather than winning.

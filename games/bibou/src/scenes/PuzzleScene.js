@@ -1,10 +1,12 @@
 import {
   ACTION_LABELS,
+  BOARD_PX,
   BOARD_X,
   BUMP_TWEEN_MS,
   CARD_COUNT_Y,
   CARD_LAYOUTS,
   CARD_Y,
+  COLLECTIBLE_LABELS,
   COLORS,
   CRATE_TEXTURE_KEY,
   CRATE_TEXTURE_PATH,
@@ -63,6 +65,23 @@ export class PuzzleScene extends Phaser.Scene {
         pos: { ...pos },
       })),
     ];
+    // Collectibles (LEVEL_DESIGN.md §3): static pickups, not part of the
+    // movable/pushable entity layer above — they never block or get pushed,
+    // and Rotate/Shift/Flip don't move them. A `required` collectible must be
+    // picked up before the character can win by reaching the goal (§4);
+    // `requiredTypes` is fixed at level load so the objective text can still
+    // report "reach the goal" once every required type has been collected and
+    // removed from `this.collectibles`.
+    this.collectibles = (this.level.entities.collectibles ?? []).map((c) => ({
+      type: c.type,
+      required: c.required === true,
+      pos: { x: c.x, y: c.y },
+    }));
+    this.requiredTypes = [
+      ...new Set(this.collectibles.filter((c) => c.required).map((c) => c.type)),
+    ];
+    this.collectedTypes = new Set();
+
     this.goalPos = { ...this.level.background.goal };
     // Walls are their own layer, keyed by tile-pair edges rather than tile
     // coordinates (LEVEL_DESIGN.md §1.2). Levels are validated at load time
@@ -101,14 +120,18 @@ export class PuzzleScene extends Phaser.Scene {
     this.exitConfirmOpen = false;
 
     this.board = new BoardView(this, size, this.goalPos);
-    this.board.drawBoard();
+    this.board.drawBoard(this.requiredTypes.length > 0);
     this.board.drawWalls(this.level.walls);
     this.board.createEntities(this.entities);
     this.board.renderEntities(this.entities);
+    this.board.createCollectibles(this.collectibles);
 
     this.buildHud();
     this.buildActionCards();
     this.setupBoardInput();
+
+    // In case a level ever starts the character on a collectible's tile.
+    this.collectPickups();
   }
 
   // The character is the only entity the win condition cares about, and the
@@ -125,6 +148,17 @@ export class PuzzleScene extends Phaser.Scene {
       color: COLORS.text,
     });
     this.updateHud();
+    // Only shown when the level has at least one `required` collectible —
+    // levels without one (e.g. Levels 1-8) keep the plain HUD.
+    if (this.requiredTypes.length > 0) {
+      this.objectiveText = this.add.text(BOARD_X, 195, '', {
+        fontFamily: 'sans-serif',
+        fontSize: '18px',
+        color: COLORS.objective,
+        wordWrap: { width: BOARD_PX },
+      });
+      this.updateObjective();
+    }
     if (this.unlimited) {
       this.add
         .text(GAME_WIDTH - BOARD_X, 165, 'TEST', {
@@ -207,6 +241,43 @@ export class PuzzleScene extends Phaser.Scene {
   updateHud() {
     const budgetLabel = this.unlimited ? '∞' : this.budget;
     this.hudText.setText(`Actions: ${this.movesUsed} / ${budgetLabel}`);
+  }
+
+  // --- Collectibles ---
+  // Picks up every collectible on the character's current tile (there's only
+  // ever ~one per tile in practice, but this handles a stacked case too).
+  // Called after every action resolves (finishAction) so a pickup is never
+  // missed regardless of which action moved the character there.
+  collectPickups() {
+    let picked = false;
+    for (let i = this.collectibles.length - 1; i >= 0; i--) {
+      if (samePos(this.collectibles[i].pos, this.characterPos)) {
+        this.collectedTypes.add(this.collectibles[i].type);
+        this.board.removeCollectibleAt(i);
+        this.collectibles.splice(i, 1);
+        picked = true;
+      }
+    }
+    if (picked) this.updateObjective();
+  }
+
+  requirementsMet() {
+    return this.requiredTypes.every((t) => this.collectedTypes.has(t));
+  }
+
+  // Refreshes the objective line and the goal's locked/unlocked marker from
+  // which required collectibles are still outstanding.
+  updateObjective() {
+    if (!this.objectiveText) return;
+    const remaining = this.requiredTypes.filter((t) => !this.collectedTypes.has(t));
+    this.objectiveText.setText(
+      remaining.length > 0
+        ? `Objective: find the ${remaining
+            .map((t) => COLLECTIBLE_LABELS[t] ?? t)
+            .join(', ')} to unlock the goal`
+        : 'Objective: reach the goal'
+    );
+    this.board.setGoalLocked(remaining.length > 0);
   }
 
   // --- Action cards ---
@@ -418,8 +489,10 @@ export class PuzzleScene extends Phaser.Scene {
     this.clearSelection();
     this.board.renderEntities(this.entities);
     this.updateHud();
+    this.collectPickups();
 
-    if (samePos(this.characterPos, this.goalPos)) {
+    const onGoal = samePos(this.characterPos, this.goalPos);
+    if (onGoal && this.requirementsMet()) {
       // Let the "that worked" pulse play before the overlay covers the board.
       const idx = this.entities.findIndex((e) => e.kind === 'character');
       this.animating = true;
@@ -429,6 +502,13 @@ export class PuzzleScene extends Phaser.Scene {
       });
     } else if (!this.actionsLeft()) {
       this.showOverlay(false);
+    } else if (onGoal) {
+      // On the goal tile but a required collectible is still outstanding
+      // (LEVEL_DESIGN.md §4) — the goal marker itself already reads 🔒.
+      const missing = this.requiredTypes
+        .filter((t) => !this.collectedTypes.has(t))
+        .map((t) => COLLECTIBLE_LABELS[t] ?? t);
+      this.setHint(`Get the ${missing.join(', ')} first`);
     } else {
       this.setHint('Select an action to continue');
     }

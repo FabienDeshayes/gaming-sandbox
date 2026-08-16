@@ -73,6 +73,7 @@ export const COLORS = {
   disabled: '#1c1c1c', // action card with no budget left
   disabledText: '#666666',
   lose: '#ef9a9a',
+  objective: '#ffd54f', // level objective text, and the goal marker while locked
 
   // Action-card panels (BoardView-adjacent ui/actionCard.js): a stronger,
   // bordered "playable card" look distinct from the plain nav buttons.
@@ -89,3 +90,19 @@ export const COLORS = {
 
 export const CRATE_TEXTURE_KEY = 'crate';
 export const CRATE_TEXTURE_PATH = 'assets/sprites/crate.png';
+
+// Collectibles (DESIGN.md, LEVEL_DESIGN.md §3): static pickups on the board,
+// keyed by `type`. Glyph is the on-board marker; label is what shows in the
+// HUD objective line. Add an entry here whenever a new collectible type ships.
+export const COLLECTIBLE_GLYPHS = {
+  key: '🔑',
+};
+
+export const COLLECTIBLE_LABELS = {
+  key: 'key',
+};
+
+// Goal marker glyph, swapped based on whether any `required` collectible is
+// still outstanding (LEVEL_DESIGN.md §4).
+export const GOAL_LOCKED_GLYPH = '🔒';
+export const GOAL_UNLOCKED_GLYPH = '★';

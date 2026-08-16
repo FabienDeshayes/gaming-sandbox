@@ -10,21 +10,6 @@ export const DIRECTIONS = {
   Right: { x: 1, y: 0 },
 };
 
-// The 8 tiles surrounding a rotation center, listed in CLOCKWISE order starting
-// from the top-left. Rotate shifts each surrounding tile's contents one step
-// along this ring (clockwise, or the reverse for anticlockwise). See
-// LEVEL_DESIGN.md §5.3.
-export const RING = [
-  { x: -1, y: -1 }, // TL (0)
-  { x: 0, y: -1 }, // T  (1)
-  { x: 1, y: -1 }, // TR (2)
-  { x: 1, y: 0 }, // R  (3)
-  { x: 1, y: 1 }, // BR (4)
-  { x: 0, y: 1 }, // B  (5)
-  { x: -1, y: 1 }, // BL (6)
-  { x: -1, y: 0 }, // L  (7)
-];
-
 // The board is borderless and loops on both axes (LEVEL_DESIGN.md §2.1).
 export function wrap(value, size) {
   return ((value % size) + size) % size;
@@ -125,28 +110,6 @@ export function moveEntity(pos, direction, size) {
   };
 }
 
-// Rotate: step one place along the 8-tile ring around `center`. An entity that
-// isn't on the ring (including one sitting on the center itself) is unaffected.
-export function rotateEntity(pos, center, clockwise, size) {
-  let idx = -1;
-  for (let i = 0; i < RING.length; i++) {
-    const rx = wrap(center.x + RING[i].x, size);
-    const ry = wrap(center.y + RING[i].y, size);
-    if (rx === pos.x && ry === pos.y) {
-      idx = i;
-      break;
-    }
-  }
-  if (idx === -1) return { ...pos };
-
-  const n = RING.length;
-  const next = clockwise ? (idx + 1) % n : (idx - 1 + n) % n;
-  return {
-    x: wrap(center.x + RING[next].x, size),
-    y: wrap(center.y + RING[next].y, size),
-  };
-}
-
 // Shift: move one cell along row `index` (axis 'row') or column `index` (axis
 // 'column'), with wraparound. An entity on any other line is unaffected.
 export function shiftEntity(pos, axis, index, direction, size) {
@@ -243,28 +206,14 @@ export function applyMoveChain(entities, path) {
   });
 }
 
-// --- Shift / Rotate resolution (LEVEL_DESIGN.md §5.2/§5.3/§5.5) ------------
-// Shift and Rotate both move every entity on a fixed cycle of tiles (a
-// row/column, wrapping at the board edge; the 8-tile ring around a rotation
-// center) one step around that cycle. With no wall on the cycle this is a
-// simple permutation — nothing can ever collide, since every occupant moves
-// together — so `resolveCycleOutcome` short-circuits to that in the common
-// case. A wall breaks the cycle into one or more open arcs; the arc(s) that
-// end at the wall need the same destructible/collectible peeling Move uses,
-// scoped to just the entities running into that specific wall.
-
-// Builds the 8 ring positions around `center`, in the *travel* direction: the
-// occupant of `order[i]` moves to `order[i + 1]` (wrapping). Reversing the
-// normal clockwise `RING` order encodes anticlockwise travel (LEVEL_DESIGN.md
-// §5.2's `(idx - 1 + n) % n` step, just expressed as a walk direction instead
-// of an index delta).
-export function rotationOrder(center, clockwise, size) {
-  const ring = RING.map((o) => ({
-    x: wrap(center.x + o.x, size),
-    y: wrap(center.y + o.y, size),
-  }));
-  return clockwise ? ring : ring.slice().reverse();
-}
+// --- Shift resolution (LEVEL_DESIGN.md §5.2/§5.4) --------------------------
+// Shift moves every entity on a fixed cycle of tiles (a row or column, wrapping
+// at the board edge) one step around that cycle. With no wall on the cycle this
+// is a simple permutation — nothing can ever collide, since every occupant
+// moves together — so `resolveCycleOutcome` short-circuits to that in the
+// common case. A wall breaks the cycle into one or more open arcs; the arc(s)
+// that end at the wall need the same destructible/collectible peeling Move
+// uses, scoped to just the entities running into that specific wall.
 
 // Builds the `size` row/column positions, in the travel direction: the
 // occupant of `order[i]` moves to `order[i + 1]` (wrapping). Right/Down walk
@@ -278,8 +227,8 @@ export function shiftOrder(axis, index, direction, size) {
   return forward ? positions : positions.slice().reverse();
 }
 
-// Resolves one full trip around `order` (an 8-tile ring for Rotate, or a
-// `size`-tile row/column for Shift) into a list of outcomes, one per occupied
+// Resolves one full trip around `order` (a `size`-tile row or column, built by
+// `shiftOrder`) into a list of outcomes, one per occupied
 // tile: `{ entity, outcome: 'move', dest }` (moves to the next tile in
 // `order`), `{ entity, outcome: 'stay' }` (blocked, doesn't move, not
 // destroyed), `{ entity, outcome: 'destroy', dest }` (a crate crushed against
@@ -292,9 +241,9 @@ export function shiftOrder(axis, index, direction, size) {
 // it, in which case the character moves onto the collectible's tile, or a
 // collectible is pushed into a character that's stuck at the wall ahead of
 // *it*, in which case the character stays put and the collectible is the one
-// that's reported as having moved, via `characterStays: true`). An empty/
-// all-open cycle returns `[]` — still a legal, budget-costing no-op
-// (LEVEL_DESIGN.md §5.2/§5.3).
+// that's reported as having moved, via `characterStays: true`). A cycle with
+// nothing on it returns `[]` — a shift that changes nothing, which costs
+// nothing (LEVEL_DESIGN.md §5.2).
 export function resolveCycleOutcome(wallSet, entities, order) {
   const n = order.length;
   const occupantAt = (pos) => entities.find((e) => samePos(e.pos, pos));

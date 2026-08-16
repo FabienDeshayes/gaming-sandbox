@@ -22,7 +22,7 @@ Every game has a `DESIGN.md` (from `templates/GAME_DESIGN_DOC_TEMPLATE.md`) that
 
 Bibou is a turn-based grid puzzle game (move tiles to get a character to a goal). It's the most fleshed-out prototype and the one with a real test suite — read its docs before making changes:
 
-- `DESIGN.md` — mechanics, actions (Move/Rotate/Shift/Flip), win/lose conditions, source layout table.
+- `DESIGN.md` — mechanics, actions (free unlimited Move, plus budgeted Shift/Flip), win condition, source layout table.
 - `LEVEL_DESIGN.md` — coordinate system, precise action specs, per-level data.
 - `TESTING.md` — how to test a level, including a full runnable headless-browser harness.
 
@@ -49,14 +49,14 @@ npm test        # node tests/game.test.js
 | `main.js` | `Phaser.Game` config and scene registration — boot only |
 | `config.js` | Screen/board layout constants and the colour palette |
 | `data/levels.js` | Level definitions, the `LEVELS` list — where a new level goes |
-| `core/rules.js` | Pure grid math: `wrap`, `moveEntity`, `rotateEntity`, `shiftEntity`, `flipEntity`, wall logic (`isValidWallPair`, `validateLevelWalls`, `buildWallSet`, `isWallBetween`), and jam/push resolution (`resolveMoveChain`, `resolveCycleOutcome`). No Phaser, no scene state — importable straight into Node for tests. |
+| `core/rules.js` | Pure grid math: `wrap`, `moveEntity`, `shiftEntity`, `flipEntity`, wall logic (`isValidWallPair`, `validateLevelWalls`, `buildWallSet`, `isWallBetween`), and jam/push resolution (`resolveMoveChain`, `resolveCycleOutcome`). No Phaser, no scene state — importable straight into Node for tests. |
 | `ui/button.js` | Shared text button (nav/overlay) |
 | `ui/actionCard.js` | Bordered "playable card" control for the four action buttons |
 | `ui/BoardView.js` | Grid/goal/wall/entity rendering, cell↔pixel mapping, transient action-preview arrows. Holds no game state. |
 | `scenes/` | `TitleScene`, `LevelSelectScene`, `PuzzleScene` |
 | `assets/sprites/` | Image assets loaded via `this.load.image` |
 
-Board/entity model: a 5×5 grid with three layers — static Background (floor/goal), static Wall (edges between adjacent tiles, not tile-indexed), and movable Entity (character, crates, collectibles). Actions only ever touch the Entity layer. The board wraps (borderless). See `DESIGN.md` §4-6 for the full mechanics and `LEVEL_DESIGN.md` for exact coordinate/action semantics before changing `core/rules.js`.
+Board/entity model: a 5×5 grid with three layers — static Background (floor/goal), static Wall (edges between adjacent tiles, not tile-indexed), and movable Entity (character, crates, collectibles). Actions only ever touch the Entity layer. The board wraps (borderless). Move is free and unlimited (no card, no budget); only Shift and Flip are budgeted, and every level places one `required` key gating the goal — a level can be won or retried, never lost. See `DESIGN.md` §4-6 for the full mechanics and `LEVEL_DESIGN.md` for exact coordinate/action semantics before changing `core/rules.js`.
 
 ## Conventions across the repo
 

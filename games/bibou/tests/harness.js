@@ -229,13 +229,16 @@ export async function openGame(browser, port) {
         return !!s && s.scene.key === k && s.children.list.length > 0;
       }, key),
 
-    // Every label on screen: buttons, arrows, HUD, hints, overlays.
+    // Every label on screen: buttons, arrows, HUD, hints, overlays. Hidden
+    // objects are excluded — the Move arrows are parked with `visible = false`
+    // rather than destroyed while an action card owns the board (BoardView),
+    // and a player can't read or tap those.
     texts: () =>
       page.evaluate(() =>
         window.__game.scene
           .getScenes(true)
           .slice(-1)[0]
-          .children.list.filter((c) => c.text !== undefined)
+          .children.list.filter((c) => c.text !== undefined && c.visible)
           .map((c) => c.text)
       ),
 
@@ -248,7 +251,9 @@ export async function openGame(browser, port) {
       const pos = await page.evaluate(
         ({ label, nth }) => {
           const s = window.__game.scene.getScenes(true).slice(-1)[0];
-          const hits = s.children.list.filter((c) => c.text === label && c.input);
+          const hits = s.children.list.filter(
+            (c) => c.text === label && c.input && c.visible
+          );
           const o = hits[nth];
           if (!o) return null;
           const b = o.getBounds();
@@ -290,7 +295,11 @@ export async function openGame(browser, port) {
         return {
           char: { ...s.characterPos },
           crates: s.entities.filter((e) => e.kind === 'crate').map((e) => ({ ...e.pos })),
+          collectibles: s.entities
+            .filter((e) => e.kind === 'collectible')
+            .map((e) => ({ type: e.type, ...e.pos })),
           movesUsed: s.movesUsed,
+          actionsUsed: s.actionsUsed,
           budget: s.unlimited ? 'inf' : s.budget,
           remaining: Object.fromEntries(
             Object.entries(s.remaining).map(([k, v]) => [k, v === Infinity ? 'inf' : v])
@@ -314,12 +323,17 @@ export async function openGame(browser, port) {
         }));
       }),
 
-    // Waits out any in-flight transition tween so a read isn't taken mid-slide.
-    settle: () =>
-      page.waitForFunction(() => {
+    // Waits out any in-flight transition tween so a read isn't taken mid-slide,
+    // then lets one more frame run: controls rebuilt as an action resolves only
+    // join Phaser's hit-test list on the following frame, so clicking in the
+    // same frame the tween ends would race them.
+    settle: async () => {
+      await page.waitForFunction(() => {
         const s = window.__game.scene.getScene('PuzzleScene');
         return !s || s.animating === false;
-      }),
+      });
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
+    },
   };
 
   return game;

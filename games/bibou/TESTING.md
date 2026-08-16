@@ -38,7 +38,7 @@ deliberately doesn't try to cover exhaustively.
 
 ## Two levels of checking
 
-1. **Rule math only (fast, no browser).** Move, Rotate, Shift, and Flip are pure
+1. **Rule math only (fast, no browser).** Move, Shift, and Flip are pure
    coordinate math living in `src/core/rules.js` (see `LEVEL_DESIGN.md` §5). You can
    import that module straight into Node and verify a solution's arithmetic without
    launching anything — good for sanity-checking a new level's intended solution
@@ -84,24 +84,27 @@ it rather than from scratch.
 ## Rule-math check
 
 Import the game's own rules — don't re-implement them, or you'll be testing your
-copy instead of the game. Rotate shifts the 8 tiles around a center one step along
-the clockwise ring `TL→T→TR→R→BR→B→BL→L` (indices 0..7). Every function takes and
-returns a plain `{x, y}`, and an entity an action doesn't touch (off the rotation
-ring, on another row) comes back unchanged.
+copy instead of the game. Every function takes and returns a plain `{x, y}`, and an
+entity an action doesn't touch (on another row, or on a flip's fixed line) comes
+back unchanged.
 
-Write the check as an `.mjs` file so Node treats it as ESM:
+Importing `src/data/levels.js` alongside them is often the fastest way to check a
+new level: the level objects are plain data, so a scratch script can build the
+entity list exactly as `PuzzleScene.create` does and replay the intended solution
+against the real rules before any UI is involved.
+
+Write the check as a plain `.js` file — `package.json` sets `"type": "module"`, so Node already treats it as ESM:
 
 ```js
-// check.mjs — run from games/bibou with: node check.mjs
+// check.js — run from games/bibou with: node check.js
+// (package.json sets "type": "module", so a plain .js file here is ESM.)
 import {
   moveEntity,
-  rotateEntity,
   shiftEntity,
   flipEntity,
   resolveMoveChain,
   applyMoveChain,
   resolveCycleOutcome,
-  rotationOrder,
   shiftOrder,
   buildWallSet,
 } from './src/core/rules.js';
@@ -110,138 +113,89 @@ const N = 5;
 const eq = (a, b, label) =>
   console.log(label, a, a.x === b.x && a.y === b.y ? 'OK' : `WRONG (want ${JSON.stringify(b)})`);
 
-// Level 2: (1,2) --CW around (2,3)--> (2,2) --CW around (1,3)--> (2,3) = goal
-let c = { x: 1, y: 2 };
-c = rotateEntity(c, { x: 2, y: 3 }, true, N);
-c = rotateEntity(c, { x: 1, y: 3 }, true, N);
-eq(c, { x: 2, y: 3 }, 'L2:');
+// Wraparound (LEVEL_DESIGN.md §2.1) — how Level 2's key is reached.
+eq(moveEntity({ x: 4, y: 2 }, 'Right', N), { x: 0, y: 2 }, 'wrap:');
 
-// Level 3: (2,3) --row-3 Right--> (3,3) --column-3 Up--> (3,2) = goal
-let s = { x: 2, y: 3 };
-s = shiftEntity(s, 'row', 3, 'Right', N);
-s = shiftEntity(s, 'column', 3, 'Up', N);
-eq(s, { x: 3, y: 2 }, 'L3:');
+// Shift moves only the addressed line (§5.2).
+eq(shiftEntity({ x: 2, y: 3 }, 'row', 3, 'Right', N), { x: 3, y: 3 }, 'shift on row:');
+eq(shiftEntity({ x: 2, y: 1 }, 'row', 3, 'Right', N), { x: 2, y: 1 }, 'shift other row:');
 
-// Level 4: (1,1) --column flip--> (3,1) --row flip--> (3,3) = goal.
-// `axis` is the mirror line, so 'column' flips x and 'row' flips y.
-let f = { x: 1, y: 1 };
-f = flipEntity(f, 'column', N);
-f = flipEntity(f, 'row', N);
-eq(f, { x: 3, y: 3 }, 'L4:');
-
-// Flip is its own inverse, and the middle line is a fixed point (§5.4) — the
-// two ways a Flip level gets lost.
+// Flip is its own inverse, and the middle line is a fixed point (§5.3) — the
+// fixed point is the whole puzzle in Level 4, where the sealed key sits at
+// (2,0), on the middle column.
 eq(flipEntity(flipEntity({ x: 1, y: 1 }, 'row', N), 'row', N), { x: 1, y: 1 }, 'flip x2:');
-eq(flipEntity({ x: 0, y: 2 }, 'row', N), { x: 0, y: 2 }, 'mid row fixed:');
+eq(flipEntity({ x: 2, y: 0 }, 'column', N), { x: 2, y: 0 }, 'L4 wrong axis:');
+eq(flipEntity({ x: 2, y: 0 }, 'row', N), { x: 2, y: 4 }, 'L4 right axis:');
 
-// Level 5: one Flip + one Move, either order
-let m = { x: 1, y: 2 };
-m = flipEntity(m, 'column', N);
-m = moveEntity(m, 'Down', N);
-eq(m, { x: 3, y: 3 }, 'L5:');
+// A wall makes the step across it illegal (§1.2) — Level 2's key is sealed off
+// from three sides so only the wraparound edge is left.
+const l2walls = buildWallSet([
+  [{ x: 0, y: 1 }, { x: 0, y: 2 }],
+  [{ x: 0, y: 2 }, { x: 0, y: 3 }],
+  [{ x: 0, y: 2 }, { x: 1, y: 2 }],
+]);
+console.log(
+  'L2 direct step blocked:',
+  resolveMoveChain(l2walls, [{ kind: 'character', pos: { x: 1, y: 2 } }], { x: 1, y: 2 }, 'Left', N)
+    .kind === 'illegal'
+    ? 'OK'
+    : 'WRONG'
+);
 
-// Wraparound (LEVEL_DESIGN.md §2.1)
-eq(moveEntity({ x: 4, y: 0 }, 'Right', N), { x: 0, y: 0 }, 'wrap:');
-
-// Level 6: full-loop push (LEVEL_DESIGN.md §5.1.1/§7) — row y=2 completely
-// full, character (1,2) moves Right and the whole row rotates by one.
-// resolveMoveChain takes a wall lookup (buildWallSet), not the raw level —
-// no walls here, so an empty set.
+// Full-loop push (§5.1.1 case 3): a row completely full rotates by one rather
+// than deadlocking. No level relies on this today, but the rule is live.
 const noWalls = buildWallSet([]);
-const l6entities = [
+const packed = [
   { kind: 'character', pos: { x: 1, y: 2 } },
   { kind: 'crate', pos: { x: 0, y: 2 } },
   { kind: 'crate', pos: { x: 2, y: 2 } },
   { kind: 'crate', pos: { x: 3, y: 2 } },
   { kind: 'crate', pos: { x: 4, y: 2 } },
 ];
-const l6result = resolveMoveChain(noWalls, l6entities, { x: 1, y: 2 }, 'Right', N);
-console.log(
-  'L6 chain:',
-  l6result,
-  l6result.kind === 'loop' && l6result.path.length === 6
-    ? 'OK'
-    : 'WRONG (expected a 6-tile loop back to start)'
-);
-applyMoveChain(l6entities, l6result.path);
-eq(l6entities[0].pos, { x: 2, y: 2 }, 'L6 char (goal):');
-eq(l6entities[1].pos, { x: 1, y: 2 }, 'L6 crate 0,2 ->:');
-eq(l6entities[2].pos, { x: 3, y: 2 }, 'L6 crate 2,2 ->:');
-eq(l6entities[3].pos, { x: 4, y: 2 }, 'L6 crate 3,2 ->:');
-eq(l6entities[4].pos, { x: 0, y: 2 }, 'L6 crate 4,2 ->:');
+const loop = resolveMoveChain(noWalls, packed, { x: 1, y: 2 }, 'Right', N);
+console.log('full-loop push:', loop.kind === 'loop' && loop.path.length === 6 ? 'OK' : 'WRONG');
+applyMoveChain(packed, loop.path);
+eq(packed[0].pos, { x: 2, y: 2 }, 'loop char ->:');
 
-// Level 7: a wall directly between the character and the goal blocks the
-// 1-move direct path; the 3-move detour around it is unaffected.
-const l7walls = buildWallSet([[{ x: 1, y: 2 }, { x: 2, y: 2 }]]);
-const l7entities = [{ kind: 'character', pos: { x: 1, y: 2 } }];
-console.log(
-  'L7 direct move blocked:',
-  resolveMoveChain(l7walls, l7entities, { x: 1, y: 2 }, 'Right', N).kind === 'illegal'
-    ? 'OK'
-    : 'WRONG'
-);
-let w = { x: 1, y: 2 };
-w = moveEntity(w, 'Up', N);
-w = moveEntity(w, 'Right', N);
-w = moveEntity(w, 'Down', N);
-eq(w, { x: 2, y: 2 }, 'L7 detour:');
-
-// Level 8: a wraparound wall on the x=0/x=4 seam of row y=2 blocks the wrap
-// shortcut; the long way around the row is unaffected.
-const l8walls = buildWallSet([[{ x: 0, y: 2 }, { x: 4, y: 2 }]]);
-const l8entities = [{ kind: 'character', pos: { x: 0, y: 2 } }];
-console.log(
-  'L8 wraparound move blocked:',
-  resolveMoveChain(l8walls, l8entities, { x: 0, y: 2 }, 'Left', N).kind === 'illegal'
-    ? 'OK'
-    : 'WRONG'
-);
-
-// Rotate/Shift resolve a wall-blocked entity the same way Move does
-// (LEVEL_DESIGN.md §5.5): a lone character with nothing to sacrifice just
-// stays put (the whole action is illegal, free) — see the L10/L11 checks
-// below for the destructible-crate case that actually moves the budget.
-const ringWall = buildWallSet([[{ x: 2, y: 1 }, { x: 3, y: 1 }]]); // T -> TR step
-const ringOutcomes = resolveCycleOutcome(
-  ringWall,
-  [{ kind: 'character', pos: { x: 2, y: 1 } }],
-  rotationOrder({ x: 2, y: 2 }, true, N)
-);
-console.log(
-  'Rotate blocked by ring-step wall:',
-  ringOutcomes.every((o) => o.outcome === 'stay') ? 'OK' : 'WRONG'
-);
-const shiftWall = buildWallSet([[{ x: 2, y: 2 }, { x: 3, y: 2 }]]);
-const shiftOutcomes = resolveCycleOutcome(
-  shiftWall,
-  [{ kind: 'character', pos: { x: 2, y: 2 } }],
-  shiftOrder('row', 2, 'Right', N)
-);
-console.log('Shift blocked by wall:', shiftOutcomes.every((o) => o.outcome === 'stay') ? 'OK' : 'WRONG');
-
-// Level 10/11: a crate crushed against a collectible stuck at a wall is
-// destroyed instead of the whole action being rejected (§5.5) — the exact
-// scenario both levels are built around, checked here via Move and Shift.
-const l10walls = buildWallSet([[{ x: 2, y: 2 }, { x: 3, y: 2 }]]);
-const l10entities = [
-  { kind: 'character', pos: { x: 0, y: 2 } },
-  { kind: 'crate', pos: { x: 1, y: 2 } },
-  { kind: 'collectible', type: 'key', pos: { x: 2, y: 2 } },
+// Level 3: a crate crushed against a wall is destroyed rather than the whole
+// move being rejected (§5.4). `victim.contains` is the key it drops.
+const l3walls = buildWallSet([[{ x: 2, y: 2 }, { x: 3, y: 2 }]]);
+const l3 = [
+  { kind: 'character', pos: { x: 1, y: 2 } },
+  { kind: 'crate', pos: { x: 2, y: 2 }, contains: { type: 'key', required: true } },
 ];
-const l10result = resolveMoveChain(l10walls, l10entities, { x: 0, y: 2 }, 'Right', N);
+const crush = resolveMoveChain(l3walls, l3, { x: 1, y: 2 }, 'Right', N);
 console.log(
-  'L10 crate crushed via Move:',
-  l10result.kind === 'destroy' && l10result.victim.kind === 'crate' ? 'OK' : 'WRONG'
+  'L3 crate crushed via Move:',
+  crush.kind === 'destroy' && crush.victim.contains?.type === 'key' ? 'OK' : 'WRONG'
 );
-const l11outcomes = resolveCycleOutcome(l10walls, l10entities, shiftOrder('row', 2, 'Right', N));
-const l11crate = l11outcomes.find((o) => o.entity.kind === 'crate');
-console.log('L11 crate crushed via Shift:', l11crate?.outcome === 'destroy' ? 'OK' : 'WRONG');
+
+// Level 5: the corridor walls run perpendicular to the shift, so a Shift of the
+// crate's column crushes it — the one thing Move can never do on that board.
+const corridor = [];
+for (let x = 0; x < N; x++) {
+  corridor.push([{ x, y: 1 }, { x, y: 2 }]);
+  corridor.push([{ x, y: 2 }, { x, y: 3 }]);
+}
+const l5crate = { kind: 'crate', pos: { x: 2, y: 2 }, contains: { type: 'key', required: true } };
+const l5 = resolveCycleOutcome(buildWallSet(corridor), [l5crate], shiftOrder('column', 2, 'Down', N));
+console.log('L5 crate crushed via Shift:', l5[0]?.outcome === 'destroy' ? 'OK' : 'WRONG');
+
+// ... and that Move alone can't: pushing along the corridor just slides it, and
+// the character can't enter the corridor from above to push down.
+const l5move = resolveMoveChain(
+  buildWallSet(corridor),
+  [{ kind: 'character', pos: { x: 2, y: 1 } }, l5crate],
+  { x: 2, y: 1 },
+  'Down',
+  N
+);
+console.log('L5 Move cannot reach the crate:', l5move.kind === 'illegal' ? 'OK' : 'WRONG');
 ```
 
 > `package.json` sets `"type": "module"`, so a plain `.js` file in this directory
-> is already ESM and can `import` the game's modules directly — the `.mjs`
-> extension isn't required, and a scratch file written as CommonJS (`require`)
-> will *not* run here.
+> is already ESM and can `import` the game's modules directly — a scratch file
+> written as CommonJS (`require`) will *not* run here.
 
 ## Browser smoke test
 
@@ -262,33 +216,53 @@ cell, and read `characterPos` / the HUD out of the live `PuzzleScene`. Adapt the
   `getBoundingClientRect()` and the ratio `rect.width / game.scale.width`.
 - **Board cells.** `BOARD_X = 40`, `BOARD_Y = 230`, `CELL = 80` (all from
   `src/config.js`); a cell center in design space is `(40 + x*80 + 40, 230 + y*80 + 40)`.
+- **Move needs no card.** There is no `Move` button to click: the four direction
+  arrows (`▲▼◀▶`) sit around the character whenever no action card is selected, so a
+  test walks by clicking those directly, or by swiping. Move also costs nothing, so
+  `scene.movesUsed` is a tally and `scene.actionsUsed`/`scene.remaining` are what
+  the budget assertions look at.
+- **The Move arrows are hidden, not destroyed,** while an action card owns the
+  board (`BoardView.hideMoveArrows`), so a lookup by glyph must filter on
+  `visible` — otherwise a parked `▶` collides with Shift's row arrows and throws
+  the `nth` index off. `tests/harness.js`'s `texts()` and `clickText()` both do
+  this, which is also the honest model: a player can't tap what isn't drawn.
 - **Shift arrows share glyphs.** Each row's inward arrows are `▶` (left edge) and
   `◀` (right edge), and each column's are `▼` (top) and `▲` (bottom) — so a glyph
   lookup by text alone is ambiguous. Filter `children.list` for the glyph and index
   into the result; the arrows are created row 0..4 then column 0..4, so the Nth `▶`
-  shifts row N right and the Nth `▲` shifts column N up. Flip's two arrows (`↔`
+  shifts row N right and the Nth `▼` shifts column N down. Flip's two arrows (`↔`
   above the middle column, `↕` left of the middle row) are unique, so a plain
   lookup by glyph works for those.
+- **A control is tappable one frame after it's created.** Phaser folds a newly
+  interactive object into its hit-test list on the following frame, so a click
+  fired in the same frame an action resolves lands on nothing. `harness.js`'s
+  `settle()` waits out the tween *and* one `requestAnimationFrame` for this
+  reason; a hand-rolled driver that clicks the instant `animating` goes false
+  will silently drop roughly every other input.
 - **The level list scrolls.** `LevelSelectScene` gives every level a fixed-height
-  row (button + description) and scrolls instead of shrinking to fit, so only the
-  first several levels are within the tappable viewport when the scene loads —
-  `clickText('Level 4')` above works because Level 4 happens to start on-screen,
-  but a level further down needs the list scrolled first. `tests/harness.js`
-  exposes `scrollToLevel(id)` for this (jumps straight to a level's row rather
-  than simulating a drag); the standalone snippet below doesn't reproduce it, so
-  copy that helper too if you're checking a level below the fold.
-- **Reading text.** Buttons, arrows (`▲◀▶▼`, `↺`, `↻`, `↔`, `↕`), the HUD, the
-  per-card `"N left"` counters, and the win/lose overlay are all Phaser text
-  objects — enumerate `scene.children.list` and read `.text`. `"You win!"` present
-  ⇒ the level was solved; `"Out of actions"` ⇒ every action's budget ran out.
+  row (button + description) and scrolls instead of shrinking to fit, so a level
+  far enough down the list needs the list scrolled before its row is in the
+  tappable viewport. `tests/harness.js` exposes `scrollToLevel(id)` for this (jumps
+  straight to a level's row rather than simulating a drag); the standalone snippet
+  below doesn't reproduce it, so copy that helper too if you add enough levels to
+  push one below the fold.
+- **Reading text.** Buttons, arrows (`▲◀▶▼`, `↔`, `↕`), the top-right `✕`/`↻`
+  buttons, the HUD, the per-card `"N left"` counters, and the win overlay are all
+  Phaser text objects — enumerate `scene.children.list` and read `.text` (filtering
+  on `visible`, above). `"You win!"` present ⇒ the level was solved. There is **no
+  lose overlay**: Move is free, so a level can only be won or restarted (`↻`).
 - **Entity state.** `PuzzleScene.entities` is the entity layer: an array of
-  `{ kind: 'character' | 'crate', pos: {x, y} }`. `scene.characterPos` is a getter
-  onto the character's `pos`, so existing checks keep working, and crates read as
-  `s.entities.filter(e => e.kind === 'crate')`.
+  `{ kind: 'character' | 'crate' | 'collectible', pos: {x, y} }`.
+  `scene.characterPos` is a getter onto the character's `pos`; crates and
+  collectibles read as `s.entities.filter(e => e.kind === ...)`. A crate carrying a
+  key holds it in `crate.contains` and is *not* on the board as a collectible until
+  the crate is destroyed — so "the key appeared" is asserted as a new entry in the
+  collectibles list, on the tile the crate died on.
 - **Per-action budgets.** `scene.remaining` maps each offered action to its own
   remaining uses (`Infinity` in Test mode, which serializes to `null` through
   `page.evaluate` — compare inside the browser context if you need the value).
-  `scene.budget` is the sum of all pools, which is what the HUD counts against.
+  Move is never in it. `scene.budget` is the sum of all pools, and is `0` on a
+  level that offers no actions at all.
 
 ### Runnable harness
 
@@ -403,21 +377,18 @@ const server = http.createServer((req, res) => {
   const texts = () => page.evaluate(() =>
     window.__game.scene.getScenes(true).slice(-1)[0].children.list.filter((c) => c.text !== undefined).map((c) => c.text));
 
-  // --- drive the level (example: Level 4, normal budget, solve with one flip per axis) ---
+  // --- drive the level (example: Level 4 — one row flip frees the sealed key) ---
   await clickText('Start');          // use 'Test' instead for unlimited budgets
   await clickText('Level 4');
   console.log('start:', await state());
 
   await clickText('Flip');
-  await clickText('↔');              // mirror across the middle column
-  console.log('after f1:', await state());   // char (1,1) -> (3,1), crates moved too
-
-  await clickText('Flip');
   await swipe(2, 2, 0, 60);          // vertical swipe = mirror across the middle row
-  console.log('after f2:', await state());
+  console.log('after flip:', await state());  // key (2,0) -> (2,4), crate (1,1) -> (1,3)
 
-  // Level 2 for comparison (tap-a-target action):
-  //   await clickText('Rotate'); await clickCell(2, 3); await clickText('↻');
+  // Walking needs no card at all — just tap the arrows around the character.
+  for (const glyph of ['▼', '▼', '▶', '▶']) await clickText(glyph);
+  console.log('at the key:', await state());
 
   const end = await texts();
   const won = end.includes('You win!');
@@ -433,47 +404,53 @@ const server = http.createServer((req, res) => {
 ## A good level test covers
 
 - **Setup:** character starts on the level's `entities.character`, crates on
-  `entities.crates`, goal renders on `background.goal`, HUD shows
-  `Actions: 0 / <sum of budgets>`, and each card shows its own `"N left"` (or `∞`
-  in Test mode).
-- **Intended solution wins:** running the documented steps ends with `"You win!"`
-  and `movesUsed` equal to the intended solution length.
-- **Budget is tight where intended:** if the level is meant to have no slack (every
-  level so far does), an extra/wrong action should trigger `"Out of actions"` rather
-  than leaving a second valid path — drive a deliberately wrong first action and
-  assert the loss. For Flip levels the natural wrong path is flipping the same axis
-  twice, which returns the board to its starting state.
+  `entities.crates`, goal renders on `background.goal`, HUD shows `Moves: 0` (plus
+  `Actions: 0 / <sum of budgets>` when the level offers any), and each card shows
+  its own `"N left"` (or `∞` in Test mode). A level with `actionBudget: {}` must
+  show no cards at all.
+- **The key gates the goal:** every level places one `required` key. Assert the
+  objective line names it from the start — *including* when it's sealed inside a
+  crate and not yet on the board — that reaching the goal without it leaves
+  `gameOver` false with the `"Get the ... first"` hint, and that the objective
+  flips to `"Objective: reach the goal"` once it's collected.
+- **Intended solution wins:** running the documented steps ends with `"You win!"`.
+- **Move is free and never runs out:** walking a level far past any old budget must
+  leave `gameOver` false, spend nothing from `scene.remaining`, and keep counting
+  in `movesUsed`. A blocked move isn't even counted.
+- **The right action is the puzzle:** each level's budgeted action has exactly one
+  useful target. Assert the *wrong* one is either free (a no-op or wall-blocked
+  Shift leaves `remaining` untouched — see Level 5) or genuinely wasteful (Level
+  4's column flip leaves the key sealed), and that `↻` restores the level to its
+  opening state either way.
 - **Budgets are spent per action type:** after using one action, assert that only
   *its* entry in `scene.remaining` dropped. A spent action's card must grey out and
   stop responding (selecting it sets the hint `"No <Action> actions left"` and does
-  not increment `movesUsed`), while the other cards still work. The level must not
-  end until every pool is empty.
+  not increment `actionsUsed`), while Move keeps working regardless.
 - **Crates move with the board:** on a level with crates, assert their positions
-  after Rotate/Shift/Flip. Move always targets the character — there is no way to
-  select a crate directly.
-- **Pushing resolves correctly:** on a level where a Move's destination is occupied,
-  assert every entity in the chain shifted by one, not just the character — including
-  the full-loop case (Level 6, `LEVEL_DESIGN.md` §5.1.1/§7), where a fully-occupied
-  row/column rotates by one instead of the move being rejected.
-- **Walls block correctly, and only where drawn:** on a level with walls (Levels 7–8,
-  `LEVEL_DESIGN.md` §1.2/§7), assert the blocked direction stays illegal (hint changes,
-  `movesUsed`/`scene.remaining` don't change, entity doesn't move) and that the
-  documented detour still succeeds. For the wraparound case (Level 8), also assert
-  the *other* direction across the same seam (where no wall was placed) still works.
-- **Collectibles and destructible crates (Levels 9–11, `LEVEL_DESIGN.md` §3/§4/§5.5):**
-  on a level with a `required` collectible, assert reaching the goal before it's
-  collected does *not* win (`gameOver` stays `false`) and the HUD's objective text
-  updates once it is. On a level built around a wall-stuck collectible, assert a
-  crate crushed against it is removed from `s.crates` while the collectible stays,
-  and that *nothing else* in that jam moves that action (`s.char` unchanged) — check
-  this through both Move and Shift, since they're separate code paths
+  after Shift/Flip. Move always targets the character — there is no way to select a
+  crate directly.
+- **Pushing resolves correctly:** on a level where a Move's destination is occupied
+  (Levels 3 and 5), assert every entity in the chain shifted by one, not just the
+  character — including the full-loop case (`LEVEL_DESIGN.md` §5.1.1 case 3), where
+  a fully-occupied row/column rotates by one instead of the move being rejected. No
+  level relies on the full loop today, so cover it as rule math.
+- **Walls block correctly, and only where drawn:** on a level with walls, assert the
+  blocked direction stays illegal (hint changes, `movesUsed`/`scene.remaining` don't
+  change, entity doesn't move) and that the documented way round still succeeds. For
+  the wraparound case (Level 2, `LEVEL_DESIGN.md` §1.2/§2.1), also assert the seam
+  where *no* wall was placed still works — that's the level's whole solution.
+- **Destructible crates and what they drop (`LEVEL_DESIGN.md` §3/§5.4):** assert a
+  crushed crate is removed from `s.crates`, that *nothing else* in that jam moves
+  that action (`s.char` unchanged), and — for a crate with `contains` — that a new
+  collectible appears in `s.collectibles` on the tile the crate died on. Check the
+  crush through both Move and Shift, since they're separate code paths
   (`resolveMoveChain` vs. `resolveCycleOutcome`) sharing the same rule.
-- **Both input styles:** exercise arrow taps *and* swipes (cardinal swipes for Move;
-  right = clockwise / left = anticlockwise for Rotate; horizontal = column flip /
-  vertical = row flip for Flip), since they're separate code paths.
+- **Both input styles:** exercise arrow taps *and* swipes (cardinal swipes for
+  Move, with nothing selected; horizontal = column flip / vertical = row flip for
+  Flip), since they're separate code paths.
 - **Test-mode selection:** from the title, `Test → Level N` runs that level with
   every pool unlimited (HUD shows `∞`, each card shows `∞ left`, a `TEST` badge
-  appears, and the lose condition never fires).
+  appears) — which is how a level's wrong turns get exercised without restarting.
 - **Transitions leave sprites as they found them:** an animation that squashes or
   grows a sprite (Flip, the goal pulse) must restore its *own* resting scale, not a
   hardcoded 1 — the crate is a 16px texture shown at 48px, so it rests at scale 3.

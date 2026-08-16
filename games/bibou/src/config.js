@@ -17,29 +17,29 @@ export const SWIPE_THRESHOLD = 24;
 // a pulse plays out-and-back within it, a wraparound slide splits it between
 // its exit and entry halves.
 export const MOVE_TWEEN_MS = 160; // one entity, one cell, straight slide
-export const ROTATE_TWEEN_MS = 220; // every ring entity slides at once
 export const FLIP_TWEEN_MS = 260; // squash to 0 (the "mirror"), then back
 export const BUMP_TWEEN_MS = 240; // blocked move: nudge toward the wall, spring back
 export const GOAL_PULSE_MS = 340; // reaching the goal: grow, then settle back
 export const CRUSH_NUDGE_MS = 160; // a crushed crate: nudge toward what it hit, spring back
 export const EXPLOSION_TWEEN_MS = 260; // a crushed crate: fragments burst outward and fade
 export const PICKUP_TWEEN_MS = 220; // a collected collectible: grow and fade in place
+export const SPAWN_TWEEN_MS = 260; // a collectible revealed by a broken crate: pops into place
 
 // Distance from the board edge, in px, at which the edge arrows are drawn —
 // Shift's inward-pointing row/column arrows and Flip's two mirror arrows (see
-// BoardView.showShiftArrows / showFlipControls). See LEVEL_DESIGN.md §5.3/§5.4.
+// BoardView.showShiftArrows / showFlipControls). See LEVEL_DESIGN.md §5.2/§5.3.
 export const EDGE_ARROW_INSET = 20;
 
+// The budgeted actions only. Move isn't here on purpose: it's free and always
+// available, so it never gets a card (LEVEL_DESIGN.md §5.1).
 export const ACTION_LABELS = {
-  move: 'Move',
-  rotate: 'Rotate',
   shift: 'Shift',
   flip: 'Flip',
 };
 
-// Card row geometry, picked by how many action cards a level shows. A level can
-// offer up to four actions, and four full-size cards don't fit across 480px, so
-// the cards shrink as the row fills up. Keyed by card count.
+// Card row geometry, picked by how many action cards a level shows. Levels
+// currently offer at most two, but four full-size cards don't fit across 480px,
+// so the cards shrink as the row fills up. Keyed by card count.
 export const CARD_LAYOUTS = {
   1: { spacing: 170, fontSize: 32, padX: 24 },
   2: { spacing: 170, fontSize: 32, padX: 24 },
@@ -50,7 +50,7 @@ export const CARD_LAYOUTS = {
 export const CARD_Y = 720;
 export const CARD_COUNT_Y = 672; // per-action budget counter, above its card
 
-// Depth every transient control (direction/rotate/shift/flip arrows and their
+// Depth every transient control (direction/shift/flip arrows and their
 // highlight outlines, BoardView's `controls` array) is drawn at, so they
 // always sit above the board, walls, and entities regardless of draw order.
 export const CONTROL_DEPTH = 50;
@@ -64,7 +64,7 @@ export const COLORS = {
   buttonHover: '#3a3d40',
   accent: '#1565c0', // selected card, arrows, ring outlines
   accentHex: 0x1565c0,
-  highlight: '#ffb74d', // test mode, rotation center outline
+  highlight: '#ffb74d', // test mode badge
   highlightHex: 0xffb74d,
   floorHex: 0x17191c,
   gridLineHex: 0x2a2d31,

@@ -22,12 +22,11 @@ import {
   applyMoveChain,
   buildWallSet,
   flipEntity,
-  isRotateBlocked,
-  isShiftBlocked,
+  resolveCycleOutcome,
   resolveMoveChain,
-  rotateEntity,
+  rotationOrder,
   samePos,
-  shiftEntity,
+  shiftOrder,
 } from '../core/rules.js';
 import { BoardView } from '../ui/BoardView.js';
 import { createActionCard } from '../ui/actionCard.js';
@@ -55,30 +54,33 @@ export class PuzzleScene extends Phaser.Scene {
     const size = this.level.gridSize;
     this.size = size;
 
-    // The entity layer: the character plus any crates, in render order. No two
-    // entities may share a tile — Move pushes whatever's in the way — and only
-    // the character can win (LEVEL_DESIGN.md §3).
+    // The entity layer: character, crates, and collectibles, in render order.
+    // No two entities may share a tile. Move/Shift/Rotate push whatever's in
+    // the way — except a collectible, which is an indestructible obstacle
+    // that never blocks the character (it's picked up instead) and can crush
+    // a crate that gets pushed into it and can't move it out of the way; see
+    // LEVEL_DESIGN.md §3/§5.5. Only the character can win.
     this.entities = [
       { kind: 'character', pos: { ...this.level.entities.character } },
       ...(this.level.entities.crates ?? []).map((pos) => ({
         kind: 'crate',
         pos: { ...pos },
       })),
+      ...(this.level.entities.collectibles ?? []).map((c) => ({
+        kind: 'collectible',
+        type: c.type,
+        required: c.required === true,
+        pos: { x: c.x, y: c.y },
+      })),
     ];
-    // Collectibles (LEVEL_DESIGN.md §3): static pickups, not part of the
-    // movable/pushable entity layer above — they never block or get pushed,
-    // and Rotate/Shift/Flip don't move them. A `required` collectible must be
-    // picked up before the character can win by reaching the goal (§4);
-    // `requiredTypes` is fixed at level load so the objective text can still
-    // report "reach the goal" once every required type has been collected and
-    // removed from `this.collectibles`.
-    this.collectibles = (this.level.entities.collectibles ?? []).map((c) => ({
-      type: c.type,
-      required: c.required === true,
-      pos: { x: c.x, y: c.y },
-    }));
+    // `requiredTypes` is fixed at level load (not re-derived from `entities`,
+    // which loses collected collectibles as they're picked up) so the
+    // objective text can still report "reach the goal" once every required
+    // type has been collected.
     this.requiredTypes = [
-      ...new Set(this.collectibles.filter((c) => c.required).map((c) => c.type)),
+      ...new Set(
+        this.entities.filter((e) => e.kind === 'collectible' && e.required).map((e) => e.type)
+      ),
     ];
     this.collectedTypes = new Set();
 
@@ -124,14 +126,10 @@ export class PuzzleScene extends Phaser.Scene {
     this.board.drawWalls(this.level.walls);
     this.board.createEntities(this.entities);
     this.board.renderEntities(this.entities);
-    this.board.createCollectibles(this.collectibles);
 
     this.buildHud();
     this.buildActionCards();
     this.setupBoardInput();
-
-    // In case a level ever starts the character on a collectible's tile.
-    this.collectPickups();
   }
 
   // The character is the only entity the win condition cares about, and the
@@ -243,22 +241,30 @@ export class PuzzleScene extends Phaser.Scene {
     this.hudText.setText(`Actions: ${this.movesUsed} / ${budgetLabel}`);
   }
 
-  // --- Collectibles ---
-  // Picks up every collectible on the character's current tile (there's only
-  // ever ~one per tile in practice, but this handles a stacked case too).
-  // Called after every action resolves (finishAction) so a pickup is never
-  // missed regardless of which action moved the character there.
-  collectPickups() {
-    let picked = false;
-    for (let i = this.collectibles.length - 1; i >= 0; i--) {
-      if (samePos(this.collectibles[i].pos, this.characterPos)) {
-        this.collectedTypes.add(this.collectibles[i].type);
-        this.board.removeCollectibleAt(i);
-        this.collectibles.splice(i, 1);
-        picked = true;
-      }
-    }
-    if (picked) this.updateObjective();
+  // --- Collectibles & destruction (LEVEL_DESIGN.md §3/§5.5) ---
+  // Removes a crushed crate from the board with a "crushed" flourish, then
+  // calls `onComplete`. Used whenever Move/Shift/Rotate resolves a crate as
+  // destroyed instead of moved.
+  destroyEntity(entity, onComplete) {
+    const index = this.entities.indexOf(entity);
+    this.board.vanishEntitySprite(index, () => {
+      this.entities.splice(index, 1);
+      this.board.removeEntitySpriteAt(index);
+      onComplete?.();
+    });
+  }
+
+  // Removes a picked-up collectible from the board with a "collected"
+  // flourish, records its type, and refreshes the objective/goal-lock state.
+  collectEntity(collectible, onComplete) {
+    const index = this.entities.indexOf(collectible);
+    this.collectedTypes.add(collectible.type);
+    this.board.collectEntitySprite(index, () => {
+      this.entities.splice(index, 1);
+      this.board.removeEntitySpriteAt(index);
+      this.updateObjective();
+      onComplete?.();
+    });
   }
 
   requirementsMet() {
@@ -489,7 +495,6 @@ export class PuzzleScene extends Phaser.Scene {
     this.clearSelection();
     this.board.renderEntities(this.entities);
     this.updateHud();
-    this.collectPickups();
 
     const onGoal = samePos(this.characterPos, this.goalPos);
     if (onGoal && this.requirementsMet()) {
@@ -524,16 +529,16 @@ export class PuzzleScene extends Phaser.Scene {
       return;
 
     // An entity in the way gets pushed first, and so on down the chain — see
-    // resolveMoveChain (LEVEL_DESIGN.md §5.1). Only a wall (§1.2) can make
-    // this illegal.
-    const chain = resolveMoveChain(
+    // resolveMoveChain (LEVEL_DESIGN.md §5.1/§5.5).
+    const result = resolveMoveChain(
       this.wallSet,
       this.entities,
       this.characterPos,
       direction,
       this.size
     );
-    if (!chain) {
+
+    if (result.kind === 'illegal') {
       this.setHint('Blocked by a wall — try another direction');
       const idx = this.entities.findIndex((e) => e.kind === 'character');
       this.animating = true;
@@ -543,8 +548,48 @@ export class PuzzleScene extends Phaser.Scene {
       return;
     }
 
-    // Capture each mover's start/end tile before applyMoveChain overwrites
-    // `pos`, so the transition can animate every entity in the chain at once.
+    if (result.kind === 'destroy') {
+      // The character itself doesn't move (§5.5: nothing behind a crushed
+      // crate advances) — only the crate is removed.
+      this.animating = true;
+      this.board.clearControls();
+      this.destroyEntity(result.victim, () => {
+        this.animating = false;
+        this.finishAction('move');
+      });
+      return;
+    }
+
+    if (result.kind === 'pickup') {
+      // The character's own next step is a collectible: it's always
+      // collected rather than pushed, and the character does advance onto
+      // that tile (this is the pre-existing pickup rule, unaffected by
+      // §5.5's "nothing advances after a destruction").
+      const character = this.entities.find((e) => e.kind === 'character');
+      const move = {
+        index: this.entities.indexOf(character),
+        from: { ...character.pos },
+        to: { ...result.path[1] },
+      };
+      character.pos = { ...result.path[1] };
+
+      this.animating = true;
+      this.board.clearControls();
+      let pending = 2;
+      const finishOnce = () => {
+        pending -= 1;
+        if (pending === 0) {
+          this.animating = false;
+          this.finishAction('move');
+        }
+      };
+      this.board.animateEntitiesTo([move], MOVE_TWEEN_MS, finishOnce);
+      this.collectEntity(result.collectible, finishOnce);
+      return;
+    }
+
+    // 'open' or 'loop': the ordinary successful push chain.
+    const chain = result.path;
     const occupants = chain
       .slice(0, -1)
       .map((p) => this.entities.find((e) => samePos(e.pos, p)));
@@ -564,9 +609,12 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // Every entity on the ring moves; entities elsewhere (and empty tiles) are
-  // unaffected, but the action still costs 1. If a wall (§1.2) would stop any
-  // one entity's one-step move around the ring, the whole rotation is illegal
-  // and rejected before anything moves — same rule as Move (DESIGN.md §5).
+  // unaffected, but the action still costs 1. If a wall (§1.2) stops an
+  // entity's one-step move around the ring, that entity (and anything queued
+  // behind it) is resolved via resolveCycleOutcome (§5.5): a crate crushed
+  // against the wall or against something else that can't move is destroyed,
+  // the character always collects a collectible it's forced into, and if
+  // nothing on the ring can be sacrificed the whole rotation is illegal.
   applyRotate(clockwise) {
     if (
       this.gameOver ||
@@ -576,50 +624,90 @@ export class PuzzleScene extends Phaser.Scene {
     )
       return;
 
-    if (
-      isRotateBlocked(this.wallSet, this.entities, this.rotateCenter, clockwise, this.size)
-    ) {
-      this.setHint('Blocked by a wall — try the other direction');
+    const order = rotationOrder(this.rotateCenter, clockwise, this.size);
+    const outcomes = resolveCycleOutcome(this.wallSet, this.entities, order);
+    this.resolveCycleAction(outcomes, 'rotate', ROTATE_TWEEN_MS, 'Blocked by a wall — try the other direction');
+  }
+
+  // Rows/columns with no entity on them are unaffected, but the action still
+  // costs 1, same as an empty Rotate ring. Same wall/destruction rules as
+  // Rotate (§5.5), just around a row/column instead of a ring.
+  applyShift(axis, index, direction) {
+    if (this.gameOver || this.animating || this.selectedAction !== 'shift') return;
+
+    const order = shiftOrder(axis, index, direction, this.size);
+    const outcomes = resolveCycleOutcome(this.wallSet, this.entities, order);
+    this.resolveCycleAction(outcomes, 'shift', 0, 'Blocked by a wall — try another edge');
+  }
+
+  // Shared resolution for Shift and Rotate (LEVEL_DESIGN.md §5.5): applies
+  // every `move`/`pickup`/`destroy` outcome from resolveCycleOutcome, waits
+  // for all of their animations, then spends the action. An all-`stay`
+  // result (nothing moved, nothing could be sacrificed) is illegal and free;
+  // an empty result (nothing on the ring/line) is a legal no-op that still
+  // costs the action, matching Rotate/Shift's existing empty-target rule.
+  // `moveDuration: 0` skips the tween for normal moves (Shift snaps today).
+  resolveCycleAction(outcomes, action, moveDuration, blockedHint) {
+    if (outcomes.length === 0) {
+      this.finishAction(action);
+      return;
+    }
+    if (outcomes.every((o) => o.outcome === 'stay')) {
+      this.setHint(blockedHint);
       return;
     }
 
-    // Every entity's destination is computed from the *original* positions
-    // first so the transition (all of them at once) matches the mutation.
-    const newPositions = this.entities.map((e) =>
-      rotateEntity(e.pos, this.rotateCenter, clockwise, this.size)
-    );
-    const moves = [];
-    this.entities.forEach((e, i) => {
-      if (!samePos(newPositions[i], e.pos)) {
-        moves.push({ index: i, from: { ...e.pos }, to: newPositions[i] });
-      }
+    const moveOutcomes = outcomes.filter((o) => o.outcome === 'move');
+    const destroyOutcomes = outcomes.filter((o) => o.outcome === 'destroy');
+    const pickupOutcomes = outcomes.filter((o) => o.outcome === 'pickup');
+
+    const moves = moveOutcomes.map((o) => ({
+      index: this.entities.indexOf(o.entity),
+      from: { ...o.entity.pos },
+      to: { ...o.dest },
+    }));
+    pickupOutcomes.forEach((o) => {
+      moves.push({
+        index: this.entities.indexOf(o.entity),
+        from: { ...o.entity.pos },
+        to: { ...o.collectible.pos },
+      });
     });
-    this.entities.forEach((e, i) => {
-      e.pos = newPositions[i];
+
+    moveOutcomes.forEach((o) => {
+      o.entity.pos = { ...o.dest };
+    });
+    pickupOutcomes.forEach((o) => {
+      o.entity.pos = { ...o.collectible.pos };
     });
 
     this.animating = true;
     this.board.clearControls();
-    this.board.animateEntitiesTo(moves, ROTATE_TWEEN_MS, () => {
-      this.animating = false;
-      this.finishAction('rotate');
+
+    let pending = 1;
+    const finishOnce = () => {
+      pending -= 1;
+      if (pending === 0) {
+        this.animating = false;
+        this.finishAction(action);
+      }
+    };
+
+    destroyOutcomes.forEach((o) => {
+      pending += 1;
+      this.destroyEntity(o.entity, finishOnce);
     });
-  }
+    pickupOutcomes.forEach((o) => {
+      pending += 1;
+      this.collectEntity(o.collectible, finishOnce);
+    });
 
-  // Rows/columns with no entity on them are unaffected, but the action still
-  // costs 1, same as an empty Rotate ring. Same wall-rejection rule as Rotate.
-  applyShift(axis, index, direction) {
-    if (this.gameOver || this.animating || this.selectedAction !== 'shift') return;
-
-    if (isShiftBlocked(this.wallSet, this.entities, axis, index, direction, this.size)) {
-      this.setHint('Blocked by a wall — try another edge');
-      return;
+    if (moveDuration > 0) {
+      this.board.animateEntitiesTo(moves, moveDuration, finishOnce);
+    } else {
+      this.board.renderEntities(this.entities);
+      finishOnce();
     }
-
-    this.entities.forEach((e) => {
-      e.pos = shiftEntity(e.pos, axis, index, direction, this.size);
-    });
-    this.finishAction('shift');
   }
 
   // Flip always moves the whole entity layer, so it never has nothing to do —

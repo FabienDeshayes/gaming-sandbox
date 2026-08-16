@@ -7,9 +7,11 @@ import {
   COLORS,
   CONTROL_DEPTH,
   CRATE_TEXTURE_KEY,
+  DESTROY_TWEEN_MS,
   EDGE_ARROW_INSET,
   GOAL_LOCKED_GLYPH,
   GOAL_UNLOCKED_GLYPH,
+  PICKUP_TWEEN_MS,
 } from '../config.js';
 import { DIRECTIONS, RING, wrap } from '../core/rules.js';
 
@@ -136,26 +138,37 @@ export class BoardView {
     else g.lineBetween(x0, y0, x0, y1);
   }
 
-  // One sprite per entity, in the same order as the list PuzzleScene owns.
-  // Crates sit below the character in draw order — no two entities ever share
-  // a tile now (LEVEL_DESIGN.md §3), but this keeps the character legible if a
-  // future entity type ever does. Crates use the pixel-art crate texture
+  // One sprite per entity, in the same order/index as PuzzleScene.entities —
+  // destroyEntity/collectEntity (PuzzleScene) rely on that index alignment to
+  // find and remove the right sprite. Crates sit below the character in draw
+  // order — no two entities ever share a tile at rest (LEVEL_DESIGN.md §3),
+  // but this keeps the character legible during the instant a pickup
+  // transiently shares a tile. Crates use the pixel-art crate texture
   // (PuzzleScene.preload loads it); NEAREST filtering keeps its small source
   // pixels crisp at the scaled-up display size instead of blurring.
+  // Collectibles draw as a text glyph (COLLECTIBLE_GLYPHS), same depth as crates.
   createEntities(entities) {
-    this.entitySprites = entities.map((entity) => {
-      if (entity.kind === 'crate') {
-        return this.scene.add
-          .image(0, 0, CRATE_TEXTURE_KEY)
-          .setDisplaySize(48, 48)
-          .setDepth(1);
-      }
-      return this.scene.add
-        .rectangle(0, 0, CELL * 0.6, CELL * 0.6, COLORS.characterHex)
-        .setStrokeStyle(3, 0xffffff)
-        .setDepth(2);
-    });
+    this.entitySprites = entities.map((entity) => this.createEntitySprite(entity));
     return this.entitySprites;
+  }
+
+  createEntitySprite(entity) {
+    if (entity.kind === 'crate') {
+      return this.scene.add.image(0, 0, CRATE_TEXTURE_KEY).setDisplaySize(48, 48).setDepth(1);
+    }
+    if (entity.kind === 'collectible') {
+      return this.scene.add
+        .text(0, 0, COLLECTIBLE_GLYPHS[entity.type] ?? '?', {
+          fontFamily: 'sans-serif',
+          fontSize: '34px',
+        })
+        .setOrigin(0.5)
+        .setDepth(1);
+    }
+    return this.scene.add
+      .rectangle(0, 0, CELL * 0.6, CELL * 0.6, COLORS.characterHex)
+      .setStrokeStyle(3, 0xffffff)
+      .setDepth(2);
   }
 
   renderEntities(entities) {
@@ -165,27 +178,42 @@ export class BoardView {
     });
   }
 
-  // Collectibles (LEVEL_DESIGN.md §3) are static markers, not part of the
-  // movable/pushable entity layer — one sprite per collectible, indexed in
-  // step with PuzzleScene.collectibles so removeCollectibleAt can find its
-  // sprite by the same index a pickup splices out of that array.
-  createCollectibles(collectibles) {
-    this.collectibleSprites = collectibles.map((c) => {
-      const p = this.cellCenter(c.pos.x, c.pos.y);
-      return this.scene.add
-        .text(p.px, p.py, COLLECTIBLE_GLYPHS[c.type] ?? '?', {
-          fontFamily: 'sans-serif',
-          fontSize: '34px',
-        })
-        .setOrigin(0.5)
-        .setDepth(1);
-    });
-    return this.collectibleSprites;
+  // Destroys entitySprites[index] and splices it out — callers (destroyEntity/
+  // collectEntity in PuzzleScene) splice PuzzleScene.entities at the same
+  // index in the same tick, so the two arrays never drift out of alignment.
+  removeEntitySpriteAt(index) {
+    const [sprite] = this.entitySprites.splice(index, 1);
+    sprite?.destroy();
   }
 
-  removeCollectibleAt(index) {
-    const [sprite] = this.collectibleSprites.splice(index, 1);
-    sprite?.destroy();
+  // A crate crushed against something that can't move (LEVEL_DESIGN.md §5.5):
+  // shrinks and fades in place, reading as "destroyed" rather than pushed.
+  vanishEntitySprite(index, onComplete) {
+    const sprite = this.entitySprites[index];
+    this.scene.tweens.add({
+      targets: sprite,
+      scaleX: 0,
+      scaleY: 0,
+      alpha: 0,
+      duration: DESTROY_TWEEN_MS,
+      ease: 'Quad.easeIn',
+      onComplete: () => onComplete?.(),
+    });
+  }
+
+  // A collectible the character just picked up: grows and fades in place —
+  // visually distinct from a crushed crate's shrink.
+  collectEntitySprite(index, onComplete) {
+    const sprite = this.entitySprites[index];
+    this.scene.tweens.add({
+      targets: sprite,
+      scaleX: sprite.scaleX * 1.6,
+      scaleY: sprite.scaleY * 1.6,
+      alpha: 0,
+      duration: PICKUP_TWEEN_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => onComplete?.(),
+    });
   }
 
   // --- Transitions ---

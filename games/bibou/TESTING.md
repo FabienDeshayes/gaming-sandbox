@@ -100,9 +100,10 @@ import {
   flipEntity,
   resolveMoveChain,
   applyMoveChain,
+  resolveCycleOutcome,
+  rotationOrder,
+  shiftOrder,
   buildWallSet,
-  isRotateBlocked,
-  isShiftBlocked,
 } from './src/core/rules.js';
 
 const N = 5;
@@ -154,13 +155,15 @@ const l6entities = [
   { kind: 'crate', pos: { x: 3, y: 2 } },
   { kind: 'crate', pos: { x: 4, y: 2 } },
 ];
-const chain = resolveMoveChain(noWalls, l6entities, { x: 1, y: 2 }, 'Right', N);
+const l6result = resolveMoveChain(noWalls, l6entities, { x: 1, y: 2 }, 'Right', N);
 console.log(
   'L6 chain:',
-  chain,
-  chain && chain.length === 6 ? 'OK' : 'WRONG (expected 6-tile loop back to start)'
+  l6result,
+  l6result.kind === 'loop' && l6result.path.length === 6
+    ? 'OK'
+    : 'WRONG (expected a 6-tile loop back to start)'
 );
-applyMoveChain(l6entities, chain);
+applyMoveChain(l6entities, l6result.path);
 eq(l6entities[0].pos, { x: 2, y: 2 }, 'L6 char (goal):');
 eq(l6entities[1].pos, { x: 1, y: 2 }, 'L6 crate 0,2 ->:');
 eq(l6entities[2].pos, { x: 3, y: 2 }, 'L6 crate 2,2 ->:');
@@ -173,7 +176,9 @@ const l7walls = buildWallSet([[{ x: 1, y: 2 }, { x: 2, y: 2 }]]);
 const l7entities = [{ kind: 'character', pos: { x: 1, y: 2 } }];
 console.log(
   'L7 direct move blocked:',
-  resolveMoveChain(l7walls, l7entities, { x: 1, y: 2 }, 'Right', N) === null ? 'OK' : 'WRONG'
+  resolveMoveChain(l7walls, l7entities, { x: 1, y: 2 }, 'Right', N).kind === 'illegal'
+    ? 'OK'
+    : 'WRONG'
 );
 let w = { x: 1, y: 2 };
 w = moveEntity(w, 'Up', N);
@@ -187,25 +192,50 @@ const l8walls = buildWallSet([[{ x: 0, y: 2 }, { x: 4, y: 2 }]]);
 const l8entities = [{ kind: 'character', pos: { x: 0, y: 2 } }];
 console.log(
   'L8 wraparound move blocked:',
-  resolveMoveChain(l8walls, l8entities, { x: 0, y: 2 }, 'Left', N) === null ? 'OK' : 'WRONG'
+  resolveMoveChain(l8walls, l8entities, { x: 0, y: 2 }, 'Left', N).kind === 'illegal'
+    ? 'OK'
+    : 'WRONG'
 );
 
-// Rotate/Shift reject the whole action when any entity's one-step move would
-// cross a wall (LEVEL_DESIGN.md §5.2/§5.3) — checked before anything moves.
+// Rotate/Shift resolve a wall-blocked entity the same way Move does
+// (LEVEL_DESIGN.md §5.5): a lone character with nothing to sacrifice just
+// stays put (the whole action is illegal, free) — see the L10/L11 checks
+// below for the destructible-crate case that actually moves the budget.
 const ringWall = buildWallSet([[{ x: 2, y: 1 }, { x: 3, y: 1 }]]); // T -> TR step
+const ringOutcomes = resolveCycleOutcome(
+  ringWall,
+  [{ kind: 'character', pos: { x: 2, y: 1 } }],
+  rotationOrder({ x: 2, y: 2 }, true, N)
+);
 console.log(
   'Rotate blocked by ring-step wall:',
-  isRotateBlocked(ringWall, [{ pos: { x: 2, y: 1 } }], { x: 2, y: 2 }, true, N) === true
-    ? 'OK'
-    : 'WRONG'
+  ringOutcomes.every((o) => o.outcome === 'stay') ? 'OK' : 'WRONG'
 );
 const shiftWall = buildWallSet([[{ x: 2, y: 2 }, { x: 3, y: 2 }]]);
-console.log(
-  'Shift blocked by wall:',
-  isShiftBlocked(shiftWall, [{ pos: { x: 2, y: 2 } }], 'row', 2, 'Right', N) === true
-    ? 'OK'
-    : 'WRONG'
+const shiftOutcomes = resolveCycleOutcome(
+  shiftWall,
+  [{ kind: 'character', pos: { x: 2, y: 2 } }],
+  shiftOrder('row', 2, 'Right', N)
 );
+console.log('Shift blocked by wall:', shiftOutcomes.every((o) => o.outcome === 'stay') ? 'OK' : 'WRONG');
+
+// Level 10/11: a crate crushed against a collectible stuck at a wall is
+// destroyed instead of the whole action being rejected (§5.5) — the exact
+// scenario both levels are built around, checked here via Move and Shift.
+const l10walls = buildWallSet([[{ x: 2, y: 2 }, { x: 3, y: 2 }]]);
+const l10entities = [
+  { kind: 'character', pos: { x: 0, y: 2 } },
+  { kind: 'crate', pos: { x: 1, y: 2 } },
+  { kind: 'collectible', type: 'key', pos: { x: 2, y: 2 } },
+];
+const l10result = resolveMoveChain(l10walls, l10entities, { x: 0, y: 2 }, 'Right', N);
+console.log(
+  'L10 crate crushed via Move:',
+  l10result.kind === 'destroy' && l10result.victim.kind === 'crate' ? 'OK' : 'WRONG'
+);
+const l11outcomes = resolveCycleOutcome(l10walls, l10entities, shiftOrder('row', 2, 'Right', N));
+const l11crate = l11outcomes.find((o) => o.entity.kind === 'crate');
+console.log('L11 crate crushed via Shift:', l11crate?.outcome === 'destroy' ? 'OK' : 'WRONG');
 ```
 
 > `package.json` sets `"type": "module"`, so a plain `.js` file in this directory
@@ -422,6 +452,14 @@ const server = http.createServer((req, res) => {
   `movesUsed`/`scene.remaining` don't change, entity doesn't move) and that the
   documented detour still succeeds. For the wraparound case (Level 8), also assert
   the *other* direction across the same seam (where no wall was placed) still works.
+- **Collectibles and destructible crates (Levels 9–11, `LEVEL_DESIGN.md` §3/§4/§5.5):**
+  on a level with a `required` collectible, assert reaching the goal before it's
+  collected does *not* win (`gameOver` stays `false`) and the HUD's objective text
+  updates once it is. On a level built around a wall-stuck collectible, assert a
+  crate crushed against it is removed from `s.crates` while the collectible stays,
+  and that *nothing else* in that jam moves that action (`s.char` unchanged) — check
+  this through both Move and Shift, since they're separate code paths
+  (`resolveMoveChain` vs. `resolveCycleOutcome`) sharing the same rule.
 - **Both input styles:** exercise arrow taps *and* swipes (cardinal swipes for Move;
   right = clockwise / left = anticlockwise for Rotate; horizontal = column flip /
   vertical = row flip for Flip), since they're separate code paths.

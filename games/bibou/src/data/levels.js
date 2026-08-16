@@ -153,6 +153,53 @@ export const LEVEL_9 = {
   actionBudget: { move: 6 },
 };
 
+// Level 10 introduces destructible crates (LEVEL_DESIGN.md §5.5): the key
+// sits stuck against a wall, and a crate sits directly between the character
+// and it on the same row. Pushing the crate straight at the key crushes it
+// (the key can't move to make room, and it can't be destroyed) — the only
+// way through, since going around costs one move more than the budget allows.
+export const LEVEL_10 = {
+  id: 10,
+  gridSize: 5,
+  background: { goal: { x: 3, y: 2 } },
+  entities: {
+    character: { x: 0, y: 2 },
+    crates: [{ x: 1, y: 2 }],
+    collectibles: [{ x: 2, y: 2, type: 'key', required: true }],
+  },
+  walls: [
+    [
+      { x: 2, y: 2 },
+      { x: 3, y: 2 },
+    ],
+  ],
+  actionBudget: { move: 6 },
+};
+
+// Level 11 exercises the same crate-destruction mechanic through Shift instead
+// of Move (LEVEL_DESIGN.md §5.5): shifting the row crushes the crate exactly
+// as pushing it would (the character and the wall-stuck key both just stay
+// put — nothing behind a destroyed crate advances), then Move handles the
+// rest. Same layout as Level 10, but the crate is destroyed with the level's
+// one Shift instead of a Move.
+export const LEVEL_11 = {
+  id: 11,
+  gridSize: 5,
+  background: { goal: { x: 3, y: 2 } },
+  entities: {
+    character: { x: 0, y: 2 },
+    crates: [{ x: 1, y: 2 }],
+    collectibles: [{ x: 2, y: 2, type: 'key', required: true }],
+  },
+  walls: [
+    [
+      { x: 2, y: 2 },
+      { x: 3, y: 2 },
+    ],
+  ],
+  actionBudget: { shift: 1, move: 5 },
+};
+
 export const LEVELS = [
   LEVEL_1,
   LEVEL_2,
@@ -163,6 +210,8 @@ export const LEVELS = [
   LEVEL_7,
   LEVEL_8,
   LEVEL_9,
+  LEVEL_10,
+  LEVEL_11,
 ];
 
 LEVELS.forEach(validateLevelWalls);

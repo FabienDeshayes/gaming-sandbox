@@ -21,6 +21,8 @@ export const ROTATE_TWEEN_MS = 220; // every ring entity slides at once
 export const FLIP_TWEEN_MS = 260; // squash to 0 (the "mirror"), then back
 export const BUMP_TWEEN_MS = 240; // blocked move: nudge toward the wall, spring back
 export const GOAL_PULSE_MS = 340; // reaching the goal: grow, then settle back
+export const DESTROY_TWEEN_MS = 220; // a crushed crate: shrink and fade in place
+export const PICKUP_TWEEN_MS = 220; // a collected collectible: grow and fade in place
 
 // Distance from the board edge, in px, at which the edge arrows are drawn —
 // Shift's inward-pointing row/column arrows and Flip's two mirror arrows (see

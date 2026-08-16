@@ -75,16 +75,16 @@ Moving off one side of the board is therefore always legal *as far as the edge i
 
 | Entity | Layer | Notes |
 |---|---|---|
-| Character | Entity | The thing the player is trying to get onto the goal tile. One per level (MVP). |
-| Crate | Entity | Any number per level, optional. Carries **no rules of its own beyond pushing**: every action displaces a crate exactly as it displaces the character, a crate on the goal tile does nothing, and Move can target a crate as readily as the character. |
-| Collectible | Entity position, static | Any number per level, optional (`entities.collectibles`, §6). Sits at a fixed tile like the goal does — Rotate/Shift/Flip never move it, and Move never pushes it or treats its tile as occupied, so any entity can step straight onto (or through, via a push chain) a collectible's tile. The moment the character's tile matches a collectible's, it's picked up and removed from the board. A collectible with `required: true` gates the win condition — see §4. Not yet pickable by crates; per the game's design notes, only the character (and, later, enemies) can collect one. |
+| Character | Entity | The thing the player is trying to get onto the goal tile. One per level (MVP). Not destructible, and never treats a collectible as an obstacle — see §5.5. |
+| Crate | Entity | Any number per level, optional. **Destructible**: every action displaces a crate exactly as it displaces the character, a crate on the goal tile does nothing, Move can target a crate as readily as the character — but if it's ever crushed against something that can't move out of its way (a wall, or another stuck entity), it's destroyed instead of the whole action being rejected. See §5.5. |
+| Collectible | Entity | Any number per level, optional (`entities.collectibles`, §6). Occupies a tile exactly like a crate — Move/Shift/Rotate can displace one — but it's **indestructible**: when it can't move out of the way, it just stays put and becomes an obstruction rather than being destroyed. The character is the sole exception to all of this: it never treats a collectible as an obstacle, always picking one up (instantly, whether or not that collectible could otherwise have moved) instead of blocking on or pushing it. A collectible with `required: true` gates the win condition — see §4. Not yet pickable by crates; per the game's design notes, only the character (and, later, enemies) can collect one. |
 | Goal | Background | A single tile marked as the win condition. Static — part of the Background layer, not something that moves. |
 
-**No two entities may occupy the same tile.** When Move would displace an entity onto a tile another entity already occupies, the entity already there is pushed one step further in the same direction first — and if *that* tile is occupied too, the push cascades down the chain before anything actually moves. See §5.1 for exactly how a push chain resolves, including the case where the chain wraps all the way around the board. Collectibles sit outside this rule entirely — they're never part of the occupied/unoccupied check a push chain walks, so they can never block or get pushed.
+**No two entities may occupy the same tile at rest.** When Move would displace an entity onto a tile another entity already occupies, the entity already there is pushed one step further in the same direction first — and if *that* tile is occupied too, the push cascades down the chain before anything actually moves. See §5.1 for exactly how a push chain resolves, including the case where the chain wraps all the way around the board, and §5.5 for what happens when that chain runs into a wall instead of an open tile. The one moment two entities *do* share a tile is transiently when the character picks up a collectible — resolved instantly as part of the same action, never left as board state.
 
-Pushing is a Move-only concern. Rotate, Shift, and Flip each displace every entity they affect in one simultaneous reshuffle — a permutation of positions, not a sequence of single-entity displacements — so two entities can never end up sharing a tile as a result of those actions, whatever the layout going in. Move is the only action where one entity moves into a tile that isn't moving along with it, so it's the only one that ever needs to push.
+Pushing is a Move-only concern in the ordinary (unblocked) case. Rotate, Shift, and Flip each displace every entity they affect in one simultaneous reshuffle — a permutation of positions, not a sequence of single-entity displacements — so two entities can never end up sharing a tile as a result of those actions when nothing is blocked. Move is the only action where one entity moves into a tile that isn't moving along with it, so it's the only one that ever needs to push a *chain*; Rotate and Shift instead resolve a *blocked* reshuffle with the same peeling logic Move uses (§5.5), just walked around a ring or along a row/column instead of from a single mover.
 
-Since entities never share a tile outside of an in-progress push resolution, a Move tap on a cell always targets the one entity present there; the character is still drawn above crates in `BoardView` for legibility, but that no longer needs to break a tie.
+Since entities never share a tile outside of an in-progress action, a Move tap on a cell always targets the one entity present there; the character is still drawn above crates and collectibles in `BoardView` for legibility, but that no longer needs to break a tie.
 
 ## 4. Win condition
 
@@ -198,6 +198,32 @@ No wraparound is involved (§2.1) — the mirror of an in-range coordinate is al
 - **The goal never moves,** so a flip changes the character's relationship to the goal — unlike Rotate/Shift, it can close a large gap or open one just as fast.
 
 Example: `axis: Column` on a 5×5 board, character at `(1, 1)` → `x = 5 - 1 - 1 = 3` → character ends at `(3, 1)`. A crate at `(0, 0)` moves to `(4, 0)` in the same action.
+
+### 5.5 Destruction and pickup at a jam
+
+Move, Shift, and Rotate all resolve to the same underlying shape: entities lined up along a direction (a linear chain for Move, a row/column for Shift, the 8-tile ring for Rotate), each trying to step one cell forward into the next tile in that line. Ordinarily this always succeeds — the destination is open, or the whole line permutes at once with nothing left in anyone's way. This section covers what happens when a wall stops a tile in that line from ever opening up.
+
+**Which entities are involved:**
+- **The character** is never destructible, and never treats a collectible as an obstacle (see the character-yields case below) — it can still be blocked by a wall or by a stuck crate, exactly as before this mechanic existed.
+- **Crates are destructible.** A crate that ends up unable to complete its forced move — because the tile ahead of it is a wall, or is occupied by an entity that itself can't move — is destroyed instead of the whole action being rejected.
+- **Collectibles are indestructible.** A collectible that can't move just stays exactly where it is, becoming an obstruction for whatever's behind it. (Future enemies are expected to behave the same way as the character here: not destructible, and not yielding to a collectible either.)
+
+**Resolution, per jammed run:** a "run" is a maximal, consecutive stretch of occupied tiles ending at a step that crosses a wall. Walk it from the tile touching the wall backward, toward whatever's pushing the run:
+
+1. The tile touching the wall: if it holds a crate, that crate is destroyed and resolution for this run stops there. Otherwise (character or collectible) it just stays.
+2. Each tile behind that, in turn, is evaluated against the entity immediately ahead of it (which by now is known to be staying put):
+   - if the entity behind is the **character** and the one ahead is a **collectible**, the character picks it up and moves onto its tile — the one case in this whole section where something *does* advance, because it's the pre-existing pickup rule (§3), not new.
+   - if the entity behind is a **crate**, it's destroyed, and resolution for this run stops there.
+   - otherwise, it just stays too, and the walk continues one tile further back.
+3. **Exactly one outcome — a single destruction or a single pickup — happens per jammed run**, whichever comes first walking backward from the wall. Everything else in that run, including the mover that initiated the action, does not move. If the walk never finds a crate to destroy or a character-behind-a-collectible to resolve as a pickup (e.g. the character alone hits a wall, or a run of collectibles all just sit there), nothing in the run changes at all — same as an ordinary blocked, illegal action: rejected, free, no cost.
+
+An action still costs its budget if *any* run on the affected line/ring/chain produced a destruction or a pickup, even if nothing physically relocated — a crate visibly dying (or a collectible visibly vanishing into inventory) is enough of an effect to spend the action. It's only "nothing happened at all, anywhere" that's illegal and free. A part of the line/ring/chain not touching any wall is unaffected by all of this and moves normally in the same action.
+
+**Move** is the special case of a single run, always starting at the character. Its own extra wrinkle: if the character's *very own* next step (not something being pushed ahead of it) lands on a collectible, that's always a pickup — regardless of whether the collectible could itself have moved further, and regardless of anything sitting beyond it. A collectible only ever needs the general jam logic above when something *other* than the character (a crate) is what's trying to displace it.
+
+**Flip is exempt.** It reflects every entity straight to its mirrored coordinate without stepping through anything in between (§5.4), so there's never a "jam" for it to resolve — collectibles and crates move with it exactly like the character does, unconditionally.
+
+Implementation: `resolveMoveChain` (Move) and `resolveCycleOutcome` (Shift/Rotate, via `rotationOrder`/`shiftOrder` to build the ordered ring/line) in `src/core/rules.js`.
 
 ## 6. Level data format
 
@@ -439,3 +465,57 @@ The goal sits directly 2 moves to the right of the start — the same shape as L
 6. Move `Down` → `(3, 1) → (3, 2)` = goal, key already held → **win**.
 
 Zero slack: 6 is the shortest path that visits the key before the goal (2 moves up to the key, then 2 right + 2 down to the goal), and the budget doesn't leave room to try the direct 2-move path first and still recover — reaching the goal without the key wastes those moves rather than winning.
+
+### Level 10
+
+Introduces destructible crates (§5.5): the key sits stuck against a wall, and a crate sits directly between the character and it on the same row.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(1, 2)` |
+| Collectibles | key at `(2, 2)`, `required: true` |
+| Goal | `(3, 2)` |
+| Walls | `(2, 2)`–`(3, 2)` |
+| Available actions | Move only |
+| Action budget | Move: 6 |
+
+The key can never step across the `(2,2)`–`(3,2)` wall, so it's permanently stuck the moment anything pushes it there. The crate sits right between the character and the key, so the direct approach immediately jams: character pushes crate, crate pushes key, key can't move — the crate is crushed (§5.5), and (per that section's "nothing behind a destruction advances" rule) the character itself does not move on that action either.
+
+**Intended solution:**
+
+1. Move `Right` → character pushes the crate into the stuck key; the crate is destroyed, the key stays put, the character stays at `(0, 2)` — 1 move spent, nothing moved.
+2. Move `Right` → `(0, 2) → (1, 2)`, now empty.
+3. Move `Right` → `(1, 2) →` the key's tile `(2, 2)` → the character's own direct step onto a collectible is always a pickup (§5.5) → key collected, character now at `(2, 2)`.
+4. Move `Up` → `(2, 2) → (2, 1)`.
+5. Move `Right` → `(2, 1) → (3, 1)`.
+6. Move `Down` → `(3, 1) → (3, 2)` = goal, key already held → **win**.
+
+Zero slack: going around the crate instead of destroying it (up, right, right, down to reach the key, then the same 3-move detour to the goal) costs 7 moves — one more than the budget allows — so the crate-crushing shortcut isn't optional flavor, it's the only way the level fits its budget.
+
+### Level 11
+
+The same layout and puzzle as Level 10, but the crate is crushed with the level's one Shift instead of a Move, to exercise the identical destruction rule (§5.5) through a different action.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(1, 2)` |
+| Collectibles | key at `(2, 2)`, `required: true` |
+| Goal | `(3, 2)` |
+| Walls | `(2, 2)`–`(3, 2)` |
+| Available actions | Shift and Move |
+| Action budget | Shift: 1, Move: 5 |
+
+**Intended solution:**
+
+1. Shift row `y = 2` **Right** → the same three-entity jam as Level 10 (character, crate, key, all on row 2), resolved the same way: the crate touching the key is destroyed, and — because nothing behind a destruction advances (§5.5) — neither the key nor the character move. 1 Shift spent, nothing moved but the crate.
+2. Move `Right` → `(0, 2) → (1, 2)`.
+3. Move `Right` → `(1, 2) →` key's tile `(2, 2)` → pickup.
+4. Move `Up` → `(2, 2) → (2, 1)`.
+5. Move `Right` → `(2, 1) → (3, 1)`.
+6. Move `Down` → `(3, 1) → (3, 2)` = goal → **win**.
+
+Zero slack in both pools: the level is solvable only by spending the single Shift on the crate (there's no other legal use for it that helps), and Move's budget of 5 is exactly what's left for the rest of the route.

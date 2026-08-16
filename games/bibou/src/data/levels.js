@@ -164,6 +164,111 @@ export const LEVEL_5 = {
   actionBudget: { shift: 1 },
 };
 
-export const LEVELS = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
+// Level 6 reuses Level 5's corridor with one change: a single door. Row y=2 is
+// still sealed from the rows above and below at every column, except that
+// (4,2) is left open downward onto (4,3) — the corridor's only way in or out.
+const DOORED_CORRIDOR_WALLS = [];
+for (let x = 0; x < 5; x++) {
+  DOORED_CORRIDOR_WALLS.push([
+    { x, y: 1 },
+    { x, y: 2 },
+  ]);
+  // x = 4 is the door: no wall below (4,2).
+  if (x !== 4) {
+    DOORED_CORRIDOR_WALLS.push([
+      { x, y: 2 },
+      { x, y: 3 },
+    ]);
+  }
+}
+
+// Level 6 is built on the full-loop push (LEVEL_DESIGN.md §5.1.1 case 3). The
+// character starts inside the doored corridor with four crates, filling all
+// five of its tiles — so there is no empty tile for a push to resolve into, and
+// every step the character takes rotates the entire row by one instead. That's
+// the only way to move in here, so it's the only way to reach the door at
+// (4,2), and later the only way to come back for the goal at (2,2), which is
+// sealed above and below like the rest of the corridor.
+export const LEVEL_6 = {
+  id: 6,
+  gridSize: 5,
+  description: 'A completely full row still moves — it rotates.',
+  background: { goal: { x: 2, y: 2 } },
+  entities: {
+    character: { x: 1, y: 2 },
+    crates: [
+      { x: 0, y: 2 },
+      { x: 2, y: 2 },
+      { x: 3, y: 2 },
+      { x: 4, y: 2 },
+    ],
+    collectibles: [{ x: 2, y: 4, type: 'key', required: true }],
+  },
+  walls: DOORED_CORRIDOR_WALLS,
+  actionBudget: {},
+};
+
+// Level 7's board has two prisons. Column x=1 is sealed down both its sides,
+// so the key inside can be slid up and down by a Shift but can never cross out
+// of it; and (3,2) — the tile column 1's key mirrors onto under a column flip —
+// is a sealed one-tile cage of its own.
+const SEALED_COLUMN = [];
+for (let y = 0; y < 5; y++) {
+  SEALED_COLUMN.push([
+    { x: 0, y },
+    { x: 1, y },
+  ]);
+  SEALED_COLUMN.push([
+    { x: 1, y },
+    { x: 2, y },
+  ]);
+}
+const MIRROR_CAGE = [
+  [
+    { x: 2, y: 2 },
+    { x: 3, y: 2 },
+  ],
+  [
+    { x: 3, y: 2 },
+    { x: 4, y: 2 },
+  ],
+  [
+    { x: 3, y: 1 },
+    { x: 3, y: 2 },
+  ],
+  [
+    { x: 3, y: 2 },
+    { x: 3, y: 3 },
+  ],
+];
+
+// Level 7 is the capstone: one Shift and one Flip, and only one order works.
+// The key at (1,2) is sealed in column 1, so only a Flip can lift it out — but
+// a column flip sends (1,2) straight to (3,2), which is a cage too, and the
+// flip is gone. Shifting column 1 first slides the key one tile off row 2
+// (either direction), and *then* the column flip lands it on an open tile.
+// Doing it the other way round strands the key in the cage for good.
+export const LEVEL_7 = {
+  id: 7,
+  gridSize: 5,
+  description: 'One Shift, one Flip — and only one order works.',
+  background: { goal: { x: 0, y: 2 } },
+  entities: {
+    character: { x: 2, y: 4 },
+    collectibles: [{ x: 1, y: 2, type: 'key', required: true }],
+  },
+  walls: [...SEALED_COLUMN, ...MIRROR_CAGE],
+  actionBudget: { shift: 1, flip: 1 },
+};
+
+export const LEVELS = [
+  LEVEL_1,
+  LEVEL_2,
+  LEVEL_3,
+  LEVEL_4,
+  LEVEL_5,
+  LEVEL_6,
+  LEVEL_7,
+];
 
 LEVELS.forEach(validateLevelWalls);

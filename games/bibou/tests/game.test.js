@@ -161,7 +161,7 @@ test('Start leads to the level list and a level starts', async (game) => {
   await game.waitForScene('LevelSelectScene');
   const texts = await game.texts();
   assert(texts.includes('Select Level'), 'level select heading');
-  assert(texts.includes('Level 1') && texts.includes('Level 5'), 'all levels listed');
+  assert(texts.includes('Level 1') && texts.includes('Level 7'), 'all levels listed');
 
   await game.clickText('Level 1');
   await game.waitForScene('PuzzleScene');
@@ -182,11 +182,11 @@ test('the level list shows a description per level and stays scrollable', async 
   );
   assert(texts.includes('Back'), 'Back is always present');
 
-  await game.scrollToLevel(5);
+  await game.scrollToLevel(7);
   texts = await game.texts();
   assert(
-    texts.includes('Shift pushes from a side you can never stand on.'),
-    'Level 5 still shows its description after scrolling to it'
+    texts.includes('One Shift, one Flip — and only one order works.'),
+    'Level 7 still shows its description after scrolling to it'
   );
 
   await game.clickText('Back');
@@ -235,6 +235,26 @@ test('Move needs no card: the arrows are there from the start', async (game) => 
   s = await game.state();
   assertEqual(s.char, { x: 2, y: 1 }, 'and a swipe works with nothing selected');
   assertEqual(s.movesUsed, 2, 'still just moves');
+});
+
+// Regression: a control consumes its own pointerdown (stopPropagation), so the
+// scene's swipe handler never sees where that press started — but it does get
+// the pointerup. Measured against the previous board press, tapping a card and
+// then an arrow read as one long swipe and walked the character a free extra
+// step on top of the action.
+test('tapping a card and then an arrow does not also move the character', async (game) => {
+  await game.clickText('Start');
+  await game.scrollToLevel(5);
+  await game.clickText('Level 5');
+  await game.waitForScene('PuzzleScene');
+
+  await game.clickText('Shift');
+  await game.clickText('▼', 1); // an empty column: the shift itself is a free no-op
+  await game.settle();
+
+  const s = await game.state();
+  assertEqual(s.char, { x: 0, y: 2 }, 'the character has not moved');
+  assertEqual(s.movesUsed, 0, 'and no phantom move was counted');
 });
 
 test('a level with no actions offers no cards and cannot run out', async (game) => {
@@ -565,10 +585,6 @@ test('Level 5: only a column shift can crush the corridor crate', async (game) =
   s = await game.state();
   assertEqual(s.char, { x: 4, y: 2 }, 'character on the goal');
   assert((await game.texts()).includes('You win!'), 'level 5 solved');
-  assert(
-    !(await game.texts()).includes('Next level'),
-    'level 5 is the last level, so the win overlay offers no Next level button'
-  );
 });
 
 test('Level 5: shifting the row the character is on is blocked and free', async (game) => {
@@ -587,6 +603,155 @@ test('Level 5: shifting the row the character is on is blocked and free', async 
   assert(
     (await game.texts()).some((t) => t.includes('Blocked by a wall')),
     'the hint explains why'
+  );
+});
+
+// --- The full-loop push -----------------------------------------------------
+
+// Level 6 packs the corridor edge to edge, so there is no open tile for a push
+// to resolve into and every step rotates the whole row instead (§5.1.1 case 3).
+// It's the only way to move in there, so it's the only way to reach the door.
+test('Level 6: a packed row rotates instead of refusing to move', async (game) => {
+  await game.clickText('Start');
+  await game.scrollToLevel(6);
+  await game.clickText('Level 6');
+  await game.waitForScene('PuzzleScene');
+
+  let s = await game.state();
+  assertEqual(
+    s.crates,
+    [{ x: 0, y: 2 }, { x: 2, y: 2 }, { x: 3, y: 2 }, { x: 4, y: 2 }],
+    'four crates fill the rest of the corridor'
+  );
+
+  // Up and down are walled everywhere but the door, so the row is all there is.
+  await game.clickText('▲');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 1, y: 2 }, 'the character cannot leave the corridor upward');
+  assertEqual(s.movesUsed, 0, 'and the blocked move is not counted');
+
+  // One step left: the character advances by one and every crate does too —
+  // including the one that wraps around the board edge.
+  await game.clickText('◀');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 0, y: 2 }, 'character stepped into a fully occupied row');
+  assertEqual(
+    s.crates,
+    [{ x: 4, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 }, { x: 3, y: 2 }],
+    'the whole row rotated by one rather than the move being rejected'
+  );
+
+  await game.clickText('◀');
+  await game.settle();
+  assertEqual((await game.state()).char, { x: 4, y: 2 }, 'looped round to the door tile');
+
+  // Out through the door, fetch the key, back in.
+  for (const glyph of ['▼', '▼', '◀']) {
+    await game.clickText(glyph);
+    await game.settle();
+  }
+  await game.clickText('◀');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 2, y: 4 }, 'walked to the key outside the corridor');
+  assertEqual(s.collectibles, [], 'and collected it');
+
+  for (const glyph of ['▶', '▶', '▲', '▲']) {
+    await game.clickText(glyph);
+    await game.settle();
+  }
+  assertEqual((await game.state()).char, { x: 4, y: 2 }, 'back inside the corridor');
+
+  // Packed again, so the way to the goal is three more rotations.
+  for (let i = 0; i < 3; i++) {
+    await game.clickText('▶');
+    await game.settle();
+  }
+  s = await game.state();
+  assertEqual(s.char, { x: 2, y: 2 }, 'character on the goal');
+  assert((await game.texts()).includes('You win!'), 'level 6 solved');
+});
+
+// --- Two actions, one order -------------------------------------------------
+
+test('Level 7: flipping before shifting strands the key in the mirror cage', async (game) => {
+  await game.clickText('Start');
+  await game.scrollToLevel(7);
+  await game.clickText('Level 7');
+  await game.waitForScene('PuzzleScene');
+  assertEqual(
+    Object.keys((await game.state()).remaining).sort(),
+    ['flip', 'shift'],
+    'level 7 offers both actions'
+  );
+
+  await game.clickText('Flip');
+  await game.clickText('↔');
+  await game.settle();
+  let s = await game.state();
+  assertEqual(
+    s.collectibles,
+    [{ type: 'key', x: 3, y: 2 }],
+    'the key lands in the cage at (3,2)'
+  );
+
+  // And no shift can get it out of there — all four of its edges are walled,
+  // so the shift is rejected and stays free.
+  await game.clickText('Shift');
+  await game.clickText('▼', 3);
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.collectibles, [{ type: 'key', x: 3, y: 2 }], 'the key has not moved');
+  assertEqual(s.remaining.shift, 1, 'and the rejected shift cost nothing');
+});
+
+test('Level 7: shift then flip frees the key and solves the level', async (game) => {
+  await game.clickText('Start');
+  await game.scrollToLevel(7);
+  await game.clickText('Level 7');
+  await game.waitForScene('PuzzleScene');
+
+  // Slide the key one tile down its sealed column, off the middle row.
+  await game.clickText('Shift');
+  await game.clickText('▼', 1);
+  await game.settle();
+  let s = await game.state();
+  assertEqual(
+    s.collectibles,
+    [{ type: 'key', x: 1, y: 3 }],
+    'the key slid down but stayed in its column'
+  );
+  assertEqual(s.remaining.shift, 0, 'that spent the shift');
+
+  // Now the column flip lands it beside the cage rather than inside it.
+  await game.clickText('Flip');
+  await game.clickText('↔');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.collectibles, [{ type: 'key', x: 3, y: 3 }], 'key flipped out to (3,3)');
+  assertEqual(s.char, { x: 2, y: 4 }, 'the character sits on the middle column, so it stays');
+
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('▲');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 3, y: 3 }, 'walked to the key');
+  assertEqual(s.collectibles, [], 'and collected it');
+
+  // Round to the goal, leaving the board through the wraparound seam.
+  for (const glyph of ['▼', '▶', '▲', '▲', '▶']) {
+    await game.clickText(glyph);
+    await game.settle();
+  }
+  s = await game.state();
+  assertEqual(s.char, { x: 0, y: 2 }, 'character on the goal');
+  assert((await game.texts()).includes('You win!'), 'level 7 solved');
+  assert(
+    !(await game.texts()).includes('Next level'),
+    'level 7 is the last level, so the win overlay offers no Next level button'
   );
 });
 

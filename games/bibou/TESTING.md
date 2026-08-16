@@ -143,7 +143,8 @@ console.log(
 );
 
 // Full-loop push (§5.1.1 case 3): a row completely full rotates by one rather
-// than deadlocking. No level relies on this today, but the rule is live.
+// than deadlocking. This is Level 6's entire board — a sealed corridor packed
+// edge to edge, where rotating is the only way the character can move.
 const noWalls = buildWallSet([]);
 const packed = [
   { kind: 'character', pos: { x: 1, y: 2 } },
@@ -421,7 +422,14 @@ const server = http.createServer((req, res) => {
   useful target. Assert the *wrong* one is either free (a no-op or wall-blocked
   Shift leaves `remaining` untouched — see Level 5) or genuinely wasteful (Level
   4's column flip leaves the key sealed), and that `↻` restores the level to its
-  opening state either way.
+  opening state either way. Where a level needs two actions in sequence (Level 7),
+  assert the *wrong order* too: doing them the other way round has to leave the
+  board provably stuck, not merely longer.
+- **A tap on a control must not also be read as a swipe.** Controls consume their
+  own `pointerdown` with `stopPropagation`, so the scene's swipe handler never
+  sees where that press began — but it still receives the `pointerup`. After
+  tapping a card and then an arrow, assert `movesUsed` is unchanged; the bug this
+  guards against walked the character a free extra step on top of the action.
 - **Budgets are spent per action type:** after using one action, assert that only
   *its* entry in `scene.remaining` dropped. A spent action's card must grey out and
   stop responding (selecting it sets the hint `"No <Action> actions left"` and does
@@ -431,9 +439,11 @@ const server = http.createServer((req, res) => {
   crate directly.
 - **Pushing resolves correctly:** on a level where a Move's destination is occupied
   (Levels 3 and 5), assert every entity in the chain shifted by one, not just the
-  character — including the full-loop case (`LEVEL_DESIGN.md` §5.1.1 case 3), where
-  a fully-occupied row/column rotates by one instead of the move being rejected. No
-  level relies on the full loop today, so cover it as rule math.
+  character — including the full-loop case (Level 6, `LEVEL_DESIGN.md` §5.1.1 case
+  3), where a fully-occupied row/column rotates by one instead of the move being
+  rejected. Assert every crate's new position, not just the character's: the whole
+  point is that the entire line turned, including the entity that wrapped around
+  the board edge.
 - **Walls block correctly, and only where drawn:** on a level with walls, assert the
   blocked direction stays illegal (hint changes, `movesUsed`/`scene.remaining` don't
   change, entity doesn't move) and that the documented way round still succeeds. For

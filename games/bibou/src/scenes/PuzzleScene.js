@@ -454,14 +454,27 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // --- Input ---
+  // A swipe is only a swipe if this handler saw where it *started*. Tapping a
+  // control (an arrow, a card) consumes the pointerdown with stopPropagation,
+  // so the scene-level pointerdown below never fires for it — but the matching
+  // pointerup still arrives here. Without `armed`, that pointerup would be
+  // measured against whatever the last board press was, read as a long swipe,
+  // and walk the character an extra step every time the player tapped a card
+  // and then an arrow. So: only a press this handler actually saw can arm a
+  // swipe, and each press arms exactly one.
   setupBoardInput() {
     let downX = 0;
     let downY = 0;
+    let armed = false;
     this.input.on('pointerdown', (pointer) => {
       downX = pointer.x;
       downY = pointer.y;
+      armed = true;
     });
     this.input.on('pointerup', (pointer) => {
+      const wasArmed = armed;
+      armed = false;
+      if (!wasArmed) return;
       if (this.gameOver || this.animating || this.exitConfirmOpen) return;
       const dx = pointer.x - downX;
       const dy = pointer.y - downY;

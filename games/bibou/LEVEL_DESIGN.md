@@ -136,7 +136,7 @@ Moving an entity onto an occupied tile pushes a chain, not just one neighbour: s
 
 1. **An unoccupied tile is found.** The chain resolves there: every entity from `startTile` up to (but not including) that tile shifts one step forward into the next tile in the chain. This is the common case — pushing one crate, or a crate that pushes another crate.
 2. **A wall is hit** (§1.2) — the next step in the walk would cross a wall. If nothing in the chain is destructible, the whole move is illegal and nothing moves — same as any other illegal action (`DESIGN.md` §5). If a crate is crushed against the wall (or against something else in the chain that can't move), it's destroyed instead — see §5.4. Level 2 (§7) exercises the plain-illegal case; Level 3 exercises the destruction case.
-3. **The walk wraps all the way back to `startTile` itself**, because the board is borderless (§2.1) and every tile on that row/column is occupied by an entity. There is no open tile to resolve into, but this is *not* a deadlock: every entity in the chain still shifts one step forward, including the entity that was at `startTile` — the net effect is the entire line rotating by one, identical to a Shift on that line.
+3. **The walk wraps all the way back to `startTile` itself**, because the board is borderless (§2.1) and every tile on that row/column is occupied by an entity. There is no open tile to resolve into, but this is *not* a deadlock: every entity in the chain still shifts one step forward, including the entity that was at `startTile` — the net effect is the entire line rotating by one, identical to a Shift on that line. Level 6 (§7) is built entirely on this case: it packs a sealed corridor edge to edge, so rotating is the only way the character can move at all.
 
 Implementation: `resolveMoveChain` (in `src/core/rules.js`, taking a wall lookup built by `buildWallSet` rather than the raw level) walks the chain and returns a discriminated result — `{ kind: 'open' | 'loop', path }` for cases 1 and 3 (`applyMoveChain` then shifts every entity in `path` forward by one), or `{ kind: 'pickup' | 'destroy' | 'illegal', ... }` for case 2 and the character's own pickup shortcut — see §5.4 for what each of those means.
 
@@ -264,7 +264,7 @@ This is the main knob for level difficulty. Levels usually grant exactly **one**
 
 ## 7. Levels
 
-Every level places exactly one `required` key, either loose on the board or sealed inside a crate, so the shape of every puzzle is *find the key, then reach the exit*. The five levels each introduce exactly one idea, in order: walking and the lock, wraparound, crates and crushing, Flip, Shift.
+Every level places exactly one `required` key, either loose on the board or sealed inside a crate, so the shape of every puzzle is *find the key, then reach the exit*. Each level introduces exactly one idea, in order: walking and the lock, wraparound, crates and crushing, Flip, Shift, the full-loop push, and finally both budgeted actions at once.
 
 ### Level 1 — the key and the door
 
@@ -381,3 +381,61 @@ Those ten walls turn row `y = 2` into a **sealed one-tile corridor**: it's cut o
 1. Walk to a comfortable spot if you like — pushing the crate along the corridor is free and changes nothing structurally.
 2. Shift the crate's column (`▼` or `▲` on that column) → the crate is crushed against the corridor wall and drops its key on its own tile. Shifting a column with nothing on row 2 is a free no-op, and shifting the character's own column is blocked and free (§4.1), so hunting for the right column costs nothing.
 3. Walk onto the dropped key, then along the corridor to the goal at `(4,2)` → **win**.
+
+### Level 6 — a full row still moves
+
+Built on the full-loop push (§5.1.1 case 3), the one push case that has no open tile to resolve into.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(1, 2)` |
+| Crates | `(0, 2)`, `(2, 2)`, `(3, 2)`, `(4, 2)` |
+| Collectibles | key at `(2, 4)`, `required: true` |
+| Goal | `(2, 2)` |
+| Walls | `(x,1)`–`(x,2)` for every `x` in `0..4`, and `(x,2)`–`(x,3)` for `x` in `0..3` — 9 walls |
+| Available actions | None (Move only) |
+
+The board is Level 5's sealed corridor with **one door**: `(4,2)` is left open downward onto `(4,3)`, and that's the only tile connecting row 2 to the rest of the board. Inside, the character and four crates fill all five tiles.
+
+**Why every step is a rotation.** Up and down are walled at every column but the door, so the character can only move along the row — and the row has no empty tile. `resolveMoveChain` walks the whole line, wraps back to the character's own tile, and resolves as case 3: everything shifts one step, the crate at the far end wrapping around the board edge. The character advances by one and the entire row turns with it. There is no other way to move in here, which is what makes the case load-bearing rather than decorative.
+
+**Intended solution:**
+
+1. `Left` ×2 → two full-row rotations carry the character `(1,2) → (0,2) → (4,2)`, the door tile. (`Right` ×3 gets there too.)
+2. `Down` through the door → `(4,3)`, then walk to the key at `(2,4)` and collect it. The corridor now has four crates and the gap the character left at `(4,2)`; nothing out here can move them.
+3. Back to `(4,3)` and `Up` into `(4,2)` — the row is packed again.
+4. `Right` ×3 → three more rotations to `(0,2) → (1,2) → (2,2)` = goal → **win**.
+
+The goal sits inside the corridor and is sealed above and below like every other tile in it, so it can only ever be entered along the row — i.e. by a rotation. No crate can leave the corridor either: pushing one through the door would need the character standing above it at `(4,1)`, which is walled off.
+
+### Level 7 — one Shift, one Flip, one order
+
+The capstone: both budgeted actions, one use each, and only one sequence works.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(2, 4)` |
+| Collectibles | key at `(1, 2)`, `required: true` |
+| Goal | `(0, 2)` |
+| Walls | `(0,y)`–`(1,y)` and `(1,y)`–`(2,y)` for every `y` in `0..4` (column 1 sealed down both sides), plus `(2,2)`–`(3,2)`, `(3,2)`–`(4,2)`, `(3,1)`–`(3,2)`, `(3,2)`–`(3,3)` (a one-tile cage at `(3,2)`) — 14 walls |
+| Available actions | Shift and Flip |
+| Action budget | Shift: 1, Flip: 1 |
+
+The board has two prisons. Column 1 is sealed down both its long sides, so the key inside can slide **up and down** freely — nothing blocks a vertical step within the column — but can never cross out sideways. And `(3,2)`, drawn as a small empty cage, is sealed on all four edges.
+
+**Why each action is needed.** Walking can't reach column 1 at all, and no Shift can move the key out of it (a wall stops a shifted step exactly as it stops a walked one, §5.2), so **Flip is the only way out**. But `(1,2)` mirrors onto `(3,2)` under a column flip — straight from one prison into the other — and a row flip does nothing at all, since the key sits on the middle row (§5.3). So **Shift is what makes the Flip land somewhere useful**: one shift of column 1 slides the key off row 2, and *then* its mirror image is an open tile.
+
+**Intended solution:**
+
+1. Shift column 1, either direction → key `(1,2) → (1,3)` (or `(1,1)`). Still sealed, but no longer on the mirror row.
+2. Flip across the middle **column** (`↔`) → key `(1,3) → (3,3)`, an open tile beside the cage. The character starts at `(2,4)`, on the middle column, so this leaves it exactly where it is.
+3. Walk to `(3,3)`, collect the key, then round to the goal at `(0,2)` — reached through the wraparound seam from `(4,2)`.
+
+**The traps, all of them visible on the board before committing:**
+
+- *Flip first.* The key drops into the cage at `(3,2)` and nothing can ever get it out again — a later shift of column 3 is rejected as a no-op (and costs nothing, §5.2), which is the game telling you the run is over. Retry.
+- *The wrong flip axis.* A row flip leaves the key on `(1,2)`, untouched.
+- *Shifting the key's row instead of its column.* Walls on both sides mean the key can't move, so it's rejected and free — safe to try.
+- *Flipping yourself in.* From column 3 the character can flip itself into column 1 and collect the key by hand. It's then sealed in there with no flip left, and the goal is outside. A genuine dead end, and a good way to learn that Flip moves the character too.

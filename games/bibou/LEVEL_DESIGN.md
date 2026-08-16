@@ -12,7 +12,7 @@ The **Board** is the whole 5×5 tile grid for a level — the union of all three
 - **Layers:**
   - **Background layer** (static): floor and the goal tile, indexed by tile coordinate like the Entity layer. Never changes during play.
   - **Wall layer** (static): a set of *edges* between adjacent tiles — see §1.2. Not indexed by tile coordinate at all; this is the layer that "doesn't follow the same coordinate system" the other two do.
-  - **Entity layer** (movable): the character and crates. Every action reads and writes this layer only — the Background and Wall layers are read-only during play.
+  - **Entity layer** (movable): the character, crates, and collectibles. Every action reads and writes this layer only — the Background and Wall layers are read-only during play.
 
 ### 1.1 Background tile types
 
@@ -41,7 +41,7 @@ Levels are checked against these rules when they're loaded (`validateLevelWalls`
 
 **Rendering.** A wall draws as a brick-coloured band with mortar joints (prototype styling, `DESIGN.md` §10) on the edge its two tiles share. A wraparound wall has no shared edge on screen — its two tiles are drawn on opposite sides of the board — so it draws as two segments instead, one on each tile's outer board edge. Both segments are one logical wall; see `BoardView.drawWalls`/`drawBrickSegment`.
 
-**Legality by action.** Move, Rotate, and Shift each move an entity exactly one cardinal step at a time, so each checks the wall between an entity's current tile and the tile it's about to step onto — see §5.1/§5.2/§5.3 for exactly how. Flip does not check walls at all: it reflects an entity directly to its mirrored coordinate rather than stepping it across the board, so it never crosses an edge in the sense a wall guards — see §5.4.
+**Legality by action.** Move and Shift each move an entity exactly one cardinal step at a time, so each checks the wall between an entity's current tile and the tile it's about to step onto — see §5.1/§5.2 for exactly how. Flip does not check walls at all: it reflects an entity directly to its mirrored coordinate rather than stepping it across the board, so it never crosses an edge in the sense a wall guards — see §5.3. That asymmetry is a design tool, not an accident: a cell walled off on all four edges is unreachable by walking *and* unreachable by Shift, so **Flip is the only way in or out of a sealed cell** — which is exactly what Level 4 is built on.
 
 ## 2. Coordinate system
 
@@ -62,7 +62,7 @@ Implementation note: store each layer as a 2D array indexed `grid[y][x]` (row-ma
 
 ### 2.1 Borderless wraparound
 
-The board has no edges — it loops. This applies to **any** entity movement on the board, regardless of which action causes it (Move, Rotate, and Shift). Flip (§5.4) is the exception, and only because it never needs wrapping: mirroring a coordinate inside the grid always lands inside the grid.
+The board has no edges — it loops. This applies to **any** entity movement on the board, regardless of which action causes it (Move and Shift). Flip (§5.3) is the exception, and only because it never needs wrapping: mirroring a coordinate inside the grid always lands inside the grid.
 
 - If a move would take a coordinate to index `5` (or beyond), it wraps to index `0`.
 - If a move would take a coordinate to index `-1` (or below), it wraps to index `4`.
@@ -75,14 +75,14 @@ Moving off one side of the board is therefore always legal *as far as the edge i
 
 | Entity | Layer | Notes |
 |---|---|---|
-| Character | Entity | The thing the player is trying to get onto the goal tile. One per level (MVP). Not destructible, and never treats a collectible as an obstacle — see §5.5. |
-| Crate | Entity | Any number per level, optional. **Destructible**: every action displaces a crate exactly as it displaces the character, a crate on the goal tile does nothing, Move can target a crate as readily as the character — but if it's ever crushed against something that can't move out of its way (a wall, or another stuck entity), it's destroyed instead of the whole action being rejected. See §5.5. |
-| Collectible | Entity | Any number per level, optional (`entities.collectibles`, §6). Occupies a tile exactly like a crate — Move/Shift/Rotate can displace one — but it's **indestructible**: when it can't move out of the way, it just stays put and becomes an obstruction rather than being destroyed. The character is the sole exception to all of this: it never treats a collectible as an obstacle, always picking one up (instantly, whether or not that collectible could otherwise have moved) instead of blocking on or pushing it. A collectible with `required: true` gates the win condition — see §4. Not yet pickable by crates; per the game's design notes, only the character (and, later, enemies) can collect one. |
+| Character | Entity | The thing the player is trying to get onto the goal tile. One per level (MVP). Not destructible, and never treats a collectible as an obstacle — see §5.4. |
+| Crate | Entity | Any number per level, optional. **Destructible**: every action displaces a crate exactly as it displaces the character, a crate on the goal tile does nothing, Move can target a crate as readily as the character — but if it's ever crushed against something that can't move out of its way (a wall, or another stuck entity), it's destroyed instead of the whole action being rejected. See §5.4. A crate may also **contain a collectible** (`contains`, §6), which it drops onto the tile it died on the instant it's destroyed — the collectible is not on the board, and cannot be reached or displaced, until the crate breaks. |
+| Collectible | Entity | Any number per level, optional (`entities.collectibles`, §6), plus any dropped by a broken crate. Occupies a tile exactly like a crate — Move and Shift can displace one — but it's **indestructible**: when it can't move out of the way, it just stays put and becomes an obstruction rather than being destroyed. The character is the sole exception to all of this: it never treats a collectible as an obstacle, always picking one up (instantly, whether or not that collectible could otherwise have moved) instead of blocking on or pushing it. A collectible with `required: true` gates the win condition — see §4. Not yet pickable by crates; per the game's design notes, only the character (and, later, enemies) can collect one. |
 | Goal | Background | A single tile marked as the win condition. Static — part of the Background layer, not something that moves. |
 
-**No two entities may occupy the same tile at rest.** When Move would displace an entity onto a tile another entity already occupies, the entity already there is pushed one step further in the same direction first — and if *that* tile is occupied too, the push cascades down the chain before anything actually moves. See §5.1 for exactly how a push chain resolves, including the case where the chain wraps all the way around the board, and §5.5 for what happens when that chain runs into a wall instead of an open tile. The one moment two entities *do* share a tile is transiently when the character picks up a collectible — resolved instantly as part of the same action, never left as board state.
+**No two entities may occupy the same tile at rest.** When Move would displace an entity onto a tile another entity already occupies, the entity already there is pushed one step further in the same direction first — and if *that* tile is occupied too, the push cascades down the chain before anything actually moves. See §5.1 for exactly how a push chain resolves, including the case where the chain wraps all the way around the board, and §5.4 for what happens when that chain runs into a wall instead of an open tile. The one moment two entities *do* share a tile is transiently when the character picks up a collectible — resolved instantly as part of the same action, never left as board state.
 
-Pushing is a Move-only concern in the ordinary (unblocked) case. Rotate, Shift, and Flip each displace every entity they affect in one simultaneous reshuffle — a permutation of positions, not a sequence of single-entity displacements — so two entities can never end up sharing a tile as a result of those actions when nothing is blocked. Move is the only action where one entity moves into a tile that isn't moving along with it, so it's the only one that ever needs to push a *chain*; Rotate and Shift instead resolve a *blocked* reshuffle with the same peeling logic Move uses (§5.5), just walked around a ring or along a row/column instead of from a single mover.
+Pushing is a Move-only concern in the ordinary (unblocked) case. Shift and Flip each displace every entity they affect in one simultaneous reshuffle — a permutation of positions, not a sequence of single-entity displacements — so two entities can never end up sharing a tile as a result of those actions when nothing is blocked. Move is the only action where one entity moves into a tile that isn't moving along with it, so it's the only one that ever needs to push a *chain*; Shift instead resolves a *blocked* reshuffle with the same peeling logic Move uses (§5.4), just walked along a row/column instead of from a single mover.
 
 Since entities never share a tile outside of an in-progress action, a Move tap on a cell always targets the one entity present there; the character is still drawn above crates and collectibles in `BoardView` for legibility, but that no longer needs to break a tie.
 
@@ -90,16 +90,29 @@ Since entities never share a tile outside of an in-progress action, a Move tap o
 
 Checked automatically after every action resolves: if the Entity-layer cell holding the character has the same `(x, y)` as the Board-layer goal tile, **and** every `required` collectible the level places has already been picked up, the level is won.
 
-Reaching the goal while a required collectible is still outstanding does nothing — no win, no penalty, the action is still spent. The goal marker itself reflects this: it draws as 🔒 while any required collectible remains, and swaps to ★ the instant the last one is picked up (`BoardView.setGoalLocked`), so a player standing on a locked goal can see why nothing happened without reading the hint text. A level with no collectibles, or none marked `required`, behaves exactly as before this section existed — the goal is always ★ and any entry is a win.
+Reaching the goal while a required collectible is still outstanding does nothing — no win, no penalty. The goal marker itself reflects this: it draws as 🔒 while any required collectible remains, and swaps to ★ the instant the last one is picked up (`BoardView.setGoalLocked`), so a player standing on a locked goal can see why nothing happened without reading the hint text. A level with no collectibles, or none marked `required`, would have an always-★ goal, though every level currently ships a required key.
+
+`requiredTypes` is computed from the level definition, not from what's on the board: a key sealed inside a crate (§3) counts from the moment the level loads, so the goal starts locked and the objective line names the key before the player has any way of seeing it.
+
+### 4.1 There is no lose condition
+
+Move is free and unlimited (§5.1), so a run can't run out of anything. A level *can* still be made unwinnable — spending the level's one Flip on the wrong axis in Level 4 leaves the key sealed for good — but the game doesn't attempt to detect that; proving a board unsolvable is not something the scene can do in general. Instead:
+
+- a **retry button (↻)** sits in the HUD for the whole run, next to the exit button, and restarts the level immediately;
+- once every action pool is empty, the resting hint changes to `No actions left — tap ↻ to retry`, so a stuck player is told where to go.
+
+An action that changes nothing is also **free**: a Shift of a line with nothing on it, or one where every entity is walled against its step, is rejected with a hint and costs no budget (§5.2). That matters when a level grants exactly one Shift — probing the board to work out *which* line to shift must not be what loses the level.
 
 ## 5. Actions
 
 Every action is defined by:
-- **Name** — identifier shown on its card.
+- **Name** — identifier shown on its card (Move has no card; see below).
 - **Parameters** — the inputs needed to fully specify one use of the action.
 - **Effect** — what it does to the Entity layer when executed.
-- **Legality** — conditions checked before the action is allowed to confirm; an illegal action is rejected and costs nothing (per `DESIGN.md` §5).
-- **Cost** — spent from **that action's own** budget on successful execution. Every action costs 1 use of itself and nothing from any other action's pool (§6).
+- **Legality** — conditions checked before the action is allowed to run; an illegal action is rejected and costs nothing (per `DESIGN.md` §5).
+- **Cost** — spent from **that action's own** budget on successful execution. Every budgeted action costs 1 use of itself and nothing from any other action's pool (§6).
+
+There are two tiers. **Move is free and unlimited** — no card, no budget, no selection step, available on every level. **Shift and Flip are budgeted**, and a level grants each of them its own small pool (usually exactly 1). A level's difficulty is which budgeted action to spend and on what, never how many steps it took to walk there.
 
 ### 5.1 Move
 
@@ -108,78 +121,53 @@ Every action is defined by:
 | Parameters | `startTile: (x, y)` — always the character's current tile (see Target selection); `direction: Up \| Down \| Left \| Right` |
 | Effect | The character, at `startTile`, is displaced to the adjacent tile in `direction`, with wraparound applied (§2.1). If that destination tile is occupied, the entity there is displaced one step further in `direction` first, and so on down the chain (§5.1.1) — every entity in the chain ends up shifted one step. The Background and Wall layers are untouched. |
 | Legality | Walking the push chain from `startTile` in `direction` must not cross a wall (§1.2) before it resolves. |
-| Cost | 1 Move |
-| Target selection | Move always targets the character — there is only ever one, so there's no tap-to-select step. Tapping the Move card immediately shows four directional arrows around the character; tap an arrow **or** swipe in a cardinal direction to choose the direction. Choosing the direction executes the move immediately — there is no separate confirm step (per `DESIGN.md` §5). Crates cannot be targeted directly; they only move when the character's push chain (§5.1.1) reaches them. |
+| Cost | **None.** Move is unlimited: it never appears in `actionBudget`, never draws down a pool, and can never end a level. It's counted (the HUD shows a running `Moves:` tally, and the win overlay reports it) but never limited. |
+| Target selection | Move always targets the character — there is only ever one, so there's no tap-to-select step, and no card either. Whenever no action card is selected, four directional arrows sit around the character; tap an arrow **or** swipe in a cardinal direction anywhere on screen to move. Choosing the direction executes the move immediately. Crates cannot be targeted directly; they only move when the character's push chain (§5.1.1) reaches them. |
 
 Direction deltas: `Up = (0, -1)`, `Down = (0, +1)`, `Left = (-1, 0)`, `Right = (+1, 0)`.
 
 Example (no push): character at `(4, 2)` moves `Right` → destination `x = (4 + 1) % 5 = 0` → character ends at `(0, 2)`.
+
+**Implementation note on the arrows.** The four Move arrows are created once per level and then repositioned and shown/hidden — never destroyed and rebuilt like every other control. Phaser only folds a newly-interactive object into its hit-test list on the *following* frame, so arrows rebuilt at the end of each move would be visible but untappable for a frame. Hiding them keeps them permanently in that list, and a hidden object fails Phaser's `willRender` check, so it can't be tapped while it's parked. See `BoardView.showMoveArrows`/`hideMoveArrows`.
 
 #### 5.1.1 Push chains
 
 Moving an entity onto an occupied tile pushes a chain, not just one neighbour: starting at `startTile`, walk the line of tiles in `direction` — `startTile`, then one step further, then one step further again — following whichever entity occupies each tile, until one of three things happens:
 
 1. **An unoccupied tile is found.** The chain resolves there: every entity from `startTile` up to (but not including) that tile shifts one step forward into the next tile in the chain. This is the common case — pushing one crate, or a crate that pushes another crate.
-2. **A wall is hit** (§1.2) — the next step in the walk would cross a wall. If nothing in the chain is destructible, the whole move is illegal and nothing moves — same as any other illegal action (`DESIGN.md` §5). If a crate is crushed against the wall (or against something else in the chain that can't move), it's destroyed instead — see §5.5. Level 7 (§7) is built to exercise the plain-illegal case, including the wraparound wall variant in Level 8; Levels 10–11 exercise the destruction case.
-3. **The walk wraps all the way back to `startTile` itself**, because the board is borderless (§2.1) and every tile on that row/column is occupied by an entity. There is no open tile to resolve into, but this is *not* a deadlock: every entity in the chain still shifts one step forward, including the entity that was at `startTile` — the net effect is the entire line rotating by one, identical to a Shift on that line. This is the case Level 6 (§7) is built to exercise.
+2. **A wall is hit** (§1.2) — the next step in the walk would cross a wall. If nothing in the chain is destructible, the whole move is illegal and nothing moves — same as any other illegal action (`DESIGN.md` §5). If a crate is crushed against the wall (or against something else in the chain that can't move), it's destroyed instead — see §5.4. Level 2 (§7) exercises the plain-illegal case; Level 3 exercises the destruction case.
+3. **The walk wraps all the way back to `startTile` itself**, because the board is borderless (§2.1) and every tile on that row/column is occupied by an entity. There is no open tile to resolve into, but this is *not* a deadlock: every entity in the chain still shifts one step forward, including the entity that was at `startTile` — the net effect is the entire line rotating by one, identical to a Shift on that line. Level 6 (§7) is built entirely on this case: it packs a sealed corridor edge to edge, so rotating is the only way the character can move at all.
 
-Implementation: `resolveMoveChain` (in `src/core/rules.js`, taking a wall lookup built by `buildWallSet` rather than the raw level) walks the chain and returns a discriminated result — `{ kind: 'open' | 'loop', path }` for cases 1 and 3 (`applyMoveChain` then shifts every entity in `path` forward by one), or `{ kind: 'pickup' | 'destroy' | 'illegal', ... }` for case 2 and the character's own pickup shortcut — see §5.5 for what each of those means.
+Implementation: `resolveMoveChain` (in `src/core/rules.js`, taking a wall lookup built by `buildWallSet` rather than the raw level) walks the chain and returns a discriminated result — `{ kind: 'open' | 'loop', path }` for cases 1 and 3 (`applyMoveChain` then shifts every entity in `path` forward by one), or `{ kind: 'pickup' | 'destroy' | 'illegal', ... }` for case 2 and the character's own pickup shortcut — see §5.4 for what each of those means.
 
 Example (push, no loop): row has crates at `(2, 2)` and `(3, 2)`, character at `(1, 2)`. Character moves `Right`: destination `(2, 2)` is occupied, so the chain walks to `(3, 2)` (also occupied), then to `(4, 2)` (open) — chain resolves. Character ends at `(2, 2)`, the first crate at `(3, 2)`, the second crate at `(4, 2)`.
 
-Example (full-loop push): see Level 6 (§7) — a row completely filled by 5 entities, where a single Move rotates the whole row by one.
-
-### 5.2 Rotate
-
-| Field | Value |
-|---|---|
-| Parameters | `center: (x, y)` — the tile at the middle of the rotation; `direction: Clockwise \| Anticlockwise` |
-| Effect | The 8 tiles surrounding `center` (its Chebyshev-distance-1 neighbours, with wraparound §2.1) form a ring. Each tile's Entity-layer contents shift **one step** around that ring in `direction`. The `center` tile itself is untouched, as are the Background and Wall layers. Empty ring tiles "rotate" too — they just carry nothing. |
-| Legality | Empty tiles are always allowed to rotate. If any occupied ring tile's one-step move to its next ring position would cross a wall (§1.2), the **whole** rotation is illegal and rejected before anything moves — same all-or-nothing rule as Move's push chain, just checked across every entity on the ring instead of one chain. |
-| Cost | 1 Rotate |
-| Target selection | Tap the Rotate card → tap a tile to set the rotation **center** → two rotation arrows appear above the center (`↺` anticlockwise, `↻` clockwise); tap an arrow **or** swipe **right** (clockwise) / **left** (anticlockwise) to choose the direction and execute in one gesture. Tapping the center tile again cancels; tapping a different tile re-centers. |
-
-**Ring order.** The 8 surrounding tiles, in clockwise order starting from the top-left corner:
-
-```
-index:  0    1    2
-        TL   T    TR         TL=(cx-1,cy-1)  T=(cx,cy-1)  TR=(cx+1,cy-1)
-        7  center 3           L=(cx-1,cy)               R=(cx+1,cy)
-        L        R
-        6    5    4
-        BL   B    BR         BL=(cx-1,cy+1)  B=(cx,cy+1)  BR=(cx+1,cy+1)
-```
-
-Clockwise order is `TL → T → TR → R → BR → B → BL → L → (back to TL)` — i.e. ring indices `0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 0`.
-
-- **Clockwise:** the contents at ring index `i` move to index `(i + 1) mod 8`.
-- **Anticlockwise:** the contents at ring index `i` move to index `(i - 1 + 8) mod 8`.
-
-Because adjacent ring positions are always cardinally adjacent, a single rotation displaces any one entity by exactly **one cell in a cardinal direction** — a corner tile shifts to an edge tile and vice-versa. This is what makes Rotate usable to walk the character around the board.
-
-Example: `center = (2, 3)`, character at the top-left ring tile `(1, 2)` (index 0). A **clockwise** rotation moves it to index 1, the `T` tile → character ends at `(2, 2)`.
-
-### 5.3 Shift
+### 5.2 Shift
 
 | Field | Value |
 |---|---|
 | Parameters | `line: { axis: Row \| Column, index }` — which row (`y = index`) or column (`x = index`) to shift; `direction: Left \| Right` for a row, `Up \| Down` for a column |
 | Effect | Every entity currently on the Entity layer at `y = index` (row) or `x = index` (column) moves one cell in `direction`, with wraparound (§2.1). Tiles on that row/column not holding an entity stay empty; the Background and Wall layers are untouched. |
-| Legality | A row/column with no entity on it "shifts" without visible effect and is always legal. If any occupied tile's one-step move would cross a wall (§1.2), the whole shift is illegal and rejected before anything moves — same all-or-nothing rule as Rotate. |
-| Cost | 1 Shift |
-| Target selection | Tap the Shift card → arrows appear immediately around **every** row and column edge, pointing inward (`▶` on the left edge / `◀` on the right edge of each row; `▼` above / `▲` below each column) → tap one arrow to shift that row or column in that direction and execute immediately. Unlike Move/Rotate, there is no separate tap-a-target step first — which arrow you tap picks the row/column *and* the direction in one gesture. |
+| Legality | If any occupied tile's one-step move would cross a wall (§1.2), that entity and anything queued behind it are resolved by §5.4 — crushed, collected, or left standing. A shift that changes nothing at all — an empty line, or one where every entity is walled in place with nothing to sacrifice — is rejected and **costs nothing**. |
+| Cost | 1 Shift, unless it was rejected as a no-op above. |
+| Target selection | Tap the Shift card → arrows appear immediately around **every** row and column edge, pointing inward (`▶` on the left edge / `◀` on the right edge of each row; `▼` above / `▲` below each column) → tap one arrow to shift that row or column in that direction and execute immediately. There is no separate tap-a-target step first — which arrow you tap picks the row/column *and* the direction in one gesture. A rejected (free) shift leaves the card selected, so the next arrow can be tried straight away. |
 
 Example: `line = { axis: Row, index: 3 }`, `direction = Right`, character at `(2, 3)` → destination `x = (2 + 1) % 5 = 3` → character ends at `(3, 3)`; a character on any other row is unaffected.
 
-### 5.4 Flip
+**What Shift is for.** Because Shift respects walls exactly as Move does, it can never reach a tile Move can't. Its distinctive powers are the other two:
+
+- **It acts at a distance.** It moves entities the character isn't standing next to — including ones the character will never be next to.
+- **It pushes from a side the character can't occupy.** Move can only push an entity in direction `d` if the character can stand on the tile behind it; Shift needs no pusher at all. An entity walled in on the shift axis is therefore crushable by Shift and by nothing else, which is exactly what Level 5 (§7) is built on.
+
+### 5.3 Flip
 
 The board's highest-impact action: it mirrors the **entire** entity layer in one use, so every entity moves at once and an entity can cross the whole board in a single action.
 
 | Field | Value |
 |---|---|
 | Parameters | `axis: Row \| Column` — the **mirror line**, i.e. the middle row or the middle column of the board |
-| Effect | Every entity on the Entity layer is reflected across that middle line. `axis: Row` mirrors across the middle row, so `y` flips and the board turns top-to-bottom; `axis: Column` mirrors across the middle column, so `x` flips and the board turns left-to-right. The other coordinate is unchanged. The Background and Wall layers are untouched — the goal tile does **not** move. |
-| Legality | Always legal: mirroring never leaves the grid, and Flip never checks walls (§1.2). A wall blocks movement between two adjacent tiles that an entity steps across; Flip reflects an entity straight to its mirrored coordinate without stepping through anything in between, so there's no edge for a wall to guard here — unlike Move, Rotate, and Shift, which all move one cardinal step at a time. |
+| Effect | Every entity on the Entity layer is reflected across that middle line. `axis: Row` mirrors across the middle row, so `y` flips and the board turns top-to-bottom; `axis: Column` mirrors across the middle column, so `x` flips and the board turns left-to-right. The other coordinate is unchanged. The Background and Wall layers are untouched — the goal tile and the walls do **not** move. |
+| Legality | Always legal: mirroring never leaves the grid, and Flip never checks walls (§1.2). A wall blocks movement between two adjacent tiles that an entity steps across; Flip reflects an entity straight to its mirrored coordinate without stepping through anything in between, so there's no edge for a wall to guard here — unlike Move and Shift, which both move one cardinal step at a time. |
 | Cost | 1 Flip |
 | Target selection | Tap the Flip card → both mirror lines highlight, with `↔` above the middle column and `↕` to the left of the middle row → tap one arrow, **or** swipe horizontally (mirror across the middle column) / vertically (mirror across the middle row), to execute immediately. Like Shift, there is no separate tap-a-target step — Flip always affects the whole board, so the only choice is which line to mirror across. |
 
@@ -192,20 +180,21 @@ No wraparound is involved (§2.1) — the mirror of an in-range coordinate is al
 
 **Properties worth designing around:**
 
-- **Flip is its own inverse.** Flipping twice across the same line returns every entity to where it started, wasting two actions. This is the main way a player loses a Flip-only level.
-- **The middle line is a fixed point.** On the 5×5 board, an entity at `y = 2` is unmoved by a row flip, and one at `x = 2` is unmoved by a column flip. An entity at `(2, 2)` is unmoved by either. The two mirror lines are highlighted while Flip is selected precisely so this is visible before committing.
+- **Flip ignores walls, and it's the only thing that does.** A cell sealed on all four edges can't be walked into and can't be shifted out of, but its contents flip out of it freely — because the walls stay where they are while the entity teleports. This is the single most important design lever in the game, and Level 4 is built entirely on it.
+- **Flip is its own inverse.** Flipping twice across the same line returns every entity to where it started, wasting two actions.
+- **The middle line is a fixed point.** On the 5×5 board, an entity at `y = 2` is unmoved by a row flip, and one at `x = 2` is unmoved by a column flip. An entity at `(2, 2)` is unmoved by either. The two mirror lines are highlighted while Flip is selected precisely so this is visible before committing — and putting a sealed key *on* one of those lines is how Level 4 makes the axis choice matter.
 - **Distance travelled depends on where you are.** An entity on an edge (`0` or `4`) jumps 4 cells; one adjacent to the middle jumps 2. Flip is strongest from the edges and weakest near the center.
-- **The goal never moves,** so a flip changes the character's relationship to the goal — unlike Rotate/Shift, it can close a large gap or open one just as fast.
+- **The goal never moves,** so a flip changes the character's relationship to the goal — unlike Shift, it can close a large gap or open one just as fast.
 
 Example: `axis: Column` on a 5×5 board, character at `(1, 1)` → `x = 5 - 1 - 1 = 3` → character ends at `(3, 1)`. A crate at `(0, 0)` moves to `(4, 0)` in the same action.
 
-### 5.5 Destruction and pickup at a jam
+### 5.4 Destruction and pickup at a jam
 
-Move, Shift, and Rotate all resolve to the same underlying shape: entities lined up along a direction (a linear chain for Move, a row/column for Shift, the 8-tile ring for Rotate), each trying to step one cell forward into the next tile in that line. Ordinarily this always succeeds — the destination is open, or the whole line permutes at once with nothing left in anyone's way. This section covers what happens when a wall stops a tile in that line from ever opening up.
+Move and Shift both resolve to the same underlying shape: entities lined up along a direction (a linear chain for Move, a row/column for Shift), each trying to step one cell forward into the next tile in that line. Ordinarily this always succeeds — the destination is open, or the whole line permutes at once with nothing left in anyone's way. This section covers what happens when a wall stops a tile in that line from ever opening up.
 
 **Which entities are involved:**
-- **The character** is never destructible, and never treats a collectible as an obstacle (see the character-yields case below) — it can still be blocked by a wall or by a stuck crate, exactly as before this mechanic existed.
-- **Crates are destructible.** A crate that ends up unable to complete its forced move — because the tile ahead of it is a wall, or is occupied by an entity that itself can't move — is destroyed instead of the whole action being rejected.
+- **The character** is never destructible, and never treats a collectible as an obstacle (see the character-yields case below) — it can still be blocked by a wall or by a stuck crate.
+- **Crates are destructible.** A crate that ends up unable to complete its forced move — because the tile ahead of it is a wall, or is occupied by an entity that itself can't move — is destroyed instead of the whole action being rejected. If it was carrying a collectible (§3), that collectible appears on the crate's own tile as it dies.
 - **Collectibles are indestructible.** A collectible that can't move just stays exactly where it is, becoming an obstruction for whatever's behind it. (Future enemies are expected to behave the same way as the character here: not destructible, and not yielding to a collectible either.)
 
 **Resolution, per jammed run:** a "run" is a maximal, consecutive stretch of occupied tiles ending at a step that crosses a wall. Walk it from the tile touching the wall backward, toward whatever's pushing the run:
@@ -218,15 +207,15 @@ Move, Shift, and Rotate all resolve to the same underlying shape: entities lined
    - otherwise, it just stays too, and the walk continues one tile further back.
 3. **Exactly one outcome — a single destruction or a single pickup — happens per jammed run**, whichever comes first walking backward from the wall. Everything else in that run, including the mover that initiated the action, does not move. If the walk never finds a crate to destroy or a character-behind-a-collectible to resolve as a pickup (e.g. the character alone hits a wall, or a run of collectibles all just sit there), nothing in the run changes at all — same as an ordinary blocked, illegal action: rejected, free, no cost.
 
-An action still costs its budget if *any* run on the affected line/ring/chain produced a destruction or a pickup, even if nothing physically relocated — a crate visibly dying (or a collectible visibly vanishing into inventory) is enough of an effect to spend the action. It's only "nothing happened at all, anywhere" that's illegal and free. A part of the line/ring/chain not touching any wall is unaffected by all of this and moves normally in the same action.
+An action still costs its budget if *any* run on the affected line/chain produced a destruction or a pickup, even if nothing physically relocated — a crate visibly dying (or a collectible visibly vanishing into inventory) is enough of an effect to spend the action. It's only "nothing happened at all, anywhere" that's rejected and free. A part of the line/chain not touching any wall is unaffected by all of this and moves normally in the same action.
 
 **Move** is the special case of a single run, always starting at the character. Its own extra wrinkle: if the character's *very own* next step (not something being pushed ahead of it) lands on a collectible, that's always a pickup — regardless of whether the collectible could itself have moved further, and regardless of anything sitting beyond it. A collectible only ever needs the general jam logic above when something *other* than the character (a crate) is what's trying to displace it.
 
-**Flip is exempt.** It reflects every entity straight to its mirrored coordinate without stepping through anything in between (§5.4), so there's never a "jam" for it to resolve — collectibles and crates move with it exactly like the character does, unconditionally.
+**Flip is exempt.** It reflects every entity straight to its mirrored coordinate without stepping through anything in between (§5.3), so there's never a "jam" for it to resolve — collectibles and crates move with it exactly like the character does, unconditionally.
 
-**Rendering a destruction.** A destroyed crate doesn't just disappear: it nudges toward the tile it was crushed trying (and failing) to reach — `CRUSH_NUDGE_MS`, the same "hit something solid" read `animateBump` gives a directly wall-blocked Move — then bursts into a small ring of fragments that fly outward and fade (`EXPLOSION_TWEEN_MS`), rather than fading or shrinking in place. `dest` on a `destroy` outcome (from either `resolveMoveChain` or `resolveCycleOutcome`) is exactly that attempted tile, computed from the same directional step the rest of the jammed run was trying to take, and is what `BoardView.destroyEntitySprite` nudges toward.
+**Rendering a destruction.** A destroyed crate doesn't just disappear: it nudges toward the tile it was crushed trying (and failing) to reach — `CRUSH_NUDGE_MS`, the same "hit something solid" read `animateBump` gives a directly wall-blocked Move — then bursts into a small ring of fragments that fly outward and fade (`EXPLOSION_TWEEN_MS`), rather than fading or shrinking in place. `dest` on a `destroy` outcome (from either `resolveMoveChain` or `resolveCycleOutcome`) is exactly that attempted tile, computed from the same directional step the rest of the jammed run was trying to take, and is what `BoardView.destroyEntitySprite` nudges toward. A collectible the crate was carrying pops into place on the crate's own tile as the fragments clear (`SPAWN_TWEEN_MS`, `BoardView.spawnEntitySprite`).
 
-Implementation: `resolveMoveChain` (Move) and `resolveCycleOutcome` (Shift/Rotate, via `rotationOrder`/`shiftOrder` to build the ordered ring/line) in `src/core/rules.js`; `BoardView.destroyEntitySprite`/`explodeAt` for the crushed-then-exploded animation.
+Implementation: `resolveMoveChain` (Move) and `resolveCycleOutcome` (Shift, via `shiftOrder` to build the ordered line) in `src/core/rules.js`; `BoardView.destroyEntitySprite`/`explodeAt`/`spawnEntitySprite` for the crushed-then-exploded-then-revealed animation.
 
 ## 6. Level data format
 
@@ -244,281 +233,209 @@ Suggested shape for encoding a level, for whoever implements level loading:
   ],
   "entities": {
     "character": { "x": 1, "y": 2 },
-    "crates": [{ "x": 0, "y": 0 }],
+    "crates": [
+      { "x": 0, "y": 0 },
+      { "x": 2, "y": 2, "contains": { "type": "key", "required": true } }
+    ],
     "collectibles": [{ "x": 1, "y": 0, "type": "key", "required": true }]
   },
   "actionBudget": {
-    "move": 2,
     "flip": 1
   }
 }
 ```
 
-`entities.crates` is optional — omit it for a level with no crates. Each entry is one crate's starting position (§3).
+`entities.crates` is optional — omit it for a level with no crates. Each entry is one crate's starting position (§3), plus an optional `contains: { type, required }`: the collectible that crate is holding, which drops onto its tile when it's destroyed (§5.4). A crate's contents count toward the level's required collectibles from the moment it loads, so the goal starts locked even though the key isn't on the board yet (§4).
 
-`entities.collectibles` is optional — omit it for a level with no collectibles. Each entry is `{ x, y, type, required }` (§3): `type` selects the on-board glyph and the HUD label (`src/config.js`'s `COLLECTIBLE_GLYPHS`/`COLLECTIBLE_LABELS` — `"key"` is the only type so far); `required` (default `false` if omitted) marks whether the goal stays locked until that collectible is picked up (§4).
+`entities.collectibles` is optional — omit it for a level with no loose collectibles. Each entry is `{ x, y, type, required }` (§3): `type` selects the on-board glyph and the HUD label (`src/config.js`'s `COLLECTIBLE_GLYPHS`/`COLLECTIBLE_LABELS` — `"key"` is the only type so far); `required` (default `false` if omitted) marks whether the goal stays locked until that collectible is picked up (§4).
 
 `walls` is optional — omit it for a level with no walls. Each entry is a `[a, b]` pair of cardinally adjacent tile coordinates naming one wall (§1.2); `validateLevelWalls` (`src/core/rules.js`) rejects an invalid pair when the level loads.
 
 **`actionBudget` is per action type, in two senses:**
 
-1. **Which actions the level offers.** An action type absent from the map, or set to `0`, cannot be used at all — this is how Level 1 offers only Move. Only the listed actions get a card.
-2. **How many times each may be used.** Each key is that action's own private pool. Using Flip draws down `flip` and nothing else, so `{ "move": 1, "flip": 1 }` means *exactly one Move and exactly one Flip* — not "two actions, spend them however you like". A level is lost only when **every** listed action has hit `0` without the character reaching the goal.
+1. **Which actions the level offers.** An action type absent from the map, or set to `0`, cannot be used at all — this is how Levels 1–3 offer no cards whatsoever. Only the listed actions get a card.
+2. **How many times each may be used.** Each key is that action's own private pool. Using Flip draws down `flip` and nothing else, so `{ "shift": 1, "flip": 1 }` means *exactly one Shift and exactly one Flip* — not "two actions, spend them however you like".
 
-Each card displays its own remaining count and greys out when spent, while the level's HUD counter shows total actions used against the sum of all pools. In Test mode every pool is unlimited.
+**Move is never listed.** It's free and unlimited on every level (§5.1), so `"actionBudget": {}` is a complete, valid budget: a pure movement puzzle with no cards at all.
 
-This is the main knob for level difficulty: the *mix* matters as much as the total. Two of one action plays very differently from one each of two, since neither can cover for the other.
+Each card displays its own remaining count and greys out when spent. In Test mode every pool is unlimited.
+
+This is the main knob for level difficulty. Levels usually grant exactly **one** use of exactly **one** action, so the puzzle is identifying the single right target for it — see §4.1 on why getting that wrong costs a retry rather than a loss.
 
 ## 7. Levels
 
-### Level 1
+Every level places exactly one `required` key, either loose on the board or sealed inside a crate, so the shape of every puzzle is *find the key, then reach the exit*. Each level introduces exactly one idea, in order: walking and the lock, wraparound, crates and crushing, Flip, Shift, the full-loop push, and finally both budgeted actions at once.
 
-The introductory level: solvable with Move alone, per `DESIGN.md`'s scope for Puzzle 1.
+### Level 1 — the key and the door
+
+Teaches the whole loop with no actions at all: swipe to walk, and the goal doesn't open until you're holding the key.
 
 | Field | Value |
 |---|---|
 | Grid | 5×5, no walls |
 | Character start | `(1, 2)` |
+| Collectibles | key at `(2, 0)`, `required: true` |
 | Goal | `(3, 2)` |
-| Available actions | Move only |
-| Action budget | 2 |
+| Available actions | None (Move only, free and unlimited) |
 
-**Intended solution:** the goal is 2 tiles to the right of the start (`x: 1 → 3`, same `y`). Moving `Right` twice solves it with zero slack:
+The goal sits 2 steps directly right of the start, so walking straight at it is the obvious first thing a player tries — and it does nothing: the marker reads 🔒 and the hint says `Get the key first`. Because moves are free, that mistake *teaches* the lock instead of punishing it, which is the point of putting the key off the direct line.
 
-1. Move `(1, 2)` `Right` → character now at `(2, 2)`
-2. Move `(2, 2)` `Right` → character now at `(3, 2)` = goal → **win**
+**Intended solution:** `Right`, `Up`, `Up` to `(2, 0)` collects the key (the marker flips to ★ and the objective line updates), then `Right`, `Down`, `Down` to `(3, 2)` = goal → **win**. Six moves, though any route works.
 
-The tight budget (exactly 2, no margin for a wrong move) is intentional: it teaches the Move action and the coordinate system without offering an easier alternate path. No wraparound is required to solve Level 1, since the shortest path stays within the grid — wraparound remains available but isn't needed here.
+### Level 2 — the board has no edges
 
-### Level 2
-
-Introduces the Rotate action (§5.2). The only action available is Rotate; there is no Move.
+Teaches wraparound (§2.1) by making the seam the *only* way in.
 
 | Field | Value |
 |---|---|
-| Grid | 5×5, no walls |
+| Grid | 5×5 |
 | Character start | `(1, 2)` |
-| Goal | `(2, 3)` |
-| Available actions | Rotate only |
-| Action budget | 2 |
-
-**Intended solution:** the goal is one tile down-and-right of the start (a diagonal, `(1,2) → (2,3)`). A single rotation only moves the character one cardinal step (§5.2), so a diagonal takes two rotations:
-
-1. Rotate around center `(2, 3)` **clockwise** → the character sits at that center's top-left ring tile `(1, 2)` (index 0) and shifts to index 1, the `T` tile → character now at `(2, 2)`.
-2. Rotate around center `(1, 3)` **clockwise** → the character sits at that center's top-right ring tile `(2, 2)` (index 2) and shifts to index 3, the `R` tile → character now at `(2, 3)` = goal → **win**.
-
-Budget 2 is exactly the shortest solution length, mirroring Level 1's tightness — this time to teach that one rotation equals one cardinal step and that reaching a diagonal needs two of them.
-
-### Level 3
-
-Introduces the Shift action (§5.3). The only action available is Shift; there is no Move or Rotate.
-
-| Field | Value |
-|---|---|
-| Grid | 5×5, no walls |
-| Character start | `(2, 3)` |
+| Collectibles | key at `(0, 2)`, `required: true` |
 | Goal | `(3, 2)` |
-| Available actions | Shift only |
-| Action budget | 2 |
+| Walls | `(0,1)`–`(0,2)`, `(0,2)`–`(0,3)`, `(0,2)`–`(1,2)` |
+| Available actions | None (Move only) |
 
-**Intended solution:** the goal is one tile up-and-right of the start (a diagonal, `(2,3) → (3,2)`). A single shift only moves the character one cardinal step along its row or column (§5.3), so a diagonal takes two shifts:
+The key's tile has four edges. Three of them are walled: up to `(0,1)`, down to `(0,3)`, and right to `(1,2)`. The fourth is the wraparound edge to `(4,2)`, which is deliberately left open — so the character has to walk *off* the right-hand side of the board to get in, and back out the same way.
 
-1. Shift row `y = 3` **Right** → character at `(2, 3)` is on that row, so `x = (2 + 1) % 5 = 3` → character now at `(3, 3)`.
-2. Shift column `x = 3` **Up** → character at `(3, 3)` is on that column, so `y = (3 - 1 + 5) % 5 = 2` → character now at `(3, 2)` = goal → **win**.
+**Intended solution:**
 
-Budget 2 is exactly the shortest solution length, mirroring Levels 1 and 2 — this time to teach that Shift moves an entity one cardinal step along a whole row/column at once, and that reaching a diagonal still needs two of them.
+1. `Right` ×3 → `(1,2) → (4,2)`, passing over the locked goal at `(3,2)` on the way, which shows the 🔒 in passing.
+2. `Right` → wraps to `(0,2)` = key → collected.
+3. `Left` → wraps back to `(4,2)`; `Left` → `(3,2)` = goal → **win**.
 
-### Level 4
+Walking straight at the key from `(1,2)` is the natural first attempt and is rejected with the wall bump, which is what sends the player looking for the other way round.
 
-Introduces the Flip action (§5.4) **and** crates (§3). The only action available is Flip.
+### Level 3 — the key is inside the crate
 
-| Field | Value |
-|---|---|
-| Grid | 5×5, no walls |
-| Character start | `(1, 1)` |
-| Crates | `(0, 0)` and `(4, 2)` |
-| Goal | `(3, 3)` |
-| Available actions | Flip only |
-| Action budget | Flip: 2 |
-
-**Intended solution:** the goal sits diagonally opposite the start through the board's center (`(1,1) → (3,3)`), which is exactly one mirror per axis. The two flips commute, so either order works:
-
-1. Flip across the middle **column** → character `x = 5 - 1 - 1 = 3` → character now at `(3, 1)`.
-2. Flip across the middle **row** → character `y = 5 - 1 - 1 = 3` → character now at `(3, 3)` = goal → **win**.
-
-(Row first gives `(1, 3)` then `(3, 3)` — same result.)
-
-Budget 2 is exactly the shortest solution, matching Levels 1–3. The trap this level teaches is Flip's self-inverse property (§5.4): using the *same* axis twice returns the character to `(1, 1)` and loses the level, so the player has to notice that the two arrows do different things rather than tapping the same one twice.
-
-The two crates carry no rules — they're here to make Flip's whole-board reach visible. They travel with the character on every flip: on the column-then-row solution, `(0, 0) → (4, 0) → (4, 4)` and `(4, 2) → (0, 2) → (0, 2)`. That second crate starts on the middle row, so the row flip leaves it exactly where it is — the fixed-point rule from §5.4, demonstrated on the board while the player watches.
-
-### Level 5
-
-The first level offering **two** action types, each with its own budget (§6) — one Move and one Flip. Neither can substitute for the other, so the level can only be solved by using each exactly once.
+Introduces crates, pushing (§5.1.1), and the crate-carries-a-collectible rule (§3/§5.4). Still no action cards — this is all Move.
 
 | Field | Value |
 |---|---|
-| Grid | 5×5, no walls |
-| Character start | `(1, 2)` |
-| Crates | `(1, 0)` |
-| Goal | `(3, 3)` |
-| Available actions | Move and Flip |
-| Action budget | Move: 1, Flip: 1 |
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(1, 2)`, containing a `required` key |
+| Goal | `(3, 2)` |
+| Walls | `(2,2)`–`(3,2)` |
+| Available actions | None (Move only) |
 
-**Intended solution:** a column flip covers the horizontal gap (`x: 1 → 3`) and the single Move covers the remaining step down. Either order works:
+The key is nowhere on the board at the start — the objective line names it anyway, which is the hint that it must be inside something. The board's single wall is the tool: a crate crushed against it breaks open.
 
-1. Flip across the middle **column** → character `x = 5 - 1 - 1 = 3` → character now at `(3, 2)`.
-2. Move `Down` → character now at `(3, 3)` = goal → **win**.
+**Intended solution:**
 
-(Move first gives `(1, 3)`, then the column flip gives `(3, 3)` — same result.)
+1. `Right` → the crate is pushed from `(1,2)` to `(2,2)`; character to `(1,2)`.
+2. `Right` → the crate's next step would cross the `(2,2)`–`(3,2)` wall, so it's crushed (§5.4) and drops its key on `(2,2)`. Nothing behind a destruction advances, so the character stays at `(1,2)`.
+3. `Right` → the character's own step lands on the key → collected, character now at `(2,2)`.
+4. `Up`, `Right`, `Down` → `(2,2) → (2,1) → (3,1) → (3,2)` = goal, detouring around the wall → **win**.
 
-Note the character starts on the middle row (`y = 2`), so a **row** flip does nothing to it (§5.4) and wastes the level's only Flip. The crate at `(1, 0)` is off the middle column, so it visibly jumps to `(3, 0)` on the correct flip, giving the player feedback that the action did something even when they mis-target.
+Six moves, but the count doesn't matter: pushing the crate the wrong way is fully recoverable, since the board is otherwise open and the character can always walk around and push it back.
 
-This level is where the per-action budget teaches itself: spending the Move on the crate — which is legal, crates are movable entities (§3) — leaves the character able to reach only `(3, 2)`, one cell short, with Move already at `0`. The lose condition still waits until *both* pools are empty.
+### Level 4 — only Flip reaches through walls
 
-### Level 6
-
-A push-chain test level, not a difficulty step: it exists to exercise the full-loop case in §5.1.1 — a row filled edge-to-edge by every entity on the board, so a single Move has to push all the way around the wraparound board and back into the mover's own tile.
+Introduces Flip (§5.3) and the one thing it can do that nothing else can.
 
 | Field | Value |
 |---|---|
-| Grid | 5×5, no walls |
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(1, 1)` |
+| Collectibles | key at `(2, 0)`, `required: true` |
+| Goal | `(4, 2)` |
+| Walls | `(1,0)`–`(2,0)`, `(2,0)`–`(3,0)`, `(2,0)`–`(2,1)`, `(2,0)`–`(2,4)` *(wraparound)* |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+The key at `(2,0)` is sealed on **all four** edges, including the wraparound one down to `(2,4)`. No route reaches it and no shift could move it out (a wall blocks a shift exactly as it blocks a step, §5.2). Flip is the only action that ignores walls, so it's the only way in.
+
+**The puzzle is the axis.** `(2,0)` sits on the middle column, which is a flip fixed point (§5.3): the `↔` arrow leaves the key exactly where it is and burns the level's only Flip. Only `↕` moves it, to `(2,4)` — a tile whose other three edges are open.
+
+**Intended solution:**
+
+1. Flip across the middle **row** (`↕`, or a vertical swipe) → key `(2,0) → (2,4)`. The character is at `y = 2`, the row-flip fixed line, so it doesn't move; the crate at `(1,1)` visibly jumps to `(1,3)`, confirming the flip did something even though the character didn't move.
+2. `Down` ×2, `Right` ×2 → `(0,2) → (0,4) → (1,4) → (2,4)` = key → collected.
+3. `Right` ×2, `Up` ×2 → `(2,4) → (4,4) → (4,2)` = goal → **win**.
+
+The crate carries no rules here; it exists so the player can see the flip move the *whole* entity layer, and see it move while the key doesn't — which is the tell for the fixed-point rule. Spending the flip on the wrong axis makes the level unwinnable, which is what the retry button (§4.1) is for.
+
+### Level 5 — Shift pushes from a side you can't stand on
+
+Introduces Shift (§5.2) on a board where Move provably cannot do its job.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(2, 2)`, containing a `required` key |
+| Goal | `(4, 2)` |
+| Walls | `(x,1)`–`(x,2)` and `(x,2)`–`(x,3)` for every `x` in `0..4` — 10 walls |
+| Available actions | Shift |
+| Action budget | Shift: 1 |
+
+Those ten walls turn row `y = 2` into a **sealed one-tile corridor**: it's cut off from the rows above and below at every column, and it wraps, so it's a closed ring. The character, the crate, and the goal all live in it, and the character can never leave it.
+
+**Why Move can't solve it.** The crate holds the key, so it has to be crushed. Crushing needs a wall in the push direction, and the only walls are the corridor's own — above and below every tile. To push the crate upward the character would have to stand *below* it and step up, but that step crosses a corridor wall and is illegal; likewise downward. Pushing left or right just slides the crate along the corridor forever, since there's no wall in the corridor to crush it against. So no sequence of moves, however long, can ever break the crate.
+
+**Why Shift can.** Shift needs no pusher. Shifting the crate's **column** tries to step it straight into a corridor wall, and a crate that can't complete its forced move is destroyed (§5.4) — which drops the key inside the corridor, where the character can simply walk to it. Either direction works; the choice that matters is *which column*.
+
+**Intended solution:**
+
+1. Walk to a comfortable spot if you like — pushing the crate along the corridor is free and changes nothing structurally.
+2. Shift the crate's column (`▼` or `▲` on that column) → the crate is crushed against the corridor wall and drops its key on its own tile. Shifting a column with nothing on row 2 is a free no-op, and shifting the character's own column is blocked and free (§4.1), so hunting for the right column costs nothing.
+3. Walk onto the dropped key, then along the corridor to the goal at `(4,2)` → **win**.
+
+### Level 6 — a full row still moves
+
+Built on the full-loop push (§5.1.1 case 3), the one push case that has no open tile to resolve into.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
 | Character start | `(1, 2)` |
 | Crates | `(0, 2)`, `(2, 2)`, `(3, 2)`, `(4, 2)` |
+| Collectibles | key at `(2, 4)`, `required: true` |
 | Goal | `(2, 2)` |
-| Available actions | Move only |
-| Action budget | Move: 1 |
+| Walls | `(x,1)`–`(x,2)` for every `x` in `0..4`, and `(x,2)`–`(x,3)` for `x` in `0..3` — 9 walls |
+| Available actions | None (Move only) |
 
-Row `y = 2` holds five entities on a five-wide board — every tile on that row is occupied. `entities.crates` starts one of its four crates sitting on the goal tile itself, which is legal and does nothing (§4) — the goal only cares what the *character* is standing on.
+The board is Level 5's sealed corridor with **one door**: `(4,2)` is left open downward onto `(4,3)`, and that's the only tile connecting row 2 to the rest of the board. Inside, the character and four crates fill all five tiles.
 
-**Intended solution:** Move the character `Right`. `resolveMoveChain` walks `(1,2) → (2,2) → (3,2) → (4,2) → (0,2) → (1,2)` — six tiles, because the sixth step wraps back to the character's own starting tile, having visited every occupied tile on the row exactly once (§5.1.1 case 3). The chain resolves as a full-row rotation:
-
-- Character `(1, 2) → (2, 2)` = goal → **win**
-- Crate `(2, 2) → (3, 2)`
-- Crate `(3, 2) → (4, 2)`
-- Crate `(4, 2) → (0, 2)`
-- Crate `(0, 2) → (1, 2)`
-
-One Move, zero slack, and it only works because the full-loop case resolves as a rotation rather than rejecting the move — if it were treated as blocked instead, this exact level would be unsolvable with the budget given.
-
-### Level 7
-
-Introduces walls (§1.2). A wall sits directly between the character and the goal, so the 1-move direct approach is illegal.
-
-| Field | Value |
-|---|---|
-| Grid | 5×5 |
-| Character start | `(1, 2)` |
-| Goal | `(2, 2)` |
-| Walls | `(1, 2)`–`(2, 2)` |
-| Available actions | Move only |
-| Action budget | Move: 3 |
-
-**Intended solution:** the wall blocks the 1-move direct path, so the character detours one row up, across, and back down:
-
-1. Move `Up` → `(1, 2) → (1, 1)`.
-2. Move `Right` → `(1, 1) → (2, 1)`.
-3. Move `Down` → `(2, 1) → (2, 2)` = goal → **win**.
-
-Going the other way around the board via wraparound (§2.1) would take 4 moves — the "long way" around a 5-wide row from an adjacent tile is `size - 1 = 4` steps — so it isn't a shortcut here; the 3-move detour through the next row is the actual shortest legal path, which is why the budget is exactly 3.
-
-### Level 8
-
-Exercises a **wraparound** wall (§1.2/§2.1): the wall sits on the seam between `x = 0` and `x = 4` on row `y = 2`, so the short way around the loop is blocked.
-
-| Field | Value |
-|---|---|
-| Grid | 5×5 |
-| Character start | `(1, 2)` |
-| Goal | `(4, 2)` |
-| Walls | `(0, 2)`–`(4, 2)` (wraparound) |
-| Available actions | Move only |
-| Action budget | Move: 3 |
-
-Without the wall, the shortest path would be leftward through the wraparound seam — `(1,2) → (0,2) → (4,2)`, 2 moves. The wall sits on exactly that seam, so the second of those two moves is illegal; the character has to go the long way instead:
-
-1. Move `Right` → `(1, 2) → (2, 2)`.
-2. Move `Right` → `(2, 2) → (3, 2)`.
-3. Move `Right` → `(3, 2) → (4, 2)` = goal → **win**.
-
-Zero slack: 3 is the shortest path once the wraparound shortcut is blocked, and none of these three rightward moves cross the wall (it only ever blocks the specific `(0,2)`–`(4,2)` step).
-
-### Level 9
-
-Introduces collectibles (§3/§4): a `required` key the character must pick up before the goal will accept them.
-
-| Field | Value |
-|---|---|
-| Grid | 5×5, no walls |
-| Character start | `(1, 2)` |
-| Collectibles | key at `(1, 0)`, `required: true` |
-| Goal | `(3, 2)` |
-| Available actions | Move only |
-| Action budget | Move: 6 |
-
-The goal sits directly 2 moves to the right of the start — the same shape as Level 1 — but the key sits off that line, so a player who ignores it and walks straight to the goal finds it locked (🔒, and the hint reads "Get the key first"): the 2 direct moves do nothing but spend the budget.
-
-**Intended solution:** collect the key first, then go to the goal — either order of axes works once at the key:
-
-1. Move `Up` → `(1, 2) → (1, 1)`.
-2. Move `Up` → `(1, 1) → (1, 0)` = key → picked up; the HUD objective updates and the goal marker flips to ★.
-3. Move `Right` → `(1, 0) → (2, 0)`.
-4. Move `Right` → `(2, 0) → (3, 0)`.
-5. Move `Down` → `(3, 0) → (3, 1)`.
-6. Move `Down` → `(3, 1) → (3, 2)` = goal, key already held → **win**.
-
-Zero slack: 6 is the shortest path that visits the key before the goal (2 moves up to the key, then 2 right + 2 down to the goal), and the budget doesn't leave room to try the direct 2-move path first and still recover — reaching the goal without the key wastes those moves rather than winning.
-
-### Level 10
-
-Introduces destructible crates (§5.5): the key sits stuck against a wall, and a crate sits directly between the character and it on the same row.
-
-| Field | Value |
-|---|---|
-| Grid | 5×5 |
-| Character start | `(0, 2)` |
-| Crates | `(1, 2)` |
-| Collectibles | key at `(2, 2)`, `required: true` |
-| Goal | `(3, 2)` |
-| Walls | `(2, 2)`–`(3, 2)` |
-| Available actions | Move only |
-| Action budget | Move: 6 |
-
-The key can never step across the `(2,2)`–`(3,2)` wall, so it's permanently stuck the moment anything pushes it there. The crate sits right between the character and the key, so the direct approach immediately jams: character pushes crate, crate pushes key, key can't move — the crate is crushed (§5.5), and (per that section's "nothing behind a destruction advances" rule) the character itself does not move on that action either.
+**Why every step is a rotation.** Up and down are walled at every column but the door, so the character can only move along the row — and the row has no empty tile. `resolveMoveChain` walks the whole line, wraps back to the character's own tile, and resolves as case 3: everything shifts one step, the crate at the far end wrapping around the board edge. The character advances by one and the entire row turns with it. There is no other way to move in here, which is what makes the case load-bearing rather than decorative.
 
 **Intended solution:**
 
-1. Move `Right` → character pushes the crate into the stuck key; the crate is destroyed, the key stays put, the character stays at `(0, 2)` — 1 move spent, nothing moved.
-2. Move `Right` → `(0, 2) → (1, 2)`, now empty.
-3. Move `Right` → `(1, 2) →` the key's tile `(2, 2)` → the character's own direct step onto a collectible is always a pickup (§5.5) → key collected, character now at `(2, 2)`.
-4. Move `Up` → `(2, 2) → (2, 1)`.
-5. Move `Right` → `(2, 1) → (3, 1)`.
-6. Move `Down` → `(3, 1) → (3, 2)` = goal, key already held → **win**.
+1. `Left` ×2 → two full-row rotations carry the character `(1,2) → (0,2) → (4,2)`, the door tile. (`Right` ×3 gets there too.)
+2. `Down` through the door → `(4,3)`, then walk to the key at `(2,4)` and collect it. The corridor now has four crates and the gap the character left at `(4,2)`; nothing out here can move them.
+3. Back to `(4,3)` and `Up` into `(4,2)` — the row is packed again.
+4. `Right` ×3 → three more rotations to `(0,2) → (1,2) → (2,2)` = goal → **win**.
 
-Zero slack: going around the crate instead of destroying it (up, right, right, down to reach the key, then the same 3-move detour to the goal) costs 7 moves — one more than the budget allows — so the crate-crushing shortcut isn't optional flavor, it's the only way the level fits its budget.
+The goal sits inside the corridor and is sealed above and below like every other tile in it, so it can only ever be entered along the row — i.e. by a rotation. No crate can leave the corridor either: pushing one through the door would need the character standing above it at `(4,1)`, which is walled off.
 
-### Level 11
+### Level 7 — one Shift, one Flip, one order
 
-The same layout and puzzle as Level 10, but the crate is crushed with the level's one Shift instead of a Move, to exercise the identical destruction rule (§5.5) through a different action.
+The capstone: both budgeted actions, one use each, and only one sequence works.
 
 | Field | Value |
 |---|---|
 | Grid | 5×5 |
-| Character start | `(0, 2)` |
-| Crates | `(1, 2)` |
-| Collectibles | key at `(2, 2)`, `required: true` |
-| Goal | `(3, 2)` |
-| Walls | `(2, 2)`–`(3, 2)` |
-| Available actions | Shift and Move |
-| Action budget | Shift: 1, Move: 5 |
+| Character start | `(2, 4)` |
+| Collectibles | key at `(1, 2)`, `required: true` |
+| Goal | `(0, 2)` |
+| Walls | `(0,y)`–`(1,y)` and `(1,y)`–`(2,y)` for every `y` in `0..4` (column 1 sealed down both sides), plus `(2,2)`–`(3,2)`, `(3,2)`–`(4,2)`, `(3,1)`–`(3,2)`, `(3,2)`–`(3,3)` (a one-tile cage at `(3,2)`) — 14 walls |
+| Available actions | Shift and Flip |
+| Action budget | Shift: 1, Flip: 1 |
+
+The board has two prisons. Column 1 is sealed down both its long sides, so the key inside can slide **up and down** freely — nothing blocks a vertical step within the column — but can never cross out sideways. And `(3,2)`, drawn as a small empty cage, is sealed on all four edges.
+
+**Why each action is needed.** Walking can't reach column 1 at all, and no Shift can move the key out of it (a wall stops a shifted step exactly as it stops a walked one, §5.2), so **Flip is the only way out**. But `(1,2)` mirrors onto `(3,2)` under a column flip — straight from one prison into the other — and a row flip does nothing at all, since the key sits on the middle row (§5.3). So **Shift is what makes the Flip land somewhere useful**: one shift of column 1 slides the key off row 2, and *then* its mirror image is an open tile.
 
 **Intended solution:**
 
-1. Shift row `y = 2` **Right** → the same three-entity jam as Level 10 (character, crate, key, all on row 2), resolved the same way: the crate touching the key is destroyed, and — because nothing behind a destruction advances (§5.5) — neither the key nor the character move. 1 Shift spent, nothing moved but the crate.
-2. Move `Right` → `(0, 2) → (1, 2)`.
-3. Move `Right` → `(1, 2) →` key's tile `(2, 2)` → pickup.
-4. Move `Up` → `(2, 2) → (2, 1)`.
-5. Move `Right` → `(2, 1) → (3, 1)`.
-6. Move `Down` → `(3, 1) → (3, 2)` = goal → **win**.
+1. Shift column 1, either direction → key `(1,2) → (1,3)` (or `(1,1)`). Still sealed, but no longer on the mirror row.
+2. Flip across the middle **column** (`↔`) → key `(1,3) → (3,3)`, an open tile beside the cage. The character starts at `(2,4)`, on the middle column, so this leaves it exactly where it is.
+3. Walk to `(3,3)`, collect the key, then round to the goal at `(0,2)` — reached through the wraparound seam from `(4,2)`.
 
-Zero slack in both pools: the level is solvable only by spending the single Shift on the crate (there's no other legal use for it that helps), and Move's budget of 5 is exactly what's left for the rest of the route.
+**The traps, all of them visible on the board before committing:**
+
+- *Flip first.* The key drops into the cage at `(3,2)` and nothing can ever get it out again — a later shift of column 3 is rejected as a no-op (and costs nothing, §5.2), which is the game telling you the run is over. Retry.
+- *The wrong flip axis.* A row flip leaves the key on `(1,2)`, untouched.
+- *Shifting the key's row instead of its column.* Walls on both sides mean the key can't move, so it's rejected and free — safe to try.
+- *Flipping yourself in.* From column 3 the character can flip itself into column 1 and collect the key by hand. It's then sealed in there with no flip left, and the goal is outside. A genuine dead end, and a good way to learn that Flip moves the character too.

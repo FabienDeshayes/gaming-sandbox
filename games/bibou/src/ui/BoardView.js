@@ -13,15 +13,25 @@ import {
   GOAL_LOCKED_GLYPH,
   GOAL_UNLOCKED_GLYPH,
   PICKUP_TWEEN_MS,
+  SPAWN_TWEEN_MS,
 } from '../config.js';
-import { DIRECTIONS, RING, wrap } from '../core/rules.js';
+import { DIRECTIONS } from '../core/rules.js';
 
 // Per-action arrow styling — deliberately small and low-contrast so the
 // preview reads as an overlay rather than another board entity (DESIGN.md
 // §10); actual on-top-ness comes from CONTROL_DEPTH, not size.
 const MOVE_ARROW = { fontSize: '28px', padding: { x: 6, y: 3 } };
-const ROTATE_ARROW = { fontSize: '32px', padding: { x: 7, y: 3 } };
 const SHIFT_ARROW = { fontSize: '24px', padding: { x: 5, y: 2 } };
+
+// The four Move arrows, as offsets from the character's cell center (scaled by
+// CELL below). Fixed order, because the arrow objects are created once and then
+// reused — see showMoveArrows.
+const MOVE_ARROW_SPECS = [
+  { dir: 'Up', glyph: '▲', dx: 0, dy: -0.7 },
+  { dir: 'Down', glyph: '▼', dx: 0, dy: 0.7 },
+  { dir: 'Left', glyph: '◀', dx: -0.7, dy: 0 },
+  { dir: 'Right', glyph: '▶', dx: 0.7, dy: 0 },
+];
 const FLIP_ARROW = { fontSize: '26px', padding: { x: 7, y: 3 } };
 
 // Everything anchored to the board: the static grid, the character sprite, the
@@ -36,6 +46,8 @@ export class BoardView {
     this.size = size;
     this.goalPos = goalPos;
     this.controls = []; // transient UI (arrows, highlights)
+    this.moveArrows = null; // the permanent Move arrows — see showMoveArrows
+    this.onMoveDirection = null;
   }
 
   // --- Coordinate helpers ---
@@ -224,6 +236,32 @@ export class BoardView {
     sprite?.destroy();
   }
 
+  // A collectible revealed by a crate breaking open (LEVEL_DESIGN.md §3): a new
+  // sprite appended to `entitySprites`, matching the entity PuzzleScene appends
+  // to its own array in the same tick so the two stay index-aligned. It pops in
+  // from nothing rather than just appearing, so the reveal reads as coming out
+  // of the crate that just exploded on that tile.
+  spawnEntitySprite(entity) {
+    const sprite = this.createEntitySprite(entity);
+    const c = this.cellCenter(entity.pos.x, entity.pos.y);
+    sprite.setPosition(c.px, c.py);
+    this.entitySprites.push(sprite);
+
+    // Grown back to the sprite's *own* resting scale, which isn't 1 for
+    // anything sized with setDisplaySize — same reason animateFlip does.
+    const restingX = sprite.scaleX;
+    const restingY = sprite.scaleY;
+    sprite.setScale(0);
+    this.scene.tweens.add({
+      targets: sprite,
+      scaleX: restingX,
+      scaleY: restingY,
+      duration: SPAWN_TWEEN_MS,
+      ease: 'Back.easeOut',
+    });
+    return sprite;
+  }
+
   // A crate crushed against something that can't move (LEVEL_DESIGN.md §5.5):
   // nudges toward the tile it was crushed trying (and failing) to reach — the
   // same "hit something solid" read as animateBump's wall-blocked nudge —
@@ -294,9 +332,9 @@ export class BoardView {
   }
 
   // --- Transitions ---
-  // Move and Rotate both resolve to a set of "this entity steps from tile A to
-  // tile B" pairs (§5.1/§5.3) — this is the shared engine behind both. Every
-  // pair in `moves` animates at once so a multi-entity chain or ring reads as
+  // Move and Shift both resolve to a set of "this entity steps from tile A to
+  // tile B" pairs (§5.1/§5.2) — this is the shared engine behind both. Every
+  // pair in `moves` animates at once so a multi-entity chain or line reads as
   // one simultaneous motion rather than a sequence.
   animateEntitiesTo(moves, duration, onComplete) {
     if (moves.length === 0) {
@@ -448,85 +486,38 @@ export class BoardView {
     });
   }
 
-  // --- Transient controls ---
-  // Four direction arrows around the character. `onDirection` gets 'Up' |
-  // 'Down' | 'Left' | 'Right'.
+  // --- Controls ---
+  // Four direction arrows around the character. Move is free and always
+  // available, so these are the board's resting state: they only go away while
+  // an action card owns the board (LEVEL_DESIGN.md §5.1). `onDirection` gets
+  // 'Up' | 'Down' | 'Left' | 'Right'.
+  //
+  // Unlike every other control these four are created *once* and then just
+  // repositioned and shown/hidden, never destroyed and rebuilt. Phaser only
+  // folds a newly-interactive object into its hit-test list on the next frame,
+  // so arrows rebuilt after each move are briefly visible but untappable —
+  // hiding them instead keeps them permanently in that list (a hidden object
+  // fails `willRender`, so it can't be tapped while it's away).
   showMoveArrows(pos, onDirection) {
-    this.clearControls();
-    const c = this.cellCenter(pos.x, pos.y);
-    const offset = CELL * 0.7;
-    const specs = [
-      { dir: 'Up', glyph: '▲', dx: 0, dy: -offset },
-      { dir: 'Down', glyph: '▼', dx: 0, dy: offset },
-      { dir: 'Left', glyph: '◀', dx: -offset, dy: 0 },
-      { dir: 'Right', glyph: '▶', dx: offset, dy: 0 },
-    ];
-    specs.forEach((s) => {
-      this.addControlArrow(c.px + s.dx, c.py + s.dy, s.glyph, MOVE_ARROW, () =>
-        onDirection(s.dir)
+    this.onMoveDirection = onDirection;
+    if (!this.moveArrows) {
+      this.moveArrows = MOVE_ARROW_SPECS.map((s) =>
+        this.makeControlArrow(0, 0, s.glyph, MOVE_ARROW, () =>
+          this.onMoveDirection?.(s.dir)
+        )
       );
-    });
-  }
-
-  // Rotate's target step doesn't restrict which tile can become the center —
-  // any tile works as one (LEVEL_DESIGN.md §5.2), unlike Move's arrows or
-  // Shift's edges which only ever offer specific targets. So as soon as
-  // Rotate is selected, every cell gets a light tappable wash to make that
-  // "anywhere works" legible before the player commits to one, the same way
-  // the other actions show their own targets immediately on selection.
-  showRotateCenterHints() {
-    this.clearControls();
-    for (let y = 0; y < this.size; y++) {
-      for (let x = 0; x < this.size; x++) {
-        const c = this.cellCenter(x, y);
-        const hint = this.scene.add
-          .rectangle(c.px, c.py, CELL - 4, CELL - 4, COLORS.accentHex, 0.22)
-          .setStrokeStyle(2, COLORS.accentHex, 0.7)
-          .setDepth(CONTROL_DEPTH);
-        this.controls.push(hint);
-      }
     }
+    const c = this.cellCenter(pos.x, pos.y);
+    this.moveArrows.forEach((arrow, i) => {
+      const s = MOVE_ARROW_SPECS[i];
+      arrow
+        .setPosition(c.px + s.dx * CELL, c.py + s.dy * CELL)
+        .setVisible(true);
+    });
   }
 
-  // Highlights the rotation center plus its 8-tile ring, and shows the two
-  // rotation arrows. `onRotate` gets `true` for clockwise.
-  showRotateControls(center, onRotate) {
-    this.clearControls();
-    const c = this.cellCenter(center.x, center.y);
-
-    // Outline the center tile and the 8 surrounding tiles that will rotate.
-    const centerHl = this.scene.add
-      .rectangle(c.px, c.py, CELL, CELL, 0x000000, 0)
-      .setStrokeStyle(3, COLORS.highlightHex)
-      .setDepth(CONTROL_DEPTH);
-    this.controls.push(centerHl);
-    RING.forEach((o) => {
-      const rx = wrap(center.x + o.x, this.size);
-      const ry = wrap(center.y + o.y, this.size);
-      const rc = this.cellCenter(rx, ry);
-      const ring = this.scene.add
-        .rectangle(rc.px, rc.py, CELL - 6, CELL - 6, 0x000000, 0)
-        .setStrokeStyle(2, COLORS.accentHex)
-        .setDepth(CONTROL_DEPTH);
-      this.controls.push(ring);
-    });
-
-    // Two rotation arrows above the center (drop below if there's no room).
-    let ay = c.py - CELL * 0.9;
-    if (ay < BOARD_Y + CELL * 0.2) ay = c.py + CELL * 0.9;
-    const specs = [
-      { glyph: '↺', dx: -30, clockwise: false }, // anticlockwise
-      { glyph: '↻', dx: 30, clockwise: true }, // clockwise
-    ];
-    // Flipped 180° from the glyphs' natural orientation: unrotated, ↺/↻ read
-    // as starting from the top, which reads backwards sitting above the
-    // rotation center — flipping them points the arrowhead the way the ring
-    // actually turns from that position.
-    specs.forEach((s) => {
-      this.addControlArrow(c.px + s.dx, ay, s.glyph, ROTATE_ARROW, () =>
-        onRotate(s.clockwise)
-      ).setAngle(180);
-    });
+  hideMoveArrows() {
+    this.moveArrows?.forEach((arrow) => arrow.setVisible(false));
   }
 
   // Arrows around every row/column edge, pointing inward. One pair per row
@@ -596,12 +587,12 @@ export class BoardView {
     );
   }
 
-  // One tappable arrow glyph, tracked so clearControls() can destroy it. The
-  // pointerdown is stopped so the board's own tap handler doesn't also fire.
-  // Depth is forced above every board/entity layer so a preview arrow never
-  // renders underneath a crate or the character; background/text colour are
-  // deliberately low-contrast so it reads as a preview, not another entity.
-  addControlArrow(px, py, glyph, style, onPress) {
+  // One tappable arrow glyph. The pointerdown is stopped so the board's own tap
+  // handler doesn't also fire. Depth is forced above every board/entity layer so
+  // a preview arrow never renders underneath a crate or the character;
+  // background/text colour are deliberately low-contrast so it reads as a
+  // preview, not another entity.
+  makeControlArrow(px, py, glyph, style, onPress) {
     const arrow = this.scene.add
       .text(px, py, glyph, {
         fontFamily: 'sans-serif',
@@ -617,12 +608,23 @@ export class BoardView {
       if (event) event.stopPropagation();
       onPress();
     });
+    return arrow;
+  }
+
+  // Same, but tracked in `controls` so clearControls() destroys it — the
+  // lifetime every arrow except Move's has.
+  addControlArrow(px, py, glyph, style, onPress) {
+    const arrow = this.makeControlArrow(px, py, glyph, style, onPress);
     this.controls.push(arrow);
     return arrow;
   }
 
+  // Puts the board back to "no control is showing at all": the transient arrows
+  // are destroyed, and the permanent Move arrows are hidden (callers that want
+  // them back call showMoveArrows afterwards).
   clearControls() {
     this.controls.forEach((a) => a.destroy());
     this.controls = [];
+    this.hideMoveArrows();
   }
 }

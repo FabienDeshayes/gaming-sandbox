@@ -15,7 +15,6 @@ import {
   GAME_WIDTH,
   GOAL_PULSE_MS,
   MOVE_TWEEN_MS,
-  ROTATE_TWEEN_MS,
   SWIPE_THRESHOLD,
 } from '../config.js';
 import {
@@ -24,7 +23,6 @@ import {
   flipEntity,
   resolveCycleOutcome,
   resolveMoveChain,
-  rotationOrder,
   samePos,
   shiftOrder,
 } from '../core/rules.js';
@@ -56,16 +54,18 @@ export class PuzzleScene extends Phaser.Scene {
     this.size = size;
 
     // The entity layer: character, crates, and collectibles, in render order.
-    // No two entities may share a tile. Move/Shift/Rotate push whatever's in
-    // the way — except a collectible, which is an indestructible obstacle
-    // that never blocks the character (it's picked up instead) and can crush
-    // a crate that gets pushed into it and can't move it out of the way; see
-    // LEVEL_DESIGN.md §3/§5.5. Only the character can win.
+    // No two entities may share a tile. Move/Shift push whatever's in the way —
+    // except a collectible, which is an indestructible obstacle that never
+    // blocks the character (it's picked up instead) and can crush a crate that
+    // gets pushed into it and can't move it out of the way; see
+    // LEVEL_DESIGN.md §3/§5.4. A crate's optional `contains` is the collectible
+    // it drops when it breaks open. Only the character can win.
     this.entities = [
       { kind: 'character', pos: { ...this.level.entities.character } },
-      ...(this.level.entities.crates ?? []).map((pos) => ({
+      ...(this.level.entities.crates ?? []).map((crate) => ({
         kind: 'crate',
-        pos: { ...pos },
+        pos: { x: crate.x, y: crate.y },
+        contains: crate.contains ? { ...crate.contains } : null,
       })),
       ...(this.level.entities.collectibles ?? []).map((c) => ({
         kind: 'collectible',
@@ -74,13 +74,19 @@ export class PuzzleScene extends Phaser.Scene {
         pos: { x: c.x, y: c.y },
       })),
     ];
-    // `requiredTypes` is fixed at level load (not re-derived from `entities`,
-    // which loses collected collectibles as they're picked up) so the
-    // objective text can still report "reach the goal" once every required
-    // type has been collected.
+    // `requiredTypes` is fixed at level load rather than re-derived from
+    // `entities` (which loses collected collectibles as they're picked up, and
+    // wouldn't see one still sealed inside a crate) so the goal starts locked
+    // and the objective text can still report "reach the goal" once every
+    // required type has been collected.
     this.requiredTypes = [
       ...new Set(
-        this.entities.filter((e) => e.kind === 'collectible' && e.required).map((e) => e.type)
+        [
+          ...(this.level.entities.collectibles ?? []),
+          ...(this.level.entities.crates ?? []).map((c) => c.contains).filter(Boolean),
+        ]
+          .filter((c) => c.required === true)
+          .map((c) => c.type)
       ),
     ];
     this.collectedTypes = new Set();
@@ -90,12 +96,16 @@ export class PuzzleScene extends Phaser.Scene {
     // coordinates (LEVEL_DESIGN.md §1.2). Levels are validated at load time
     // (src/data/levels.js), so this set can be trusted here.
     this.wallSet = buildWallSet(this.level.walls);
+    // Move is free and unlimited, so these are two separate counters: moves are
+    // a score, actions are the budgeted resource (LEVEL_DESIGN.md §5/§6).
     this.movesUsed = 0;
+    this.actionsUsed = 0;
 
     // Budgets are per action type: the keys of actionBudget with a positive
     // budget are the actions this level offers, and each one has its own pool
-    // that only its own uses draw down (LEVEL_DESIGN.md §6).
-    this.availableActions = Object.keys(this.level.actionBudget).filter(
+    // that only its own uses draw down (LEVEL_DESIGN.md §6). Move is never in
+    // here — a level with an empty budget is a pure movement puzzle.
+    this.availableActions = Object.keys(this.level.actionBudget ?? {}).filter(
       (k) => this.level.actionBudget[k] > 0
     );
     this.remaining = {};
@@ -111,9 +121,7 @@ export class PuzzleScene extends Phaser.Scene {
           0
         );
 
-    this.selectedAction = null; // null | 'move' | 'rotate' | 'shift' | 'flip'
-    this.targetSelected = false; // move: always true once selected; rotate: center tapped
-    this.rotateCenter = null; // {x, y} once a rotation center is chosen
+    this.selectedAction = null; // null (Move is the default) | 'shift' | 'flip'
     this.gameOver = false;
     this.animating = false; // true while a transition tween owns the entity sprites
     // Phaser reuses one Scene instance across scene.start, so every flag that
@@ -131,6 +139,7 @@ export class PuzzleScene extends Phaser.Scene {
     this.buildHud();
     this.buildActionCards();
     this.setupBoardInput();
+    this.showMoveControls();
   }
 
   // The character is the only entity the win condition cares about, and the
@@ -147,8 +156,8 @@ export class PuzzleScene extends Phaser.Scene {
       color: COLORS.text,
     });
     this.updateHud();
-    // Only shown when the level has at least one `required` collectible —
-    // levels without one (e.g. Levels 1-8) keep the plain HUD.
+    // Only shown when the level has at least one `required` collectible — which
+    // every level currently does, but a level without one keeps the plain HUD.
     if (this.requiredTypes.length > 0) {
       this.objectiveText = this.add.text(BOARD_X, 195, '', {
         fontFamily: 'sans-serif',
@@ -167,15 +176,28 @@ export class PuzzleScene extends Phaser.Scene {
         })
         .setOrigin(1, 0);
     }
-    this.buildExitButton();
+    this.buildTopButtons();
   }
 
-  // Top-right icon button, tappable any time play isn't already blocked
-  // (gameOver/animating/exitConfirmOpen) — it opens showExitConfirm rather
-  // than leaving immediately, so an accidental tap doesn't drop a run.
-  buildExitButton() {
-    this.exitButton = this.add
-      .text(GAME_WIDTH - 20, 20, '✕', {
+  // Top-right icon buttons. `✕` opens showExitConfirm rather than leaving
+  // immediately, so an accidental tap doesn't drop a run. `↻` restarts the
+  // level outright: with Move free there is no lose condition any more, so
+  // restarting is how a player recovers from spending an action badly
+  // (LEVEL_DESIGN.md §4).
+  buildTopButtons() {
+    this.exitButton = this.makeIconButton(GAME_WIDTH - 20, '✕', () =>
+      this.showExitConfirm()
+    );
+    this.retryButton = this.makeIconButton(
+      GAME_WIDTH - 20 - this.exitButton.width - 10,
+      '↻',
+      () => this.scene.restart({ level: this.level, unlimited: this.unlimited })
+    );
+  }
+
+  makeIconButton(x, glyph, onPress) {
+    const button = this.add
+      .text(x, 20, glyph, {
         fontFamily: 'sans-serif',
         fontSize: '26px',
         color: COLORS.text,
@@ -185,16 +207,14 @@ export class PuzzleScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setInteractive({ useHandCursor: true })
       .setDepth(5);
-    this.exitButton.on('pointerover', () =>
-      this.exitButton.setStyle({ backgroundColor: COLORS.buttonHover })
-    );
-    this.exitButton.on('pointerout', () =>
-      this.exitButton.setStyle({ backgroundColor: COLORS.button })
-    );
-    this.exitButton.on('pointerdown', (pointer, lx, ly, event) => {
+    button.on('pointerover', () => button.setStyle({ backgroundColor: COLORS.buttonHover }));
+    button.on('pointerout', () => button.setStyle({ backgroundColor: COLORS.button }));
+    button.on('pointerdown', (pointer, lx, ly, event) => {
       if (event) event.stopPropagation();
-      this.showExitConfirm();
+      if (this.gameOver || this.animating || this.exitConfirmOpen) return;
+      onPress();
     });
+    return button;
   }
 
   // In-canvas confirmation panel — mirrors showOverlay's dim-background +
@@ -202,7 +222,6 @@ export class PuzzleScene extends Phaser.Scene {
   // (real vs. test, per `unlimited`), same destination as the overlay's own
   // "Level select" button.
   showExitConfirm() {
-    if (this.gameOver || this.animating || this.exitConfirmOpen) return;
     this.exitConfirmOpen = true;
     this.board.clearControls();
 
@@ -233,26 +252,47 @@ export class PuzzleScene extends Phaser.Scene {
       createButton(this, GAME_WIDTH / 2, 510, 'Cancel', () => {
         this.exitConfirmOpen = false;
         panel.forEach((p) => p.destroy());
+        this.showMoveControls();
       }).setDepth(21)
     );
   }
 
   updateHud() {
-    const budgetLabel = this.unlimited ? '∞' : this.budget;
-    this.hudText.setText(`Actions: ${this.movesUsed} / ${budgetLabel}`);
+    // Moves are unlimited, so they read as a plain tally; only the budgeted
+    // actions get counted against a total.
+    const parts = [`Moves: ${this.movesUsed}`];
+    if (this.availableActions.length > 0) {
+      const budgetLabel = this.unlimited ? '∞' : this.budget;
+      parts.push(`Actions: ${this.actionsUsed} / ${budgetLabel}`);
+    }
+    this.hudText.setText(parts.join('   '));
   }
 
-  // --- Collectibles & destruction (LEVEL_DESIGN.md §3/§5.5) ---
+  // --- Collectibles & destruction (LEVEL_DESIGN.md §3/§5.4) ---
   // Removes a crushed crate from the board with a "crushed" flourish, then
   // calls `onComplete`. `dest` is the tile the crate was crushed trying (and
   // failing) to reach — the crushed flourish nudges toward it first, reading
-  // as "it tried to push through," before it explodes. Used whenever
-  // Move/Shift/Rotate resolves a crate as destroyed instead of moved.
+  // as "it tried to push through," before it explodes. A crate carrying a
+  // `contains` collectible drops it onto the tile it died on, which is the
+  // whole point of a key-bearing crate. Used whenever Move/Shift resolves a
+  // crate as destroyed instead of moved.
   destroyEntity(entity, dest, onComplete) {
     const index = this.entities.indexOf(entity);
+    const dropped = entity.contains;
+    const droppedPos = { ...entity.pos };
     this.board.destroyEntitySprite(index, entity.pos, dest, () => {
       this.entities.splice(index, 1);
       this.board.removeEntitySpriteAt(index);
+      if (dropped) {
+        const collectible = {
+          kind: 'collectible',
+          type: dropped.type,
+          required: dropped.required === true,
+          pos: droppedPos,
+        };
+        this.entities.push(collectible);
+        this.board.spawnEntitySprite(collectible);
+      }
       onComplete?.();
     });
   }
@@ -293,7 +333,8 @@ export class PuzzleScene extends Phaser.Scene {
   buildActionCards() {
     // Lay the available action cards out in a centered row near the bottom,
     // shrinking them as the row fills up, with each card's own remaining budget
-    // printed above it.
+    // printed above it. Move has no card — it's free and always available — so
+    // a pure movement level shows no cards at all.
     this.actionCards = {};
     this.cardCounts = {};
     const n = this.availableActions.length;
@@ -319,12 +360,8 @@ export class PuzzleScene extends Phaser.Scene {
         .setOrigin(0.5);
     });
 
-    this.beginHint =
-      n === 1
-        ? `Tap ${ACTION_LABELS[this.availableActions[0]]} to begin`
-        : 'Select an action to begin';
     this.hintText = this.add
-      .text(GAME_WIDTH / 2, 790, this.beginHint, {
+      .text(GAME_WIDTH / 2, 790, '', {
         fontFamily: 'sans-serif',
         fontSize: '20px',
         color: COLORS.hint,
@@ -332,6 +369,16 @@ export class PuzzleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.updateActionCards();
+    this.setHint(this.defaultHint());
+  }
+
+  // What the hint reads when nothing is selected. Move is always on offer, so
+  // the resting hint is about swiping; a level whose action pools are all spent
+  // points at the retry button instead, since that's the only way back.
+  defaultHint() {
+    if (this.availableActions.length === 0) return 'Swipe or tap an arrow to move';
+    if (!this.actionsLeft()) return 'No actions left — tap ↻ to retry';
+    return 'Swipe to move, or tap an action';
   }
 
   // Repaint each card from its own remaining budget: a spent action greys out
@@ -367,7 +414,7 @@ export class PuzzleScene extends Phaser.Scene {
     if (this.gameOver || this.animating || this.exitConfirmOpen) return;
     if (this.selectedAction === action) {
       this.clearSelection();
-      this.setHint(this.beginHint);
+      this.setHint(this.defaultHint());
       return;
     }
     if (this.remaining[action] <= 0) {
@@ -377,140 +424,117 @@ export class PuzzleScene extends Phaser.Scene {
     this.clearSelection();
     this.selectedAction = action;
     this.actionCards[action].setBaseColor(COLORS.accentHex);
-    if (action === 'move') {
-      // Move only ever acts on the character (there's exactly one), so there's
-      // no target-tap step — the arrows appear immediately.
-      this.targetSelected = true;
-      this.board.showMoveArrows(this.characterPos, (dir) => this.applyMove(dir));
-      this.setHint('Tap an arrow or swipe a direction');
-    } else if (action === 'rotate') {
-      this.board.showRotateCenterHints();
-      this.setHint('Tap a tile for the rotation center');
-    } else if (action === 'shift') {
-      // Unlike Move/Rotate, Shift has no separate target-tap step: the
-      // arrows themselves (one per row/column edge) are the target.
-      this.targetSelected = true;
+    // Neither action has a separate target-tap step: selecting the card shows
+    // the arrows that stand for every possible use of it, and tapping one both
+    // picks the target and executes (LEVEL_DESIGN.md §5.2/§5.3). Showing them
+    // replaces the resting Move arrows until the selection clears.
+    if (action === 'shift') {
       this.board.showShiftArrows((axis, index, dir) =>
         this.applyShift(axis, index, dir)
       );
       this.setHint('Tap an arrow to shift that row or column');
     } else if (action === 'flip') {
-      // Flip has no target either — it always mirrors the whole board, so the
-      // only choice is which of the two mirror lines to use.
-      this.targetSelected = true;
       this.board.showFlipControls((axis) => this.applyFlip(axis));
       this.setHint('Tap ↔ / ↕ or swipe to flip the board');
     }
   }
 
+  // Clearing a selection returns the board to its resting state: Move's arrows
+  // back around the character, wherever it now stands.
   clearSelection() {
     this.selectedAction = null;
-    this.targetSelected = false;
-    this.rotateCenter = null;
     this.board.clearControls();
     this.updateActionCards();
+    this.showMoveControls();
+  }
+
+  showMoveControls() {
+    if (this.gameOver || this.animating || this.exitConfirmOpen) return;
+    this.board.showMoveArrows(this.characterPos, (dir) => this.applyMove(dir));
   }
 
   // --- Input ---
+  // A swipe is only a swipe if this handler saw where it *started*. Tapping a
+  // control (an arrow, a card) consumes the pointerdown with stopPropagation,
+  // so the scene-level pointerdown below never fires for it — but the matching
+  // pointerup still arrives here. Without `armed`, that pointerup would be
+  // measured against whatever the last board press was, read as a long swipe,
+  // and walk the character an extra step every time the player tapped a card
+  // and then an arrow. So: only a press this handler actually saw can arm a
+  // swipe, and each press arms exactly one.
   setupBoardInput() {
     let downX = 0;
     let downY = 0;
+    let armed = false;
     this.input.on('pointerdown', (pointer) => {
       downX = pointer.x;
       downY = pointer.y;
+      armed = true;
     });
     this.input.on('pointerup', (pointer) => {
+      const wasArmed = armed;
+      armed = false;
+      if (!wasArmed) return;
       if (this.gameOver || this.animating || this.exitConfirmOpen) return;
       const dx = pointer.x - downX;
       const dy = pointer.y - downY;
-      const dist = Math.hypot(dx, dy);
+      if (Math.hypot(dx, dy) < SWIPE_THRESHOLD) return;
 
-      // Swipe: only meaningful once a target is selected.
-      if (this.targetSelected && dist >= SWIPE_THRESHOLD) {
-        if (this.selectedAction === 'move') {
-          const dir =
-            Math.abs(dx) > Math.abs(dy)
-              ? dx > 0
-                ? 'Right'
-                : 'Left'
-              : dy > 0
-              ? 'Down'
-              : 'Up';
-          this.applyMove(dir);
-        } else if (this.selectedAction === 'rotate') {
-          // Right = clockwise, left = anticlockwise; vertical swipes are ignored.
-          if (Math.abs(dx) > Math.abs(dy)) this.applyRotate(dx > 0);
-        } else if (this.selectedAction === 'flip') {
-          // The swipe direction is the direction the board's contents travel:
-          // a horizontal swipe mirrors across the middle column, a vertical one
-          // across the middle row.
-          this.applyFlip(Math.abs(dx) > Math.abs(dy) ? 'column' : 'row');
-        }
-        return;
+      if (this.selectedAction === null) {
+        // Nothing selected is the resting state, and the resting state is Move:
+        // a cardinal swipe anywhere walks the character (LEVEL_DESIGN.md §5.1).
+        this.applyMove(
+          Math.abs(dx) > Math.abs(dy)
+            ? dx > 0
+              ? 'Right'
+              : 'Left'
+            : dy > 0
+            ? 'Down'
+            : 'Up'
+        );
+      } else if (this.selectedAction === 'flip') {
+        // The swipe direction is the direction the board's contents travel:
+        // a horizontal swipe mirrors across the middle column, a vertical one
+        // across the middle row.
+        this.applyFlip(Math.abs(dx) > Math.abs(dy) ? 'column' : 'row');
       }
-
-      // Tap on the board.
-      const cell = this.board.pointerToCell(pointer);
-      if (!cell) return;
-      this.handleBoardTap(cell);
     });
   }
 
-  handleBoardTap(cell) {
-    if (this.selectedAction === 'rotate') this.handleRotateTap(cell);
-  }
-
-  handleRotateTap(cell) {
-    if (!this.targetSelected) {
-      this.rotateCenter = { ...cell };
-      this.targetSelected = true;
-      this.showRotateControls();
-      this.setHint('Tap ↺ / ↻ or swipe left (CCW) / right (CW)');
-      return;
-    }
-    // Center already chosen: tapping it again cancels, tapping elsewhere
-    // re-centers the rotation on the new tile.
-    if (samePos(cell, this.rotateCenter)) {
-      this.targetSelected = false;
-      this.rotateCenter = null;
-      this.board.showRotateCenterHints();
-      this.setHint('Tap a tile for the rotation center');
-    } else {
-      this.rotateCenter = { ...cell };
-      this.showRotateControls();
-    }
-  }
-
-  showRotateControls() {
-    this.board.showRotateControls(this.rotateCenter, (clockwise) =>
-      this.applyRotate(clockwise)
-    );
-  }
-
   // --- Actions ---
-  // Spend one use of `action` from its own budget and resolve the outcome
-  // (win → out of actions → continue). Called once the action's transition
-  // tween has finished, so it's the entity sprites' final resting state that
+  // Resolve the outcome of a completed action (win → continue) and, for a
+  // budgeted action, spend one use from its own pool. `action` is 'move' for
+  // the free, unlimited default. Called once the action's transition tween has
+  // finished, so it's the entity sprites' final resting state that
   // updateHud/showOverlay follow.
   finishAction(action) {
-    this.movesUsed += 1;
-    if (!this.unlimited) this.remaining[action] -= 1;
-    this.clearSelection();
+    if (action === 'move') {
+      this.movesUsed += 1;
+    } else {
+      this.actionsUsed += 1;
+      if (!this.unlimited) this.remaining[action] -= 1;
+    }
     this.board.renderEntities(this.entities);
     this.updateHud();
 
     const onGoal = samePos(this.characterPos, this.goalPos);
     if (onGoal && this.requirementsMet()) {
+      // Set before clearSelection so it doesn't put the Move arrows back on a
+      // board that's about to be covered by the win overlay.
+      this.gameOver = true;
+      this.clearSelection();
       // Let the "that worked" pulse play before the overlay covers the board.
       const idx = this.entities.findIndex((e) => e.kind === 'character');
       this.animating = true;
       this.board.pulseEntity(idx, GOAL_PULSE_MS, () => {
         this.animating = false;
-        this.showOverlay(true);
+        this.showOverlay();
       });
-    } else if (!this.actionsLeft()) {
-      this.showOverlay(false);
-    } else if (onGoal) {
+      return;
+    }
+
+    this.clearSelection();
+    if (onGoal) {
       // On the goal tile but a required collectible is still outstanding
       // (LEVEL_DESIGN.md §4) — the goal marker itself already reads 🔒.
       const missing = this.requiredTypes
@@ -518,21 +542,17 @@ export class PuzzleScene extends Phaser.Scene {
         .map((t) => COLLECTIBLE_LABELS[t] ?? t);
       this.setHint(`Get the ${missing.join(', ')} first`);
     } else {
-      this.setHint('Select an action to continue');
+      this.setHint(this.defaultHint());
     }
   }
 
+  // Move is free, unlimited, and the board's resting action, so it only runs
+  // when no action card is selected.
   applyMove(direction) {
-    if (
-      this.gameOver ||
-      this.animating ||
-      this.selectedAction !== 'move' ||
-      !this.targetSelected
-    )
-      return;
+    if (this.gameOver || this.animating || this.selectedAction !== null) return;
 
     // An entity in the way gets pushed first, and so on down the chain — see
-    // resolveMoveChain (LEVEL_DESIGN.md §5.1/§5.5).
+    // resolveMoveChain (LEVEL_DESIGN.md §5.1/§5.4).
     const result = resolveMoveChain(
       this.wallSet,
       this.entities,
@@ -552,7 +572,7 @@ export class PuzzleScene extends Phaser.Scene {
     }
 
     if (result.kind === 'destroy') {
-      // The character itself doesn't move (§5.5: nothing behind a crushed
+      // The character itself doesn't move (§5.4: nothing behind a crushed
       // crate advances) — only the crate is removed.
       this.animating = true;
       this.board.clearControls();
@@ -567,7 +587,7 @@ export class PuzzleScene extends Phaser.Scene {
       // The character's own next step is a collectible: it's always
       // collected rather than pushed, and the character does advance onto
       // that tile (this is the pre-existing pickup rule, unaffected by
-      // §5.5's "nothing advances after a destruction").
+      // §5.4's "nothing advances after a destruction").
       const character = this.entities.find((e) => e.kind === 'character');
       const move = {
         index: this.entities.indexOf(character),
@@ -611,52 +631,29 @@ export class PuzzleScene extends Phaser.Scene {
     });
   }
 
-  // Every entity on the ring moves; entities elsewhere (and empty tiles) are
-  // unaffected, but the action still costs 1. If a wall (§1.2) stops an
-  // entity's one-step move around the ring, that entity (and anything queued
-  // behind it) is resolved via resolveCycleOutcome (§5.5): a crate crushed
-  // against the wall or against something else that can't move is destroyed,
-  // the character always collects a collectible it's forced into, and if
-  // nothing on the ring can be sacrificed the whole rotation is illegal.
-  applyRotate(clockwise) {
-    if (
-      this.gameOver ||
-      this.animating ||
-      this.selectedAction !== 'rotate' ||
-      !this.targetSelected
-    )
-      return;
-
-    const order = rotationOrder(this.rotateCenter, clockwise, this.size);
-    const outcomes = resolveCycleOutcome(this.wallSet, this.entities, order);
-    this.resolveCycleAction(outcomes, 'rotate', ROTATE_TWEEN_MS, 'Blocked by a wall — try the other direction');
-  }
-
-  // Rows/columns with no entity on them are unaffected, but the action still
-  // costs 1, same as an empty Rotate ring. Same wall/destruction rules as
-  // Rotate (§5.5), just around a row/column instead of a ring.
+  // Every entity on the addressed row/column moves; entities elsewhere are
+  // unaffected. If a wall (§1.2) stops an entity's one-step move along the
+  // line, that entity (and anything queued behind it) is resolved via
+  // resolveCycleOutcome (§5.4): a crate crushed against the wall or against
+  // something else that can't move is destroyed, the character always collects
+  // a collectible it's forced into, and if nothing on the line can be
+  // sacrificed the whole shift is illegal.
   applyShift(axis, index, direction) {
     if (this.gameOver || this.animating || this.selectedAction !== 'shift') return;
 
     const order = shiftOrder(axis, index, direction, this.size);
     const outcomes = resolveCycleOutcome(this.wallSet, this.entities, order);
-    this.resolveCycleAction(outcomes, 'shift', 0, 'Blocked by a wall — try another edge');
-  }
 
-  // Shared resolution for Shift and Rotate (LEVEL_DESIGN.md §5.5): applies
-  // every `move`/`pickup`/`destroy` outcome from resolveCycleOutcome, waits
-  // for all of their animations, then spends the action. An all-`stay`
-  // result (nothing moved, nothing could be sacrificed) is illegal and free;
-  // an empty result (nothing on the ring/line) is a legal no-op that still
-  // costs the action, matching Rotate/Shift's existing empty-target rule.
-  // `moveDuration: 0` skips the tween for normal moves (Shift snaps today).
-  resolveCycleAction(outcomes, action, moveDuration, blockedHint) {
+    // Nothing on that line at all, or nothing on it that can move: the shift
+    // changed nothing, so it costs nothing. That matters now that a level's
+    // whole challenge is spending one or two actions on the right target —
+    // probing an empty row shouldn't burn the budget.
     if (outcomes.length === 0) {
-      this.finishAction(action);
+      this.setHint('Nothing on that row or column');
       return;
     }
     if (outcomes.every((o) => o.outcome === 'stay')) {
-      this.setHint(blockedHint);
+      this.setHint('Blocked by a wall — try another edge');
       return;
     }
 
@@ -705,7 +702,7 @@ export class PuzzleScene extends Phaser.Scene {
       pending -= 1;
       if (pending === 0) {
         this.animating = false;
-        this.finishAction(action);
+        this.finishAction('shift');
       }
     };
 
@@ -718,17 +715,15 @@ export class PuzzleScene extends Phaser.Scene {
       this.collectEntity(o.collectible, finishOnce);
     });
 
-    if (moveDuration > 0) {
-      this.board.animateEntitiesTo(moves, moveDuration, finishOnce);
-    } else {
-      this.board.renderEntities(this.entities);
-      finishOnce();
-    }
+    // Shift snaps its movers rather than sliding them, so the whole line reads
+    // as one reshuffle instead of five separate steps.
+    this.board.renderEntities(this.entities);
+    finishOnce();
   }
 
   // Flip always moves the whole entity layer, so it never has nothing to do —
   // though an entity sitting exactly on the mirror line stays put. All of them
-  // flip in the same synchronized pass (LEVEL_DESIGN.md §5.4), never one at a
+  // flip in the same synchronized pass (LEVEL_DESIGN.md §5.3), never one at a
   // time, since it's a single reflection of the whole board.
   applyFlip(axis) {
     if (this.gameOver || this.animating || this.selectedAction !== 'flip') return;
@@ -750,7 +745,9 @@ export class PuzzleScene extends Phaser.Scene {
   }
 
   // --- Overlay ---
-  showOverlay(won) {
+  // Only ever a win: with Move free and unlimited, a level can't be lost, only
+  // restarted (LEVEL_DESIGN.md §4).
+  showOverlay() {
     this.gameOver = true;
     this.clearSelection();
 
@@ -760,30 +757,33 @@ export class PuzzleScene extends Phaser.Scene {
       .setDepth(10);
 
     this.add
-      .text(GAME_WIDTH / 2, 300, won ? 'You win!' : 'Out of actions', {
+      .text(GAME_WIDTH / 2, 300, 'You win!', {
         fontFamily: 'sans-serif',
         fontSize: '44px',
-        color: won ? COLORS.goalMark : COLORS.lose,
+        color: COLORS.goalMark,
       })
       .setOrigin(0.5)
       .setDepth(11);
 
-    const budgetLabel = this.unlimited ? '∞' : this.budget;
+    const summary = [`Moves used: ${this.movesUsed}`];
+    if (this.availableActions.length > 0) {
+      const budgetLabel = this.unlimited ? '∞' : this.budget;
+      summary.push(`Actions used: ${this.actionsUsed} / ${budgetLabel}`);
+    }
     this.add
-      .text(
-        GAME_WIDTH / 2,
-        370,
-        `Actions used: ${this.movesUsed} / ${budgetLabel}`,
-        { fontFamily: 'sans-serif', fontSize: '26px', color: COLORS.text }
-      )
+      .text(GAME_WIDTH / 2, 370, summary.join('\n'), {
+        fontFamily: 'sans-serif',
+        fontSize: '26px',
+        color: COLORS.text,
+        align: 'center',
+      })
       .setOrigin(0.5)
       .setDepth(11);
 
     // Offer to continue straight into the next level, but only when there is
     // one — the last level in LEVELS gets the ordinary three buttons.
-    const nextLevel = won
-      ? LEVELS[LEVELS.findIndex((l) => l.id === this.level.id) + 1]
-      : undefined;
+    const nextLevel =
+      LEVELS[LEVELS.findIndex((l) => l.id === this.level.id) + 1];
 
     let y = 470;
     if (nextLevel) {

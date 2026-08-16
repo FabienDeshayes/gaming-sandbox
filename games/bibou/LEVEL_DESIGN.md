@@ -120,10 +120,10 @@ Example (no push): character at `(4, 2)` moves `Right` → destination `x = (4 +
 Moving an entity onto an occupied tile pushes a chain, not just one neighbour: starting at `startTile`, walk the line of tiles in `direction` — `startTile`, then one step further, then one step further again — following whichever entity occupies each tile, until one of three things happens:
 
 1. **An unoccupied tile is found.** The chain resolves there: every entity from `startTile` up to (but not including) that tile shifts one step forward into the next tile in the chain. This is the common case — pushing one crate, or a crate that pushes another crate.
-2. **A wall is hit** (§1.2) — the next step in the walk would cross a wall. The whole move is illegal and nothing moves — same as any other illegal action (`DESIGN.md` §5). Level 7 (§7) is built to exercise this case, including the wraparound wall variant in Level 8.
+2. **A wall is hit** (§1.2) — the next step in the walk would cross a wall. If nothing in the chain is destructible, the whole move is illegal and nothing moves — same as any other illegal action (`DESIGN.md` §5). If a crate is crushed against the wall (or against something else in the chain that can't move), it's destroyed instead — see §5.5. Level 7 (§7) is built to exercise the plain-illegal case, including the wraparound wall variant in Level 8; Levels 10–11 exercise the destruction case.
 3. **The walk wraps all the way back to `startTile` itself**, because the board is borderless (§2.1) and every tile on that row/column is occupied by an entity. There is no open tile to resolve into, but this is *not* a deadlock: every entity in the chain still shifts one step forward, including the entity that was at `startTile` — the net effect is the entire line rotating by one, identical to a Shift on that line. This is the case Level 6 (§7) is built to exercise.
 
-Implementation: `resolveMoveChain` (in `src/core/rules.js`, taking a wall lookup built by `buildWallSet` rather than the raw level) walks the chain and returns the ordered list of tiles it passes through, or `null` for case 2; `applyMoveChain` shifts every entity in that list forward by one. Both cases 1 and 3 are the same function call — case 3 is simply what happens when the walk's terminating condition is "back at the start" instead of "found an empty tile".
+Implementation: `resolveMoveChain` (in `src/core/rules.js`, taking a wall lookup built by `buildWallSet` rather than the raw level) walks the chain and returns a discriminated result — `{ kind: 'open' | 'loop', path }` for cases 1 and 3 (`applyMoveChain` then shifts every entity in `path` forward by one), or `{ kind: 'pickup' | 'destroy' | 'illegal', ... }` for case 2 and the character's own pickup shortcut — see §5.5 for what each of those means.
 
 Example (push, no loop): row has crates at `(2, 2)` and `(3, 2)`, character at `(1, 2)`. Character moves `Right`: destination `(2, 2)` is occupied, so the chain walks to `(3, 2)` (also occupied), then to `(4, 2)` (open) — chain resolves. Character ends at `(2, 2)`, the first crate at `(3, 2)`, the second crate at `(4, 2)`.
 
@@ -223,7 +223,9 @@ An action still costs its budget if *any* run on the affected line/ring/chain pr
 
 **Flip is exempt.** It reflects every entity straight to its mirrored coordinate without stepping through anything in between (§5.4), so there's never a "jam" for it to resolve — collectibles and crates move with it exactly like the character does, unconditionally.
 
-Implementation: `resolveMoveChain` (Move) and `resolveCycleOutcome` (Shift/Rotate, via `rotationOrder`/`shiftOrder` to build the ordered ring/line) in `src/core/rules.js`.
+**Rendering a destruction.** A destroyed crate doesn't just disappear: it nudges toward the tile it was crushed trying (and failing) to reach — `CRUSH_NUDGE_MS`, the same "hit something solid" read `animateBump` gives a directly wall-blocked Move — then bursts into a small ring of fragments that fly outward and fade (`EXPLOSION_TWEEN_MS`), rather than fading or shrinking in place. `dest` on a `destroy` outcome (from either `resolveMoveChain` or `resolveCycleOutcome`) is exactly that attempted tile, computed from the same directional step the rest of the jammed run was trying to take, and is what `BoardView.destroyEntitySprite` nudges toward.
+
+Implementation: `resolveMoveChain` (Move) and `resolveCycleOutcome` (Shift/Rotate, via `rotationOrder`/`shiftOrder` to build the ordered ring/line) in `src/core/rules.js`; `BoardView.destroyEntitySprite`/`explodeAt` for the crushed-then-exploded animation.
 
 ## 6. Level data format
 

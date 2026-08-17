@@ -66,6 +66,22 @@ export function setPalette(id) {
   }
 }
 
+// The colour a gem gave back (DESIGN.md §9). Each of the three takes the
+// foreground of a palette you are *not* playing in, so restoring a colour
+// always adds one the world genuinely did not have — and the four CRT
+// foregrounds are already known to read against every one of the backgrounds.
+//
+// `hue` 0 means "no gem": the palette's own foreground, which is what the whole
+// world is drawn in before the first gem and what most of it stays after.
+// Switching palettes mid-game reshuffles which colour belongs to which gem;
+// that's deterministic and it's the same three, so nothing is lost by it.
+export function gemColour(hue) {
+  const active = getPalette();
+  if (!hue) return active.fg;
+  const other = PALETTES.filter((p) => p.id !== active.id)[hue - 1];
+  return other ? other.fg : active.fg;
+}
+
 // Phaser wants '#rrggbb' for text colours, the palette stores numbers.
 export function hex(colour) {
   return '#' + colour.toString(16).padStart(6, '0');

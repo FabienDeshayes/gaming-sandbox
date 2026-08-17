@@ -16,10 +16,11 @@ import {
   VIEW_COLS,
   VIEW_H,
   VIEW_ROWS,
+  gemColour,
   getPalette,
 } from '../config.js';
-import { isBase, isWalkable } from '../core/world.js';
-import { itemOnTile, litTiles, tileKey } from '../core/rules.js';
+import { isBase, terrainAt } from '../core/world.js';
+import { gateOnTile, itemOnTile, litTiles, tileKey } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
 
 export class MapView {
@@ -73,8 +74,14 @@ export class MapView {
   // Repaints every tile from the run's current position. Three visibility
   // states: unknown tiles are simply not drawn, remembered ones are dimmed, and
   // the lit shape draws at full brightness.
+  //
+  // Tints are reassigned here rather than once at construction, because what
+  // colour a tile is drawn in now depends on the run: a gate takes the colour
+  // of the gem that opened it, and an item takes the colour of the gem that
+  // made it visible (DESIGN.md §9).
   refresh(run) {
     const lit = new Set(litTiles(run).map((t) => tileKey(t.x, t.y)));
+    const fg = getPalette().fg;
 
     for (const cell of this.cells) {
       const wx = run.x + cell.dx;
@@ -89,14 +96,38 @@ export class MapView {
       }
 
       const alpha = lit.has(key) ? LIT_ALPHA : REMEMBERED_ALPHA;
-      const rock = !isWalkable(wx, wy, run.seed);
+      const terrain = terrainAt(wx, wy, run.seed);
+      const underCharacter = cell.dx === 0 && cell.dy === 0;
+      const gate = terrain === 'gate' ? gateOnTile(run, wx, wy) : null;
+      // Standing in an open gateway, the arch gives way to plain floor. The
+      // wizard and a gate are both dense sprites and one on top of the other
+      // reads as a single blob — the same reason the hut isn't drawn underneath
+      // them either. A shut gate never has to worry about it: you can't stand
+      // on one.
+      const showGate = gate && !underCharacter;
+
+      // A gate fills its tile the way rock and wall do — it *is* the ring it
+      // stands in, not something lying on the floor. Shut, it's drawn in the
+      // palette's own foreground, because a gate you can't open yet is just
+      // more wall; open, it's the colour of the gem that opened it.
+      const ground = showGate
+        ? gate.open
+          ? 'gate-open'
+          : 'gate'
+        : terrain === 'rock'
+          ? 'rock'
+          : terrain === 'wall'
+            ? 'wall'
+            : this.floorVariant(run, wx, wy);
 
       cell.ground
-        .setTexture(rock ? 'rock' : this.floorVariant(run, wx, wy))
+        .setTexture(ground)
+        .setTint(showGate && gate.open ? gemColour(gate.requires) : fg)
         .setVisible(true)
         .setAlpha(alpha);
 
-      if (rock) {
+      // Nothing lies on rock, on wall, or in a gateway.
+      if (terrain !== 'floor') {
         cell.overlay.setVisible(false);
         cell.item.setVisible(false);
         continue;
@@ -105,21 +136,27 @@ export class MapView {
       // The base is the only thing that sits on top of bare floor. The wizard
       // stands in its doorway rather than on top of it: both sprites are dense,
       // and together they read as one unidentifiable blob.
-      const underCharacter = cell.dx === 0 && cell.dy === 0;
       cell.overlay
         .setTexture('base')
+        .setTint(fg)
         .setVisible(isBase(wx, wy) && !underCharacter)
         .setAlpha(alpha);
 
       const item = itemOnTile(run, wx, wy);
       if (item) {
-        cell.item.setTexture(itemDef(item).sprite).setVisible(true).setAlpha(alpha);
+        const def = itemDef(item);
+        cell.item
+          .setTexture(def.sprite)
+          .setTint(gemColour(def.hue || 0))
+          .setVisible(true)
+          .setAlpha(alpha);
       } else {
         cell.item.setVisible(false);
       }
     }
 
-    this.wizard.setTexture(`wizard-${run.facing}`);
+    // The wizard carries the newest colour they've brought back (DESIGN.md §9).
+    this.wizard.setTexture(`wizard-${run.facing}`).setTint(gemColour(run.gems));
   }
 
 

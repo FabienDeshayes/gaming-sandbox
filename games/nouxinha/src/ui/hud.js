@@ -1,9 +1,10 @@
 // The bottom quarter of the screen: run counters, the inventory strip, the
 // active light's durability, and (built by the scene) the D-pad on the right.
 
-import { FONT, GAME_WIDTH, HUD_Y, getPalette, hex } from '../config.js';
+import { FONT, GAME_WIDTH, HUD_Y, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
-import { activeLight, inventoryStacks, STARTING_WATER } from '../core/rules.js';
+import { activeLight, inventoryStacks, maxWater } from '../core/rules.js';
+import { MAX_GEMS } from '../core/save.js';
 import { makeButton } from './button.js';
 
 const PAD = 14;
@@ -12,6 +13,11 @@ const SLOT_GAP = 8;
 const SLOT_Y = HUD_Y + 36;
 const MAX_SLOTS = 4;
 const INV_BUTTON_X = PAD + MAX_SLOTS * (SLOT + SLOT_GAP) + 42;
+
+// The gem row sits under the status line, on the left where the D-pad isn't.
+const GEM_Y = HUD_Y + 178;
+const GEM_X = PAD + 84;
+const GEM_GAP = 30;
 
 export class Hud {
   constructor(scene, { onSlot, onCoins, onWater, onInventory }) {
@@ -49,13 +55,31 @@ export class Hud {
     this.lightLabel = text(PAD, SLOT_Y + SLOT + 12, 13);
     this.lightBar = scene.add.graphics();
     this.status = text(PAD, SLOT_Y + SLOT + 52, 12);
+
+    // How much colour is back: one pip per gem, each in the colour it gave.
+    // The ones still out there are drawn dim rather than left out, so the row
+    // always says how many there are to find.
+    text(PAD, GEM_Y - 7, 12).setText('COLOURS');
+    this.gems = scene.add.container(0, 0);
   }
 
   update(run) {
     const pal = getPalette();
     this.explored.setText(`EXPLORED ${run.explored.size}`);
     this.coins.setText(`COINS ${run.coins}`);
-    this.water.setText(`WATER ${run.water}/${STARTING_WATER}`);
+    this.water.setText(`WATER ${run.water}/${maxWater(run.gems)}`);
+
+    this.gems.removeAll(true);
+    for (let i = 1; i <= MAX_GEMS; i++) {
+      const held = i <= run.gems;
+      this.gems.add(
+        this.scene.add
+          .image(GEM_X + (i - 1) * GEM_GAP, GEM_Y, 'gem')
+          .setScale(1.4)
+          .setTint(held ? gemColour(i) : pal.fg)
+          .setAlpha(held ? 1 : 0.25)
+      );
+    }
 
     this.slots.removeAll(true);
     const stacks = inventoryStacks(run).slice(0, MAX_SLOTS);
@@ -84,7 +108,7 @@ export class Hud {
       const icon = this.scene.add
         .image(x + SLOT / 2, SLOT_Y + SLOT / 2 - 4, def.sprite)
         .setScale(2.5)
-        .setTint(pal.fg);
+        .setTint(gemColour(def.hue || 0));
 
       const parts = [g, icon];
 

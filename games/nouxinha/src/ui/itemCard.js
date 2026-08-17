@@ -3,7 +3,7 @@
 //
 // Opening one costs no step — the game is turn-based on movement only.
 
-import { FONT, GAME_HEIGHT, GAME_WIDTH, getPalette, hex } from '../config.js';
+import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { makeButton } from './button.js';
 import { makeScrollable } from './scroll.js';
 
@@ -79,7 +79,7 @@ export class ItemCard {
       })
       .setOrigin(0.5);
 
-    const sprite = scene.add.image(cx, cy - 64, def.sprite).setScale(6).setTint(pal.fg);
+    const sprite = scene.add.image(cx, cy - 64, def.sprite).setScale(6).setTint(gemColour(def.hue || 0));
 
     const parts = [backdrop, panel, panelZone, title, sprite];
 

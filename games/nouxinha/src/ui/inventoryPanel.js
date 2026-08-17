@@ -5,7 +5,7 @@
 //
 // Opening it costs no step, the same as the item card and the hut dialog.
 
-import { FONT, GAME_HEIGHT, GAME_WIDTH, getPalette, hex } from '../config.js';
+import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
 import { makeButton } from './button.js';
 import { makeScrollable } from './scroll.js';
@@ -88,7 +88,7 @@ export class InventoryPanel {
         const midY = top2 + ROW_H / 2;
         const active = stack.instances.some((inst) => inst.isActive);
 
-        const icon = scene.add.image(24, midY - 4, def.sprite).setScale(2.2).setTint(pal.fg);
+        const icon = scene.add.image(24, midY - 4, def.sprite).setScale(2.2).setTint(gemColour(def.hue || 0));
         const name = scene.add.text(56, top2 + 10, def.name, {
           fontFamily: FONT,
           fontSize: '14px',

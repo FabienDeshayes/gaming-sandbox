@@ -6,26 +6,36 @@
 import { assert, assertEqual, run, test, unit } from './harness.js';
 import { visibleTiles, tileKey } from '../src/core/light.js';
 import {
+  canEnter,
+  chebyshev,
   DEFAULT_SEED,
+  gatesReachable,
   isWalkable,
   itemAt,
   pickSeed,
   reachableFraction,
+  sanctums,
   terrainAt,
 } from '../src/core/world.js';
 import {
   activeLight,
   activeShape,
+  bankRun,
   createRun,
   equip,
+  gateOnTile,
   inventoryStacks,
   isBlackout,
   itemOnTile,
   litTiles,
+  maxWater,
   runSummary,
   step,
   STARTING_WATER,
+  WATER_PER_GEM,
 } from '../src/core/rules.js';
+import { emptySave, MAX_GEMS } from '../src/core/save.js';
+import { gemColour } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
 
 // --- Routes through the real world -----------------------------------------
@@ -35,7 +45,10 @@ import { ITEMS } from '../src/data/items.js';
 
 const SEED = pickSeed(DEFAULT_SEED);
 
-function bfs(seed, isGoal, maxDepth = 24, start = [0, 0]) {
+// `gems` is what the walker is carrying, because a sanctum gate is only
+// walkable to a run holding the gem it wants — routing with 0 would send a test
+// round the outside of a sanctum it is supposed to walk into.
+function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], gems = 0) {
   const [sx, sy] = start;
   const prev = new Map([[tileKey(sx, sy), null]]);
   let frontier = [[sx, sy]];
@@ -46,7 +59,7 @@ function bfs(seed, isGoal, maxDepth = 24, start = [0, 0]) {
         const nx = x + dx;
         const ny = y + dy;
         const key = tileKey(nx, ny);
-        if (prev.has(key) || !isWalkable(nx, ny, seed)) continue;
+        if (prev.has(key) || !canEnter(nx, ny, seed, gems)) continue;
         prev.set(key, [tileKey(x, y), name]);
         next.push([nx, ny]);
         const hit = isGoal(nx, ny);
@@ -96,6 +109,19 @@ const ROCK_ROUTE = bfs(SEED, (x, y) => {
 // Six copies of the same light, chained leg to leg — enough to overflow the
 // item card's instance list and force it to scroll.
 const MEDIUM_TORCH_CHAIN = bfsChain(SEED, 'torch-medium', 6);
+
+// The four sanctums of this world, and the walk to the first gem. Sanctum 1's
+// arch is the one that stands open, so this route is walkable carrying nothing
+// — which is exactly the promise the chain rests on.
+const SANCTUMS = sanctums(SEED);
+const FIRST_GEM = SANCTUMS[0];
+const GEM_ROUTE = bfs(
+  SEED,
+  (x, y) => x === FIRST_GEM.centre.x && y === FIRST_GEM.centre.y,
+  90
+);
+// The nearest tile from which a step walks into a gate that is still shut.
+const SHUT_GATE = SANCTUMS.find((s) => s.requires === 1);
 
 // --- Pure rules -------------------------------------------------------------
 
@@ -319,6 +345,203 @@ unit('the run summary counts how far out you got and what you found', () => {
   assert(runSummary(state).furthest >= furthest, 'walking back does not shrink it');
 });
 
+// --- Sanctums, gates and gems ----------------------------------------------
+
+unit('every sanctum is a sealed ring with one gate and its gem at the centre', () => {
+  for (const s of SANCTUMS) {
+    const holes = [];
+    for (let dy = -s.radius; dy <= s.radius; dy++)
+      for (let dx = -s.radius; dx <= s.radius; dx++) {
+        const at = terrainAt(s.centre.x + dx, s.centre.y + dy, SEED);
+        const ring = Math.max(Math.abs(dx), Math.abs(dy)) === s.radius;
+        if (ring && at !== 'wall') holes.push(`(${dx},${dy})=${at}`);
+        // The clearing is forced floor, so the gem is always reachable from the
+        // gate — that's what lets the seed check only test the door.
+        if (!ring) assertEqual(at, 'floor', `inside sanctum ${s.index} at (${dx},${dy})`);
+      }
+    assertEqual(holes, [`(${s.gate.x - s.centre.x},${s.gate.y - s.centre.y})=gate`],
+      `sanctum ${s.index} ring is solid but for its gate`);
+    assertEqual(itemAt(s.centre.x, s.centre.y, SEED), s.gem || 'spring-vial',
+      `sanctum ${s.index} centre holds its prize`);
+  }
+});
+
+unit('a gate sits on a wall face, never a corner, with its approach adjacent', () => {
+  for (const s of SANCTUMS) {
+    const offX = Math.abs(s.gate.x - s.centre.x);
+    const offY = Math.abs(s.gate.y - s.centre.y);
+    assert(!(offX === s.radius && offY === s.radius), `sanctum ${s.index} gate is on a corner`);
+    // There are no diagonal steps, so the tile you approach from has to be
+    // orthogonally adjacent or the gate can never be walked through at all.
+    const walk = Math.abs(s.gate.x - s.approach.x) + Math.abs(s.gate.y - s.approach.y);
+    assertEqual(walk, 1, `sanctum ${s.index} approach is one step from its gate`);
+    assertEqual(terrainAt(s.approach.x, s.approach.y, SEED), 'floor',
+      `sanctum ${s.index} approach is standable`);
+  }
+});
+
+unit('the sanctums sit at different distances and in different directions', () => {
+  assertEqual(SANCTUMS.map((s) => chebyshev(s.centre.x, s.centre.y)), [20, 45, 80, 110],
+    'each sanctum lands exactly on its planned ring');
+
+  // Three gems in three directions is what makes collecting them exploring
+  // rather than one long walk out and back.
+  const headings = SANCTUMS.map((s) => Math.atan2(s.centre.y, s.centre.x));
+  for (let a = 0; a < headings.length; a++)
+    for (let b = a + 1; b < headings.length; b++) {
+      let apart = Math.abs(headings[a] - headings[b]) * (180 / Math.PI);
+      if (apart > 180) apart = 360 - apart;
+      assert(apart > 45, `sanctums ${a} and ${b} are only ${apart.toFixed(0)} degrees apart`);
+    }
+});
+
+unit('pickSeed guarantees every sanctum door can be walked to from the hut', () => {
+  assert(gatesReachable(SEED), 'the chosen seed opens all four doors');
+  // And it holds for seeds picked from elsewhere, not just the default one.
+  for (const preferred of [1, 5, 77, 12345]) {
+    const picked = pickSeed(preferred);
+    assert(gatesReachable(picked), `seed picked from ${preferred} leaves a door sealed`);
+  }
+});
+
+unit('a gate stays shut until you hold the gem it wants', () => {
+  const { gate, approach, requires } = SHUT_GATE;
+  assertEqual(requires, 1, 'the second sanctum wants one gem');
+
+  const empty = createRun(SEED, emptySave());
+  assertEqual(canEnter(gate.x, gate.y, SEED, 0), false, 'shut with no gems');
+  assertEqual(gateOnTile(empty, gate.x, gate.y), { requires: 1, open: false }, 'and reads as shut');
+
+  // Walking into it is rejected the way rock is, but with a reason that says
+  // there is something behind it.
+  empty.x = approach.x;
+  empty.y = approach.y;
+  const dir = { '1,0': 'right', '-1,0': 'left', '0,1': 'down', '0,-1': 'up' }[
+    `${gate.x - approach.x},${gate.y - approach.y}`
+  ];
+  const blocked = step(empty, dir);
+  assertEqual(blocked.moved, false, 'the step is rejected');
+  assertEqual(blocked.reason, 'locked', 'and named as a locked gate, not a wall');
+  assertEqual(blocked.needs, 1, 'saying how many gems it wants');
+
+  // The same tile, for a run that has carried a gem home, is just a doorway.
+  const armed = createRun(SEED, { ...emptySave(), gems: 1 });
+  assertEqual(canEnter(gate.x, gate.y, SEED, 1), true, 'open with one gem');
+  armed.x = approach.x;
+  armed.y = approach.y;
+  assertEqual(step(armed, dir).moved, true, 'and it can be walked through');
+});
+
+unit('gem-tier items are in the world all along, invisible until their gem', () => {
+  // A tile the world put a flask on, found by search rather than hardcoded.
+  let flask = null;
+  for (let y = -40; y <= 40 && !flask; y++)
+    for (let x = -40; x <= 40 && !flask; x++)
+      if (itemAt(x, y, SEED) === 'water-flask') flask = { x, y };
+  assert(flask, 'the world should generate water flasks within 40 tiles');
+
+  const before = createRun(SEED, emptySave());
+  assertEqual(itemOnTile(before, flask.x, flask.y), null, 'no gem, nothing there');
+
+  const after = createRun(SEED, { ...emptySave(), gems: 1 });
+  assertEqual(itemOnTile(after, flask.x, flask.y), 'water-flask', 'one gem, and there it is');
+  // The pristine world never changed — only what the run can see of it.
+  assertEqual(itemAt(flask.x, flask.y, SEED), 'water-flask', 'the world held it either way');
+});
+
+unit('each gem carried raises the water ceiling', () => {
+  assertEqual(maxWater(0), STARTING_WATER, 'no gems');
+  assertEqual(maxWater(3), STARTING_WATER + 3 * WATER_PER_GEM, 'all three');
+  // The furthest sanctum is 110 out, so 220 steps of walking — more than a
+  // gemless run could survive even in a straight line. The ladder has to reach.
+  const round = 2 * SANCTUMS[SANCTUMS.length - 1].distance;
+  assert(maxWater(MAX_GEMS) > round, `${maxWater(MAX_GEMS)} water cannot cover a ${round}-step round trip`);
+  assertEqual(createRun(SEED, { ...emptySave(), gems: 2 }).water, maxWater(2), 'a run starts topped up');
+});
+
+unit('walking onto a gem restores a colour and opens the next gate', () => {
+  const state = createRun(SEED, emptySave());
+  assertEqual(state.gems, 0, 'a fresh save has no colour');
+  let found = null;
+  for (const dir of GEM_ROUTE.path) {
+    const result = step(state, dir);
+    assert(result.moved, `route step ${dir} should be legal`);
+    if (result.gemFound) found = result;
+  }
+
+  assertEqual({ x: state.x, y: state.y }, FIRST_GEM.centre, 'arrived at the gem');
+  assertEqual(state.gems, 1, 'and picked it up');
+  assertEqual(found.picked, 'gem-1', 'the step reported which gem');
+  assertEqual(found.gemFound, 1, 'and that it was the first colour');
+  // The gate that was shut a moment ago is now a doorway.
+  assertEqual(gateOnTile(state, SHUT_GATE.gate.x, SHUT_GATE.gate.y), { requires: 1, open: true },
+    'the second sanctum has opened');
+});
+
+unit('a gem is only kept if the run banks it at the hut', () => {
+  const state = createRun(SEED, emptySave());
+  for (const dir of GEM_ROUTE.path) step(state, dir);
+  assertEqual(runSummary(state).gemsCarried, 1, 'carrying one that was not already banked');
+
+  // Banking is what writes it down; dying simply never calls this, which is the
+  // whole reason the walk home is a decision (DESIGN.md §6).
+  const saved = bankRun(state);
+  assertEqual(saved.gems, 1, 'the gem is in the save');
+  assertEqual(saved.runs, 1, 'and the run is counted');
+
+  // A later run that starts from that save opens the gate without walking back.
+  const next = createRun(SEED, saved);
+  assertEqual(next.gems, 1, 'the next run starts holding it');
+  assertEqual(runSummary(next).gemsCarried, 0, 'and is no longer carrying it at risk');
+});
+
+unit('every sanctum can be walked to and back on the water its gate implies', () => {
+  // The chain only works if the gem that opens a gate is also what makes the
+  // walk to it survivable (DESIGN.md §4.4). This is the invariant that keeps
+  // that true, and the one a retune of the distances or the water is most
+  // likely to break silently — a sanctum nobody can return from is a gem the
+  // player can never bank, and the game would just quietly dead-end there.
+  for (const s of SANCTUMS) {
+    const route = bfs(
+      SEED,
+      (x, y) => x === s.centre.x && y === s.centre.y,
+      200,
+      [0, 0],
+      s.requires
+    );
+    const round = route.path.length * 2;
+    const cap = maxWater(s.requires);
+    assert(
+      round <= cap,
+      `sanctum ${s.index} is a ${round}-step round trip on ${cap} water — unreturnable`
+    );
+    // And it has to leave room to actually *find* the place, not just to walk a
+    // route you already knew.
+    assert(
+      cap - round >= 50,
+      `sanctum ${s.index} leaves only ${cap - round} steps of slack to search with`
+    );
+  }
+});
+
+unit('each gem gets a colour the world did not already have', () => {
+  const base = gemColour(0);
+  const colours = [1, 2, 3].map(gemColour);
+  assert(!colours.includes(base), 'no gem hands back the colour already on screen');
+  assertEqual(new Set(colours).size, 3, 'and the three differ from each other');
+  // This is the rule the renderer paints an opened gate with: a gate wanting
+  // gem N is drawn in gem N's colour once it opens (MapView.refresh).
+  assertEqual(gemColour(SHUT_GATE.requires), colours[0], "gate 1 opens in gem 1's colour");
+});
+
+unit('a corrupt or hand-edited save cannot break a run', () => {
+  for (const bad of [null, 'nonsense', { gems: 99 }, { gems: -4 }, { gems: 'two', coins: NaN }]) {
+    const state = createRun(SEED, bad);
+    assert(state.gems >= 0 && state.gems <= MAX_GEMS, `gems clamped for ${JSON.stringify(bad)}`);
+    assertEqual(state.water, maxWater(state.gems), 'water matches whatever gem count survived');
+  }
+});
+
 // --- The real game in a browser --------------------------------------------
 
 test('the title screen starts a run', async (game) => {
@@ -329,11 +552,11 @@ test('the title screen starts a run', async (game) => {
 });
 
 test('a button responds across its whole width, not just the left half', async (game) => {
-  // EXPLORE is a 240-wide button centred on x=240 (TitleScene.js), so its
+  // EXPLORE is a 240-wide button centred on (240, 570) (TitleScene.js), so its
   // right edge sits at x=360. Tapping 90px right of centre is still 30px
   // inside the button — Container.displayOriginX shifting the hit area left
   // by half the button's width (the bug this pins) would make this miss.
-  await game.clickAt(330, 540);
+  await game.clickAt(330, 570);
   await game.waitForScene('ExploreScene');
   assertEqual(await game.activeScene(), 'ExploreScene', 'scene');
 });
@@ -670,6 +893,71 @@ test('stopping at the hut recaps the run before going home', async (game) => {
   await game.clickText('HOME');
   await game.waitForScene('TitleScene');
   assertEqual(await game.activeScene(), 'TitleScene', 'back to the title screen');
+});
+
+test('walking into the first sanctum restores a colour to the world', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  assertEqual(await game.wizardTint(), gemColour(0), 'the wizard starts in the palette foreground');
+  assertEqual((await game.state()).gems, 0, 'and with no colour to their name');
+
+  for (const dir of GEM_ROUTE.path) {
+    await game.tapDpad(dir);
+    await game.settle();
+  }
+
+  const state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, FIRST_GEM.centre, 'standing on the gem');
+  assertEqual(state.gems, 1, 'which is now in hand');
+  assert(await game.hasText('FIRST COLOUR IS BACK. CARRY IT HOME TO KEEP IT.'), 'the status line');
+
+  // The colour actually reached the screen — this is the whole point of a gem,
+  // and it is only observable in the render.
+  assertEqual(await game.wizardTint(), gemColour(1), 'the wizard wears the colour it gave back');
+  const tiles = await game.visibleTiles();
+  assert(
+    tiles.some((t) => t.ground === 'wall'),
+    'the sanctum around them is drawn as masonry, not as rock'
+  );
+  // The arch they walked in through is drawn open, in the palette's own colour
+  // — this first sanctum is the one that never wanted a gem.
+  const arch = tiles.find((t) => t.x === FIRST_GEM.gate.x && t.y === FIRST_GEM.gate.y);
+  assertEqual(arch.ground, 'gate-open', 'the gateway is drawn as an open arch');
+  assertEqual(arch.tint, gemColour(FIRST_GEM.requires), 'in the colour of whatever opened it');
+  // Water rises with the gem, so the HUD's ceiling moves too.
+  assert(await game.hasText(`WATER ${state.water}/${maxWater(1)}`), 'the water ceiling rose');
+});
+
+test('stopping at the hut writes the save, leaving by the X does not', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+  assertEqual(await game.save(), null, 'a first run starts with nothing written');
+
+  // Out one tile and straight back, so the run banks without finding anything.
+  await game.tapDpad('right');
+  await game.settle();
+  await game.tapDpad('left');
+  await game.settle();
+  await game.clickText('STOP HERE');
+
+  assert(await game.hasText('COLOURS SAVED'), 'the recap reports what was banked');
+  const saved = await game.save();
+  assertEqual(saved.runs, 1, 'the run was written down');
+  assertEqual(saved.gems, 0, 'with no colour on it');
+
+  await game.clickText('HOME');
+  await game.waitForScene('TitleScene');
+  assert(await game.hasText('0/3 COLOURS  0 COINS  1 RUNS'), 'and the title screen reads it back');
+
+  // Abandoning by the map's X is not a save — only the hut is (DESIGN.md §6).
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+  await game.tapDpad('right');
+  await game.settle();
+  await game.clickAt(456, 31);
+  await game.waitForScene('TitleScene');
+  assertEqual((await game.save()).runs, 1, 'the abandoned run was not counted');
 });
 
 test('the whole game fits a portrait phone screen', async (game) => {

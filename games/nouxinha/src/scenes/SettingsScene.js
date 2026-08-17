@@ -2,6 +2,7 @@
 // one, so the list shows you the four combinations instead of describing them.
 
 import { FONT, GAME_WIDTH, PALETTES, getPalette, hex, setPalette } from '../config.js';
+import { clearSave, loadSave } from '../core/save.js';
 import { ensureTextures } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 
@@ -74,6 +75,29 @@ export class SettingsScene extends Phaser.Scene {
         this.scene.restart();
       });
     });
+
+    // Erasing is the one destructive control in the game and there is only one
+    // save slot, so it asks with itself rather than with a dialog: the first tap
+    // arms it, the second does it. Tapping anything else leaves without firing.
+    const save = loadSave();
+    let armed = false;
+    const erase = makeButton(
+      this,
+      cx,
+      626,
+      save.runs ? 'ERASE SAVE' : 'NO SAVE YET',
+      () => {
+        if (!save.runs) return;
+        if (!armed) {
+          armed = true;
+          erase.setLabel('TAP AGAIN TO ERASE');
+          return;
+        }
+        clearSave();
+        this.scene.restart();
+      },
+      { width: 240, fontSize: 14, enabled: !!save.runs }
+    );
 
     makeButton(this, cx, 700, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
   }

@@ -51,9 +51,10 @@ reaches in to *set* game state.
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
-| `state()` | The live run: position, facing, steps, coins, seed, explored count, furthest distance, inventory, active light, and whether the item card or the hut dialog is open |
-| `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground texture, alpha, overlay and item. This is the render, not the model — it's how the three visibility states get asserted |
-| `wizardTexture()` | Which of the four facing sprites is showing |
+| `state()` | The live run: position, facing, steps, coins, water, gems, seed, explored count, furthest distance, inventory, active light, and whether the item card or the hut dialog is open |
+| `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground texture, alpha, **tint**, overlay, item and item tint. This is the render, not the model — it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
+| `wizardTexture()` / `wizardTint()` | Which of the four facing sprites is showing, and what colour it's drawn in — the wizard wears the newest gem's colour |
+| `save()` | The single save slot straight out of `localStorage`. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
 | `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |
@@ -81,6 +82,39 @@ const TORCH_ROUTE = bfs(SEED, (x, y) => itemAt(x, y, SEED) === 'torch-medium');
 This keeps the suite honest if the noise is ever retuned: the route moves with the world instead of
 silently pointing at a tile that is now rock. Hardcoding `(-8, 0)` would pass today and rot at the
 next threshold change.
+
+The same applies to the sanctums, which move with the seed: a test that wants the first gem asks
+`sanctums(SEED)[0].centre` for it rather than naming a tile.
+
+```js
+const FIRST_GEM = sanctums(SEED)[0];
+const GEM_ROUTE = bfs(SEED, (x, y) => x === FIRST_GEM.centre.x && y === FIRST_GEM.centre.y, 90);
+```
+
+**Route with the gems the walker is carrying.** `bfs` takes a `gems` argument and steps with
+`canEnter`, not `isWalkable`, because a sanctum gate is only walkable to a run holding the gem it
+wants. Routing with the default 0 sends a test around the outside of a sanctum it was supposed to
+walk into — and the maximum depth has to be raised too, since the sanctums sit 20 to 110 tiles out
+and the default 24 will never reach one.
+
+## Testing the gem chain
+
+A gem changes three things and each is asserted where it actually lives:
+
+- **The rules** — that a gate is shut, that a step into one is rejected as `locked` rather than
+  `blocked`, that a tier of items is invisible below its gem count — are pure, so they're `unit(...)`
+  tests that build runs with `createRun(SEED, { ...emptySave(), gems: n })`. Passing a save is the
+  public way to set a run's starting gems; nothing reaches into a live run to change it.
+- **The render** — that the colour reached the screen — needs the browser, and is asserted from
+  `wizardTint()` and the `tint` fields of `visibleTiles()` against `gemColour(n)` from `src/config.js`
+  rather than a hardcoded hex, so the assertions track the palette rule instead of restating it.
+- **The save** — that a gem is only kept if the run banked it at the hut — is read back with
+  `save()`. Every browser test gets its own page and so its own empty `localStorage`; no test
+  inherits another's save.
+
+Walking a browser test to a sanctum costs roughly 200ms a step, so only the first (20 tiles out) is
+driven through the real canvas. Gates further out are covered by the pure tests, which reach them
+for free.
 
 ## Adding a test
 

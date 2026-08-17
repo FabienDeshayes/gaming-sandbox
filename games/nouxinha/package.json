@@ -1,0 +1,13 @@
+{
+  "name": "nouxinha",
+  "private": true,
+  "type": "module",
+  "description": "Test scaffolding for the Nouxinha prototype — the game itself needs no build step.",
+  "scripts": {
+    "test": "node tests/game.test.js"
+  },
+  "devDependencies": {
+    "phaser": "^3.90.0",
+    "playwright-core": "^1.62.1"
+  }
+}

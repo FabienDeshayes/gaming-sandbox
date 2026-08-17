@@ -1,0 +1,145 @@
+// Step resolution: legality, durability, burnout/auto-swap, pickup, reveal.
+//
+// A run's whole state lives in the plain object `createRun` returns, and every
+// function here operates on it without touching Phaser — so the entire game can
+// be played out in Node by a test, which is how the durability and burnout
+// sequencing gets checked.
+
+import { DIRECTIONS, visibleTiles, tileKey } from './light.js';
+import { DEFAULT_SEED, isWalkable, itemAt, pickSeed } from './world.js';
+import { itemDef, STARTING_LIGHT } from '../data/items.js';
+
+export { DIRECTIONS, tileKey };
+
+export function createRun(seed = DEFAULT_SEED) {
+  const state = {
+    seed: pickSeed(seed),
+    x: 0,
+    y: 0,
+    facing: 'up',
+    steps: 0,
+    coins: 0,
+    // Lights, in pickup order. Auto-swap on burnout walks this order.
+    inventory: [newLight(STARTING_LIGHT)],
+    activeIndex: 0,
+    // Tiles ever lit. The only thing about the world a run has to remember —
+    // terrain, items, and decoration are all re-derived from the seed.
+    explored: new Set(),
+    // Item tiles this run has already emptied, so a pickup doesn't respawn.
+    collected: new Set(),
+  };
+  reveal(state);
+  return state;
+}
+
+function newLight(id) {
+  const def = itemDef(id);
+  return { id, durability: def.maxDurability };
+}
+
+export function activeLight(state) {
+  return state.inventory[state.activeIndex] || null;
+}
+
+// The shape currently lighting the world — null once every light is spent,
+// which `visibleTiles` reads as blackout.
+export function activeShape(state) {
+  const light = activeLight(state);
+  return light ? itemDef(light.id).shape : null;
+}
+
+export function isBlackout(state) {
+  return activeLight(state) === null;
+}
+
+// Equips a carried light. Costs no step — the game is turn-based on movement only.
+export function equip(state, index) {
+  if (index < 0 || index >= state.inventory.length) return false;
+  state.activeIndex = index;
+  reveal(state);
+  return true;
+}
+
+// The item lying on a tile, accounting for what this run has already taken.
+export function itemOnTile(state, x, y) {
+  if (state.collected.has(tileKey(x, y))) return null;
+  return itemAt(x, y, state.seed);
+}
+
+// Lights everything the active shape covers from where the character stands and
+// files it into `explored`. Returns the lit tiles so the renderer can tell
+// "lit right now" from "seen once".
+export function reveal(state) {
+  const lit = visibleTiles(activeShape(state), state.x, state.y, state.facing);
+  for (const { x, y } of lit) state.explored.add(tileKey(x, y));
+  return lit;
+}
+
+export function litTiles(state) {
+  return visibleTiles(activeShape(state), state.x, state.y, state.facing);
+}
+
+// Burns one durability off the active light. When it hits zero the light is
+// spent and removed, and the next light in inventory order auto-equips; with
+// nothing left the character is in blackout, which is a setback, not a death.
+function burnActiveLight(state) {
+  const light = activeLight(state);
+  if (!light) return { burnedOut: false, burnedId: null, blackout: true };
+
+  light.durability -= 1;
+  if (light.durability > 0) return { burnedOut: false, burnedId: null, blackout: false };
+
+  state.inventory.splice(state.activeIndex, 1);
+  // After the splice the same index *is* the next light in order; only when the
+  // spent one was last does it wrap round to the start.
+  if (state.inventory.length === 0) state.activeIndex = -1;
+  else if (state.activeIndex >= state.inventory.length) state.activeIndex = 0;
+
+  return {
+    burnedOut: true,
+    burnedId: light.id,
+    blackout: state.inventory.length === 0,
+  };
+}
+
+function collect(state, x, y) {
+  const id = itemOnTile(state, x, y);
+  if (!id) return null;
+  state.collected.add(tileKey(x, y));
+  if (id === 'coin') {
+    state.coins += 1;
+  } else {
+    // Lights arrive unequipped — swapping is the player's call.
+    state.inventory.push(newLight(id));
+  }
+  return id;
+}
+
+// One step in a cardinal direction. Rock is impassable: the step is rejected,
+// costs no durability, and doesn't change facing.
+export function step(state, direction) {
+  const dir = DIRECTIONS[direction];
+  if (!dir) return { moved: false, reason: 'unknown-direction' };
+
+  const nx = state.x + dir.dx;
+  const ny = state.y + dir.dy;
+  if (!isWalkable(nx, ny, state.seed)) return { moved: false, reason: 'blocked' };
+
+  state.x = nx;
+  state.y = ny;
+  state.facing = direction;
+  state.steps += 1;
+
+  // Order matters: burn first (so the step you take on your last durability is
+  // the one that plunges you into the dark), then pick up, then light the
+  // result — a pickup can't light the tile it landed on until it's equipped.
+  const burn = burnActiveLight(state);
+  const picked = collect(state, nx, ny);
+  const lit = reveal(state);
+
+  return { moved: true, reason: null, picked, lit, ...burn };
+}
+
+export function tilesExplored(state) {
+  return state.explored.size;
+}

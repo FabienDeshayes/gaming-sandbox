@@ -301,6 +301,8 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
 
     tapCoins: () => clickAt(14 + 170 + 40, 636 + 8),
 
+    tapWater: () => clickAt(14 + 260 + 40, 636 + 8),
+
     // Opens the full scrollable inventory panel via the HUD's ITEMS button.
     tapInventory: () => clickAt(312, 660 + 28),
 
@@ -364,6 +366,7 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
           facing: r.facing,
           steps: r.steps,
           coins: r.coins,
+          water: r.water,
           seed: r.seed,
           explored: r.explored.size,
           inventory: r.inventory.map((i) => ({ id: i.id, durability: i.durability })),

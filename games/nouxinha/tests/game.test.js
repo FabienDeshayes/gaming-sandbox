@@ -24,6 +24,7 @@ import {
   litTiles,
   runSummary,
   step,
+  STARTING_WATER,
 } from '../src/core/rules.js';
 import { ITEMS } from '../src/data/items.js';
 
@@ -82,8 +83,10 @@ function bfsChain(seed, wantId, count, maxDepth = 24) {
   return legs;
 }
 
-// The nearest medium torch, and the nearest spot with a rock to walk into.
+// The nearest medium torch, the nearest water drop, and the nearest spot with
+// a rock to walk into.
 const TORCH_ROUTE = bfs(SEED, (x, y) => itemAt(x, y, SEED) === 'torch-medium');
+const WATER_ROUTE = bfs(SEED, (x, y) => itemAt(x, y, SEED) === 'water-drop');
 const ROCK_ROUTE = bfs(SEED, (x, y) => {
   const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
     ([, dx, dy]) => !isWalkable(x + dx, y + dy, SEED)
@@ -128,6 +131,39 @@ unit('a step burns exactly one durability and sets facing', () => {
   assert(result.moved, 'the first step off the base should be legal');
   assertEqual(activeLight(state).durability, before - 1, 'durability');
   assertEqual(state.steps, 1, 'steps');
+});
+
+unit('a step also burns one water, same as durability', () => {
+  const state = createRun(SEED);
+  const before = state.water;
+  const result = step(state, ROCK_ROUTE.path[0] || 'up');
+  assert(result.moved, 'the first step off the base should be legal');
+  assertEqual(state.water, before - 1, 'water');
+});
+
+unit('walking onto a water drop refills water, capped at the starting amount', () => {
+  const state = createRun(SEED);
+  for (const dir of WATER_ROUTE.path) step(state, dir);
+  const plainDepletion = STARTING_WATER - WATER_ROUTE.path.length;
+  assert(state.water > plainDepletion, 'the drop topped water back up');
+  assert(state.water <= STARTING_WATER, 'refill never exceeds the starting amount');
+  assertEqual(itemOnTile(state, state.x, state.y), null, 'the drop is gone now');
+});
+
+unit('running out of water ends the run, and nothing else can move it again', () => {
+  const state = createRun(SEED);
+  const first = ROCK_ROUTE.path[0] || 'up';
+  const back = { up: 'down', down: 'up', left: 'right', right: 'left' }[first];
+  let i = 0;
+  while (state.water > 0 && i < 5000) {
+    step(state, i % 2 === 0 ? first : back);
+    i += 1;
+  }
+  assertEqual(state.water, 0, 'water ran all the way out');
+
+  const result = step(state, first);
+  assertEqual(result.moved, false, 'a dead run cannot move');
+  assertEqual(result.reason, 'dead', 'reason');
 });
 
 unit('walking into rock is rejected and costs nothing', () => {
@@ -442,6 +478,24 @@ test('the coin counter opens the coin card', async (game) => {
   await game.tapCoins();
   assert(await game.hasText('COIN'), 'the coin card');
   assert(await game.hasText(ITEMS.coin.effect), 'effect text');
+  await game.clickText('CLOSE');
+  assertEqual((await game.state()).cardOpen, false, 'card is closed');
+});
+
+test('the HUD tracks water, and the water counter opens its card', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  assert(await game.hasText('WATER 200/200'), 'starts full');
+
+  await game.tapDpad('right');
+  await game.settle();
+  assert(await game.hasText('WATER 199/200'), 'a step burns one water, same as durability');
+  assertEqual((await game.state()).water, 199, 'the model agrees');
+
+  await game.tapWater();
+  assert(await game.hasText('WATER DROP'), 'the water drop card');
+  assert(await game.hasText(ITEMS['water-drop'].effect), 'effect text');
   await game.clickText('CLOSE');
   assertEqual((await game.state()).cardOpen, false, 'card is closed');
 });

@@ -3,7 +3,7 @@
 
 import { FONT, GAME_WIDTH, HUD_Y, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
-import { activeLight, inventoryStacks } from '../core/rules.js';
+import { activeLight, inventoryStacks, STARTING_WATER } from '../core/rules.js';
 import { makeButton } from './button.js';
 
 const PAD = 14;
@@ -14,10 +14,11 @@ const MAX_SLOTS = 4;
 const INV_BUTTON_X = PAD + MAX_SLOTS * (SLOT + SLOT_GAP) + 42;
 
 export class Hud {
-  constructor(scene, { onSlot, onCoins, onInventory }) {
+  constructor(scene, { onSlot, onCoins, onWater, onInventory }) {
     this.scene = scene;
     this.onSlot = onSlot;
     this.onCoins = onCoins;
+    this.onWater = onWater;
 
     const pal = getPalette();
     const text = (x, y, size) =>
@@ -31,6 +32,10 @@ export class Hud {
     this.explored = text(PAD, HUD_Y + 12, 14);
     this.coins = text(PAD + 170, HUD_Y + 12, 14).setInteractive({ useHandCursor: true });
     this.coins.on('pointerdown', () => this.onCoins());
+    // Water is the run's one hard failure state (DESIGN.md §6), so it gets its
+    // own counter in the same row rather than living only in the item card.
+    this.water = text(PAD + 260, HUD_Y + 12, 14).setInteractive({ useHandCursor: true });
+    this.water.on('pointerdown', () => this.onWater());
 
     this.slots = scene.add.container(0, 0);
     // Opens the full scrollable list (inventoryPanel.js) — the strip only ever
@@ -50,6 +55,7 @@ export class Hud {
     const pal = getPalette();
     this.explored.setText(`EXPLORED ${run.explored.size}`);
     this.coins.setText(`COINS ${run.coins}`);
+    this.water.setText(`WATER ${run.water}/${STARTING_WATER}`);
 
     this.slots.removeAll(true);
     const stacks = inventoryStacks(run).slice(0, MAX_SLOTS);

@@ -220,6 +220,29 @@ export const TORCH_LAMP = [
   '................',
 ];
 
+// The water drop: a pointed tip widening into a hollow bulb with a solid
+// bottom cap, same "outline with a small solid accent" language as the
+// torches — and a silhouette that reads apart from both the torches' diamond
+// tip and the coin's ring.
+export const WATER_DROP = [
+  '................',
+  '.......##.......',
+  '......#..#......',
+  '.....#....#.....',
+  '.....#....#.....',
+  '....#......#....',
+  '....#......#....',
+  '...#........#...',
+  '...#........#...',
+  '..#..........#..',
+  '..#..........#..',
+  '..#..........#..',
+  '...#........#...',
+  '....#......#....',
+  '.....##....##...',
+  '......######....',
+];
+
 // The left-facing wizard is the right-facing mask mirrored — same silhouette,
 // same staff hand, no second drawing to keep in sync.
 export function mirror(mask) {
@@ -259,4 +282,5 @@ export const SPRITES = {
   'torch-small': TORCH_SMALL,
   'torch-medium': TORCH_MEDIUM,
   'torch-lamp': TORCH_LAMP,
+  'water-drop': WATER_DROP,
 };

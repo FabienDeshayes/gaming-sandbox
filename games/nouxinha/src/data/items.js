@@ -39,6 +39,13 @@ export const ITEMS = {
     isLight: false,
     effect: 'Currency. The merchant is not open yet.',
   },
+  'water-drop': {
+    id: 'water-drop',
+    name: 'WATER DROP',
+    sprite: 'water-drop',
+    isLight: false,
+    effect: 'Refills 20 water, up to the 200 max. Run dry and the run is over.',
+  },
 };
 
 export const STARTING_LIGHT = 'torch-small';

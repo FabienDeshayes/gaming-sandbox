@@ -51,10 +51,20 @@ reaches in to *set* game state.
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
-| `state()` | The live run: position, facing, steps, coins, seed, explored count, inventory, active light |
+| `state()` | The live run: position, facing, steps, coins, seed, explored count, furthest distance, inventory, active light, and whether the item card or the hut dialog is open |
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground texture, alpha, overlay and item. This is the render, not the model — it's how the three visibility states get asserted |
 | `wizardTexture()` | Which of the four facing sprites is showing |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
+| `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
+| `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |
+
+### Testing a screen size
+
+Pages open at the 480×854 design size, where the canvas is 1:1 and every design coordinate is a
+screen coordinate. `openAnother({ viewport })` opens one at a real device size instead, which is how
+"the whole game fits a portrait phone screen" checks that Phaser's `FIT` scaling leaves the canvas
+inside the viewport with no page scroll — the failure mode there is a canvas wider than the screen,
+which pushes controls off the edge and lets a tap turn into a sideways pan instead of a press.
 
 ## Writing a test against an infinite procedural world
 

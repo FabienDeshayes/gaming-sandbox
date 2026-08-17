@@ -6,7 +6,7 @@
 // sequencing gets checked.
 
 import { DIRECTIONS, visibleTiles, tileKey } from './light.js';
-import { DEFAULT_SEED, isWalkable, itemAt, pickSeed } from './world.js';
+import { DEFAULT_SEED, chebyshev, isBase, isWalkable, itemAt, pickSeed } from './world.js';
 import { itemDef, STARTING_LIGHT } from '../data/items.js';
 
 export { DIRECTIONS, tileKey };
@@ -19,11 +19,17 @@ export function createRun(seed = DEFAULT_SEED) {
     facing: 'up',
     steps: 0,
     coins: 0,
+    // How far out this expedition got, for the recap the hut offers on the way
+    // back in — the number DESIGN.md §6 calls the real score.
+    furthest: 0,
+    // Everything picked up this run, by item id, including lights that have
+    // since burned out. The inventory alone can't tell that story.
+    found: {},
     // Lights, in pickup order. Auto-swap on burnout walks this order.
     inventory: [newLight(STARTING_LIGHT)],
     activeIndex: 0,
     // Tiles ever lit. The only thing about the world a run has to remember —
-    // terrain, items, and decoration are all re-derived from the seed.
+    // terrain and items are both re-derived from the seed.
     explored: new Set(),
     // Item tiles this run has already emptied, so a pickup doesn't respawn.
     collected: new Set(),
@@ -106,6 +112,7 @@ function collect(state, x, y) {
   const id = itemOnTile(state, x, y);
   if (!id) return null;
   state.collected.add(tileKey(x, y));
+  state.found[id] = (state.found[id] || 0) + 1;
   if (id === 'coin') {
     state.coins += 1;
   } else {
@@ -129,6 +136,7 @@ export function step(state, direction) {
   state.y = ny;
   state.facing = direction;
   state.steps += 1;
+  state.furthest = Math.max(state.furthest, chebyshev(nx, ny));
 
   // Order matters: burn first (so the step you take on your last durability is
   // the one that plunges you into the dark), then pick up, then light the
@@ -137,9 +145,30 @@ export function step(state, direction) {
   const picked = collect(state, nx, ny);
   const lit = reveal(state);
 
-  return { moved: true, reason: null, picked, lit, ...burn };
+  // Walking back onto the hut is the one moment the run offers to end itself
+  // (DESIGN.md §6), so the step that lands there says so.
+  return { moved: true, reason: null, picked, lit, atBase: isBase(nx, ny), ...burn };
 }
 
 export function tilesExplored(state) {
   return state.explored.size;
+}
+
+// What the run is worth so far, in the terms the recap reports it.
+export function runSummary(state) {
+  const lights = state.inventory.map((slot) => ({
+    id: slot.id,
+    durability: slot.durability,
+  }));
+  return {
+    explored: state.explored.size,
+    coins: state.coins,
+    steps: state.steps,
+    furthest: state.furthest,
+    // Coins are counted separately, so "found" here means lights only.
+    lightsFound: Object.entries(state.found)
+      .filter(([id]) => id !== 'coin')
+      .reduce((total, [, count]) => total + count, 0),
+    lights,
+  };
 }

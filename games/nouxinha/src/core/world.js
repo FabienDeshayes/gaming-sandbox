@@ -1,19 +1,18 @@
 // The world: infinite, and derived rather than stored.
 //
-// Every tile's terrain, item, and floor decoration is a pure function of its
-// (x, y) and the run's seed, so walking back to a tile always finds the same
-// thing there and nothing but the set of *seen* tiles ever needs remembering.
-// No Phaser, no scene state — importable straight into Node for tests.
+// Every tile's terrain and item is a pure function of its (x, y) and the run's
+// seed, so walking back to a tile always finds the same thing there and nothing
+// but the set of *seen* tiles ever needs remembering. No Phaser, no scene
+// state — importable straight into Node for tests.
 
 export const DEFAULT_SEED = 0x6e6f7578; // "noux"
 
-// Distinct hash channels, so terrain, items, item kind, and decoration are
-// independent of each other — otherwise rocky ground would also be rich ground.
+// Distinct hash channels, so terrain and items are independent of each other —
+// otherwise rocky ground would also be rich ground.
 const CH_TERRAIN = 1;
 const CH_TERRAIN_FINE = 2;
 const CH_ITEM = 3;
 const CH_ITEM_KIND = 4;
-const CH_DECOR = 5;
 
 // ~28% rock coverage. Density alone can't guarantee the base isn't walled in —
 // at *any* threshold that still looks like a cave system, a noticeable slice of
@@ -25,8 +24,6 @@ const ROCK_THRESHOLD = 0.6;
 export const BASE_X = 0;
 export const BASE_Y = 0;
 const BASE_CLEARING = 1;
-
-export const DECOR_VARIANTS = 6;
 
 // --- Noise ------------------------------------------------------------------
 
@@ -82,10 +79,6 @@ export function terrainAt(x, y, seed = DEFAULT_SEED) {
 
 export function isWalkable(x, y, seed = DEFAULT_SEED) {
   return terrainAt(x, y, seed) !== 'rock';
-}
-
-export function decorAt(x, y, seed = DEFAULT_SEED) {
-  return Math.floor(randomAt(x, y, seed, CH_DECOR) * DECOR_VARIANTS) % DECOR_VARIANTS;
 }
 
 // --- Connectivity -----------------------------------------------------------

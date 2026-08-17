@@ -21,6 +21,7 @@ import {
   isBlackout,
   itemOnTile,
   litTiles,
+  runSummary,
   step,
 } from '../src/core/rules.js';
 import { ITEMS } from '../src/data/items.js';
@@ -216,6 +217,32 @@ unit('a picked-up item does not come back', () => {
   assertEqual(itemAt(state.x, state.y, SEED), 'torch-medium', 'the pristine world still has it');
 });
 
+unit('a step reports arriving back at the hut', () => {
+  const state = createRun(SEED);
+  // The base clearing is forced floor, so stepping out and back is always legal.
+  assertEqual(step(state, 'right').atBase, false, 'stepping off the hut');
+  assertEqual(step(state, 'left').atBase, true, 'stepping back onto it');
+  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 0 }, 'home again');
+});
+
+unit('the run summary counts how far out you got and what you found', () => {
+  const state = createRun(SEED);
+  assertEqual(runSummary(state).furthest, 0, 'a fresh run has been nowhere');
+
+  for (const dir of TORCH_ROUTE.path) step(state, dir);
+  const summary = runSummary(state);
+
+  assertEqual(summary.steps, TORCH_ROUTE.path.length, 'steps taken');
+  assertEqual(summary.lightsFound, 1, 'the torch on the route');
+  assertEqual(summary.coins, state.coins, 'coins match the run');
+  assertEqual(summary.explored, state.explored.size, 'tiles explored match the run');
+  // Furthest is the high-water mark, not where you happen to be standing.
+  assert(summary.furthest > 0, 'the walk got somewhere');
+  const furthest = summary.furthest;
+  for (let i = 0; i < TORCH_ROUTE.path.length; i++) step(state, 'left');
+  assert(runSummary(state).furthest >= furthest, 'walking back does not shrink it');
+});
+
 // --- The real game in a browser --------------------------------------------
 
 test('the title screen starts a run', async (game) => {
@@ -383,6 +410,74 @@ test('the menu button returns to the title screen', async (game) => {
   await game.clickAt(456, 31);
   await game.waitForScene('TitleScene');
   assertEqual(await game.activeScene(), 'TitleScene', 'scene');
+});
+
+test('walking back to the hut asks whether to stop', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await game.tapDpad('right');
+  await game.settle();
+  assertEqual((await game.state()).dialogOpen, false, 'nothing asks while you are out');
+
+  await game.tapDpad('left');
+  await game.settle();
+  assertEqual((await game.state()).dialogOpen, true, 'the hut asks on arrival');
+  assert(await game.hasText('BACK AT THE HUT'), 'the prompt');
+
+  // The world is frozen behind the question.
+  await game.tapDpad('right');
+  assertEqual((await game.state()).x, 0, 'no stepping out from under the dialog');
+
+  await game.clickText('KEEP GOING');
+  assertEqual((await game.state()).dialogOpen, false, 'dismissed');
+
+  await game.tapDpad('right');
+  await game.settle();
+  const state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, { x: 1, y: 0 }, 'and the run carries on');
+});
+
+test('stopping at the hut recaps the run before going home', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await game.tapDpad('right');
+  await game.settle();
+  await game.tapDpad('left');
+  await game.settle();
+  await game.clickText('STOP HERE');
+
+  assert(await game.hasText('EXPEDITION OVER'), 'the recap');
+  const texts = await game.texts();
+  for (const label of ['TILES EXPLORED', 'COINS', 'LIGHTS FOUND', 'FURTHEST OUT', 'STEPS TAKEN'])
+    assert(texts.includes(label), `the recap reports ${label}`);
+  // One tile out and back: the 3x3 around the base plus the three tiles the
+  // step east added, in two steps.
+  assert(texts.includes('12'), 'the tiles-explored figure');
+  assert(texts.includes('2'), 'the step count');
+  assert(
+    texts.some((t) => t.startsWith('CARRYING SMALL TORCH')),
+    'what is still in hand'
+  );
+
+  await game.clickText('HOME');
+  await game.waitForScene('TitleScene');
+  assertEqual(await game.activeScene(), 'TitleScene', 'back to the title screen');
+});
+
+test('the whole game fits a portrait phone screen', async (game) => {
+  // Phaser fits the canvas to #game, so if #game is not the viewport the canvas
+  // overflows it — which used to push the map's X button off the side and let
+  // the page pan sideways, swallowing taps.
+  const phone = await game.openAnother({ viewport: { width: 390, height: 844 } });
+  const fit = await phone.canvasFit();
+  const where = JSON.stringify(fit);
+
+  assert(fit.left >= -1 && fit.top >= -1, `canvas starts off screen: ${where}`);
+  assert(fit.right <= fit.viewport.width + 1, `canvas runs off the side: ${where}`);
+  assert(fit.bottom <= fit.viewport.height + 1, `canvas runs off the bottom: ${where}`);
+  assert(!fit.pageScrollsX && !fit.pageScrollsY, `the page scrolls behind the canvas: ${where}`);
 });
 
 run();

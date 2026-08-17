@@ -24,7 +24,7 @@ Nouxinha is a grid exploration game: a wizard walks an infinite procedurally-gen
 
 Things that are easy to break by not knowing them:
 
-- **The world is derived, never stored.** Terrain, item spawns, and floor decoration are pure functions of `(x, y, seed)` in `src/core/world.js`. A run stores only which tiles it has *seen* and which item tiles it has emptied. Don't add a world array.
+- **The world is derived, never stored.** Terrain and item spawns are pure functions of `(x, y, seed)` in `src/core/world.js`. A run stores only which tiles it has *seen*, which item tiles it has emptied, and the few tallies the end-of-run recap reports. Don't add a world array.
 - **A run validates its seed at start.** `pickSeed` flood-fills a window around the base and bumps the seed if the spawn is sealed into a pocket — the design promises the character is never permanently stuck.
 - **Sprites are text.** 16×16 `#`/`.` masks in `src/data/sprites.js`, baked to white textures and tinted with the palette's foreground at draw time. That tinting is what enforces the two-colour rule, so anything drawn must be tinted — a stray untinted object breaks the palette.
 - **Tests derive their routes.** There are no hand-authored levels, so the suite BFSes the real world to find the nearest torch or rock and replays the path. Don't hardcode coordinates.

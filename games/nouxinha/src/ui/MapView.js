@@ -18,7 +18,7 @@ import {
   VIEW_ROWS,
   getPalette,
 } from '../config.js';
-import { decorAt, isBase, isWalkable } from '../core/world.js';
+import { isBase, isWalkable } from '../core/world.js';
 import { itemOnTile, litTiles, tileKey } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
 
@@ -50,8 +50,8 @@ export class MapView {
             .setScale(SPRITE_SCALE)
             .setTint(pal.fg)
             .setVisible(false);
-        // Three layers per tile: ground, then decoration or the base hut, then
-        // whatever is lying on it.
+        // Three layers per tile: ground, then the base hut where there is one,
+        // then whatever is lying on it.
         const cell = {
           dx: col - midCol,
           dy: row - midRow,
@@ -102,17 +102,14 @@ export class MapView {
         continue;
       }
 
-      // The wizard stands in the doorway of the base rather than on top of it:
-      // both sprites are dense, and together they read as one unidentifiable blob.
+      // The base is the only thing that sits on top of bare floor. The wizard
+      // stands in its doorway rather than on top of it: both sprites are dense,
+      // and together they read as one unidentifiable blob.
       const underCharacter = cell.dx === 0 && cell.dy === 0;
-      if (isBase(wx, wy)) {
-        cell.overlay.setTexture('base').setVisible(!underCharacter).setAlpha(alpha);
-      } else {
-        cell.overlay
-          .setTexture(`decor-${decorAt(wx, wy, run.seed)}`)
-          .setVisible(true)
-          .setAlpha(alpha);
-      }
+      cell.overlay
+        .setTexture('base')
+        .setVisible(isBase(wx, wy) && !underCharacter)
+        .setAlpha(alpha);
 
       const item = itemOnTile(run, wx, wy);
       if (item) {

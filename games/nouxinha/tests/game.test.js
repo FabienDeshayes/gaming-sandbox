@@ -252,6 +252,25 @@ test('the title screen starts a run', async (game) => {
   assertEqual(await game.activeScene(), 'ExploreScene', 'scene');
 });
 
+test('settings: picking a palette and going back both work on a single tap', async (game) => {
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  assertEqual(await game.activeScene(), 'SettingsScene', 'scene');
+
+  // Picking a row restarts the scene in the new palette — one tap, not several.
+  await game.clickText('AMBER');
+  await game.waitForScene('SettingsScene');
+  assert(await game.hasText('AMBER'), 'still on the palette list, repainted');
+
+  // Restore the default so this test doesn't change what every other test sees.
+  await game.clickText('PHOSPHOR');
+  await game.waitForScene('SettingsScene');
+
+  await game.clickText('BACK');
+  await game.waitForScene('TitleScene');
+  assertEqual(await game.activeScene(), 'TitleScene', 'back to the title screen');
+});
+
 test('a run starts at the base with the small torch lit', async (game) => {
   await game.clickText('EXPLORE');
   await game.waitForScene('ExploreScene');

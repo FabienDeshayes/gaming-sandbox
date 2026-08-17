@@ -60,7 +60,14 @@ export class SettingsScene extends Phaser.Scene {
         .zone(cx - ROW_W / 2, y, ROW_W, ROW_H)
         .setOrigin(0)
         .setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => {
+      // Fire on release, not on touch-down (see ui/button.js) — pointerdown
+      // here is what made a row sometimes eat a tap and need a second one.
+      let pressed = false;
+      zone.on('pointerdown', () => (pressed = true));
+      zone.on('pointerout', () => (pressed = false));
+      zone.on('pointerup', () => {
+        if (!pressed) return;
+        pressed = false;
         setPalette(option.id);
         // Everything on screen was tinted at create time, so re-enter the scene
         // to repaint it in the palette just chosen.

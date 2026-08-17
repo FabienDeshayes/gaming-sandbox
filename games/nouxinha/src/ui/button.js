@@ -36,9 +36,30 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
     new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height),
     Phaser.Geom.Rectangle.Contains
   );
+
+  // Fire on release rather than on touch-down: a scene transition kicked off
+  // mid-press (before the finger has even lifted) is the one thing that made
+  // these buttons feel unresponsive on touch, since the previous scene can
+  // still be mid-teardown when a pointerdown lands right after one. Down still
+  // draws the press so the button gives instant feedback either way; up (only
+  // if still over the button — pointerout cancels it) is what actually acts.
+  let pressed = false;
   container.on('pointerover', () => enabled && draw(true));
-  container.on('pointerout', () => draw(false));
-  container.on('pointerdown', () => enabled && onClick && onClick());
+  container.on('pointerout', () => {
+    pressed = false;
+    draw(false);
+  });
+  container.on('pointerdown', () => {
+    if (!enabled) return;
+    pressed = true;
+    draw(true);
+  });
+  container.on('pointerup', () => {
+    if (!enabled) return;
+    draw(false);
+    if (pressed && onClick) onClick();
+    pressed = false;
+  });
 
   container.setLabel = (next) => text.setText(next);
   container.setEnabled = (next) => {

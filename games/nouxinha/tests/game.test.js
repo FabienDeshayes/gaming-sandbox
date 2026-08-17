@@ -252,6 +252,16 @@ test('the title screen starts a run', async (game) => {
   assertEqual(await game.activeScene(), 'ExploreScene', 'scene');
 });
 
+test('a button responds across its whole width, not just the left half', async (game) => {
+  // EXPLORE is a 240-wide button centred on x=240 (TitleScene.js), so its
+  // right edge sits at x=360. Tapping 90px right of centre is still 30px
+  // inside the button — Container.displayOriginX shifting the hit area left
+  // by half the button's width (the bug this pins) would make this miss.
+  await game.clickAt(330, 540);
+  await game.waitForScene('ExploreScene');
+  assertEqual(await game.activeScene(), 'ExploreScene', 'scene');
+});
+
 test('settings: picking a palette and going back both work on a single tap', async (game) => {
   await game.clickText('SETTINGS');
   await game.waitForScene('SettingsScene');

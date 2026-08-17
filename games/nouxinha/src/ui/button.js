@@ -32,8 +32,15 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   };
   draw(false);
 
+  // Phaser.GameObjects.Container.displayOriginX/Y is hardcoded to width/2,
+  // height/2 and gets added to the pointer's local coordinate before it's
+  // checked against the hit area (Phaser.Input.InputManager#pointWithinHitArea)
+  // — so a container's custom hit area has to be given top-left-relative
+  // (0, 0, width, height), not centred like the border/text drawn below. A
+  // centred rectangle here silently shifted the whole clickable region half a
+  // button-width to the left of what was actually drawn.
   container.setInteractive(
-    new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height),
+    new Phaser.Geom.Rectangle(0, 0, width, height),
     Phaser.Geom.Rectangle.Contains
   );
 

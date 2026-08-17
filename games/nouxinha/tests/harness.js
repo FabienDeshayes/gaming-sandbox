@@ -139,9 +139,13 @@ export function launchBrowser() {
 
 // --- Driver -----------------------------------------------------------------
 
-export async function openGame(browser, port) {
+// `viewport` defaults to the design size, where the canvas is 1:1 and every
+// design coordinate is a screen coordinate. Pass a real device size to test what
+// Phaser's FIT scaling actually does with it.
+export async function openGame(browser, port, { viewport = { width: 480, height: 854 } } = {}) {
   const errors = [];
-  const page = await browser.newPage({ viewport: { width: 480, height: 854 } });
+  const spawned = [];
+  const page = await browser.newPage({ viewport });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   // The browser asks for /favicon.ico on its own and this server has none —
   // that 404 comes from the browser, not the game.
@@ -193,8 +197,35 @@ export async function openGame(browser, port) {
 
   const game = {
     page,
-    pageErrors: () => errors.slice(),
-    close: () => page.close(),
+    pageErrors: () => spawned.reduce((all, g) => all.concat(g.pageErrors()), errors.slice()),
+    close: async () => {
+      for (const other of spawned) await other.close();
+      await page.close();
+    },
+
+    // A second page on the same server, for the handful of things that are only
+    // testable at a different screen size. Closed with its parent.
+    openAnother: async (opts) => {
+      const other = await openGame(browser, port, opts);
+      spawned.push(other);
+      return other;
+    },
+
+    // How the canvas actually sits on the screen — the check that the whole
+    // game is reachable rather than half of it hanging off the side.
+    canvasFit: () =>
+      page.evaluate(() => {
+        const r = window.__game.canvas.getBoundingClientRect();
+        return {
+          left: r.left,
+          top: r.top,
+          right: r.right,
+          bottom: r.bottom,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          pageScrollsX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          pageScrollsY: document.documentElement.scrollHeight > document.documentElement.clientHeight,
+        };
+      }),
 
     activeScene: () =>
       page.evaluate(() => {
@@ -298,8 +329,10 @@ export async function openGame(browser, port) {
           explored: r.explored.size,
           inventory: r.inventory.map((i) => ({ id: i.id, durability: i.durability })),
           activeIndex: r.activeIndex,
+          furthest: r.furthest,
           animating: s.animating,
           cardOpen: s.card.isOpen(),
+          dialogOpen: s.dialog.isOpen(),
         };
       }),
 

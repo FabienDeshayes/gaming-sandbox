@@ -17,3 +17,8 @@ picking up a gem restores colour to the world. each of the 3 gems is assigned a 
 the player can find a compass (or buy it from the merchant) to help guide toward gems and the hut. 
 * collectibles
 these will be coins for the merchant, food and / or water for now.
+
+
+bugs / to correct:
+* water should replenish when on the hut
+* when you run out of all sources of light, you don't see anything but the adjacent tiles (and they are dimmed as if they are in the fog of war)

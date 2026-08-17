@@ -47,6 +47,26 @@ export function activeLight(state) {
   return state.inventory[state.activeIndex] || null;
 }
 
+// Groups the flat, pickup-ordered inventory by item id for display, so a run
+// carrying several of the same light shows one stack instead of one slot per
+// copy. The model itself stays flat — burnout, auto-swap, and `equip` all
+// index into `state.inventory` directly by position — so each instance keeps
+// its original flat index for `equip` to use.
+export function inventoryStacks(state) {
+  const stacks = [];
+  const byId = new Map();
+  state.inventory.forEach((slot, index) => {
+    let stack = byId.get(slot.id);
+    if (!stack) {
+      stack = { id: slot.id, instances: [] };
+      byId.set(slot.id, stack);
+      stacks.push(stack);
+    }
+    stack.instances.push({ index, durability: slot.durability, isActive: index === state.activeIndex });
+  });
+  return stacks;
+}
+
 // The shape currently lighting the world — null once every light is spent,
 // which `visibleTiles` reads as blackout.
 export function activeShape(state) {

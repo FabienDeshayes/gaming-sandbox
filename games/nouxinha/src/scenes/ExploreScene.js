@@ -1,13 +1,14 @@
 // The game: a wizard, a torch burning down a step at a time, and a lot of dark.
 
 import { FONT, GAME_WIDTH, VIEW_H, getPalette, hex } from '../config.js';
-import { DIRECTIONS, createRun, equip, runSummary, step } from '../core/rules.js';
+import { DIRECTIONS, createRun, equip, inventoryStacks, runSummary, step } from '../core/rules.js';
 import { DEFAULT_SEED } from '../core/world.js';
 import { itemDef } from '../data/items.js';
 import { ensureTextures } from '../ui/textures.js';
 import { MapView } from '../ui/MapView.js';
 import { Hud } from '../ui/hud.js';
 import { ItemCard } from '../ui/itemCard.js';
+import { InventoryPanel } from '../ui/inventoryPanel.js';
 import { Dialog } from '../ui/dialog.js';
 import { makeDpad } from '../ui/dpad.js';
 import { playPickup, unlockAudio } from '../ui/sfx.js';
@@ -35,10 +36,12 @@ export class ExploreScene extends Phaser.Scene {
 
     this.map = new MapView(this);
     this.hud = new Hud(this, {
-      onSlot: (i) => this.openSlot(i),
+      onSlot: (stack) => this.openStack(stack),
       onCoins: () => !this.modalOpen() && this.card.show({ def: itemDef('coin') }),
+      onInventory: () => !this.modalOpen() && this.inventory.show(inventoryStacks(this.run)),
     });
     this.card = new ItemCard(this, { onEquip: (i) => this.equipSlot(i) });
+    this.inventory = new InventoryPanel(this, { onOpenStack: (stack) => this.openStack(stack) });
     this.dialog = new Dialog(this);
 
     makeDpad(this, DPAD_CX, DPAD_CY, (dir) => this.tryStep(dir));
@@ -63,10 +66,10 @@ export class ExploreScene extends Phaser.Scene {
       .on('pointerdown', () => !this.modalOpen() && this.scene.start('TitleScene'));
   }
 
-  // The card and the hut's dialog both own the whole screen while they're up:
-  // nothing behind them steps, swipes, or reacts to a key.
+  // The card, the inventory panel, and the hut's dialog all own the whole
+  // screen while they're up: nothing behind them steps, swipes, or reacts to a key.
   modalOpen() {
-    return this.card.isOpen() || this.dialog.isOpen();
+    return this.card.isOpen() || this.inventory.isOpen() || this.dialog.isOpen();
   }
 
   bindInput() {
@@ -103,7 +106,10 @@ export class ExploreScene extends Phaser.Scene {
     };
     for (const [event, dir] of Object.entries(keys))
       this.input.keyboard.on(event, () => this.tryStep(dir));
-    this.input.keyboard.on('keydown-ESC', () => this.card.isOpen() && this.card.hide());
+    this.input.keyboard.on('keydown-ESC', () => {
+      if (this.card.isOpen()) this.card.hide();
+      if (this.inventory.isOpen()) this.inventory.hide();
+    });
   }
 
   tryStep(direction) {
@@ -137,9 +143,11 @@ export class ExploreScene extends Phaser.Scene {
   // arriving there asks rather than assumes — the hut is also just a landmark to
   // cross on the way somewhere else.
   askToStop() {
-    // An item card opened during the step's 90ms slide would otherwise swallow
-    // the question; arriving home is the more important of the two.
+    // An item card or the inventory panel opened during the step's 90ms slide
+    // would otherwise swallow the question; arriving home is the more
+    // important of the two.
     if (this.card.isOpen()) this.card.hide();
+    if (this.inventory.isOpen()) this.inventory.hide();
     this.dialog.show({
       title: 'BACK AT THE HUT',
       lines: ['Call it here, or head back out?'],
@@ -184,16 +192,11 @@ export class ExploreScene extends Phaser.Scene {
     if (result.picked) this.hud.flash(`FOUND ${itemDef(result.picked).name}.`);
   }
 
-  openSlot(index) {
+  // `stack` is one entry of `inventoryStacks(run)` — see core/rules.js. Called
+  // from both a tapped HUD slot and a tapped row in the inventory panel.
+  openStack(stack) {
     if (this.modalOpen()) return;
-    const slot = this.run.inventory[index];
-    if (!slot) return;
-    this.card.show({
-      def: itemDef(slot.id),
-      durability: slot.durability,
-      index,
-      isActive: index === this.run.activeIndex,
-    });
+    this.card.show({ def: itemDef(stack.id), instances: stack.instances });
   }
 
   equipSlot(index) {

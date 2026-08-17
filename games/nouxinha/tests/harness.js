@@ -21,6 +21,13 @@ const VIEW_CX = 240;
 const VIEW_CY = 312;
 const DPAD = { cx: 388, cy: 748, offset: 54 };
 
+// Mirrored from src/ui/itemCard.js and src/ui/inventoryPanel.js.
+const CARD_CX = 240;
+const CARD_CY = 854 / 2 - 40;
+const CARD_MULTI_LIST = { x: CARD_CX - (380 - 64) / 2, y: CARD_CY + 88, h: 120, rowH: 40 };
+const INV_PANEL = { left: CARD_CX - 380 / 2, top: CARD_CY - 460 / 2 };
+const INV_LIST = { x: INV_PANEL.left + 20, y: INV_PANEL.top + 56, rowH: 64 };
+
 // --- Tiny test runner -------------------------------------------------------
 
 const suite = [];
@@ -294,6 +301,38 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
 
     tapCoins: () => clickAt(14 + 170 + 40, 636 + 8),
 
+    // Opens the full scrollable inventory panel via the HUD's ITEMS button.
+    tapInventory: () => clickAt(312, 660 + 28),
+
+    // Taps the i-th row (0-based) of a multi-copy item card's instance list.
+    tapCardInstance: (i) =>
+      clickAt(CARD_MULTI_LIST.x + 20, CARD_MULTI_LIST.y + i * CARD_MULTI_LIST.rowH + CARD_MULTI_LIST.rowH / 2),
+
+    // Taps the i-th row (0-based) of the open inventory panel's stack list.
+    tapInventoryRow: (i) => clickAt(INV_LIST.x + 20, INV_LIST.y + i * INV_LIST.rowH + INV_LIST.rowH / 2),
+
+    // A press-move-release drag from one point to another, for exercising
+    // scrollable lists (the item card's instance list, the inventory panel) —
+    // unlike `swipe`, this holds at the destination instead of releasing with
+    // momentum, and takes design-space coordinates directly since these
+    // overlays aren't inside the tile viewport `swipe` converts for.
+    dragAt: async (x0, y0, x1, y1) => {
+      const R = await rect();
+      await page.mouse.move(R.left + x0 * R.sx, R.top + y0 * R.sy);
+      await page.mouse.down();
+      await page.mouse.move(R.left + x1 * R.sx, R.top + y1 * R.sy, { steps: 6 });
+      await page.mouse.up();
+      await page.waitForTimeout(140);
+    },
+
+    // Drags inside an open multi-copy item card's instance list by `dy`
+    // pixels (negative scrolls down through the list).
+    dragCardList: (dy) => {
+      const x = CARD_MULTI_LIST.x + 20;
+      const y = CARD_MULTI_LIST.y + CARD_MULTI_LIST.h / 2;
+      return game.dragAt(x, y, x, y + dy);
+    },
+
     // Swipes across the map area from its centre.
     swipe: async (dir) => {
       const R = await rect();
@@ -332,6 +371,7 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
           furthest: r.furthest,
           animating: s.animating,
           cardOpen: s.card.isOpen(),
+          inventoryOpen: s.inventory.isOpen(),
           dialogOpen: s.dialog.isOpen(),
         };
       }),
@@ -351,6 +391,17 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
             overlay: c.overlay.visible ? c.overlay.texture.key : null,
             item: c.item.visible ? c.item.texture.key : null,
           }));
+      }),
+
+    // The y position of whichever scrollable list is currently open (the item
+    // card's instance list or the inventory panel's stack list) — moves as the
+    // player drags, which is how a scroll is told apart from a tap that just
+    // didn't move anything.
+    scrollContentY: () =>
+      page.evaluate(() => {
+        const s = window.__game.scene.getScene('ExploreScene');
+        const handle = s.card.isOpen() ? s.card.scrollHandle : s.inventory.scrollHandle;
+        return handle && handle.content ? handle.content.y : null;
       }),
 
     wizardTexture: () =>

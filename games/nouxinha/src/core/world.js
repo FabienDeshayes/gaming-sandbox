@@ -126,8 +126,9 @@ export function pickSeed(preferred = DEFAULT_SEED, minFraction = 0.6, maxAttempt
 // --- Items ------------------------------------------------------------------
 
 // Spawn odds rise with distance from the base, and so does what can spawn:
-// coins near home, medium torches in the middle band, lamp torches only far
-// out. This is the whole reason to spend durability walking away (DESIGN.md §4.3).
+// coins and water drops near home, medium torches in the middle band, lamp
+// torches only far out. This is the whole reason to spend durability walking
+// away (DESIGN.md §4.3).
 const SPAWN_NEAR = 0.03;
 const SPAWN_FAR = 0.06;
 const SPAWN_FALLOFF = 40;
@@ -142,6 +143,10 @@ export function spawnChance(distance) {
 
 // The item lying on a tile in a pristine world, ignoring whether this run has
 // already picked it up — see rules.js `itemOnTile` for the run-aware version.
+//
+// Water drops carve their share out of what would otherwise be a coin, at
+// every distance band, without moving the torch thresholds — so a change here
+// can never shift where a medium or lamp torch spawns.
 export function itemAt(x, y, seed = DEFAULT_SEED) {
   const d = chebyshev(x, y, BASE_X, BASE_Y);
   if (d <= BASE_CLEARING) return null;
@@ -149,8 +154,11 @@ export function itemAt(x, y, seed = DEFAULT_SEED) {
   if (randomAt(x, y, seed, CH_ITEM) >= spawnChance(d)) return null;
 
   const kind = randomAt(x, y, seed, CH_ITEM_KIND);
-  if (d < BAND_MID) return 'coin';
-  if (d < BAND_FAR) return kind < 0.75 ? 'coin' : 'torch-medium';
-  if (kind < 0.6) return 'coin';
+  if (d < BAND_MID) return kind < 0.5 ? 'coin' : 'water-drop';
+  if (d < BAND_FAR) {
+    if (kind < 0.75) return kind < 0.45 ? 'coin' : 'water-drop';
+    return 'torch-medium';
+  }
+  if (kind < 0.6) return kind < 0.3 ? 'coin' : 'water-drop';
   return kind < 0.85 ? 'torch-medium' : 'torch-lamp';
 }

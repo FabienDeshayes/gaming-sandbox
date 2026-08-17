@@ -38,6 +38,7 @@ export class ExploreScene extends Phaser.Scene {
     this.hud = new Hud(this, {
       onSlot: (stack) => this.openStack(stack),
       onCoins: () => !this.modalOpen() && this.card.show({ def: itemDef('coin') }),
+      onWater: () => !this.modalOpen() && this.card.show({ def: itemDef('water-drop') }),
       onInventory: () => !this.modalOpen() && this.inventory.show(inventoryStacks(this.run)),
     });
     this.card = new ItemCard(this, { onEquip: (i) => this.equipSlot(i) });
@@ -133,9 +134,11 @@ export class ExploreScene extends Phaser.Scene {
     this.animating = true;
     this.map.slide(this, DIRECTIONS[direction], () => {
       this.animating = false;
-      // Asked once the world has finished moving, so the question doesn't land
-      // over a sliding map.
-      if (result.atBase) this.askToStop();
+      // Asked/shown once the world has finished moving, so the question or the
+      // death screen doesn't land over a sliding map. Death takes priority over
+      // the hut's question — dying in the doorway is still dying.
+      if (result.died) this.showDeath();
+      else if (result.atBase) this.askToStop();
     });
   }
 
@@ -176,6 +179,24 @@ export class ExploreScene extends Phaser.Scene {
         ['STEPS TAKEN', summary.steps],
       ],
       footer: `CARRYING ${carried}`,
+      buttons: [{ label: 'HOME', onClick: () => this.scene.start('TitleScene') }],
+    });
+  }
+
+  // Running out of water is the run's one hard failure state (DESIGN.md §6):
+  // unlike the hut's recap, there's nothing to carry home from it.
+  showDeath() {
+    if (this.card.isOpen()) this.card.hide();
+    if (this.inventory.isOpen()) this.inventory.hide();
+    const summary = runSummary(this.run);
+    this.dialog.show({
+      title: 'OUT OF WATER',
+      lines: ['You collapsed in the dark. Everything you carried is lost.'],
+      rows: [
+        ['TILES EXPLORED', summary.explored],
+        ['FURTHEST OUT', summary.furthest],
+        ['STEPS TAKEN', summary.steps],
+      ],
       buttons: [{ label: 'HOME', onClick: () => this.scene.start('TitleScene') }],
     });
   }

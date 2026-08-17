@@ -11,6 +11,13 @@ import { itemDef, STARTING_LIGHT } from '../data/items.js';
 
 export { DIRECTIONS, tileKey };
 
+// Water balance — tune here. Every successful step costs one, independent of
+// the light; a water-drop pickup refills it, capped at the starting amount.
+// Hitting zero is the run's one hard failure state (DESIGN.md §6).
+export const STARTING_WATER = 200;
+export const WATER_PER_STEP = 1;
+export const WATER_REFILL = 20;
+
 export function createRun(seed = DEFAULT_SEED) {
   const state = {
     seed: pickSeed(seed),
@@ -19,6 +26,7 @@ export function createRun(seed = DEFAULT_SEED) {
     facing: 'up',
     steps: 0,
     coins: 0,
+    water: STARTING_WATER,
     // How far out this expedition got, for the recap the hut offers on the way
     // back in — the number DESIGN.md §6 calls the real score.
     furthest: 0,
@@ -135,6 +143,8 @@ function collect(state, x, y) {
   state.found[id] = (state.found[id] || 0) + 1;
   if (id === 'coin') {
     state.coins += 1;
+  } else if (id === 'water-drop') {
+    state.water = Math.min(STARTING_WATER, state.water + WATER_REFILL);
   } else {
     // Lights arrive unequipped — swapping is the player's call.
     state.inventory.push(newLight(id));
@@ -143,10 +153,12 @@ function collect(state, x, y) {
 }
 
 // One step in a cardinal direction. Rock is impassable: the step is rejected,
-// costs no durability, and doesn't change facing.
+// costs no durability, and doesn't change facing. Once water has run out the
+// run is over, so every further step is rejected too.
 export function step(state, direction) {
   const dir = DIRECTIONS[direction];
   if (!dir) return { moved: false, reason: 'unknown-direction' };
+  if (state.water <= 0) return { moved: false, reason: 'dead' };
 
   const nx = state.x + dir.dx;
   const ny = state.y + dir.dy;
@@ -159,15 +171,25 @@ export function step(state, direction) {
   state.furthest = Math.max(state.furthest, chebyshev(nx, ny));
 
   // Order matters: burn first (so the step you take on your last durability is
-  // the one that plunges you into the dark), then pick up, then light the
-  // result — a pickup can't light the tile it landed on until it's equipped.
+  // the one that plunges you into the dark), then pick up — a water-drop
+  // picked up on the tile that would have killed you still saves you, the same
+  // way a pickup can't light the tile it landed on until it's equipped.
   const burn = burnActiveLight(state);
+  state.water = Math.max(0, state.water - WATER_PER_STEP);
   const picked = collect(state, nx, ny);
   const lit = reveal(state);
 
   // Walking back onto the hut is the one moment the run offers to end itself
   // (DESIGN.md §6), so the step that lands there says so.
-  return { moved: true, reason: null, picked, lit, atBase: isBase(nx, ny), ...burn };
+  return {
+    moved: true,
+    reason: null,
+    picked,
+    lit,
+    atBase: isBase(nx, ny),
+    died: state.water <= 0,
+    ...burn,
+  };
 }
 
 export function tilesExplored(state) {
@@ -183,6 +205,7 @@ export function runSummary(state) {
   return {
     explored: state.explored.size,
     coins: state.coins,
+    water: state.water,
     steps: state.steps,
     furthest: state.furthest,
     // Coins are counted separately, so "found" here means lights only.

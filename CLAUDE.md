@@ -18,6 +18,19 @@ The template convention (`templates/game/index.html` + `main.js`): Phaser 3 load
 
 Every game has a `DESIGN.md` (from `templates/GAME_DESIGN_DOC_TEMPLATE.md`) that documents the game **as it currently is**, not as a changelog. When a mechanic changes, edit the relevant section in place — never leave "previously X, now Y" or "superseded" notes. Git history is the changelog; the doc is the current source of truth. This convention applies to all docs in a game folder (e.g. `games/bibou/DESIGN.md`, `LEVEL_DESIGN.md`, `TESTING.md`).
 
+## Working in `games/nouxinha/`
+
+Nouxinha is a grid exploration game: a wizard walks an infinite procedurally-generated dark, and the light sources they carry burn down one step at a time. Read `games/nouxinha/DESIGN.md` before changing it, and `games/nouxinha/TESTING.md` before adding a test.
+
+Things that are easy to break by not knowing them:
+
+- **The world is derived, never stored.** Terrain, item spawns, and floor decoration are pure functions of `(x, y, seed)` in `src/core/world.js`. A run stores only which tiles it has *seen* and which item tiles it has emptied. Don't add a world array.
+- **A run validates its seed at start.** `pickSeed` flood-fills a window around the base and bumps the seed if the spawn is sealed into a pocket — the design promises the character is never permanently stuck.
+- **Sprites are text.** 16×16 `#`/`.` masks in `src/data/sprites.js`, baked to white textures and tinted with the palette's foreground at draw time. That tinting is what enforces the two-colour rule, so anything drawn must be tinted — a stray untinted object breaks the palette.
+- **Tests derive their routes.** There are no hand-authored levels, so the suite BFSes the real world to find the nearest torch or rock and replays the path. Don't hardcode coordinates.
+
+Same test setup as Bibou (`cd games/nouxinha && npm install && npm test`), including the CDN-rewriting harness.
+
 ## Working in `games/bibou/` (the reference prototype)
 
 Bibou is a turn-based grid puzzle game (move tiles to get a character to a goal). It's the most fleshed-out prototype and the one with a real test suite — read its docs before making changes:

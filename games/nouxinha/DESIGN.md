@@ -2,6 +2,9 @@
 
 > Grid exploration game about walking into the dark on a limited supply of light.
 
+> See [`TESTING.md`](./TESTING.md) for how to run the suite and how to write a test against an
+> infinite procedural world.
+
 > **Doc convention:** this doc describes the game *as it is now*. When something changes, edit the
 > relevant sections in place — don't leave "superseded"/"previously"/"was X, now Y" notes. Git history
 > is the changelog; this doc is the current source of truth.
@@ -64,7 +67,8 @@ Only one light is active at a time. Equipping is manual (via the item card, §7)
 
 Effectively infinite and **procedurally generated from a seed**: terrain and item spawns are derived by hashing the tile's `(x, y)` against the run's seed, so a tile's content is the same every time you walk back to it and nothing needs storing except which tiles you've seen. There is no world edge.
 
-- The **base** sits at `(0, 0)` and is where every run starts. Its 3×3 neighbourhood is forced to floor so you can never be walled in at spawn. It renders as a distinct landmark so it's recognisable from the edge of your light, and it's the one tile that's always on the map.
+- The **base** sits at `(0, 0)` and is where every run starts. Its 3×3 neighbourhood is forced to floor so you can never be walled in at spawn. It renders as a hut with a flag so it's recognisable from the edge of your light, and it's the one tile that's always on the map. The hut isn't drawn while the wizard is standing on it — two dense sprites on one tile read as an unidentifiable blob, so the wizard is simply in the doorway.
+- **The seed is validated at run start.** A clearing at spawn isn't enough: at any rock density that still looks like a cave system, a noticeable slice of seeds seals the base into a pocket of a few tiles, which would break the promise that the character is never permanently stuck (§5). So a run flood-fills a 40-tile window from the base and rejects a seed that can't reach most of the floor in it, bumping to the next seed until one opens up. Carving guaranteed corridors into the noise would be the alternative, and it leaves a visible lattice; this keeps the terrain organic and costs a few milliseconds once per run.
 - Rock density comes from one noise channel; item spawns from another. A third channel picks each floor tile's **decoration variant** (§9), so ground texture is stable per coordinate rather than reshuffling every time you re-light a tile. **Item quality scales with distance from the base** — coins near home, medium torches in the middle band, lamp torches only far out. That's what makes walking away from the base worth the durability.
 - The base has no function beyond "start point and landmark" until the vault exists (§12).
 
@@ -95,6 +99,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Equip a light | Tap **Equip** on its item card | Click **Equip** |
 | Close the item card | Tap the card's close control, or tap outside it | Click, or press Esc |
 | Change palette | Settings, from the title screen | Same |
+| Leave the run | Tap **X** in the top right of the map | Click **X** |
 
 **The item card** is an overlay, opened from an inventory slot, showing: the item's name, its sprite at large scale, **durability** as `current / max` with a bar, a one-line **effect** description ("Lights the 8 tiles around you"), and an **Equip** button for lights (greyed out on the already-active one). Opening a card doesn't cost a step — the game is turn-based on movement only.
 
@@ -103,9 +108,9 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 - Top 624px: the map viewport. 48px tiles, with the character's tile centred exactly on the viewport centre (240, 312). Because 480 and 624 are both whole multiples of 48, exact centring puts the grid on a half-tile offset: 9 full columns plus a half column bleeding off each edge, and 12 full rows plus a half row top and bottom. That partial outer ring is a feature — tiles cut by the screen edge read as "the world keeps going", which is the right message for this game.
 - Bottom ~230px (about a quarter): the HUD. Inventory strip and the run counters (tiles explored, coins) on the left; the four-direction D-pad on the right, thumb-reachable.
 
-## 8. Scope — MVP vs. cut
+## 8. Scope
 
-**MVP (must have to test if the core loop is fun):**
+**Built — the MVP, and what "is the walk interesting" gets judged on:**
 - Procedural infinite grid (floor/rock) from a seed, with the base at `(0, 0)`
 - Tile stepping via swipe and D-pad, with facing tracked from the last step
 - Three visibility states with persistent memory of explored tiles
@@ -133,7 +138,8 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 
 ## 9. Art & audio style
 
-- **Visual style:** Pixel art, **duo-chromatic**, retro CRT. Exactly two colours are on screen at any moment: a dark background and a single foreground used for every tile border, the character, items, HUD, and text. Sprites are authored as 16×16 1-bit masks (foreground shape on transparent) drawn at 3× with nearest-neighbour filtering, and tinted with the palette's foreground colour — which is what makes a palette swap a one-line change rather than an asset rebuild.
+- **Visual style:** Pixel art, **duo-chromatic**, retro CRT. Exactly two colours are on screen at any moment: a dark background and a single foreground used for every tile border, the character, items, HUD, and text. Sprites are authored as 16×16 1-bit masks (foreground shape on transparent) drawn at 3× with nearest-neighbour filtering, and tinted with the palette's foreground colour — which is what makes a palette swap a one-line change rather than an asset rebuild. The masks live in `src/data/sprites.js` as **text**, `#` and `.` — the art is data, it diffs in git, and changing it needs no image editor (see §11).
+  - **Tile edges:** a floor tile draws its dotted border on its top and left edges only, so the edge shared by two known tiles is drawn once rather than doubled. It closes off its right or bottom edge only where the neighbour there is still unknown, so the frontier of explored ground reads as a boundary instead of an unfinished grid.
   - **Three visibility states, one colour:** lit = foreground at full alpha; remembered = the same foreground at ~30% alpha; unknown = nothing drawn at all, just background. Dimming by alpha rather than by a third colour is what keeps the two-colour rule intact.
   - **Floor is never plain.** An empty floor tile is not bare background with a border — it carries a sparse stipple of foreground pixels (a few dots, a crack, a pebble, a tuft) so that "ground I have lit" is unmistakably different from "dark I have never been to". Concretely: a dotted or dashed tile border, plus one of ~6 decoration variants picked per tile from the world seed, each only a handful of lit pixels on the 16×16 mask. Sparse is the point — the tiles have to tile without the viewport turning into noise, and the character and items still have to pop against them. Rock uses the inverse weight: a dense, near-solid mask, so a rock wall reads as a mass and floor reads as a surface.
 
@@ -166,29 +172,35 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
 
 - **Platform:** Web (2D), portrait, mobile-first
 - **Engine/library:** Phaser 3, via CDN `<script>` tag
-- **Screen size:** 480×854 fixed (~9:16); 48px tiles; a 624px-tall viewport showing an 11×14 tile window (outer ring half-cut, see §7) with the character pinned dead centre
-- **Source layout** (target, once past the single-file template):
+- **Screen size:** 480×854 fixed (~9:16); 48px tiles; a 624px-tall viewport with the character pinned dead centre. The tile pool is 11×15 — one row wider than strictly visible, so the half-cut outer ring (§7) is always fully covered.
+- **Source layout:**
 
   | Path | Holds |
   |---|---|
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
-  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, and the active-palette accessor |
-  | `src/core/world.js` | Seeded hash → terrain and item spawn for a tile coordinate. Pure, no Phaser |
+  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, and the active-palette accessor (persisted to `localStorage`) |
+  | `src/core/world.js` | Seeded hash → terrain, item spawn, and floor decoration for a tile coordinate, plus `reachableFraction`/`pickSeed` for the run-start seed validation. Pure, no Phaser |
   | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles. Pure |
-  | `src/core/rules.js` | Step resolution: legality, durability tick, burnout/auto-swap, pickup. Pure |
+  | `src/core/rules.js` | The run: step legality, durability tick, burnout/auto-swap, pickup, reveal. Pure |
   | `src/data/items.js` | Item definitions (name, sprite key, durability, light shape, effect text) |
-  | `src/ui/` | D-pad, inventory strip, item card overlay |
+  | `src/data/sprites.js` | Every sprite, as a 16×16 text mask — including the four floor-edge variants, derived from the base pattern rather than drawn a second time |
+  | `src/ui/textures.js` | Bakes the masks into white textures at boot, and rejects any mask that isn't 16×16 |
+  | `src/ui/MapView.js` | The tile pool, the three visibility states, the step slide and the blocked-step bump. Holds no game state |
+  | `src/ui/hud.js` | Run counters, inventory strip, the active light's durability, the status line |
+  | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/button.js` | The D-pad, the item card overlay, the shared bordered button |
   | `src/scenes/` | `TitleScene`, `SettingsScene`, `ExploreScene` |
-  | `assets/sprites/` | 16×16 1-bit sprites: wizard ×4 facings, rock, base, floor decoration variants, small/medium/lamp torch, coin |
+  | `tests/` | `harness.js` (local server + Playwright driver + runner) and `game.test.js` — see `TESTING.md` |
+
+- **Sprites are text, not images.** Each is a 16×16 grid of `#`/`.` in `src/data/sprites.js`, baked into a white texture at boot and tinted at draw time. No binary assets, no image editor, no build step — and one texture set serves all four palettes.
 
 - **Explored-tile storage:** a `Set` of `"x,y"` keys for tiles ever lit. Terrain, items, and floor decoration are re-derived from the seed on demand, so nothing else about the world needs storing.
-- **Rendering the viewport:** the tile window is redrawn (or repositioned) around the character's coordinate each step rather than instantiating sprites for a growing world — a fixed pool of ~11×14 tile sprites whose texture and alpha are reassigned from the tile they currently represent. Sprite count stays constant however far you walk.
+- **Rendering the viewport:** the tile window is repointed around the character's coordinate each step rather than instantiating sprites for a growing world — a fixed pool of 11×15 cells (three sprites each: ground, decoration/base, item) whose texture and alpha are reassigned from whatever tile now sits at that screen position. Sprite count stays constant however far you walk. A step slides the whole tile container one tile and tweens it home in 90ms, so the world moves and the wizard doesn't; input is blocked for that tween so a fast tapper can't outrun the renderer.
 - **Key technical risks:**
   - Keeping the world genuinely unbounded — all tile lookups go through the seeded generator, never an array, and the camera works in world coordinates so there's no origin to drift from.
   - Swipe vs. tap disambiguation on the map area, with the D-pad live at the same time.
   - Two-colour discipline surviving contact with Phaser defaults (text, UI, particles all need explicit tinting).
   - Floor decoration density: enough that ground never reads as empty dark, sparse enough that items and the wizard still pop — and it has to hold up at the remembered state's ~30% alpha too, where decoration is the *only* thing distinguishing explored ground from unknown.
-- **Testing:** `core/world.js`, `core/light.js`, and `core/rules.js` are pure and importable from Node, so light shapes, durability/burnout sequencing, and spawn distribution can be unit-tested without a browser — the same split `games/bibou/` uses.
+- **Testing:** `core/world.js`, `core/light.js`, and `core/rules.js` are pure and importable from Node, so light shapes, durability/burnout sequencing, and spawn distribution are unit-tested without a browser; everything a player *does* is driven against the real canvas with Playwright. Because there are no hand-authored levels to write coordinates against, the browser tests BFS the real world at load time to find their targets (the nearest torch, the nearest rock to walk into) and replay the route — see `TESTING.md`.
 
 ## 12. TODO — deferred, not yet designed
 

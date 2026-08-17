@@ -1,0 +1,388 @@
+// The Nouxinha suite. `unit(...)` tests exercise the pure core in Node;
+// `test(...)` tests each drive a fresh page against the real canvas.
+//
+// See TESTING.md for how to run these and how to add one.
+
+import { assert, assertEqual, run, test, unit } from './harness.js';
+import { visibleTiles, tileKey } from '../src/core/light.js';
+import {
+  DEFAULT_SEED,
+  isWalkable,
+  itemAt,
+  pickSeed,
+  reachableFraction,
+  terrainAt,
+} from '../src/core/world.js';
+import {
+  activeLight,
+  activeShape,
+  createRun,
+  equip,
+  isBlackout,
+  itemOnTile,
+  litTiles,
+  step,
+} from '../src/core/rules.js';
+import { ITEMS } from '../src/data/items.js';
+
+// --- Routes through the real world -----------------------------------------
+//
+// Derived here rather than hardcoded, so a change to the noise moves the tests
+// with it instead of silently invalidating them.
+
+const SEED = pickSeed(DEFAULT_SEED);
+
+function bfs(seed, isGoal, maxDepth = 24) {
+  const prev = new Map([['0,0', null]]);
+  let frontier = [[0, 0]];
+  for (let d = 0; d < maxDepth; d++) {
+    const next = [];
+    for (const [x, y] of frontier) {
+      for (const [dx, dy, name] of [[0, -1, 'up'], [1, 0, 'right'], [0, 1, 'down'], [-1, 0, 'left']]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const key = tileKey(nx, ny);
+        if (prev.has(key) || !isWalkable(nx, ny, seed)) continue;
+        prev.set(key, [tileKey(x, y), name]);
+        next.push([nx, ny]);
+        const hit = isGoal(nx, ny);
+        if (hit) {
+          const path = [];
+          let cur = key;
+          while (prev.get(cur)) {
+            const [p, dir] = prev.get(cur);
+            path.unshift(dir);
+            cur = p;
+          }
+          return { x: nx, y: ny, path, hit };
+        }
+      }
+    }
+    frontier = next;
+  }
+  throw new Error('no route found in the test world');
+}
+
+// The nearest medium torch, and the nearest spot with a rock to walk into.
+const TORCH_ROUTE = bfs(SEED, (x, y) => itemAt(x, y, SEED) === 'torch-medium');
+const ROCK_ROUTE = bfs(SEED, (x, y) => {
+  const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
+    ([, dx, dy]) => !isWalkable(x + dx, y + dy, SEED)
+  );
+  return into ? into[0] : null;
+});
+
+// --- Pure rules -------------------------------------------------------------
+
+unit('small torch lights the 3x3 block around you', () => {
+  const lit = visibleTiles(ITEMS['torch-small'].shape, 0, 0, 'up');
+  assertEqual(lit.length, 9, 'tile count');
+  assert(lit.some((t) => t.x === 1 && t.y === 1), 'includes the diagonal');
+});
+
+unit('medium torch lights 2 tiles in every direction', () => {
+  assertEqual(visibleTiles(ITEMS['torch-medium'].shape, 0, 0, 'up').length, 25, 'tile count');
+});
+
+unit('lamp torch is a cone that widens with distance', () => {
+  const lit = visibleTiles(ITEMS['torch-lamp'].shape, 0, 0, 'up');
+  // own tile + 1 + 3 + 5
+  assertEqual(lit.length, 10, 'tile count');
+  assert(lit.some((t) => t.x === 0 && t.y === -3), 'reaches 3 ahead');
+  assert(lit.some((t) => t.x === -2 && t.y === -3), 'is 5 wide at 3 ahead');
+  assert(!lit.some((t) => t.y > 0), 'shows nothing behind');
+});
+
+unit('lamp torch re-aims with facing', () => {
+  const right = visibleTiles(ITEMS['torch-lamp'].shape, 0, 0, 'right');
+  assert(right.some((t) => t.x === 3 && t.y === 0), 'reaches 3 to the right');
+  assert(!right.some((t) => t.x < 0), 'shows nothing behind');
+});
+
+unit('a step burns exactly one durability and sets facing', () => {
+  const state = createRun(SEED);
+  const before = activeLight(state).durability;
+  const result = step(state, ROCK_ROUTE.path[0] || 'up');
+  assert(result.moved, 'the first step off the base should be legal');
+  assertEqual(activeLight(state).durability, before - 1, 'durability');
+  assertEqual(state.steps, 1, 'steps');
+});
+
+unit('walking into rock is rejected and costs nothing', () => {
+  const state = createRun(SEED);
+  for (const dir of ROCK_ROUTE.path) assert(step(state, dir).moved, 'route step');
+  const durability = activeLight(state).durability;
+  const facing = state.facing;
+  const steps = state.steps;
+
+  const result = step(state, ROCK_ROUTE.hit);
+  assert(!result.moved, 'the step into rock should be rejected');
+  assertEqual(result.reason, 'blocked', 'reason');
+  assertEqual(activeLight(state).durability, durability, 'durability unchanged');
+  assertEqual(state.facing, facing, 'facing unchanged');
+  assertEqual(state.steps, steps, 'step count unchanged');
+});
+
+unit('a spent light is removed and the next one auto-equips', () => {
+  const state = createRun(SEED);
+  state.inventory.push({ id: 'torch-medium', durability: 50 });
+
+  let burnout = null;
+  // Rock is impassable, so pace back and forth on tiles known to be walkable.
+  const first = ROCK_ROUTE.path[0] || 'up';
+  const back = { up: 'down', down: 'up', left: 'right', right: 'left' }[first];
+  for (let i = 0; i < 100 && !burnout; i++) {
+    const result = step(state, i % 2 === 0 ? first : back);
+    if (result.burnedOut) burnout = result;
+  }
+
+  assert(burnout, 'the small torch should burn out within 100 steps');
+  assertEqual(burnout.burnedId, 'torch-small', 'which light burned out');
+  assertEqual(burnout.blackout, false, 'a spare light means no blackout');
+  assertEqual(state.inventory.length, 1, 'the spent light is gone');
+  assertEqual(activeLight(state).id, 'torch-medium', 'the spare is now equipped');
+});
+
+unit('with no lights left you see only your own tile', () => {
+  const state = createRun(SEED);
+  const first = ROCK_ROUTE.path[0] || 'up';
+  const back = { up: 'down', down: 'up', left: 'right', right: 'left' }[first];
+  for (let i = 0; i < 100; i++) step(state, i % 2 === 0 ? first : back);
+
+  assert(isBlackout(state), 'should be in blackout');
+  assertEqual(activeShape(state), null, 'no active shape');
+  assertEqual(litTiles(state).length, 1, 'only the tile underfoot');
+  // Blackout is a setback, not a death: you can still walk.
+  const before = state.steps;
+  step(state, back);
+  assertEqual(state.steps, before + 1, 'still able to move');
+});
+
+unit('equipping a carried light changes what you can see', () => {
+  const state = createRun(SEED);
+  assertEqual(litTiles(state).length, 9, 'small torch');
+  state.inventory.push({ id: 'torch-medium', durability: 50 });
+  assert(equip(state, 1), 'equip should succeed');
+  assertEqual(litTiles(state).length, 25, 'medium torch');
+});
+
+unit('the world is the same every time you walk back to it', () => {
+  for (const [x, y] of [[3, 7], [-12, 4], [40, -40]]) {
+    assertEqual(terrainAt(x, y, SEED), terrainAt(x, y, SEED), 'terrain is stable');
+    assertEqual(itemAt(x, y, SEED), itemAt(x, y, SEED), 'items are stable');
+  }
+  // A different seed is a different world.
+  let differences = 0;
+  for (let i = 0; i < 200; i++)
+    if (terrainAt(i, 3, SEED) !== terrainAt(i, 3, SEED + 1)) differences++;
+  assert(differences > 20, `seeds should differ, got ${differences} differing tiles`);
+});
+
+unit('the base clearing is always walkable', () => {
+  for (let y = -1; y <= 1; y++)
+    for (let x = -1; x <= 1; x++)
+      for (const seed of [SEED, 5, 8, 999]) assert(isWalkable(x, y, seed), `(${x},${y}) seed ${seed}`);
+});
+
+unit('pickSeed rejects a seed that walls the base in', () => {
+  // Seed 5 seals the spawn into a pocket of a couple of tiles.
+  assert(reachableFraction(5) < 0.6, 'seed 5 should be a stranding seed');
+  const picked = pickSeed(5);
+  assert(picked !== 5, 'a stranding seed should be rejected');
+  assert(reachableFraction(picked) >= 0.6, 'the replacement should open up');
+});
+
+unit('nothing spawns on the base clearing, and the best loot is far out', () => {
+  for (let y = -1; y <= 1; y++)
+    for (let x = -1; x <= 1; x++) assertEqual(itemAt(x, y, SEED), null, `item at (${x},${y})`);
+
+  let nearLamps = 0;
+  let farLamps = 0;
+  for (let y = -30; y <= 30; y++)
+    for (let x = -30; x <= 30; x++) {
+      if (itemAt(x, y, SEED) !== 'torch-lamp') continue;
+      if (Math.max(Math.abs(x), Math.abs(y)) < 20) nearLamps++;
+      else farLamps++;
+    }
+  assertEqual(nearLamps, 0, 'no lamp torches inside the near bands');
+  assert(farLamps > 0, 'lamp torches should exist further out');
+});
+
+unit('a picked-up item does not come back', () => {
+  const state = createRun(SEED);
+  for (const dir of TORCH_ROUTE.path) step(state, dir);
+  assertEqual(state.inventory.length, 2, 'the torch is in the inventory');
+  assertEqual(itemOnTile(state, state.x, state.y), null, 'the tile is empty now');
+  assertEqual(itemAt(state.x, state.y, SEED), 'torch-medium', 'the pristine world still has it');
+});
+
+// --- The real game in a browser --------------------------------------------
+
+test('the title screen starts a run', async (game) => {
+  assert(await game.hasText('NOUXINHA'), 'title');
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+  assertEqual(await game.activeScene(), 'ExploreScene', 'scene');
+});
+
+test('a run starts at the base with the small torch lit', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  const state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 0 }, 'starts on the base');
+  assertEqual(state.inventory, [{ id: 'torch-small', durability: 100 }], 'inventory');
+  assertEqual(state.explored, 9, 'the 3x3 block around the base is lit');
+
+  const tiles = await game.visibleTiles();
+  assertEqual(tiles.filter((t) => t.alpha === 1).length, 9, 'nine tiles at full brightness');
+  assert(await game.hasText('EXPLORED 9'), 'the explored counter');
+
+  // The wizard stands in the base's doorway, so the hut itself is only drawn
+  // once they step off it — two dense sprites on one tile read as a blob.
+  assert(!tiles.some((t) => t.overlay === 'base'), 'the hut is hidden under the wizard');
+  await game.tapDpad('right');
+  await game.settle();
+  const after = await game.visibleTiles();
+  const base = after.find((t) => t.x === 0 && t.y === 0);
+  assertEqual(base.overlay, 'base', 'the hut is drawn once you step off it');
+});
+
+test('the d-pad walks and burns the torch', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await game.tapDpad('right');
+  await game.settle();
+
+  const state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, { x: 1, y: 0 }, 'moved one tile east');
+  assertEqual(state.facing, 'right', 'facing');
+  assertEqual(state.inventory[0].durability, 99, 'one durability spent');
+  assertEqual(await game.wizardTexture(), 'wizard-right', 'the wizard turned');
+});
+
+test('swiping the map walks', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await game.swipe('down');
+  await game.settle();
+
+  const state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 1 }, 'moved one tile south');
+  assertEqual(await game.wizardTexture(), 'wizard-down', 'the wizard turned');
+});
+
+test('arrow keys walk', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await game.press('ArrowUp');
+  await game.settle();
+
+  const state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, { x: 0, y: -1 }, 'moved one tile north');
+});
+
+test('explored ground stays on screen, dimmed', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await game.tapDpad('right');
+  await game.settle();
+  await game.tapDpad('right');
+  await game.settle();
+
+  const tiles = await game.visibleTiles();
+  const lit = tiles.filter((t) => t.alpha === 1);
+  const remembered = tiles.filter((t) => t.alpha === 0.3);
+  assertEqual(lit.length, 9, 'the light shape is still 9 tiles');
+  assert(remembered.length > 0, 'ground walked past is still drawn, dimmed');
+  // Everything drawn is either lit or remembered — unknown tiles are not drawn.
+  assertEqual(lit.length + remembered.length, tiles.length, 'no third state on screen');
+  assert(
+    remembered.some((t) => t.x === 0 && t.y === 0),
+    'the base is remembered from two tiles away'
+  );
+});
+
+test('walking into rock bumps instead of moving', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+  for (const dir of ROCK_ROUTE.path) {
+    await game.tapDpad(dir);
+    await game.settle();
+  }
+
+  const before = await game.state();
+  await game.tapDpad(ROCK_ROUTE.hit);
+  await game.settle();
+  const after = await game.state();
+
+  assertEqual({ x: after.x, y: after.y }, { x: before.x, y: before.y }, 'did not move');
+  assertEqual(after.inventory[0].durability, before.inventory[0].durability, 'no durability spent');
+});
+
+test('the item card shows what a torch does', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await game.tapSlot(0);
+  assert(await game.hasText('SMALL TORCH'), 'the item name');
+  assert(await game.hasText('DURABILITY  100 / 100'), 'durability readout');
+  assert(await game.hasText(ITEMS['torch-small'].effect), 'effect text');
+  assert(await game.hasText('EQUIPPED'), 'the active light reads as equipped');
+  assertEqual((await game.state()).cardOpen, true, 'card is open');
+
+  await game.clickText('CLOSE');
+  assertEqual((await game.state()).cardOpen, false, 'card is closed');
+});
+
+test('the coin counter opens the coin card', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await game.tapCoins();
+  assert(await game.hasText('COIN'), 'the coin card');
+  assert(await game.hasText(ITEMS.coin.effect), 'effect text');
+  await game.clickText('CLOSE');
+  assertEqual((await game.state()).cardOpen, false, 'card is closed');
+});
+
+test('finding a torch and equipping it widens the light', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  for (const dir of TORCH_ROUTE.path) {
+    await game.tapDpad(dir);
+    await game.settle();
+  }
+
+  let state = await game.state();
+  assertEqual(state.inventory.length, 2, 'the torch was picked up');
+  assertEqual(state.inventory[1].id, 'torch-medium', 'which torch');
+  assertEqual(state.activeIndex, 0, 'a found light arrives unequipped');
+  assertEqual((await game.visibleTiles()).filter((t) => t.alpha === 1).length, 9, 'still radius 1');
+
+  await game.tapSlot(1);
+  await game.clickText('EQUIP');
+
+  state = await game.state();
+  assertEqual(state.activeIndex, 1, 'the medium torch is equipped');
+  assertEqual(
+    (await game.visibleTiles()).filter((t) => t.alpha === 1).length,
+    25,
+    'the lit shape grew to radius 2'
+  );
+});
+
+test('the menu button returns to the title screen', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+  await game.clickAt(456, 31);
+  await game.waitForScene('TitleScene');
+  assertEqual(await game.activeScene(), 'TitleScene', 'scene');
+});
+
+run();

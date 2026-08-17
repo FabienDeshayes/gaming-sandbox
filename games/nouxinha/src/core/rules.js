@@ -6,19 +6,43 @@
 // sequencing gets checked.
 
 import { DIRECTIONS, visibleTiles, tileKey } from './light.js';
-import { DEFAULT_SEED, chebyshev, isBase, isWalkable, itemAt, pickSeed } from './world.js';
-import { itemDef, STARTING_LIGHT } from '../data/items.js';
+import {
+  DEFAULT_SEED,
+  canEnter,
+  chebyshev,
+  entryCost,
+  isBase,
+  itemAt,
+  pickSeed,
+  sanctumAt,
+} from './world.js';
+import { loadSave, normaliseSave, writeSave } from './save.js';
+import { itemDef, unlockOf, STARTING_LIGHT } from '../data/items.js';
 
 export { DIRECTIONS, tileKey };
 
-// Water balance — tune here. Every successful step costs one, independent of
-// the light; a water-drop pickup refills it, capped at the starting amount.
+// Water balance — tune here. Every successful step costs one; a water pickup
+// refills it by whatever that item carries, capped at the run's maximum.
 // Hitting zero is the run's one hard failure state (DESIGN.md §6).
 export const STARTING_WATER = 200;
 export const WATER_PER_STEP = 1;
-export const WATER_REFILL = 20;
 
-export function createRun(seed = DEFAULT_SEED) {
+// Each gem you hold widens the leash. The sanctums sit at 20, 45, 80 and 110
+// tiles out, which is further than 200 water can carry anyone home — so the
+// gem that opens the next gate is also what makes the walk to it survivable
+// (DESIGN.md §4.4). Without this the chain simply dead-ends at the second gate.
+export const WATER_PER_GEM = 50;
+
+export function maxWater(gems) {
+  return STARTING_WATER + gems * WATER_PER_GEM;
+}
+
+export function createRun(seed = DEFAULT_SEED, save = loadSave()) {
+  // Normalised here rather than trusted: a save arrives off disk, from a test,
+  // or from the run that banked it, and a hand-edited one must cost the player
+  // their progress at worst — never the run's arithmetic.
+  const banked = normaliseSave(save);
+  const gems = banked.gems;
   const state = {
     seed: pickSeed(seed),
     x: 0,
@@ -26,7 +50,13 @@ export function createRun(seed = DEFAULT_SEED) {
     facing: 'up',
     steps: 0,
     coins: 0,
-    water: STARTING_WATER,
+    // Gems held, as a count — the sanctum chain hands them out in order, so
+    // this doubles as which gates open and how much colour is back (save.js).
+    gems,
+    // What was already banked before this run, so the recap can report what
+    // this expedition added rather than the running total.
+    banked,
+    water: maxWater(gems),
     // How far out this expedition got, for the recap the hut offers on the way
     // back in — the number DESIGN.md §6 calls the real score.
     furthest: 0,
@@ -94,10 +124,21 @@ export function equip(state, index) {
   return true;
 }
 
-// The item lying on a tile, accounting for what this run has already taken.
+// The item lying on a tile, accounting for what this run has already taken and
+// what it has the gems to see at all. An item above your gem count isn't
+// hidden from the *world* — it was always generated there — it just isn't part
+// of yours yet, which is what makes a gem light up ground you'd already walked.
 export function itemOnTile(state, x, y) {
   if (state.collected.has(tileKey(x, y))) return null;
-  return itemAt(x, y, state.seed);
+  const id = itemAt(x, y, state.seed);
+  if (!id || unlockOf(id) > state.gems) return null;
+  return id;
+}
+
+// Whether a step onto this tile is legal for the gems this run is carrying:
+// floor always, a gate only once you hold the gem it wants.
+export function canStepOnto(state, x, y) {
+  return canEnter(x, y, state.seed, state.gems);
 }
 
 // Lights everything the active shape covers from where the character stands and
@@ -139,12 +180,19 @@ function burnActiveLight(state) {
 function collect(state, x, y) {
   const id = itemOnTile(state, x, y);
   if (!id) return null;
+  const def = itemDef(id);
   state.collected.add(tileKey(x, y));
   state.found[id] = (state.found[id] || 0) + 1;
+
   if (id === 'coin') {
     state.coins += 1;
-  } else if (id === 'water-drop') {
-    state.water = Math.min(STARTING_WATER, state.water + WATER_REFILL);
+  } else if (def.gem) {
+    // A gem is only ever picked up in the order the sanctums hand them out, so
+    // the count only ever climbs by one — but take the max anyway rather than
+    // incrementing, so nothing can double-count a gem already banked.
+    state.gems = Math.max(state.gems, def.gem);
+  } else if (def.water) {
+    state.water = Math.min(maxWater(state.gems), state.water + def.water);
   } else {
     // Lights arrive unequipped — swapping is the player's call.
     state.inventory.push(newLight(id));
@@ -152,9 +200,10 @@ function collect(state, x, y) {
   return id;
 }
 
-// One step in a cardinal direction. Rock is impassable: the step is rejected,
-// costs no durability, and doesn't change facing. Once water has run out the
-// run is over, so every further step is rejected too.
+// One step in a cardinal direction. Rock and sanctum wall are impassable, and
+// so is a gate you don't have the gem for: the step is rejected, costs no
+// durability, and doesn't change facing. Once water has run out the run is
+// over, so every further step is rejected too.
 export function step(state, direction) {
   const dir = DIRECTIONS[direction];
   if (!dir) return { moved: false, reason: 'unknown-direction' };
@@ -162,7 +211,14 @@ export function step(state, direction) {
 
   const nx = state.x + dir.dx;
   const ny = state.y + dir.dy;
-  if (!isWalkable(nx, ny, state.seed)) return { moved: false, reason: 'blocked' };
+  if (!canStepOnto(state, nx, ny)) {
+    // A shut gate is a different answer from a wall: it tells the player there
+    // is something through there and exactly what it costs to get in.
+    const cost = entryCost(nx, ny, state.seed);
+    return cost === null
+      ? { moved: false, reason: 'blocked' }
+      : { moved: false, reason: 'locked', needs: cost };
+  }
 
   state.x = nx;
   state.y = ny;
@@ -176,6 +232,7 @@ export function step(state, direction) {
   // way a pickup can't light the tile it landed on until it's equipped.
   const burn = burnActiveLight(state);
   state.water = Math.max(0, state.water - WATER_PER_STEP);
+  const gemsBefore = state.gems;
   const picked = collect(state, nx, ny);
   const lit = reveal(state);
 
@@ -185,6 +242,9 @@ export function step(state, direction) {
     moved: true,
     reason: null,
     picked,
+    // A gem landing is the one pickup that changes how the whole screen looks,
+    // so the scene gets told rather than having to diff the count itself.
+    gemFound: state.gems > gemsBefore ? state.gems : 0,
     lit,
     atBase: isBase(nx, ny),
     died: state.water <= 0,
@@ -192,8 +252,29 @@ export function step(state, direction) {
   };
 }
 
+// Which gate stands on this tile and whether this run can open it — the
+// renderer needs both to draw a gate in the colour of the gem that opened it.
+export function gateOnTile(state, x, y) {
+  const site = sanctumAt(x, y, state.seed);
+  if (!site || site.part !== 'gate') return null;
+  return { requires: site.sanctum.requires, open: site.sanctum.requires <= state.gems };
+}
+
 export function tilesExplored(state) {
   return state.explored.size;
+}
+
+// Banks the run into the single save slot. Only the hut calls this (DESIGN.md
+// §6): dying of thirst or leaving by the map's X ends a run without writing,
+// which is what makes carrying a gem home the moment that matters.
+export function bankRun(state) {
+  return writeSave({
+    v: 1,
+    gems: Math.max(state.gems, state.banked.gems),
+    coins: state.banked.coins + state.coins,
+    runs: state.banked.runs + 1,
+    furthest: Math.max(state.furthest, state.banked.furthest),
+  });
 }
 
 // What the run is worth so far, in the terms the recap reports it.
@@ -208,9 +289,13 @@ export function runSummary(state) {
     water: state.water,
     steps: state.steps,
     furthest: state.furthest,
-    // Coins are counted separately, so "found" here means lights only.
+    gems: state.gems,
+    // Gems this expedition is carrying that weren't already banked — the thing
+    // walking home is actually protecting.
+    gemsCarried: Math.max(0, state.gems - state.banked.gems),
+    // Coins and gems are counted separately, so "found" here means lights only.
     lightsFound: Object.entries(state.found)
-      .filter(([id]) => id !== 'coin')
+      .filter(([id]) => id !== 'coin' && !itemDef(id).gem && !itemDef(id).water)
       .reduce((total, [, count]) => total + count, 0),
     lights,
   };

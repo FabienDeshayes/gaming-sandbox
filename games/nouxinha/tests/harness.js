@@ -367,6 +367,7 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
           steps: r.steps,
           coins: r.coins,
           water: r.water,
+          gems: r.gems,
           seed: r.seed,
           explored: r.explored.size,
           inventory: r.inventory.map((i) => ({ id: i.id, durability: i.durability })),
@@ -380,7 +381,9 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
       }),
 
     // What the player can actually see: for each drawn tile, its world
-    // coordinate, texture, and alpha. This is the render, not the model.
+    // coordinate, texture, alpha, and tint. This is the render, not the model —
+    // and since a gem's whole effect is a colour change, the tints are the only
+    // way to assert that restoring one actually reached the screen.
     visibleTiles: () =>
       page.evaluate(() => {
         const s = window.__game.scene.getScene('ExploreScene');
@@ -391,9 +394,23 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
             y: s.run.y + c.dy,
             ground: c.ground.texture.key,
             alpha: Math.round(c.ground.alpha * 100) / 100,
+            tint: c.ground.tintTopLeft,
             overlay: c.overlay.visible ? c.overlay.texture.key : null,
             item: c.item.visible ? c.item.texture.key : null,
+            itemTint: c.item.visible ? c.item.tintTopLeft : null,
           }));
+      }),
+
+    // The single save slot, straight out of localStorage — the only state that
+    // outlives a run, so a test asserting a gem was kept has to read it here
+    // rather than from the run it came from.
+    save: () =>
+      page.evaluate(() => {
+        try {
+          return JSON.parse(localStorage.getItem('nouxinha.save'));
+        } catch (e) {
+          return null;
+        }
       }),
 
     // The y position of whichever scrollable list is currently open (the item
@@ -410,6 +427,13 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
     wizardTexture: () =>
       page.evaluate(
         () => window.__game.scene.getScene('ExploreScene').map.wizard.texture.key
+      ),
+
+    // The wizard wears the newest colour carried home, so this is how a test
+    // sees that a gem repainted the character.
+    wizardTint: () =>
+      page.evaluate(
+        () => window.__game.scene.getScene('ExploreScene').map.wizard.tintTopLeft
       ),
 
     // Drives the run forward without the test having to care about terrain:

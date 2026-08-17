@@ -1,8 +1,17 @@
 // The game: a wizard, a torch burning down a step at a time, and a lot of dark.
 
 import { FONT, GAME_WIDTH, VIEW_H, getPalette, hex } from '../config.js';
-import { DIRECTIONS, createRun, equip, inventoryStacks, runSummary, step } from '../core/rules.js';
+import {
+  DIRECTIONS,
+  bankRun,
+  createRun,
+  equip,
+  inventoryStacks,
+  runSummary,
+  step,
+} from '../core/rules.js';
 import { DEFAULT_SEED } from '../core/world.js';
+import { MAX_GEMS } from '../core/save.js';
 import { itemDef } from '../data/items.js';
 import { ensureTextures } from '../ui/textures.js';
 import { MapView } from '../ui/MapView.js';
@@ -119,6 +128,12 @@ export class ExploreScene extends Phaser.Scene {
 
     const result = step(this.run, direction);
     if (!result.moved) {
+      // A shut gate bumps like rock, but says what it wants — otherwise it
+      // reads as a wall with a pattern on it and the player walks away.
+      if (result.reason === 'locked')
+        this.hud.flash(
+          `THE GATE WANTS ${result.needs} COLOUR${result.needs === 1 ? '' : 'S'}. YOU HAVE ${this.run.gems}.`
+        );
       this.animating = true;
       this.map.bump(this, DIRECTIONS[direction], () => {
         this.animating = false;
@@ -151,9 +166,17 @@ export class ExploreScene extends Phaser.Scene {
     // important of the two.
     if (this.card.isOpen()) this.card.hide();
     if (this.inventory.isOpen()) this.inventory.hide();
+    // The hut is the only place a run can be written down, so a player carrying
+    // a gem needs telling that this is the moment it stops being at risk.
+    const carrying = runSummary(this.run).gemsCarried;
     this.dialog.show({
       title: 'BACK AT THE HUT',
-      lines: ['Call it here, or head back out?'],
+      lines: carrying
+        ? [
+            `Stopping here saves ${carrying === 1 ? 'the colour' : `all ${carrying} colours`} you are carrying.`,
+            'Head back out and you carry them at your own risk.',
+          ]
+        : ['Call it here, or head back out?'],
       buttons: [
         { label: 'KEEP GOING', onClick: () => this.dialog.hide() },
         { label: 'STOP HERE', onClick: () => this.showRecap() },
@@ -161,8 +184,11 @@ export class ExploreScene extends Phaser.Scene {
     });
   }
 
+  // Stopping at the hut is the only thing that writes the save (DESIGN.md §6),
+  // which is what makes the walk home the decision the run is really about.
   showRecap() {
     const summary = runSummary(this.run);
+    const saved = bankRun(this.run);
     // What's coming home, and how much walking is left in it.
     const carried = summary.lights.length
       ? summary.lights
@@ -175,6 +201,7 @@ export class ExploreScene extends Phaser.Scene {
         ['TILES EXPLORED', summary.explored],
         ['COINS', summary.coins],
         ['LIGHTS FOUND', summary.lightsFound],
+        ['COLOURS SAVED', `${saved.gems}/${MAX_GEMS}`],
         ['FURTHEST OUT', summary.furthest],
         ['STEPS TAKEN', summary.steps],
       ],
@@ -184,14 +211,19 @@ export class ExploreScene extends Phaser.Scene {
   }
 
   // Running out of water is the run's one hard failure state (DESIGN.md §6):
-  // unlike the hut's recap, there's nothing to carry home from it.
+  // unlike the hut's recap, there's nothing to carry home from it, and nothing
+  // is written — a gem that never made it back to the hut is still out there.
   showDeath() {
     if (this.card.isOpen()) this.card.hide();
     if (this.inventory.isOpen()) this.inventory.hide();
     const summary = runSummary(this.run);
     this.dialog.show({
       title: 'OUT OF WATER',
-      lines: ['You collapsed in the dark. Everything you carried is lost.'],
+      lines: [
+        summary.gemsCarried
+          ? 'You collapsed in the dark. The colour you were carrying is back where you found it.'
+          : 'You collapsed in the dark. Everything you carried is lost.',
+      ],
       rows: [
         ['TILES EXPLORED', summary.explored],
         ['FURTHEST OUT', summary.furthest],
@@ -204,6 +236,12 @@ export class ExploreScene extends Phaser.Scene {
   // hud.update() resets the status line, so anything worth saying about the
   // step just taken is said after it.
   announce(result) {
+    // A gem outranks everything else that could have happened on the step: it
+    // is the only pickup that repaints the world.
+    if (result.gemFound) {
+      this.hud.flash(`${itemDef(result.picked).name} IS BACK. CARRY IT HOME TO KEEP IT.`);
+      return;
+    }
     if (result.burnedOut) {
       const burned = itemDef(result.burnedId).name;
       if (result.blackout) this.hud.flash(`${burned} BURNED OUT. NO LIGHT LEFT.`);

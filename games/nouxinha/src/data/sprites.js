@@ -243,6 +243,157 @@ export const WATER_DROP = [
   '......######....',
 ];
 
+// A gem: table, crown, girdle, and a pavilion tapering to a point, with the
+// facet lines carried right through. Drawn once and tinted three different ways
+// — the colour a gem gave back *is* how you tell it from the other two, so
+// three separate masks would be three ways to say the same thing.
+export const GEM = [
+  '................',
+  '....########....',
+  '...#.#....#.#...',
+  '..#..#....#..#..',
+  '.##############.',
+  '..#...#..#...#..',
+  '...#..#..#..#...',
+  '...#..#..#..#...',
+  '....#.#..#.#....',
+  '....#.#..#.#....',
+  '.....##..##.....',
+  '.....#....#.....',
+  '......#..#......',
+  '.......##.......',
+  '................',
+  '................',
+];
+
+// Sanctum wall: coursed masonry with staggered joints. Rock is a blob and this
+// is a grid, which is the whole point — a sanctum has to read as *built* from
+// the edge of your light, or a player walks its perimeter thinking it's terrain.
+export const WALL = [
+  '################',
+  '#....#....#....#',
+  '#....#....#....#',
+  '################',
+  '..#....#....#...',
+  '..#....#....#...',
+  '################',
+  '#....#....#....#',
+  '#....#....#....#',
+  '################',
+  '..#....#....#...',
+  '..#....#....#...',
+  '################',
+  '#....#....#....#',
+  '#....#....#....#',
+  '################',
+];
+
+// A shut gate: an arch, barred. Drawn in the palette's own foreground like the
+// wall it sits in, because a gate you can't open yet is just more wall.
+export const GATE = [
+  '................',
+  '....########....',
+  '..##........##..',
+  '.#............#.',
+  '.#..#..##..#..#.',
+  '.#..#..##..#..#.',
+  '.#..#..##..#..#.',
+  '.##############.',
+  '.#..#..##..#..#.',
+  '.#..#..##..#..#.',
+  '.#..#..##..#..#.',
+  '.#..#..##..#..#.',
+  '.#..#..##..#..#.',
+  '.#..#..##..#..#.',
+  '.##############.',
+  '................',
+];
+
+// The same arch with the bars gone and the leaves folded back against the
+// jambs, drawn in the colour of the gem that opened it (DESIGN.md §9).
+export const GATE_OPEN = [
+  '................',
+  '....########....',
+  '..##........##..',
+  '.#............#.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##..........##.',
+  '.##############.',
+  '................',
+];
+
+// The gem-tier waters. Both have to read apart from the water drop at a glance,
+// since all three sit on the ground looking useful: the drop is a teardrop, the
+// flask is square-shouldered and hard-sided, the vial is round-bottomed and
+// sparkling. Each is drawn with its water pooled solid inside the outline.
+export const WATER_FLASK = [
+  '................',
+  '......####......',
+  '......#..#......',
+  '......#..#......',
+  '.....##..##.....',
+  '....#......#....',
+  '...#........#...',
+  '..#..........#..',
+  '..#..........#..',
+  '..#..........#..',
+  '..#..........#..',
+  '..#...####...#..',
+  '..#..######..#..',
+  '..#.########.#..',
+  '..############..',
+  '................',
+];
+
+export const SPRING_VIAL = [
+  '...#........#...',
+  '....#..##..#....',
+  '.....######.....',
+  '......#..#......',
+  '..#...#..#...#..',
+  '...#.#....#.#...',
+  '.....#....#.....',
+  '....#......#....',
+  '....#......#....',
+  '...#........#...',
+  '...#.######.#...',
+  '...#.######.#...',
+  '....########....',
+  '.....######.....',
+  '......####......',
+  '................',
+];
+
+// The beacon: a brazier on splayed legs, throwing sparks. The three torches
+// differ from each other by silhouette and so does this — nothing else in the
+// game is a wide bowl on a stem.
+export const TORCH_BEACON = [
+  '................',
+  '.......##.......',
+  '......####......',
+  '..#..######..#..',
+  '..#.#.####.#.#..',
+  '...#..####..#...',
+  '..############..',
+  '..#..........#..',
+  '...#........#...',
+  '....########....',
+  '.......##.......',
+  '.......##.......',
+  '......####......',
+  '.....##..##.....',
+  '....##....##....',
+  '................',
+];
+
 // The left-facing wizard is the right-facing mask mirrored — same silhouette,
 // same staff hand, no second drawing to keep in sync.
 export function mirror(mask) {
@@ -278,9 +429,16 @@ export const SPRITES = {
   rock: ROCK,
   ...FLOOR_VARIANTS,
   base: BASE,
+  wall: WALL,
+  gate: GATE,
+  'gate-open': GATE_OPEN,
   coin: COIN,
   'torch-small': TORCH_SMALL,
   'torch-medium': TORCH_MEDIUM,
   'torch-lamp': TORCH_LAMP,
+  'torch-beacon': TORCH_BEACON,
   'water-drop': WATER_DROP,
+  'water-flask': WATER_FLASK,
+  'spring-vial': SPRING_VIAL,
+  gem: GEM,
 };

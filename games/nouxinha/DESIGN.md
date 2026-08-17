@@ -96,21 +96,26 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Action | Input (touch — primary) | Input (keyboard/mouse) |
 |---|---|---|
 | Step | Swipe in a cardinal direction anywhere on the map area, or tap a D-pad arrow (bottom right of the HUD) | Arrow keys / WASD, or click a D-pad arrow |
-| Inspect an item | Tap its slot in the inventory strip (bottom left of the HUD) → opens the item card | Click the slot |
-| Equip a light | Tap **Equip** on its item card | Click **Equip** |
-| Close the item card | Tap the card's close control, or tap outside it | Click, or press Esc |
+| Inspect a stack | Tap its slot in the inventory strip (bottom left of the HUD) → opens the item card | Click the slot |
+| Browse the full inventory | Tap **ITEMS** next to the strip → opens the scrollable inventory panel | Click **ITEMS** |
+| Equip a light | Tap **Equip** on its item card (single copy), or tap a copy's row in a stack's instance list (multiple copies) | Click the same |
+| Close an overlay | Tap its close control, or tap outside it | Click, or press Esc |
 | Answer the hut | Tap **KEEP GOING** or **STOP HERE** on the dialog | Click |
 | Change palette | Settings, from the title screen | Same |
 | Leave the run | Tap **X** in the top right of the map | Click **X** |
 
-**The item card** is an overlay, opened from an inventory slot, showing: the item's name, its sprite at large scale, **durability** as `current / max` with a bar, a one-line **effect** description ("Lights the 8 tiles around you"), and an **Equip** button for lights (greyed out on the already-active one). Opening a card doesn't cost a step — the game is turn-based on movement only.
+**Stacking.** The inventory strip and panel both group carried lights by kind rather than showing one slot per copy: a kind you're carrying more than one of shows a single icon badged `×N`. The run itself still tracks every copy separately, in pickup order, each with its own durability — grouping is purely a display concern, so equipping still targets one specific copy.
+
+**The item card** is an overlay, opened from a slot in the strip or a row in the inventory panel, showing: the item's name, its sprite at large scale, and a one-line **effect** description ("Lights the 8 tiles around you"). A kind carried as a single copy shows that copy's **durability** as `current / max` with a bar and an **Equip** button (greyed out if it's already active). A kind carried as several copies shows a scrollable list instead — one row per copy, its own durability bar, and an `EQUIPPED` tag on whichever is active — since copies rarely share a durability and the choice of *which* one to equip has to be visible; tapping a row equips that exact copy and closes the card. Opening a card doesn't cost a step — the game is turn-based on movement only.
+
+**The inventory panel** is opened from the HUD's **ITEMS** button and lists every carried stack — icon, name, and count — in a scrollable list, so a run isn't limited to what fits in the strip's slots. Tapping a stack closes the panel and opens its item card.
 
 **The hut dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons. It has no close control of its own — every way out is one of its buttons, because both of its uses (the stop/continue question and the recap) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key.
 
 **Screen layout** (480×854):
 
 - Top 624px: the map viewport. 48px tiles, with the character's tile centred exactly on the viewport centre (240, 312). Because 480 and 624 are both whole multiples of 48, exact centring puts the grid on a half-tile offset: 9 full columns plus a half column bleeding off each edge, and 12 full rows plus a half row top and bottom. That partial outer ring is a feature — tiles cut by the screen edge read as "the world keeps going", which is the right message for this game.
-- Bottom ~230px (about a quarter): the HUD. Inventory strip and the run counters (tiles explored, coins) on the left; the four-direction D-pad on the right, thumb-reachable.
+- Bottom ~230px (about a quarter): the HUD. Inventory strip, the **ITEMS** button, and the run counters (tiles explored, coins) on the left; the four-direction D-pad on the right, thumb-reachable.
 
 ## 8. Scope
 
@@ -121,7 +126,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 - Small torch (radius 1) equipped at start; durability ticking per step; auto-swap on burnout; blackout when nothing is left
 - Medium torch and lamp torch as findable items, with distance-scaled spawning
 - Coins and a coin counter
-- Inventory strip + item card with durability, effect, and Equip
+- Stacked inventory strip, a scrollable inventory panel, and an item card (durability, effect, Equip — a scrollable per-copy list for stacks of more than one)
 - Duo-chromatic rendering with four CRT palettes selectable in Settings, persisted
 - Tiles-explored counter
 - The hut's stop/continue question and the end-of-run recap
@@ -188,14 +193,15 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/config.js` | Screen/HUD/tile layout constants, the palette table, and the active-palette accessor (persisted to `localStorage`) |
   | `src/core/world.js` | Seeded hash → terrain and item spawn for a tile coordinate, plus `reachableFraction`/`pickSeed` for the run-start seed validation. Pure, no Phaser |
   | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles. Pure |
-  | `src/core/rules.js` | The run: step legality, durability tick, burnout/auto-swap, pickup, reveal, and `runSummary` for the recap. Pure |
+  | `src/core/rules.js` | The run: step legality, durability tick, burnout/auto-swap, pickup, reveal, `inventoryStacks` for grouping same-id copies for display, and `runSummary` for the recap. Pure |
   | `src/data/items.js` | Item definitions (name, sprite key, durability, light shape, effect text) |
   | `src/data/sprites.js` | Every sprite, as a 16×16 text mask — including the four floor-edge variants, derived from the base pattern rather than drawn a second time |
   | `src/ui/textures.js` | Bakes the masks into white textures at boot, and rejects any mask that isn't 16×16 |
   | `src/ui/MapView.js` | The tile pool, the three visibility states, the step slide and the blocked-step bump. Holds no game state |
-  | `src/ui/hud.js` | Run counters, inventory strip, the active light's durability, the status line |
+  | `src/ui/hud.js` | Run counters, the stacked inventory strip, the **ITEMS** button, the active light's durability, the status line |
+  | `src/ui/scroll.js` | A drag/wheel-scrollable, mask-clipped list region shared by the item card's instance list and the inventory panel |
   | `src/ui/sfx.js` | The pickup blip, synthesised through WebAudio. No assets, and silently inert where audio is unavailable |
-  | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/dialog.js`, `src/ui/button.js` | The D-pad, the item card overlay, the hut's title/rows/buttons dialog, the shared bordered button |
+  | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js` | The D-pad, the item card overlay (single-copy or scrollable instance list), the full scrollable inventory panel, the hut's title/rows/buttons dialog, the shared bordered button |
   | `src/scenes/` | `TitleScene`, `SettingsScene`, `ExploreScene` |
   | `tests/` | `harness.js` (local server + Playwright driver + runner) and `game.test.js` — see `TESTING.md` |
 

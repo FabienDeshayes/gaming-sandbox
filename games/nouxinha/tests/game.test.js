@@ -18,6 +18,7 @@ import {
   activeShape,
   createRun,
   equip,
+  inventoryStacks,
   isBlackout,
   itemOnTile,
   litTiles,
@@ -33,9 +34,10 @@ import { ITEMS } from '../src/data/items.js';
 
 const SEED = pickSeed(DEFAULT_SEED);
 
-function bfs(seed, isGoal, maxDepth = 24) {
-  const prev = new Map([['0,0', null]]);
-  let frontier = [[0, 0]];
+function bfs(seed, isGoal, maxDepth = 24, start = [0, 0]) {
+  const [sx, sy] = start;
+  const prev = new Map([[tileKey(sx, sy), null]]);
+  let frontier = [[sx, sy]];
   for (let d = 0; d < maxDepth; d++) {
     const next = [];
     for (const [x, y] of frontier) {
@@ -64,6 +66,22 @@ function bfs(seed, isGoal, maxDepth = 24) {
   throw new Error('no route found in the test world');
 }
 
+// A chain of `count` routes to distinct copies of `wantId`, each leg starting
+// where the previous one left off — for tests that need to actually collect
+// several of the same item by playing, rather than one.
+function bfsChain(seed, wantId, count, maxDepth = 24) {
+  const used = new Set();
+  let start = [0, 0];
+  const legs = [];
+  for (let i = 0; i < count; i++) {
+    const found = bfs(seed, (x, y) => itemAt(x, y, seed) === wantId && !used.has(tileKey(x, y)), maxDepth, start);
+    used.add(tileKey(found.x, found.y));
+    legs.push(found.path);
+    start = [found.x, found.y];
+  }
+  return legs;
+}
+
 // The nearest medium torch, and the nearest spot with a rock to walk into.
 const TORCH_ROUTE = bfs(SEED, (x, y) => itemAt(x, y, SEED) === 'torch-medium');
 const ROCK_ROUTE = bfs(SEED, (x, y) => {
@@ -72,6 +90,9 @@ const ROCK_ROUTE = bfs(SEED, (x, y) => {
   );
   return into ? into[0] : null;
 });
+// Six copies of the same light, chained leg to leg — enough to overflow the
+// item card's instance list and force it to scroll.
+const MEDIUM_TORCH_CHAIN = bfsChain(SEED, 'torch-medium', 6);
 
 // --- Pure rules -------------------------------------------------------------
 
@@ -165,6 +186,25 @@ unit('equipping a carried light changes what you can see', () => {
   state.inventory.push({ id: 'torch-medium', durability: 50 });
   assert(equip(state, 1), 'equip should succeed');
   assertEqual(litTiles(state).length, 25, 'medium torch');
+});
+
+unit('inventoryStacks groups same-id copies while keeping their flat index', () => {
+  const state = createRun(SEED);
+  state.inventory.push({ id: 'torch-medium', durability: 50 });
+  state.inventory.push({ id: 'torch-medium', durability: 12 });
+  state.inventory.push({ id: 'torch-lamp', durability: 60 });
+
+  const stacks = inventoryStacks(state);
+  assertEqual(stacks.map((s) => s.id), ['torch-small', 'torch-medium', 'torch-lamp'], 'one stack per id, in pickup order');
+
+  const medium = stacks.find((s) => s.id === 'torch-medium');
+  assertEqual(medium.instances.length, 2, 'both copies land in the same stack');
+  assertEqual(medium.instances.map((i) => i.durability), [50, 12], 'each copy keeps its own durability');
+  assertEqual(medium.instances.map((i) => i.index), [1, 2], 'each copy keeps its flat inventory index for equip()');
+
+  const small = stacks.find((s) => s.id === 'torch-small');
+  assertEqual(small.instances[0].isActive, true, 'the equipped copy is flagged active');
+  assertEqual(medium.instances[0].isActive, false, 'an unequipped copy is not');
 });
 
 unit('the world is the same every time you walk back to it', () => {
@@ -431,6 +471,89 @@ test('finding a torch and equipping it widens the light', async (game) => {
     25,
     'the lit shape grew to radius 2'
   );
+});
+
+test('collecting two of the same torch stacks them in the HUD, badged with a count', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  for (const leg of MEDIUM_TORCH_CHAIN.slice(0, 2))
+    for (const dir of leg) {
+      await game.tapDpad(dir);
+      await game.settle();
+    }
+
+  const state = await game.state();
+  assertEqual(state.inventory.length, 3, 'small torch plus two mediums');
+  assert(await game.hasText('x2'), 'the medium torch slot is badged with its count');
+
+  // The HUD strip still only shows one slot for the stack.
+  await game.tapSlot(1);
+  assertEqual((await game.state()).cardOpen, true, 'the stack opens one card');
+  assert(await game.hasText('MEDIUM TORCH'), 'the stacked item\'s name');
+});
+
+test('the inventory panel lists every stack and opens the tapped one', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  for (const leg of MEDIUM_TORCH_CHAIN.slice(0, 2))
+    for (const dir of leg) {
+      await game.tapDpad(dir);
+      await game.settle();
+    }
+
+  await game.tapInventory();
+  assertEqual((await game.state()).inventoryOpen, true, 'the panel is open');
+  assert(await game.hasText('INVENTORY'), 'panel title');
+  assert(await game.hasText('SMALL TORCH'), 'lists the small torch stack');
+  assert(await game.hasText('MEDIUM TORCH'), 'lists the medium torch stack');
+  assert(await game.hasText('CARRYING 2'), 'the medium stack shows its count');
+
+  await game.tapInventoryRow(1);
+  const state = await game.state();
+  assertEqual(state.inventoryOpen, false, 'tapping a row closes the panel');
+  assertEqual(state.cardOpen, true, 'and opens that stack\'s item card');
+  assert(await game.hasText('MEDIUM TORCH'), 'the right stack\'s card');
+});
+
+test('a multi-copy item card lists every instance and equips exactly the one tapped', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  for (const leg of MEDIUM_TORCH_CHAIN)
+    for (const dir of leg) {
+      await game.tapDpad(dir);
+      await game.settle();
+    }
+
+  let state = await game.state();
+  assertEqual(state.inventory.length, 7, 'small torch plus six mediums');
+
+  await game.tapSlot(1);
+  assertEqual(
+    (await game.texts()).filter((t) => t === '50 / 50').length,
+    6,
+    'all six copies are listed, even though only a few show at once'
+  );
+
+  const before = await game.scrollContentY();
+  // Drag well past what the list can scroll, to also prove it clamps rather
+  // than running the content off past its last row.
+  await game.dragCardList(-200);
+  const after = await game.scrollContentY();
+  assert(after < before, 'the list scrolled');
+  assertEqual(before - after, 6 * 40 - 120, 'scroll clamps to the content height, not the drag distance');
+
+  // With the list scrolled all the way down, the bottom of the three visible
+  // rows (visual slot 2) is now the sixth and last copy picked up — tapping
+  // it should equip that exact copy, not whichever one happened to occupy
+  // that screen position before scrolling.
+  await game.tapCardInstance(2);
+  state = await game.state();
+  assertEqual(state.cardOpen, false, 'tapping an instance closes the card');
+  assertEqual(state.activeIndex, 6, 'the last copy picked up is now equipped');
+  assertEqual(state.inventory[6].id, 'torch-medium', 'sanity: that slot really is a medium torch');
 });
 
 test('the menu button returns to the title screen', async (game) => {

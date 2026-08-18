@@ -1,5 +1,5 @@
-import { FONT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
-import { loadSave, MAX_GEMS } from '../core/save.js';
+import { FONT, GAME_WIDTH, gemColour, getCheats, getPalette, hex } from '../config.js';
+import { anySlotUsed, loadSave, MAX_GEMS } from '../core/save.js';
 import { ensureTextures } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { makeWizard, paintWizard } from '../ui/wizard.js';
@@ -14,7 +14,10 @@ export class TitleScene extends Phaser.Scene {
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
     const cx = GAME_WIDTH / 2;
+    // The slot last played, which is what the title screen reports and what
+    // EXPLORE would pick up again (core/save.js).
     const save = loadSave();
+    const canLoad = anySlotUsed();
 
     this.add
       .text(cx, 200, 'NOUXINHA', {
@@ -59,27 +62,32 @@ export class TitleScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setAlpha(0.6);
 
-    makeButton(this, cx, 570, 'EXPLORE', () => this.scene.start('ExploreScene', runOptions()), {
+    // Cheats are loud on purpose: a run started under them banks nothing, and a
+    // player who forgot the toggle was on should find that out here rather than
+    // at the hut (DESIGN.md §6.2).
+    if (getCheats())
+      this.add
+        .text(cx, 520, 'CHEATS ON — NOTHING WILL BE SAVED', {
+          fontFamily: FONT,
+          fontSize: '11px',
+          color: hex(pal.fg),
+        })
+        .setOrigin(0.5)
+        .setAlpha(0.6);
+
+    // Both ways in go through the slot picker: which of the three campaigns
+    // this is has to be answered before a run can start (DESIGN.md §6.1).
+    makeButton(this, cx, 566, 'NEW GAME', () => this.scene.start('SlotScene', { mode: 'new' }), {
       width: 240,
     });
-    makeButton(this, cx, 640, 'SETTINGS', () => this.scene.start('SettingsScene'), { width: 240 });
+    makeButton(
+      this,
+      cx,
+      632,
+      'LOAD GAME',
+      () => canLoad && this.scene.start('SlotScene', { mode: 'load' }),
+      { width: 240, enabled: canLoad }
+    );
+    makeButton(this, cx, 698, 'SETTINGS', () => this.scene.start('SettingsScene'), { width: 240 });
   }
-}
-
-// The world is a pure function of a seed, and its consumables of a nonce
-// (core/world.js), so naming both in the URL reproduces an expedition exactly:
-// `?seed=1234&nonce=9` walks the same ground past the same coins. There is no UI
-// for it because it is for sharing a world and for the suite, not for playing —
-// leave them off and a run picks its own.
-function runOptions() {
-  const params = new URLSearchParams(
-    typeof location === 'undefined' ? '' : location.search
-  );
-  const asInt = (name) => {
-    const raw = params.get(name);
-    if (raw === null) return undefined;
-    const value = Number(raw);
-    return Number.isFinite(value) ? value | 0 : undefined;
-  };
-  return { seed: asInt('seed'), nonce: asInt('nonce') };
 }

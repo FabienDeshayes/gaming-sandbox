@@ -535,37 +535,37 @@ export function uniqueAt(x, y, seed = DEFAULT_SEED) {
 // there is to find. Measured over a 141x141 window against the world before the
 // rule existed, which held 4.4% of its floor tiles under an item:
 //
-//   D    items per floor tile   worst same-kind count in any 15x15 square
-//   15   1.2%                   1
-//   13   1.5%                   3, in 0.001% of windows
-//   11   1.9%                   3, in 0.12% of windows
-//   10   2.2%                   3, in 0.33% of windows
+//   D    items per floor tile   closest two of a kind ever land
+//   15   1.3%                   15
+//   12   1.8%                   12
+//   10   2.3%                   10
+//    8   3.0%                    8
 //
 // Spreading items out costs items: a kind can never be denser than one per DxD,
-// so the world now holds roughly a quarter of what it used to, evenly, instead
-// of four times as much in clumps. That is the trade the rule asks for, and this
-// constant is where to change your mind about it.
+// so the world holds a fraction of what an unthinned scatter would, evenly,
+// instead of several times as much in clumps. That is the trade the rule asks
+// for, and this constant is where to change your mind about it.
 //
-// 15 is deliberate rather than approximate. With a Chebyshev minimum of D, one
-// kind can never appear more than (floor(14/D) + 1)^2 times in a 15x15 square —
-// which is 4 for every D from 8 to 14, and drops straight to 1 at D = 15. No
-// value of D gives exactly 2, so "never more than 2 of the same item in a 15x15
-// square" is met by going one better: at most *one* of any kind in any 15x15
-// square anywhere in the world, which a test can assert outright.
+// 10 is where the trade currently sits: a walk finds something often enough that
+// pushing one ring further out is worth the durability, while a 10-tile
+// exclusion still means a light's worth of ground never shows you the same kind
+// twice. What it gives up against a wider separation is the outright guarantee
+// that a screenful holds one of anything — at D = 10 a 15x15 square can hold up
+// to four of a kind, which reads as a good patch of ground rather than a clump.
 //
 // The lattice is much finer than the separation on purpose. One candidate per
 // separation-sized cell would place its points far too politely — neighbouring
 // cells conflict about half the time and the loser is simply dropped, which
 // throws away most of the world's items. Throwing many more darts at the same
-// exclusion radius packs what survives much closer to the one-per-15x15 ceiling
-// the rule allows, and still lands irregularly, because the survivors are the
-// ones that won a hash rather than the ones sitting on a grid.
+// exclusion radius packs what survives much closer to the ceiling the rule
+// allows, and still lands irregularly, because the survivors are the ones that
+// won a hash rather than the ones sitting on a grid.
 //
 // The cost is the neighbourhood a candidate has to check: a conflict can come
 // from CELL_REACH cells away rather than one.
 
 const CONSUMABLE_CELL = 4;
-export const MIN_SEPARATION = 15;
+export const MIN_SEPARATION = 10;
 const CELL_REACH = Math.ceil(MIN_SEPARATION / CONSUMABLE_CELL);
 
 const BAND_MID = 8;

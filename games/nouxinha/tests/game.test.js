@@ -41,16 +41,19 @@ import {
   litTiles,
   maxWater,
   refillWater,
+  rememberGround,
   respawn,
   runSummary,
   spendable,
   step,
+  CHEAT_COINS,
+  CHEAT_REVEAL_RADIUS,
   STARTING_WATER,
   WATER_PER_GEM,
 } from '../src/core/rules.js';
 import { compassTarget } from '../src/core/compass.js';
 import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
-import { emptySave, MAX_GEMS } from '../src/core/save.js';
+import { clampSlot, emptySave, MAX_GEMS, normaliseSave, SLOT_COUNT } from '../src/core/save.js';
 import { PRICES } from '../src/data/shop.js';
 import { BLACKOUT_MEMORY_RADIUS, gemColour } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
@@ -648,6 +651,53 @@ unit('each gem gets a colour the world did not already have', () => {
   assertEqual(gemColour(SHUT_GATE.requires), colours[0], "gate 1 opens in gem 1's colour");
 });
 
+unit('a slot number is always one of the three', () => {
+  assertEqual(SLOT_COUNT, 3, 'three campaigns can be walked at once');
+  assertEqual(clampSlot(0), 1, 'below the first is the first');
+  assertEqual(clampSlot(9), SLOT_COUNT, 'past the last is the last');
+  assertEqual(clampSlot('x'), 1, 'and nonsense is the first');
+});
+
+unit('a slot counts as in use the moment there is anything in it', () => {
+  assertEqual(normaliseSave(emptySave()).started, false, 'an empty save is an empty slot');
+  assertEqual(normaliseSave({ ...emptySave(), started: true }).started, true, 'a claimed one is not');
+  // The flag is belt and braces: a save with progress in it is somebody's
+  // campaign whether or not the flag survived being hand-edited.
+  for (const field of [{ runs: 2 }, { coins: 5 }, { gems: 1 }, { map: true }, { mapped: '0,0,1' }])
+    assertEqual(normaliseSave({ ...emptySave(), ...field }).started, true, `${Object.keys(field)[0]} means used`);
+});
+
+unit('cheats hand a run the whole late game, and bank none of it', () => {
+  const state = createRun(SEED, emptySave(), NONCE, { cheats: true });
+
+  assertEqual(state.gems, MAX_GEMS, 'every colour is back');
+  assertEqual(state.water, maxWater(MAX_GEMS), 'on the widest tank');
+  assertEqual(state.coins, CHEAT_COINS, 'with a purse the merchant cannot exhaust');
+  assertEqual([...state.tools].sort(), ['compass', 'map'], 'and both tools');
+
+  const lights = Object.values(ITEMS).filter((def) => def.isLight).map((def) => def.id);
+  assertEqual(state.inventory.length, lights.length, 'one of every light');
+  for (const id of lights)
+    assert(state.inventory.some((slot) => slot.id === id), `carrying the ${id}`);
+  assertEqual(activeLight(state).id, 'torch-beacon', 'lit by the longest-burning one');
+
+  // Far enough out to cover the fourth sanctum's ring and every landmark, which
+  // is the whole point: the late game can be looked at without walking to it.
+  const furthest = sanctums(SEED)[3];
+  assert(
+    state.explored.has(tileKey(furthest.centre.x, furthest.centre.y)),
+    'the furthest sanctum is already drawn'
+  );
+  assert(state.explored.has(tileKey(CHEAT_REVEAL_RADIUS, CHEAT_REVEAL_RADIUS)), 'out to the corner');
+  assert(state.seenUnique.has('gem-3'), 'and every unique object is markable on the map');
+
+  // A run handed its gems is a sandbox, not a campaign, so nothing it does
+  // reaches a slot (DESIGN.md §6.2).
+  step(state, 'right');
+  assertEqual(bankRun(state).gems, 0, 'stopping at the hut banks nothing');
+  assertEqual(rememberGround(state).mapped, '', 'and not even the ground it was handed');
+});
+
 unit('a corrupt or hand-edited save cannot break a run', () => {
   for (const bad of [null, 'nonsense', { gems: 99 }, { gems: -4 }, { gems: 'two', coins: NaN }]) {
     const state = createRun(SEED, bad, NONCE);
@@ -941,7 +991,7 @@ unit('the compass points at the nearest thing it can actually reach', () => {
 
 // --- The map -------------------------------------------------------------------
 
-unit('the map remembers where you walked, and only if you own it', () => {
+unit('the ground a run lit carries into the next one, map or no map', () => {
   const walked = new Set(['0,0', '1,0', '2,0', '3,0', '-4,7', '-3,7']);
   const encoded = encodeExplored(walked);
   const back = decodeExplored(encoded);
@@ -949,23 +999,36 @@ unit('the map remembers where you walked, and only if you own it', () => {
   for (const key of walked) assert(back.has(key), `kept ${key}`);
   assertEqual(decodeExplored('not a map;4,x,2').size, 0, 'and a corrupt one costs the drawing');
 
-  // A run without the map banks no ground.
+  // Cartography is not progress (DESIGN.md §6.1): owning the map changes what
+  // you can look at, never what the slot remembers.
   const plain = createRun(SEED, emptySave(), NONCE);
-  assertEqual(bankRun(plain).mapped, '', 'no map, nothing drawn');
-
-  // A run with it banks what it lit, and the next run starts with it.
-  const mapped = createRun(SEED, { ...emptySave(), map: true }, NONCE);
-  for (const dir of ['right', 'right', 'right', 'up', 'up']) step(mapped, dir);
-  const saved = bankRun(mapped);
-  assert(saved.mapped.length > 0, 'the ground was written down');
+  for (const dir of ['right', 'right', 'right', 'up', 'up']) step(plain, dir);
+  const saved = bankRun(plain);
+  assert(saved.mapped.length > 0, 'a run without the map still writes its ground');
   assertEqual(saved.mappedSeed, SEED, 'against the world it belongs to');
 
   const next = createRun(SEED, saved, NONCE);
-  assertEqual(next.explored.size, mapped.explored.size, 'the next run opens with it drawn');
+  assertEqual(next.explored.size, plain.explored.size, 'the next run opens with it drawn');
 
-  // A map drawn in another world is discarded rather than drawn wrong.
+  // Ground drawn in another world is discarded rather than drawn wrong.
   const elsewhere = createRun(SEED, { ...saved, mappedSeed: (SEED + 1) | 0 }, NONCE);
-  assert(elsewhere.explored.size < next.explored.size, 'a stale map is dropped');
+  assert(elsewhere.explored.size < next.explored.size, 'a stale drawing is dropped');
+});
+
+unit('a run that never gets home keeps its ground and nothing else', () => {
+  // `rememberGround` writes to the active slot, which is localStorage — absent
+  // in Node, so what it hands back is the normalised save it would have stored.
+  const state = createRun(SEED, { ...emptySave(), coins: 40, runs: 3 }, NONCE);
+  for (const dir of ['right', 'right', 'up']) step(state, dir);
+  state.coins = 25;
+  state.tools.add('compass');
+
+  const kept = rememberGround(state);
+  assert(kept.mapped.length > 0, 'the walk is written down');
+  assertEqual(kept.mappedSeed, SEED, 'against the world it belongs to');
+  assertEqual(kept.coins, 0, 'but nothing the run was carrying is banked');
+  assertEqual(kept.compass, false, 'not even a tool it found on the way');
+  assertEqual(kept.runs, 0, 'and a run that never got home is not a run completed');
 });
 
 unit('the map only marks unique objects the run has actually seen', () => {
@@ -982,19 +1045,18 @@ unit('the map only marks unique objects the run has actually seen', () => {
 
 test('the title screen starts a run', async (game) => {
   assert(await game.hasText('NOUXINHA'), 'title');
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
   assertEqual(await game.activeScene(), 'ExploreScene', 'scene');
 });
 
 test('a button responds across its whole width, not just the left half', async (game) => {
-  // EXPLORE is a 240-wide button centred on (240, 570) (TitleScene.js), so its
+  // NEW GAME is a 240-wide button centred on (240, 566) (TitleScene.js), so its
   // right edge sits at x=360. Tapping 90px right of centre is still 30px
   // inside the button — Container.displayOriginX shifting the hit area left
   // by half the button's width (the bug this pins) would make this miss.
-  await game.clickAt(330, 570);
-  await game.waitForScene('ExploreScene');
-  assertEqual(await game.activeScene(), 'ExploreScene', 'scene');
+  await game.clickAt(330, 566);
+  await game.waitForScene('SlotScene');
+  assertEqual(await game.activeScene(), 'SlotScene', 'scene');
 });
 
 test('settings: picking a palette and going back both work on a single tap', async (game) => {
@@ -1017,8 +1079,7 @@ test('settings: picking a palette and going back both work on a single tap', asy
 });
 
 test('a run starts at the base with the small torch lit', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   const state = await game.state();
   assertEqual({ x: state.x, y: state.y }, { x: 0, y: 0 }, 'starts on the base');
@@ -1040,8 +1101,7 @@ test('a run starts at the base with the small torch lit', async (game) => {
 });
 
 test('the d-pad walks and burns the torch', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await game.tapDpad('right');
   await game.settle();
@@ -1054,8 +1114,7 @@ test('the d-pad walks and burns the torch', async (game) => {
 });
 
 test('swiping the map walks', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await game.swipe('down');
   await game.settle();
@@ -1066,8 +1125,7 @@ test('swiping the map walks', async (game) => {
 });
 
 test('arrow keys walk', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await game.press('ArrowUp');
   await game.settle();
@@ -1077,8 +1135,7 @@ test('arrow keys walk', async (game) => {
 });
 
 test('explored ground stays on screen, dimmed', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await game.tapDpad('right');
   await game.settle();
@@ -1099,8 +1156,7 @@ test('explored ground stays on screen, dimmed', async (game) => {
 });
 
 test('blackout shrinks memory to a fog of war around the character', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   // One step off the base, then pace back and forth inside its forced-floor
   // neighbourhood (DESIGN.md §4.3) — never back onto the hut itself, so its
@@ -1130,8 +1186,7 @@ test('blackout shrinks memory to a fog of war around the character', async (game
 });
 
 test('walking into rock bumps instead of moving', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
   for (const dir of ROCK_ROUTE.path) {
     await game.tapDpad(dir);
     await game.settle();
@@ -1147,8 +1202,7 @@ test('walking into rock bumps instead of moving', async (game) => {
 });
 
 test('the item card shows what a torch does', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await game.tapSlot(0);
   assert(await game.hasText('SMALL TORCH'), 'the item name');
@@ -1162,8 +1216,7 @@ test('the item card shows what a torch does', async (game) => {
 });
 
 test('the coin counter opens the coin card', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await game.tapCoins();
   assert(await game.hasText('COINS'), 'the coin card');
@@ -1173,8 +1226,7 @@ test('the coin counter opens the coin card', async (game) => {
 });
 
 test('the HUD tracks water, and the water counter opens its card', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   assert(await game.hasText('WATER 200/200'), 'starts full');
 
@@ -1191,8 +1243,7 @@ test('the HUD tracks water, and the water counter opens its card', async (game) 
 });
 
 test('finding a torch and equipping it widens the light', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   for (const dir of TORCH_ROUTE.path) {
     await game.tapDpad(dir);
@@ -1218,8 +1269,7 @@ test('finding a torch and equipping it widens the light', async (game) => {
 }, { query: WORLD });
 
 test('collecting two of the same torch stacks them in the HUD, badged with a count', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   for (const leg of MEDIUM_TORCH_CHAIN.slice(0, 2))
     for (const dir of leg) {
@@ -1238,8 +1288,7 @@ test('collecting two of the same torch stacks them in the HUD, badged with a cou
 }, { query: WORLD });
 
 test('the inventory panel lists every stack and opens the tapped one', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   for (const leg of MEDIUM_TORCH_CHAIN.slice(0, 2))
     for (const dir of leg) {
@@ -1262,8 +1311,7 @@ test('the inventory panel lists every stack and opens the tapped one', async (ga
 }, { query: WORLD });
 
 test('a multi-copy item card lists every instance and equips exactly the one tapped', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   for (const leg of MEDIUM_TORCH_CHAIN)
     for (const dir of leg) {
@@ -1306,16 +1354,14 @@ test('a multi-copy item card lists every instance and equips exactly the one tap
 }, { query: WORLD });
 
 test('the menu button returns to the title screen', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
   await game.clickAt(456, 31);
   await game.waitForScene('TitleScene');
   assertEqual(await game.activeScene(), 'TitleScene', 'scene');
 });
 
 test('walking back to the hut asks whether to stop', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await game.tapDpad('right');
   await game.settle();
@@ -1340,8 +1386,7 @@ test('walking back to the hut asks whether to stop', async (game) => {
 });
 
 test('keeping going at the hut refills water to the ceiling', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   // A loop through the base's guaranteed-floor neighbourhood that only lands
   // back on the hut at the very end, so the water spend is real before the
@@ -1363,8 +1408,7 @@ test('keeping going at the hut refills water to the ceiling', async (game) => {
 });
 
 test('stopping at the hut recaps the run before going home', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await game.tapDpad('right');
   await game.settle();
@@ -1391,8 +1435,7 @@ test('stopping at the hut recaps the run before going home', async (game) => {
 });
 
 test('walking into the first sanctum restores a colour to the world', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   assertEqual(
     (await game.wizardZoneTints())[1],
@@ -1430,10 +1473,11 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   assert(await game.hasText(`WATER ${state.water}/${maxWater(1)}`), 'the water ceiling rose');
 });
 
-test('stopping at the hut writes the save, leaving by the X does not', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
-  assertEqual(await game.save(), null, 'a first run starts with nothing written');
+test('stopping at the hut writes the save, leaving by the X keeps only the ground', async (game) => {
+  await game.startRun();
+  // NEW GAME claims the slot, so there is a save — an empty one, with nothing
+  // banked into it yet.
+  assertEqual((await game.save()).runs, 0, 'a first run starts with nothing banked');
 
   // Out one tile and straight back, so the run banks without finding anything.
   await game.tapDpad('right');
@@ -1446,19 +1490,91 @@ test('stopping at the hut writes the save, leaving by the X does not', async (ga
   const saved = await game.save();
   assertEqual(saved.runs, 1, 'the run was written down');
   assertEqual(saved.gems, 0, 'with no colour on it');
+  assert(saved.mapped.length > 0, 'and the ground it lit came home with it');
 
   await game.clickText('HOME');
   await game.waitForScene('TitleScene');
   assert(await game.hasText('0/3 COLOURS  0 COINS  1 RUNS'), 'and the title screen reads it back');
 
-  // Abandoning by the map's X is not a save — only the hut is (DESIGN.md §6).
-  await game.clickText('EXPLORE');
+  // Abandoning by the map's X banks nothing — only the hut does (DESIGN.md §6)
+  // — but the dark this run lit stays lit for the next one (§6.1).
+  await game.startRun();
+  const opened = await game.state();
+  assert(opened.explored > 9, 'the next run opens on the ground already drawn');
+  await game.tapDpad('right');
+  await game.settle();
+  await game.tapDpad('up');
+  await game.settle();
+  const abandoned = await game.state();
+  await game.clickAt(456, 31);
+  await game.waitForScene('TitleScene');
+
+  const after = await game.save();
+  assertEqual(after.runs, 1, 'the abandoned run was not counted');
+  assertEqual(decodeExplored(after.mapped).size, abandoned.explored, 'but its walk was kept');
+});
+
+test('new game picks a slot, and load game brings that campaign back', async (game) => {
+  // Three campaigns, and the picker says what is in all three (DESIGN.md §6.1).
+  await game.clickText('NEW GAME');
+  await game.waitForScene('SlotScene');
+  for (const slot of ['SLOT 1', 'SLOT 2', 'SLOT 3'])
+    assert(await game.hasText(slot), `${slot} is offered`);
+  assertEqual((await game.texts()).filter((t) => t === 'EMPTY').length, 3, 'all three empty');
+
+  // Bank a run in slot 2: out one tile, back, and stop at the hut.
+  await game.clickText('SLOT 2');
   await game.waitForScene('ExploreScene');
   await game.tapDpad('right');
   await game.settle();
-  await game.clickAt(456, 31);
+  await game.tapDpad('left');
+  await game.settle();
+  await game.clickText('STOP HERE');
+  await game.clickText('HOME');
   await game.waitForScene('TitleScene');
-  assertEqual((await game.save()).runs, 1, 'the abandoned run was not counted');
+
+  assertEqual(await game.save(1), null, 'slot 1 was never touched');
+  assertEqual((await game.save(2)).runs, 1, 'and slot 2 has the campaign');
+
+  await game.clickText('LOAD GAME');
+  await game.waitForScene('SlotScene');
+  assert(await game.hasText('0/3 COLOURS  0 COINS  1 RUNS'), 'the picker reads the slot back');
+  assertEqual((await game.texts()).filter((t) => t === 'EMPTY').length, 2, 'the other two are free');
+
+  await game.clickText('SLOT 2');
+  await game.waitForScene('ExploreScene');
+  const state = await game.state();
+  assertEqual(state.banked.runs, 1, 'and loading it carries on where it left off');
+  assert(state.explored > 9, 'on the ground that campaign had already lit');
+});
+
+test('cheats reveal the map, hand you everything, and save nothing', async (game) => {
+  // The switch is in Settings, and the title screen says it is on, because a
+  // run under it banks nothing (DESIGN.md §6.2).
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  assert(await game.hasText('CHEATS: OFF'), 'off by default');
+  await game.clickText('CHEATS: OFF');
+  assert(await game.hasText('CHEATS: ON'), 'and the button says so once tapped');
+  await game.clickText('BACK');
+  await game.waitForScene('TitleScene');
+  assert(await game.hasText('CHEATS ON — NOTHING WILL BE SAVED'), 'the title screen warns');
+
+  await game.startRun();
+  const state = await game.state();
+  assertEqual(state.gems, 3, 'every colour is back');
+  assertEqual(state.tools.sort(), ['compass', 'map'], 'both tools are in the corner');
+  assertEqual(state.compassShown, true, 'the needle is there to read');
+  assert(state.explored > 10000, 'and the world is drawn out past the last sanctum');
+
+  // Straight back onto the hut, which is the one place a run can write itself.
+  await game.tapDpad('right');
+  await game.settle();
+  await game.tapDpad('left');
+  await game.settle();
+  await game.clickText('STOP HERE');
+  assert(await game.hasText('CHEATS ON — NOTHING WAS WRITTEN TO THE SLOT'), 'the recap says so');
+  assertEqual((await game.save()).runs, 0, 'and the slot is untouched');
 });
 
 test('the whole game fits a portrait phone screen', async (game) => {
@@ -1477,8 +1593,7 @@ test('the whole game fits a portrait phone screen', async (game) => {
 
 
 test('walking onto the merchant opens the counter, and buying spends the purse', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   await walkPath(game, MERCHANT_ROUTE.path);
 
@@ -1500,8 +1615,7 @@ test('walking onto the merchant opens the counter, and buying spends the purse',
 }, { query: WORLD, save: { ...emptySave(), coins: 200 } });
 
 test('the coin counter shows the purse the merchant spends, not just this run', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   const state = await game.state();
   assertEqual(state.coins, 0, 'this run has found nothing yet');
@@ -1510,8 +1624,7 @@ test('the coin counter shows the purse the merchant spends, not just this run', 
 }, { query: WORLD, save: { ...emptySave(), coins: 120 } });
 
 test('the compass sits in the corner and points where the rules say', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   const state = await game.state();
   assertEqual(state.compassShown, true, 'a run that owns one sees it');
@@ -1526,16 +1639,14 @@ test('the compass sits in the corner and points where the rules say', async (gam
 }, { query: WORLD, save: { ...emptySave(), compass: true } });
 
 test('a run without the compass has no needle and no map button', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
   const state = await game.state();
   assertEqual(state.compassShown, false, 'nothing in the corner');
   assertEqual(state.tools, [], 'because nothing is owned');
 });
 
 test('the map draws the ground this run has walked', async (game) => {
-  await game.clickText('EXPLORE');
-  await game.waitForScene('ExploreScene');
+  await game.startRun();
 
   for (const dir of ['right', 'right', 'up', 'up', 'up']) {
     await game.tapDpad(dir);

@@ -47,6 +47,7 @@ reaches in to *set* game state.
 | Helper | Does |
 |---|---|
 | `clickText(label, nth)` | Taps an on-screen label, searching inside containers (buttons and the item card build their text into one) |
+| `startRun(slot)` | Title screen to a walking run the way a player gets there: **NEW GAME** or **LOAD GAME**, then a slot. Loads slot 1 when a save was planted there, starts a fresh campaign in it otherwise |
 | `tapDpad(dir)` | Taps a D-pad arrow |
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
@@ -55,7 +56,7 @@ reaches in to *set* game state.
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground texture, alpha, **tint**, overlay, item and item tint. This is the render, not the model — it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its four colour-zone layers — the wizard wears one colour per gem carried, plus the base colour |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
-| `save()` | The single save slot straight out of `localStorage`. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
+| `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
 | `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |
@@ -106,8 +107,8 @@ Routes to terrain (the nearest rock to bump into) and to unique objects (a gem, 
 compass lying in the dark) need none of this — those don't move with the nonce.
 
 **`bfsChain` strikes off every tile a leg walks over**, not just the one it stops on. With items
-spread 15 tiles apart, legs are long enough that an earlier one routinely picks up in passing the
-item a later one was aiming at — which fails as a flake rather than as a bug.
+spread `MIN_SEPARATION` tiles apart, legs are long enough that an earlier one routinely picks up in
+passing the item a later one was aiming at — which fails as a flake rather than as a bug.
 
 The same applies to the sanctums, which move with the seed: a test that wants the first gem asks
 `sanctums(SEED)[0].centre` for it rather than naming a tile.
@@ -136,13 +137,15 @@ A gem changes three things and each is asserted where it actually lives:
   rather than a hardcoded hex, so the assertions track the palette rule instead of restating it.
 - **The save** — that a gem is only kept if the run banked it at the hut — is read back with
   `save()`. Every browser test gets its own page and so its own empty `localStorage`; no test
-  inherits another's save.
+  inherits another's save. What a run keeps *however* it ends is the ground it lit, so the tests that
+  pin that read `mapped` back out of the slot rather than the run (DESIGN.md §6.1).
 
 ## Starting from a player who already has something
 
 A run's starting gems come from the save it is handed, and so do its coins and its tools. In a pure
 test that is `createRun(SEED, { ...emptySave(), gems: 2, compass: true }, NONCE)`. In a browser test
-it is the `save` page option, which plants a save slot before the page loads:
+it is the `save` page option, which plants save slot 1 before the page loads — `startRun()` then
+takes that campaign up through **LOAD GAME** instead of starting a new one over it:
 
 ```js
 test('the compass sits in the corner', async (game) => { ... },
@@ -152,13 +155,18 @@ test('the compass sits in the corner', async (game) => { ... },
 That is prior state, not live state — the browser's version of handing `createRun` a save. Nothing in
 the harness ever reaches into a running scene to change it, which is still the rule.
 
+The `cheats` page option is the same idea for the Settings switch (DESIGN.md §6.2): it turns cheats on
+before the page loads, so a test can open straight onto a run holding everything. The test that pins
+the switch itself does it the player's way instead, through Settings.
+
 ## Testing the world's three layers
 
 The separation rule is the one thing here worth asserting outright rather than sampling: a test walks
 a 141x141 window, buckets every consumable by kind, and checks no two of a kind are within
-`MIN_SEPARATION`. It is quadratic in the number of items per kind and still runs in milliseconds,
-because the whole point of the rule is that there aren't many. Sanctum clearings are skipped — a
-clearing is a deliberate hoard with its own cap (two of a kind), tested separately.
+`MIN_SEPARATION` — the constant, never the number, so retuning the drop rate is a one-line change. It
+is quadratic in the number of items per kind and still runs in milliseconds, because the whole point
+of the rule is that there aren't many. Sanctum clearings are skipped — a clearing is a deliberate
+hoard with its own cap (two of a kind), tested separately.
 
 The other two invariants worth keeping honest:
 

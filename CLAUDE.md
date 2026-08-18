@@ -28,6 +28,8 @@ Things that are easy to break by not knowing them:
 - **A run validates its seed at start.** `pickSeed` flood-fills a window around the base and bumps the seed if the spawn is sealed into a pocket — the design promises the character is never permanently stuck.
 - **Sprites are text.** 16×16 `#`/`.` masks in `src/data/sprites.js`, baked to white textures and tinted with the palette's foreground at draw time. That tinting is what enforces the two-colour rule, so anything drawn must be tinted — a stray untinted object breaks the palette.
 - **Tests derive their routes.** There are no hand-authored levels, so the suite BFSes the real world to find the nearest torch or rock and replays the path. Don't hardcode coordinates.
+- **Saving is slot-based, and progress and ground save differently.** Three `localStorage` slots (`src/core/save.js`), picked through the title screen's NEW GAME / LOAD GAME; only stopping at the hut banks progress, but the ground a run lit is written whichever way it ends, so a run never starts from black again.
+- **Cheats are a Settings toggle** (`getCheats()` in `src/config.js`, applied in `createRun`): the whole map revealed and one of everything, and a run under them never writes to a slot.
 
 Same test setup as Bibou (`cd games/nouxinha && npm install && npm test`), including the CDN-rewriting harness.
 

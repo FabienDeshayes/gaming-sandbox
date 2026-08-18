@@ -1,14 +1,24 @@
-// Palette picker. Each row is drawn in its *own* palette rather than the active
+// Palette picker, the cheat switch, and the one destructive control in the
+// game. Each palette row is drawn in its *own* palette rather than the active
 // one, so the list shows you the four combinations instead of describing them.
 
-import { FONT, GAME_WIDTH, PALETTES, getPalette, hex, setPalette } from '../config.js';
-import { clearSave, loadSave } from '../core/save.js';
+import {
+  FONT,
+  GAME_WIDTH,
+  PALETTES,
+  getCheats,
+  getPalette,
+  hex,
+  setCheats,
+  setPalette,
+} from '../config.js';
+import { activeSlot, clearSave, loadSave } from '../core/save.js';
 import { ensureTextures } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 
-const ROW_H = 76;
+const ROW_H = 68;
 const ROW_W = 380;
-const FIRST_ROW_Y = 220;
+const FIRST_ROW_Y = 176;
 
 export class SettingsScene extends Phaser.Scene {
   constructor() {
@@ -26,7 +36,7 @@ export class SettingsScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     PALETTES.forEach((option, i) => {
-      const y = FIRST_ROW_Y + i * (ROW_H + 16);
+      const y = FIRST_ROW_Y + i * (ROW_H + 14);
       const active = option.id === pal.id;
 
       const swatch = this.add.graphics();
@@ -76,29 +86,65 @@ export class SettingsScene extends Phaser.Scene {
       });
     });
 
-    // Erasing is the one destructive control in the game and there is only one
-    // save slot, so it asks with itself rather than with a dialog: the first tap
-    // arms it, the second does it. Tapping anything else leaves without firing.
-    const save = loadSave();
+    // The cheat switch (DESIGN.md §6.2): a run started with it on opens with the
+    // map revealed and one of everything, which is how the late game gets looked
+    // at without a campaign's worth of walking behind it. It says what it costs
+    // on the button itself, because a run under it banks nothing at all.
+    const cheats = makeButton(
+      this,
+      cx,
+      588,
+      cheatLabel(getCheats()),
+      () => {
+        const on = setCheats(!getCheats());
+        cheats.setLabel(cheatLabel(on));
+        note.setText(cheatNote(on)).setAlpha(on ? 0.8 : 0.5);
+      },
+      { width: 300, fontSize: 14 }
+    );
+    const note = this.add
+      .text(cx, 622, cheatNote(getCheats()), {
+        fontFamily: FONT,
+        fontSize: '11px',
+        color: hex(pal.fg),
+      })
+      .setOrigin(0.5)
+      .setAlpha(getCheats() ? 0.8 : 0.5);
+
+    // Erasing is the one destructive control here and it always means the slot
+    // you last played, so it says which. Like the slot picker's overwrite, it
+    // asks with itself: the first tap arms it, the second does it.
+    const slot = activeSlot();
+    const save = loadSave(slot);
     let armed = false;
     const erase = makeButton(
       this,
       cx,
-      626,
-      save.runs ? 'ERASE SAVE' : 'NO SAVE YET',
+      676,
+      save.started ? `ERASE SLOT ${slot}` : `SLOT ${slot} IS EMPTY`,
       () => {
-        if (!save.runs) return;
+        if (!save.started) return;
         if (!armed) {
           armed = true;
           erase.setLabel('TAP AGAIN TO ERASE');
           return;
         }
-        clearSave();
+        clearSave(slot);
         this.scene.restart();
       },
-      { width: 240, fontSize: 14, enabled: !!save.runs }
+      { width: 300, fontSize: 14, enabled: !!save.started }
     );
 
-    makeButton(this, cx, 700, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
+    makeButton(this, cx, 744, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
   }
+}
+
+function cheatLabel(on) {
+  return `CHEATS: ${on ? 'ON' : 'OFF'}`;
+}
+
+function cheatNote(on) {
+  return on
+    ? 'WHOLE MAP REVEALED, ONE OF EVERYTHING. NOTHING SAVES.'
+    : 'REVEALS THE MAP AND HANDS YOU EVERY ITEM.';
 }

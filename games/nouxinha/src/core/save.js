@@ -1,30 +1,45 @@
-// The one save slot, and the only thing that outlives a run.
+// The save slots, and the only thing that outlives a run.
 //
-// Saving happens at the hut and nowhere else (DESIGN.md §6): walk home, take
-// the hut up on its offer to stop, and what you're carrying becomes yours.
+// Progress is written at the hut and nowhere else (DESIGN.md §6): walk home,
+// take the hut up on its offer to stop, and what you're carrying becomes yours.
 // Anything else — dying of thirst, or leaving by the map's X — ends the run
-// without writing, so the gem in your pocket goes back where it came from.
+// without banking, so the gem in your pocket goes back where it came from.
+//
+// The ground you walked is the exception, and it is deliberate. Cartography is
+// not progress: it says where the rock is, never what you were carrying, and a
+// world that opened black every expedition would make every run start from
+// scratch. So the explored set is written whichever way a run ends, while
+// everything the run was *holding* still lives or dies on the walk home.
 //
 // Gems are stored as a *count*, not a list. The sanctum chain hands them out in
 // order — each gate wants the gem from the sanctum before it — so "how many"
 // says everything "which ones" would.
 //
-// The two tools are stored as flags, and the map brings a third thing with it:
-// the ground it has drawn. That is the only part of a run that outlives it, and
-// it is here rather than in a run save because it is cartography, not progress
-// (core/cartography.js). It is tied to the seed that produced it, so a world
-// that ever changed underneath it is discarded rather than drawn wrong.
+// There are three slots, so more than one campaign can be walked at a time, and
+// one of them is active: the one NEW GAME or LOAD GAME last picked. Everything
+// here defaults to that one, which is what lets a run bank itself without ever
+// knowing which slot it belongs to.
 
 import { SANCTUM_PLAN } from './world.js';
 
-const STORAGE_KEY = 'nouxinha.save';
+const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;
+const ACTIVE_KEY = 'nouxinha.slot';
+// The single slot this game used before there were three. Read once, moved into
+// slot 1, and forgotten — a player who has walked a campaign keeps it.
+const LEGACY_KEY = 'nouxinha.save';
 const VERSION = 1;
+
+export const SLOT_COUNT = 3;
 
 export const MAX_GEMS = SANCTUM_PLAN.filter((s) => s.gem).length;
 
 export function emptySave() {
   return {
     v: VERSION,
+    // Whether this slot has been claimed at all. A slot NEW GAME has picked is
+    // in use from that moment, before it has a single run in it — otherwise
+    // "which slot am I playing" would have no answer until the first walk home.
+    started: false,
     gems: 0,
     coins: 0,
     runs: 0,
@@ -58,41 +73,130 @@ export function normaliseSave(raw) {
   save.furthest = int(raw.furthest, 0, Number.MAX_SAFE_INTEGER);
   save.compass = !!raw.compass;
   save.map = !!raw.map;
-  // Only a run that owns the map is allowed to have drawn anything, so a save
-  // claiming otherwise loses the drawing rather than the game.
-  save.mapped = save.map && typeof raw.mapped === 'string' ? raw.mapped : '';
+  save.mapped = typeof raw.mapped === 'string' ? raw.mapped : '';
   save.mappedSeed = Number.isFinite(raw.mappedSeed) ? raw.mappedSeed | 0 : 0;
   save.seen = Array.isArray(raw.seen)
     ? raw.seen.filter((id) => typeof id === 'string').slice(0, 32)
     : [];
+  // Anything in a slot means the slot is in use, whether or not the flag
+  // survived — a hand-written save is still somebody's campaign.
+  save.started =
+    !!raw.started ||
+    save.runs > 0 ||
+    save.coins > 0 ||
+    save.gems > 0 ||
+    save.compass ||
+    save.map ||
+    !!save.mapped;
   return save;
+}
+
+// --- Slots -------------------------------------------------------------------
+
+export function clampSlot(slot) {
+  const n = Number.isFinite(slot) ? Math.floor(slot) : 1;
+  return Math.max(1, Math.min(SLOT_COUNT, n));
 }
 
 // localStorage throws in some embedded/private contexts, and a save is never
 // worth taking the game down for — a run that can't persist is still playable.
-export function loadSave() {
+function read(key) {
   try {
-    return normaliseSave(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+    return localStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
+}
+
+function write(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    /* progress just won't persist */
+  }
+}
+
+function remove(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    /* nothing to clear */
+  }
+}
+
+// The one-slot save this game used to keep, moved into slot 1 the first time a
+// three-slot build opens it. Done once, on the way past, so nothing downstream
+// has to know there was ever another shape of save.
+function migrateLegacy() {
+  const legacy = read(LEGACY_KEY);
+  if (legacy === null) return;
+  if (read(SLOT_KEY(1)) === null) write(SLOT_KEY(1), legacy);
+  remove(LEGACY_KEY);
+}
+migrateLegacy();
+
+let active = clampSlot(Number(read(ACTIVE_KEY)) || 1);
+
+export function activeSlot() {
+  return active;
+}
+
+export function setActiveSlot(slot) {
+  active = clampSlot(slot);
+  write(ACTIVE_KEY, String(active));
+  return active;
+}
+
+export function loadSave(slot = active) {
+  try {
+    return normaliseSave(JSON.parse(read(SLOT_KEY(clampSlot(slot)))));
   } catch (e) {
     return emptySave();
   }
 }
 
-export function writeSave(save) {
+export function writeSave(save, slot = active) {
   const clean = normaliseSave(save);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
-  } catch (e) {
-    /* progress just won't persist */
-  }
+  // Anything written is a slot in use, even a run that walked home with nothing.
+  clean.started = true;
+  write(SLOT_KEY(clampSlot(slot)), JSON.stringify(clean));
   return clean;
 }
 
-export function clearSave() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (e) {
-    /* nothing to clear */
-  }
+export function clearSave(slot = active) {
+  remove(SLOT_KEY(clampSlot(slot)));
   return emptySave();
+}
+
+// Every slot, in order, for the picker to draw. `used` is what tells NEW GAME's
+// list from LOAD GAME's: an unused slot is free to start in and has nothing to
+// load.
+export function slots() {
+  const out = [];
+  for (let slot = 1; slot <= SLOT_COUNT; slot++) {
+    const save = loadSave(slot);
+    out.push({ slot, save, used: save.started });
+  }
+  return out;
+}
+
+export function anySlotUsed() {
+  return slots().some((entry) => entry.used);
+}
+
+// NEW GAME: the slot is emptied, claimed, and made the active one, so a campaign
+// started here banks here. Overwriting an occupied slot is the picker's
+// decision, not this function's — by the time it is called the player has
+// already been asked twice.
+export function startSlot(slot) {
+  const picked = setActiveSlot(slot);
+  clearSave(picked);
+  return writeSave(emptySave(), picked);
+}
+
+// LOAD GAME: nothing is written, the slot simply becomes the one the next run
+// reads from and banks into.
+export function loadSlot(slot) {
+  const picked = setActiveSlot(slot);
+  return loadSave(picked);
 }

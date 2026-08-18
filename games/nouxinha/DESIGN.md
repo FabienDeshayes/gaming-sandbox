@@ -51,7 +51,7 @@ The world has three things in it: **terrain** (floor, rock, and the built walls 
 |---|---|---|
 | Tile stepping | The character moves exactly one tile per input, in a cardinal direction. Rock and sanctum wall are impassable, and so is a gate you don't hold the gem for: a rejected step costs no durability and doesn't change facing. The character's **facing** is the direction of their last successful step (it starts pointing north from the base). | Swipe in a cardinal direction anywhere on the map, or tap the D-pad |
 | Gems and gates | Three gems sit at the centres of walled **sanctums** scattered around the hut. Picking one up gives a colour back to the world and opens the gate that wants it (§4.4). | Walk onto the gem |
-| Saving | A run is only written down by stopping at the hut (§6). Dying of thirst or leaving by the map's **X** writes nothing, so a gem picked up but not carried home is still out there next run. | **STOP HERE** on the hut's dialog |
+| Saving | A run is only banked by stopping at the hut (§6). Dying of thirst or leaving by the map's **X** banks nothing, so a gem picked up but not carried home is still out there next run — though the ground the run lit is kept whichever way it ends (§6.1). | **STOP HERE** on the hut's dialog |
 | Light & visibility | The active light source defines a **shape** of tiles visible from the character's tile (see §4.1). Every tile has one of three states: **unknown** (never lit — drawn as flat background, indistinguishable from any other unknown tile), **remembered** (lit at some point — drawn dimmed), **lit** (inside the current light shape — drawn full brightness). Items and terrain are only readable in the lit state; a remembered tile keeps showing whatever was there when you last saw it. | — |
 | Durability | Each successful step costs **1 durability** off the *active* light only. Rejected steps (into rock) cost nothing. Carried-but-inactive lights never burn. At 0 the light is spent and removed from the inventory, and the next light in inventory order auto-equips. With no lights left the character is in **blackout**: the light shape shrinks to the character's own tile, and memory shrinks with it — a remembered tile more than one step away stops being drawn until it's lit again, so the screen is the character's own tile plus a small ring of fog of war. Blackout is not death — the character can still feel their way home a step at a time — but it is the moment the walk actually gets dangerous. | — |
 | Water | Every successful step also costs **1 water**, independent of the light and never affected by blackout. Water starts at **200** and each gem held raises that ceiling by **50**, to 350 with all three. A water pickup refills by its own amount (§4.2), capped at the ceiling. Unlike light, water has no auto-swap or backup: hitting **0** is the run's one hard failure state — the run ends and everything carried is lost (§6). The balance numbers are named constants at the top of `src/core/rules.js` (`STARTING_WATER`, `WATER_PER_STEP`, `WATER_PER_GEM`) so they can be retuned without touching the mechanic itself. | — |
@@ -89,7 +89,7 @@ The compass and the map are **tools** rather than items: one of each exists, nei
 | Spring vial | 3 | Refills water to the ceiling, wherever you are. |
 | Gem | — | One per sanctum, three in all. Gives a colour back to the world and opens the gate that wants it (§4.4). |
 | Compass | — | Points at the next unique object worth walking to (§4.6). Bought for 50 or found. |
-| Map | — | Draws everywhere you have walked, and remembers it between runs (§4.6). Bought for 100 or found. |
+| Map | — | Draws everywhere the campaign has walked, all at once (§4.6). Bought for 100 or found. |
 
 ### 4.3 The world
 
@@ -121,14 +121,21 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
   the other way round: enough to grow caves worth navigating, not enough to make walking a maze.
 
 **Consumables are spread, never clumped.** Every kind is thrown onto a lattice and then thinned so
-that **no two of the same kind ever land within 15 tiles of each other** — which means no 15×15
-square anywhere in the world can hold two of anything. That rule is the whole design of this layer,
-and it has a price worth being honest about: a kind can never be denser than one instance per 15×15,
-so the world holds roughly a quarter of the items it would without the rule, evenly, instead of four
-times as many in bunches. `MIN_SEPARATION` in `src/core/world.js` is the single number that trades
-one against the other, and the measured curve is written down next to it. Two consequences fall out:
+that **no two of the same kind ever land within 10 tiles of each other**. That rule is the whole
+design of this layer, and it has a price worth being honest about: a kind can never be denser than
+one instance per 10×10, so the world holds a fraction of the items an unthinned scatter would,
+evenly, instead of several times as many in bunches. `MIN_SEPARATION` in `src/core/world.js` is the
+single number that trades one against the other, and the measured curve is written down next to it.
 
-- **A coin pickup is a small pile worth 1-5**, because one coin per 225 tiles could never pay for a
+**10 is where that trade sits, and it is a dial rather than a law.** Wider separations were tried and
+made the walk too thin: at 15 a light's worth of ground was usually empty, and an expedition that
+found nothing on the way out had no reason to push further. At 10 roughly one floor tile in 43 has
+something on it — a little under twice as many as at 15 — which is often enough that walking one more
+ring out is a decision rather than a gamble. What it gives up is the outright guarantee that a
+screenful holds one of anything: a 15×15 square can now hold up to four of a kind, which reads as a
+good patch of ground rather than a clump. Two consequences fall out:
+
+- **A coin pickup is a small pile worth 1-5**, because one coin per 100 tiles could never pay for a
   100-coin map.
 - **Sanctum clearings are the exception.** A clearing is a hoard somebody left there, so it keeps its
   dense cache — capped at two of any one kind, so it reads as a cache and not a pile (§4.4).
@@ -233,13 +240,13 @@ have never lit is not on it, because a map you didn't draw isn't a map. Items ar
 they move every time the world respawns (§4.3), so a map of them would be out of date before it was
 read.
 
-**Owning the map is what makes walking persist.** Everything else about a run is forgotten at the
-door (§6.1), which would make a map that opens blank every expedition worth nothing at all. So the
-map — and only the map — writes the ground it has drawn into the save, and the next run opens with it
-already there. What persists is cartography, not progress: where the ground is, never where you were
-standing, how much water you had, or what you were carrying. It is tied to the seed that drew it, so
-a world that ever changed underneath it discards the drawing rather than showing one from somewhere
-else.
+**Walking persists whether or not you own the map** (§6.1). The explored set is saved with the slot
+and handed back to the next run, so an expedition opens with every tile the campaign has ever lit
+already drawn and pushes on from the edge of the dark rather than from the doorstep. What the map
+adds is the *view*: seeing all of that at once instead of nine tiles at a time. What persists is
+cartography, not progress — where the ground is, never where you were standing, how much water you
+had, or what you were carrying. It is tied to the seed that drew it, so a world that ever changed
+underneath it discards the drawing rather than showing one from somewhere else.
 
 ## 5. Constraints
 
@@ -248,7 +255,7 @@ else.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
 - **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is still authored as a 1-bit mask, so what a gem changes is a tint at draw time, never an asset.
 - Every gem is optional. Nothing in the game requires finding one; the sanctums gate their own contents and nothing else. The compass and the map are optional too — they make the walk legible, never possible.
-- **No two of the same consumable within 15 tiles.** The world spreads items rather than scattering them, which caps how much there is to find (§4.3). One constant decides the trade.
+- **No two of the same consumable within 10 tiles.** The world spreads items rather than scattering them, which caps how much there is to find (§4.3). One constant decides the trade.
 - Portrait, mobile-first, touch as the primary input. 480×854 fixed canvas.
 - Turn-based: the world only advances when the player steps. No real-time pressure.
 - No build tooling: Phaser 3 from a CDN `<script>` tag, game code as plain ES modules.
@@ -257,18 +264,28 @@ else.
 ## 6. Win / lose conditions
 
 - **Win:** bringing all three colours home. It is a destination rather than an ending — the world is still there afterwards, with the fourth sanctum's cache open and nothing left to unlock.
-- **Lose:** running out of water. It depletes independently of light and never auto-refills — only a water pickup does that — so hitting 0 ends the run on the spot and everything carried is lost — gems, lights, coins, and any tool bought or found on the way — with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
-- **Session end:** the player walks back to the hut and takes it up on the offer to stop (§4). The HUD tracks the numbers that stand in for a score while you're out — **tiles explored** (distinct tiles ever lit), **coins**, **water** remaining, and the row of **colours** recovered — and stopping at the hut closes the run with a **recap**: tiles explored, coins, lights found, colours saved, furthest distance reached, steps taken, and what's still in hand.
+- **Lose:** running out of water. It depletes independently of light and never auto-refills — only a water pickup does that — so hitting 0 ends the run on the spot and everything carried is lost — gems, lights, coins, and any tool bought or found on the way, though the ground it lit still goes into the slot (§6.1) — with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
+- **Session end:** the player walks back to the hut and takes it up on the offer to stop (§4). The HUD tracks the numbers that stand in for a score while you're out — **tiles explored** (distinct tiles the campaign has ever lit, since ground carries between runs — §6.1), **coins**, **water** remaining, and the row of **colours** recovered — and stopping at the hut closes the run with a **recap**: tiles explored, **new ground** this expedition lit that no earlier one had, coins, lights found, colours saved, furthest distance reached, steps taken, and what's still in hand. The two ground numbers are both there on purpose: the total is how much of the world is drawn, the new one is what this particular walk was worth.
 
 ### 6.1 Saving
 
-**The hut is the only place a run is written down**, and that single rule is what gives the walk home its weight.
+**The hut is the only place a run is banked**, and that single rule is what gives the walk home its weight. The one thing that outlives a run regardless is the ground it lit — cartography is not progress.
 
-- There is **one save slot**, holding the gem count, banked coins, runs completed, the furthest distance ever reached, which of the two tools are owned, and — only if the map is one of them — the ground it has drawn and which unique objects have been seen (§4.6). It lives in `localStorage` and is the only state that outlives a run.
-- **Stopping at the hut** is the only thing that writes it. Dying of thirst writes nothing, and leaving by the map's **X** abandons the run and writes nothing either — so a gem picked up but not carried home is still sitting in its sanctum next run, and a compass bought but not carried home is still on the merchant's shelf, with the coins still in the bank.
+- There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, banked coins, runs completed, the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, and which unique objects have been seen (§4.6). They live in `localStorage` and are the only state that outlives a run.
+- **A run belongs to a slot before it starts.** The title screen offers **NEW GAME** and **LOAD GAME**, and both go through the slot picker: new empties the slot it is pointed at and starts a campaign there, load carries one on. The slot picked stays active, so a run banks itself without ever having to be told which campaign it is (§7).
+- **Stopping at the hut** is the only thing that banks. Dying of thirst banks nothing, and leaving by the map's **X** abandons the run and banks nothing either — so a gem picked up but not carried home is still sitting in its sanctum next run, and a compass bought but not carried home is still on the merchant's shelf, with the coins still in the bank.
+- **The ground is the exception, and it is deliberate.** However a run ends — banked, dead, or walked out of — the tiles it lit are written into its slot, and the next expedition opens with all of them already drawn. Everything the run was *holding* still lives or dies on the walk home; where the rock is does not. Re-walking ground you have already crossed is not the tension this game is about, and a world that opened black every time made every run start from scratch.
 - The hut says so plainly when you arrive carrying a gem, because a player who doesn't know this rule can lose an hour's walk to it without ever being told the rule existed.
 - A save is normalised on the way in and out, so a corrupt or hand-edited file costs the player their progress at worst — never the run's arithmetic.
-- **Erasing** is in Settings, and asks twice: the first tap arms the button, the second does it.
+- **Erasing** is in Settings and always means the slot you last played, so it says which slot it is about. It asks twice: the first tap arms the button, the second does it. Starting a **NEW GAME** over an occupied slot asks the same way, on the row itself.
+
+### 6.2 Cheats
+
+A developer switch in Settings, off by default, for looking at what the late game actually does without a campaign's worth of walking behind it.
+
+- A run started with cheats on opens with **the whole world revealed** — every tile out past the fourth sanctum, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust.
+- **A cheat run writes nothing at all.** It banks no progress at the hut and it does not even keep its ground, because a run that was *handed* three gems is not a campaign and must never overwrite one. The toggle says so on itself, the title screen says so under the gem pips, and the recap says so instead of listing what is being carried home.
+- It is a preference rather than run state: `src/config.js` persists it next to the palette, the scene reads it and hands it to `createRun`, and `src/core/rules.js` never asks.
 
 ## 7. Controls
 
@@ -284,7 +301,11 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Answer the hut | Tap **KEEP GOING** or **STOP HERE** on the dialog | Click |
 | Buy something | Tap a row on the merchant's counter, then **LEAVE** | Click the same |
 | Open the map | Tap **MAP** in the top right of the viewport (only there if you own one) | Click **MAP** |
+| Start a run | **NEW GAME** or **LOAD GAME** on the title screen, then a slot on the picker | Click the same |
+| Overwrite a campaign | Tap an occupied slot under **NEW GAME**, then tap it again | Click the same |
 | Change palette | Settings, from the title screen | Same |
+| Turn cheats on or off | Settings → **CHEATS** (§6.2) | Same |
+| Erase the slot you last played | Settings → **ERASE SLOT n**, then tap again | Same |
 | Leave the run | Tap **X** in the top right of the map | Click **X** |
 
 **Stacking.** The inventory strip and panel both group carried lights by kind rather than showing one slot per copy: a kind you're carrying more than one of shows a single icon badged `×N`. The run itself still tracks every copy separately, in pickup order, each with its own durability — grouping is purely a display concern, so equipping still targets one specific copy.
@@ -330,7 +351,9 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
 - A synthesised pickup blip
 - Four seed-derived sanctums with masonry walls and gem-gated gates, guaranteed reachable (§4.4)
 - Three gems, each restoring a colour, opening its gate, raising the water ceiling, and revealing its tier of items
-- One save slot, written only by stopping at the hut, with progress on the title screen and an erase in Settings
+- Three save slots, picked through NEW GAME / LOAD GAME, banked only by stopping at the hut, with progress on the title screen and an erase in Settings
+- Explored ground carried between runs however a run ends, so a campaign never starts from black again (§6.1)
+- A cheat toggle in Settings that opens a run on the whole map with one of everything, and banks nothing (§6.2)
 - Consumables spread by a minimum-separation rule and relaid on every respawn, with unique objects fixed to the seed (§4.3)
 - The merchant, and a price list that makes coins worth picking up
 - The compass, pointing at the next unique object worth walking to
@@ -406,13 +429,13 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | Path | Holds |
   |---|---|
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
-  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), and `gemColour` — which colour each recovered gem paints in |
+  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), the cheat switch (§6.2, persisted the same way), and `gemColour` — which colour each recovered gem paints in |
   | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums and landmarks (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `canEnter`); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation. `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
   | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles. Pure |
-  | `src/core/rules.js` | The run: step legality (including gates), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, reveal, `inventoryStacks` for grouping same-id copies for display, `bankRun` for the hut's save, and `runSummary` for the recap. Also where the water balance constants (`STARTING_WATER`, `WATER_PER_STEP`, `WATER_PER_GEM`) live. Pure |
-  | `src/core/save.js` | The one save slot: load, write, erase, and the normaliser every save passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
+  | `src/core/rules.js` | The run: step legality (including gates), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, reveal, `inventoryStacks` for grouping same-id copies for display, `bankRun` for the hut's save, `rememberGround` for the ground a run keeps however it ends, the cheat setup (§6.2), and `runSummary` for the recap. Also where the water balance constants (`STARTING_WATER`, `WATER_PER_STEP`, `WATER_PER_GEM`) live. Pure |
+  | `src/core/save.js` | The three save slots and which one is active: load, write, erase, start, the slot listing the picker draws, and the normaliser every save passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
   | `src/data/items.js` | Item definitions (name, sprite key, durability, light shape, water refill, effect text) plus `tier`/`hue` — the gem that brings an item into the world and the gem colour it's drawn in — and the two tools |
   | `src/data/shop.js` | The merchant's prices, stock order, and which lines are one-offs. One table to retune the economy |
   | `src/data/sprites.js` | Every sprite, as a 16×16 text mask — including the four floor-edge variants, derived from the base pattern rather than drawn a second time |
@@ -425,7 +448,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers |
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |
   | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js` | The D-pad, the item card overlay (single-copy or scrollable instance list), the full scrollable inventory panel, the hut's title/rows/buttons dialog, the shared bordered button |
-  | `src/scenes/` | `TitleScene`, `SettingsScene`, `ExploreScene` |
+  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker), `SettingsScene`, `ExploreScene` |
   | `tests/` | `harness.js` (local server + Playwright driver + runner) and `game.test.js` — see `TESTING.md` |
 
 - **Sprites are text, not images.** Each is a 16×16 grid of `#`/`.` in `src/data/sprites.js`, baked into a white texture at boot and tinted at draw time. No binary assets, no image editor, no build step — and one texture set serves all four palettes.

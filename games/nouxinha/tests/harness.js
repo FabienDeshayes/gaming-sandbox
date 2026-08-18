@@ -169,14 +169,17 @@ export function launchBrowser() {
 // world be reproduced (see TitleScene) — which is how a test knows where the
 // consumables are before the page has drawn them.
 //
-// `save` plants a save slot before the page loads, so a test can start from a
+// `save` plants save slot 1 before the page loads, so a test can start from a
 // player who has already banked coins or carried a tool home. That is prior
 // state, not live state: it is the browser's version of handing `createRun` a
-// save, and nothing here ever reaches into a running scene.
+// save, and nothing here ever reaches into a running scene. `game.startRun()`
+// then takes that slot up through LOAD GAME instead of NEW GAME.
+//
+// `cheats` turns the Settings switch on before the page loads, the same way.
 export async function openGame(
   browser,
   port,
-  { viewport = { width: 480, height: 854 }, query = '', save = null } = {}
+  { viewport = { width: 480, height: 854 }, query = '', save = null, cheats = false } = {}
 ) {
   const errors = [];
   const spawned = [];
@@ -190,13 +193,23 @@ export async function openGame(
   });
 
   if (save)
-    await page.addInitScript((slot) => {
+    await page.addInitScript((planted) => {
       try {
-        localStorage.setItem('nouxinha.save', JSON.stringify(slot));
+        localStorage.setItem('nouxinha.save.1', JSON.stringify(planted));
+        localStorage.setItem('nouxinha.slot', '1');
       } catch (e) {
         /* a page that can't store one just runs without it */
       }
     }, save);
+
+  if (cheats)
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('nouxinha.cheats', '1');
+      } catch (e) {
+        /* a page that can't store one just runs without it */
+      }
+    });
 
   // src/main.js never stores the Phaser.Game it constructs, so trap the
   // constructor and stash the instance as window.__game for the driver to read.
@@ -329,6 +342,18 @@ export async function openGame(
     },
 
     clickAt,
+
+    // Title screen to a walking run, the way a player gets there: NEW GAME or
+    // LOAD GAME, then a slot. A test that planted a save wants that campaign
+    // back, so it loads slot 1; one that planted nothing starts a fresh one in
+    // the same slot.
+    startRun: async (slot = 1) => {
+      const used = await page.evaluate((n) => !!localStorage.getItem(`nouxinha.save.${n}`), slot);
+      await game.clickText(used ? 'LOAD GAME' : 'NEW GAME');
+      await game.waitForScene('SlotScene');
+      await game.clickText(`SLOT ${slot}`);
+      await game.waitForScene('ExploreScene');
+    },
 
     // Taps a D-pad arrow, the way a thumb would.
     tapDpad: (dir) => {
@@ -467,17 +492,18 @@ export async function openGame(
           }));
       }),
 
-    // The single save slot, straight out of localStorage — the only state that
-    // outlives a run, so a test asserting a gem was kept has to read it here
-    // rather than from the run it came from.
-    save: () =>
-      page.evaluate(() => {
+    // A save slot, straight out of localStorage — the only state that outlives a
+    // run, so a test asserting a gem was kept has to read it here rather than
+    // from the run it came from. Slot 1 unless asked otherwise: that is the one
+    // `save` plants into and `startRun` picks.
+    save: (slot = 1) =>
+      page.evaluate((n) => {
         try {
-          return JSON.parse(localStorage.getItem('nouxinha.save'));
+          return JSON.parse(localStorage.getItem(`nouxinha.save.${n}`));
         } catch (e) {
           return null;
         }
-      }),
+      }, slot),
 
     // The y position of whichever scrollable list is currently open (the item
     // card's instance list or the inventory panel's stack list) — moves as the

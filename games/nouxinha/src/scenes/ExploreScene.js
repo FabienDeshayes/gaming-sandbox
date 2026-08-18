@@ -7,6 +7,7 @@ import {
   createRun,
   equip,
   inventoryStacks,
+  refillWater,
   runSummary,
   step,
 } from '../core/rules.js';
@@ -178,10 +179,20 @@ export class ExploreScene extends Phaser.Scene {
           ]
         : ['Call it here, or head back out?'],
       buttons: [
-        { label: 'KEEP GOING', onClick: () => this.dialog.hide() },
+        { label: 'KEEP GOING', onClick: () => this.resupply() },
         { label: 'STOP HERE', onClick: () => this.showRecap() },
       ],
     });
+  }
+
+  // The hut tops water back up on the way out, not just on the way home —
+  // it's a base, not just a save point, so a run that doubles back can push
+  // out again on a full tank.
+  resupply() {
+    const refilled = refillWater(this.run);
+    this.dialog.hide();
+    this.hud.update(this.run);
+    if (refilled) this.hud.flash('WATER REFILLED AT THE HUT.');
   }
 
   // Stopping at the hut is the only thing that writes the save (DESIGN.md §6),

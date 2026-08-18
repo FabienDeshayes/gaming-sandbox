@@ -40,8 +40,8 @@ export const ITEMS = {
     sprite: 'torch-lamp',
     isLight: true,
     maxDurability: 60,
-    shape: { kind: 'cone', depth: 3 },
-    effect: 'Lights a widening cone 3 tiles ahead. Sees nothing behind you.',
+    shape: { kind: 'cone', depth: 4 },
+    effect: 'Lights a widening cone 4 tiles ahead. Sees nothing behind you.',
   },
   // The one light that breaks the "more reach, shorter leash" trade, because it
   // is the second gem's reward for a walk nothing else would survive.

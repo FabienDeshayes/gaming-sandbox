@@ -40,9 +40,10 @@ function radiusTiles(x, y, radius) {
   return out;
 }
 
-// A cone widening with distance: 1 tile ahead is 1 wide, 2 ahead is 3 wide,
-// 3 ahead is 5 wide. Nothing behind or beside, plus your own tile — turning
-// re-aims it, which is why the lamp rewards committing to a direction.
+// A cone widening with distance: 1 tile ahead is 3 wide, 2 ahead is 5 wide,
+// 3 ahead is 7 wide, 4 ahead is 9 wide. Nothing behind or beside, plus your
+// own tile — turning re-aims it, which is why the lamp rewards committing to
+// a direction.
 function coneTiles(x, y, facing, depth) {
   const dir = DIRECTIONS[facing] || DIRECTIONS.up;
   // The axis across the cone is the facing rotated a quarter turn.
@@ -50,7 +51,7 @@ function coneTiles(x, y, facing, depth) {
   const py = dir.dx;
   const out = [{ x, y }];
   for (let d = 1; d <= depth; d++) {
-    const halfWidth = d - 1;
+    const halfWidth = d;
     for (let w = -halfWidth; w <= halfWidth; w++)
       out.push({ x: x + dir.dx * d + px * w, y: y + dir.dy * d + py * w });
   }

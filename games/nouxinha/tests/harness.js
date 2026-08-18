@@ -426,14 +426,15 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
 
     wizardTexture: () =>
       page.evaluate(
-        () => window.__game.scene.getScene('ExploreScene').map.wizard.texture.key
+        () => `wizard-${window.__game.scene.getScene('ExploreScene').map.wizard.facing}`
       ),
 
-    // The wizard wears the newest colour carried home, so this is how a test
-    // sees that a gem repainted the character.
-    wizardTint: () =>
-      page.evaluate(
-        () => window.__game.scene.getScene('ExploreScene').map.wizard.tintTopLeft
+    // The wizard is a stack of colour-zone layers (src/ui/wizard.js), one per
+    // gem plus the base band — this is how a test sees that a gem's colour
+    // actually reached one of them.
+    wizardZoneTints: () =>
+      page.evaluate(() =>
+        window.__game.scene.getScene('ExploreScene').map.wizard.layers.map((l) => l.tintTopLeft)
       ),
 
     // Drives the run forward without the test having to care about terrain:

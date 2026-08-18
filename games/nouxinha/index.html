@@ -28,6 +28,13 @@
       display: block;
       /* No pan/zoom gesture to wait on: every touch is the game's immediately. */
       touch-action: none;
+      /* Phaser's pixelArt:true keeps its own internal render crisp, but FIT
+         scaling then stretches that canvas up to the device's CSS size, and
+         without this the browser smooths that stretch — which fades or drops
+         the single-pixel dots in the floor's dotted border on any screen
+         where the scale factor isn't a clean integer. */
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
   </style>
 </head>

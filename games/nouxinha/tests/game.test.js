@@ -29,14 +29,16 @@ import {
   itemOnTile,
   litTiles,
   maxWater,
+  refillWater,
   runSummary,
   step,
   STARTING_WATER,
   WATER_PER_GEM,
 } from '../src/core/rules.js';
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
-import { gemColour } from '../src/config.js';
+import { BLACKOUT_MEMORY_RADIUS, gemColour } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
+import { zoneColours } from '../src/ui/wizard.js';
 
 // --- Routes through the real world -----------------------------------------
 //
@@ -137,16 +139,16 @@ unit('medium torch lights 2 tiles in every direction', () => {
 
 unit('lamp torch is a cone that widens with distance', () => {
   const lit = visibleTiles(ITEMS['torch-lamp'].shape, 0, 0, 'up');
-  // own tile + 1 + 3 + 5
-  assertEqual(lit.length, 10, 'tile count');
-  assert(lit.some((t) => t.x === 0 && t.y === -3), 'reaches 3 ahead');
-  assert(lit.some((t) => t.x === -2 && t.y === -3), 'is 5 wide at 3 ahead');
+  // own tile + 3 + 5 + 7 + 9
+  assertEqual(lit.length, 25, 'tile count');
+  assert(lit.some((t) => t.x === 0 && t.y === -4), 'reaches 4 ahead');
+  assert(lit.some((t) => t.x === -4 && t.y === -4), 'is 9 wide at 4 ahead');
   assert(!lit.some((t) => t.y > 0), 'shows nothing behind');
 });
 
 unit('lamp torch re-aims with facing', () => {
   const right = visibleTiles(ITEMS['torch-lamp'].shape, 0, 0, 'right');
-  assert(right.some((t) => t.x === 3 && t.y === 0), 'reaches 3 to the right');
+  assert(right.some((t) => t.x === 4 && t.y === 0), 'reaches 4 to the right');
   assert(!right.some((t) => t.x < 0), 'shows nothing behind');
 });
 
@@ -165,6 +167,14 @@ unit('a step also burns one water, same as durability', () => {
   const result = step(state, ROCK_ROUTE.path[0] || 'up');
   assert(result.moved, 'the first step off the base should be legal');
   assertEqual(state.water, before - 1, 'water');
+});
+
+unit('refillWater tops the tank back up to the ceiling, once', () => {
+  const state = createRun(SEED);
+  state.water = 5;
+  assert(refillWater(state), 'reports a refill happened');
+  assertEqual(state.water, maxWater(state.gems), 'topped back up to the ceiling');
+  assertEqual(refillWater(state), false, 'nothing to refill once already full');
 });
 
 unit('walking onto a water drop refills water, capped at the starting amount', () => {
@@ -240,6 +250,18 @@ unit('with no lights left you see only your own tile', () => {
   const before = state.steps;
   step(state, back);
   assertEqual(state.steps, before + 1, 'still able to move');
+});
+
+unit('the wizard accumulates one colour per gem, keeping the base band', () => {
+  const fg = gemColour(0);
+  assertEqual(zoneColours(0), [fg, fg, fg, fg], 'no gems: every band is the palette foreground');
+  assertEqual(zoneColours(1), [fg, gemColour(1), fg, fg], 'one gem lights only its own band');
+  assertEqual(zoneColours(2), [fg, gemColour(1), gemColour(2), fg], 'a second gem adds a band, keeping the first');
+  assertEqual(
+    zoneColours(3),
+    [fg, gemColour(1), gemColour(2), gemColour(3)],
+    'a third gem lights every band'
+  );
 });
 
 unit('equipping a carried light changes what you can see', () => {
@@ -662,6 +684,37 @@ test('explored ground stays on screen, dimmed', async (game) => {
   );
 });
 
+test('blackout shrinks memory to a fog of war around the character', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  // One step off the base, then pace back and forth inside its forced-floor
+  // neighbourhood (DESIGN.md §4.3) — never back onto the hut itself, so its
+  // dialog never interrupts the loop — until the starting small torch (100
+  // durability) burns all the way out.
+  await game.tapDpad('right');
+  await game.settle();
+  for (let i = 0; i < 99; i++) {
+    await game.tapDpad(i % 2 === 0 ? 'down' : 'up');
+    await game.settle();
+  }
+  const state = await game.state();
+  assertEqual(state.inventory.length, 0, 'the small torch is spent');
+
+  const tiles = await game.visibleTiles();
+  const lit = tiles.filter((t) => t.alpha === 1);
+  const remembered = tiles.filter((t) => t.alpha === 0.3);
+  assertEqual(lit.length, 1, 'only the tile underfoot is lit');
+  assert(remembered.length > 0, 'a small ring of memory still shows around the character');
+  assert(
+    remembered.every(
+      (t) =>
+        Math.max(Math.abs(t.x - state.x), Math.abs(t.y - state.y)) <= BLACKOUT_MEMORY_RADIUS
+    ),
+    'nothing further out is drawn as remembered any more'
+  );
+});
+
 test('walking into rock bumps instead of moving', async (game) => {
   await game.clickText('EXPLORE');
   await game.waitForScene('ExploreScene');
@@ -867,6 +920,29 @@ test('walking back to the hut asks whether to stop', async (game) => {
   assertEqual({ x: state.x, y: state.y }, { x: 1, y: 0 }, 'and the run carries on');
 });
 
+test('keeping going at the hut refills water to the ceiling', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  // A loop through the base's guaranteed-floor neighbourhood that only lands
+  // back on the hut at the very end, so the water spend is real before the
+  // dialog interrupts anything.
+  for (const dir of ['right', 'up', 'left', 'down']) {
+    await game.tapDpad(dir);
+    await game.settle();
+  }
+  const before = await game.state();
+  assertEqual({ x: before.x, y: before.y }, { x: 0, y: 0 }, 'back at the hut');
+  assert(before.water < 200, 'water spent walking the loop');
+  assertEqual(before.dialogOpen, true, 'the hut asks on arrival');
+
+  await game.clickText('KEEP GOING');
+  assert(await game.hasText('WATER REFILLED AT THE HUT.'), 'the status line says so');
+  const after = await game.state();
+  assertEqual(after.water, 200, 'topped back up to the ceiling');
+  assert((await game.texts()).includes('WATER 200/200'), 'the HUD counter agrees');
+});
+
 test('stopping at the hut recaps the run before going home', async (game) => {
   await game.clickText('EXPLORE');
   await game.waitForScene('ExploreScene');
@@ -899,7 +975,11 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   await game.clickText('EXPLORE');
   await game.waitForScene('ExploreScene');
 
-  assertEqual(await game.wizardTint(), gemColour(0), 'the wizard starts in the palette foreground');
+  assertEqual(
+    (await game.wizardZoneTints())[1],
+    gemColour(0),
+    'the wizard starts in the palette foreground'
+  );
   assertEqual((await game.state()).gems, 0, 'and with no colour to their name');
 
   for (const dir of GEM_ROUTE.path) {
@@ -914,7 +994,9 @@ test('walking into the first sanctum restores a colour to the world', async (gam
 
   // The colour actually reached the screen — this is the whole point of a gem,
   // and it is only observable in the render.
-  assertEqual(await game.wizardTint(), gemColour(1), 'the wizard wears the colour it gave back');
+  const zoneTints = await game.wizardZoneTints();
+  assertEqual(zoneTints[0], gemColour(0), 'the base band stays the palette foreground');
+  assertEqual(zoneTints[1], gemColour(1), 'the first gem band wears the colour it gave back');
   const tiles = await game.visibleTiles();
   assert(
     tiles.some((t) => t.ground === 'wall'),

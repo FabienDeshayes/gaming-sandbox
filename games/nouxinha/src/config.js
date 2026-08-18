@@ -32,6 +32,11 @@ export const VIEW_ROWS = 15;
 export const LIT_ALPHA = 1;
 export const REMEMBERED_ALPHA = 0.3;
 
+// In blackout, remembered ground beyond this Chebyshev distance is hidden
+// too — memory shrinks to a fog of war around the character instead of
+// staying legible over the whole run (DESIGN.md §4).
+export const BLACKOUT_MEMORY_RADIUS = 1;
+
 export const PALETTES = [
   { id: 'phosphor', name: 'PHOSPHOR', bg: 0x0b1a0b, fg: 0x33ff66 },
   { id: 'amber', name: 'AMBER', bg: 0x1a0f00, fg: 0xffb000 },

@@ -53,7 +53,7 @@ reaches in to *set* game state.
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
 | `state()` | The live run: position, facing, steps, coins, water, gems, seed, explored count, furthest distance, inventory, active light, and whether the item card or the hut dialog is open |
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground texture, alpha, **tint**, overlay, item and item tint. This is the render, not the model — it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
-| `wizardTexture()` / `wizardTint()` | Which of the four facing sprites is showing, and what colour it's drawn in — the wizard wears the newest gem's colour |
+| `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its four colour-zone layers — the wizard wears one colour per gem carried, plus the base colour |
 | `save()` | The single save slot straight out of `localStorage`. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
@@ -106,7 +106,7 @@ A gem changes three things and each is asserted where it actually lives:
   tests that build runs with `createRun(SEED, { ...emptySave(), gems: n })`. Passing a save is the
   public way to set a run's starting gems; nothing reaches into a live run to change it.
 - **The render** — that the colour reached the screen — needs the browser, and is asserted from
-  `wizardTint()` and the `tint` fields of `visibleTiles()` against `gemColour(n)` from `src/config.js`
+  `wizardZoneTints()` and the `tint` fields of `visibleTiles()` against `gemColour(n)` from `src/config.js`
   rather than a hardcoded hex, so the assertions track the palette rule instead of restating it.
 - **The save** — that a gem is only kept if the run banked it at the hut — is read back with
   `save()`. Every browser test gets its own page and so its own empty `localStorage`; no test

@@ -37,6 +37,17 @@ export function maxWater(gems) {
   return STARTING_WATER + gems * WATER_PER_GEM;
 }
 
+// The hut's other job besides banking a run (DESIGN.md §4): choosing to keep
+// going instead of stopping tops the tank back up before the expedition
+// continues, so a run that doubles back can push out again at full water.
+// Returns whether it actually topped anything up, for the scene to decide
+// whether a refill is worth announcing.
+export function refillWater(state) {
+  const before = state.water;
+  state.water = maxWater(state.gems);
+  return state.water > before;
+}
+
 export function createRun(seed = DEFAULT_SEED, save = loadSave()) {
   // Normalised here rather than trusted: a save arrives off disk, from a test,
   // or from the run that banked it, and a hand-edited one must cost the player

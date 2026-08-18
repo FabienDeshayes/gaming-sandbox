@@ -146,7 +146,7 @@ export class Hud {
 
     if (!light) {
       this.lightLabel.setText('NO LIGHT');
-      this.status.setText('BLACKOUT. WALK HOME ON WHAT YOU REMEMBER.');
+      this.status.setText('BLACKOUT. ONLY WHAT IS RIGHT AROUND YOU IS VISIBLE.');
       return;
     }
 

@@ -2,6 +2,7 @@ import { FONT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { loadSave, MAX_GEMS } from '../core/save.js';
 import { ensureTextures } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
+import { makeWizard, paintWizard } from '../ui/wizard.js';
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -32,10 +33,10 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0.6);
 
-    // The wizard, lit by the torch they're about to spend — and wearing however
-    // much colour has already been carried home, so the title screen itself is
-    // the progress bar.
-    this.add.image(cx, 380, 'wizard-down').setScale(7).setTint(gemColour(save.gems));
+    // The wizard, lit by the torch they're about to spend — and wearing
+    // however much colour has already been carried home, so the title screen
+    // itself is the progress bar.
+    paintWizard(makeWizard(this, cx, 380, 'down', 7), 'down', save.gems);
 
     // One pip per gem, the found ones in the colour they gave back.
     const gap = 44;

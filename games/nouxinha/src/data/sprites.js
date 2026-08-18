@@ -400,6 +400,29 @@ export function mirror(mask) {
   return mask.map((row) => row.split('').reverse().join(''));
 }
 
+// The wizard wears one colour per gem recovered, plus the base colour they
+// start with (DESIGN.md §9). A single sprite can only take one tint, so each
+// facing is split into four horizontal bands — top to bottom, hat tip to
+// staff foot — baked as their own masks and stacked back into the same
+// silhouette at draw time. Band 0 is always the palette's own foreground;
+// bands 1-3 turn the colour of gems one, two and three once carried, so the
+// character accumulates colour instead of just swapping it.
+export const WIZARD_ZONES = 4;
+
+function zoneMask(mask, zone) {
+  const bandSize = Math.ceil(mask.length / WIZARD_ZONES);
+  const lo = zone * bandSize;
+  const hi = lo + bandSize;
+  const blank = '.'.repeat(mask[0].length);
+  return mask.map((row, y) => (y >= lo && y < hi ? row : blank));
+}
+
+function wizardZones(mask, key) {
+  const out = {};
+  for (let zone = 0; zone < WIZARD_ZONES; zone++) out[`${key}-${zone}`] = zoneMask(mask, zone);
+  return out;
+}
+
 // The four floor tiles: the base pattern, plus the versions that close off the
 // right edge, the bottom edge, or both. A tile picks its variant from whether
 // those neighbours have been lit yet, so the frontier of explored ground reads
@@ -426,6 +449,10 @@ export const SPRITES = {
   'wizard-up': WIZARD_UP,
   'wizard-right': WIZARD_RIGHT,
   'wizard-left': mirror(WIZARD_RIGHT),
+  ...wizardZones(WIZARD_DOWN, 'wizard-down'),
+  ...wizardZones(WIZARD_UP, 'wizard-up'),
+  ...wizardZones(WIZARD_RIGHT, 'wizard-right'),
+  ...wizardZones(mirror(WIZARD_RIGHT), 'wizard-left'),
   rock: ROCK,
   ...FLOOR_VARIANTS,
   base: BASE,

@@ -6,6 +6,7 @@
 // screen position. Holds no game state; everything it draws it reads from a run.
 
 import {
+  BLACKOUT_MEMORY_RADIUS,
   GAME_WIDTH,
   LIT_ALPHA,
   REMEMBERED_ALPHA,
@@ -20,8 +21,9 @@ import {
   getPalette,
 } from '../config.js';
 import { isBase, terrainAt } from '../core/world.js';
-import { gateOnTile, itemOnTile, litTiles, tileKey } from '../core/rules.js';
+import { gateOnTile, isBlackout, itemOnTile, litTiles, tileKey } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
+import { makeWizard, paintWizard } from './wizard.js';
 
 export class MapView {
   constructor(scene) {
@@ -65,10 +67,7 @@ export class MapView {
       }
     }
 
-    this.wizard = scene.add
-      .image(VIEW_CX, VIEW_CY, 'wizard-up')
-      .setScale(SPRITE_SCALE)
-      .setTint(pal.fg);
+    this.wizard = makeWizard(scene, VIEW_CX, VIEW_CY, 'up', SPRITE_SCALE);
   }
 
   // Repaints every tile from the run's current position. Three visibility
@@ -82,13 +81,22 @@ export class MapView {
   refresh(run) {
     const lit = new Set(litTiles(run).map((t) => tileKey(t.x, t.y)));
     const fg = getPalette().fg;
+    const blackout = isBlackout(run);
 
     for (const cell of this.cells) {
       const wx = run.x + cell.dx;
       const wy = run.y + cell.dy;
       const key = tileKey(wx, wy);
+      // In blackout, memory itself shrinks to a fog of war around the
+      // character — remembered ground further out is hidden again rather
+      // than staying legible, which is what makes running out of light
+      // actually dangerous to walk through (DESIGN.md §4).
+      const tooFarInBlackout =
+        blackout &&
+        !lit.has(key) &&
+        Math.max(Math.abs(cell.dx), Math.abs(cell.dy)) > BLACKOUT_MEMORY_RADIUS;
 
-      if (!run.explored.has(key)) {
+      if (!run.explored.has(key) || tooFarInBlackout) {
         cell.ground.setVisible(false);
         cell.overlay.setVisible(false);
         cell.item.setVisible(false);
@@ -155,8 +163,9 @@ export class MapView {
       }
     }
 
-    // The wizard carries the newest colour they've brought back (DESIGN.md §9).
-    this.wizard.setTexture(`wizard-${run.facing}`).setTint(gemColour(run.gems));
+    // The wizard wears one colour per gem carried, on top of the base colour
+    // they start with (DESIGN.md §9).
+    paintWizard(this.wizard, run.facing, run.gems);
   }
 
 

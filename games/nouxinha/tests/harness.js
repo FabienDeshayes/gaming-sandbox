@@ -25,6 +25,18 @@ const DPAD = { cx: 388, cy: 748, offset: 54 };
 const CARD_CX = 240;
 const CARD_CY = 854 / 2 - 40;
 const CARD_MULTI_LIST = { x: CARD_CX - (380 - 64) / 2, y: CARD_CY + 88, h: 120, rowH: 40 };
+
+// Mirrored from src/ui/shop.js and src/scenes/ExploreScene.js's navigation rail.
+const SHOP = { left: 240 - 420 / 2, rowH: 52, pad: 22, titleH: 40, purseH: 30 };
+const RAIL = { x: 480 - 62, top: 58, w: 48, badgeH: 78, gap: 10, mapH: 34 };
+const SHOP_STOCK = 6; // src/data/shop.js STOCK.length
+
+// The shop panel is centred vertically and sized by its row count, same as the
+// widget works it out.
+function shopTop() {
+  const panelH = SHOP.pad + SHOP.titleH + SHOP.purseH + SHOP_STOCK * SHOP.rowH + 20 + 44 + SHOP.pad;
+  return (854 - panelH) / 2;
+}
 const INV_PANEL = { left: CARD_CX - 380 / 2, top: CARD_CY - 460 / 2 };
 const INV_LIST = { x: INV_PANEL.left + 20, y: INV_PANEL.top + 56, rowH: 64 };
 
@@ -32,9 +44,10 @@ const INV_LIST = { x: INV_PANEL.left + 20, y: INV_PANEL.top + 56, rowH: 64 };
 
 const suite = [];
 
-// A browser test: gets a fresh page driving the real game.
-export function test(name, fn) {
-  suite.push({ name, fn, browser: true });
+// A browser test: gets a fresh page driving the real game. `opts` reach
+// `openGame` — pass `{ query }` to pin the world a test walks through.
+export function test(name, fn, opts = {}) {
+  suite.push({ name, fn, browser: true, opts });
 }
 
 // A pure test: no browser, for the world/light/rules math.
@@ -57,8 +70,8 @@ export async function run() {
   const browser = await launchBrowser();
   let failed = 0;
 
-  for (const { name, fn, browser: needsBrowser } of suite) {
-    const game = needsBrowser ? await openGame(browser, port) : null;
+  for (const { name, fn, browser: needsBrowser, opts } of suite) {
+    const game = needsBrowser ? await openGame(browser, port, opts) : null;
     try {
       await fn(game);
       const stray = game ? game.pageErrors() : [];
@@ -93,7 +106,10 @@ export async function run() {
 export function startServer() {
   const mime = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png' };
   const server = http.createServer((req, res) => {
-    const rel = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+    // Strip the query before resolving: the game takes `?seed=&nonce=` on the
+    // URL, and a bare `/?seed=1` still means index.html.
+    const requested = req.url.split('?')[0];
+    const rel = requested === '/' ? '/index.html' : requested;
     if (rel === '/phaser.min.js') {
       res.writeHead(200, { 'Content-Type': 'text/javascript' });
       res.end(fs.readFileSync(path.join(ROOT, 'node_modules/phaser/dist/phaser.min.js')));
@@ -149,7 +165,19 @@ export function launchBrowser() {
 // `viewport` defaults to the design size, where the canvas is 1:1 and every
 // design coordinate is a screen coordinate. Pass a real device size to test what
 // Phaser's FIT scaling actually does with it.
-export async function openGame(browser, port, { viewport = { width: 480, height: 854 } } = {}) {
+// `query` names a seed and a nonce in the URL, the way the game itself lets a
+// world be reproduced (see TitleScene) — which is how a test knows where the
+// consumables are before the page has drawn them.
+//
+// `save` plants a save slot before the page loads, so a test can start from a
+// player who has already banked coins or carried a tool home. That is prior
+// state, not live state: it is the browser's version of handing `createRun` a
+// save, and nothing here ever reaches into a running scene.
+export async function openGame(
+  browser,
+  port,
+  { viewport = { width: 480, height: 854 }, query = '', save = null } = {}
+) {
   const errors = [];
   const spawned = [];
   const page = await browser.newPage({ viewport });
@@ -160,6 +188,15 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
     const from = m.location()?.url || '';
     if (m.type() === 'error' && !from.includes('favicon')) errors.push('console: ' + m.text());
   });
+
+  if (save)
+    await page.addInitScript((slot) => {
+      try {
+        localStorage.setItem('nouxinha.save', JSON.stringify(slot));
+      } catch (e) {
+        /* a page that can't store one just runs without it */
+      }
+    }, save);
 
   // src/main.js never stores the Phaser.Game it constructs, so trap the
   // constructor and stash the instance as window.__game for the driver to read.
@@ -184,7 +221,9 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
     });
   });
 
-  await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle' });
+  await page.goto(`http://localhost:${port}/${query ? `?${query}` : ''}`, {
+    waitUntil: 'networkidle',
+  });
   await page.waitForFunction(() => window.__game && window.__game.isBooted);
 
   // Design space is 480x854 but the canvas is scaled with Phaser.Scale.FIT, so
@@ -233,6 +272,8 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
           pageScrollsY: document.documentElement.scrollHeight > document.documentElement.clientHeight,
         };
       }),
+
+    shot: (file) => page.screenshot({ path: file }),
 
     activeScene: () =>
       page.evaluate(() => {
@@ -306,6 +347,18 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
     // Opens the full scrollable inventory panel via the HUD's ITEMS button.
     tapInventory: () => clickAt(312, 660 + 28),
 
+    // A row of the merchant's counter, by its index in src/data/shop.js STOCK.
+    tapShopRow: (i) =>
+      clickAt(240, shopTop() + SHOP.pad + SHOP.titleH + SHOP.purseH + i * SHOP.rowH + SHOP.rowH / 2),
+
+    // The navigation rail down the right edge of the map viewport: the map
+    // button sits under the compass badge when the run owns both.
+    tapMapButton: async () => {
+      const hasCompass = (await game.state()).tools.includes('compass');
+      const y = RAIL.top + (hasCompass ? RAIL.badgeH + RAIL.gap : 0);
+      await clickAt(RAIL.x + RAIL.w / 2, y + RAIL.mapH / 2);
+    },
+
     // Taps the i-th row (0-based) of a multi-copy item card's instance list.
     tapCardInstance: (i) =>
       clickAt(CARD_MULTI_LIST.x + 20, CARD_MULTI_LIST.y + i * CARD_MULTI_LIST.rowH + CARD_MULTI_LIST.rowH / 2),
@@ -373,10 +426,23 @@ export async function openGame(browser, port, { viewport = { width: 480, height:
           inventory: r.inventory.map((i) => ({ id: i.id, durability: i.durability })),
           activeIndex: r.activeIndex,
           furthest: r.furthest,
+          // The consumable layer's salt: a run's own nonce plus how many times
+          // the world has respawned under it (DESIGN.md §4.3).
+          nonce: r.nonce,
+          epoch: r.epoch,
+          tools: [...r.tools],
+          seenUnique: [...r.seenUnique],
+          banked: { ...r.banked },
           animating: s.animating,
           cardOpen: s.card.isOpen(),
           inventoryOpen: s.inventory.isOpen(),
           dialogOpen: s.dialog.isOpen(),
+          shopOpen: s.shop.isOpen(),
+          mapOpen: s.worldMap.isOpen(),
+          compassShown: s.compass.container.visible,
+          compassTarget: s.compass.container.visible
+            ? { sprite: s.compass.icon.texture.key, arrow: s.compass.arrow.texture.key }
+            : null,
         };
       }),
 

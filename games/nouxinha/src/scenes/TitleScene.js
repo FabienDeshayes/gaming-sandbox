@@ -59,7 +59,27 @@ export class TitleScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setAlpha(0.6);
 
-    makeButton(this, cx, 570, 'EXPLORE', () => this.scene.start('ExploreScene'), { width: 240 });
+    makeButton(this, cx, 570, 'EXPLORE', () => this.scene.start('ExploreScene', runOptions()), {
+      width: 240,
+    });
     makeButton(this, cx, 640, 'SETTINGS', () => this.scene.start('SettingsScene'), { width: 240 });
   }
+}
+
+// The world is a pure function of a seed, and its consumables of a nonce
+// (core/world.js), so naming both in the URL reproduces an expedition exactly:
+// `?seed=1234&nonce=9` walks the same ground past the same coins. There is no UI
+// for it because it is for sharing a world and for the suite, not for playing —
+// leave them off and a run picks its own.
+function runOptions() {
+  const params = new URLSearchParams(
+    typeof location === 'undefined' ? '' : location.search
+  );
+  const asInt = (name) => {
+    const raw = params.get(name);
+    if (raw === null) return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value | 0 : undefined;
+  };
+  return { seed: asInt('seed'), nonce: asInt('nonce') };
 }

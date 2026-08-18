@@ -8,19 +8,30 @@ import { visibleTiles, tileKey } from '../src/core/light.js';
 import {
   canEnter,
   chebyshev,
+  consumableAt,
   DEFAULT_SEED,
-  gatesReachable,
+  isMerchant,
   isWalkable,
+  landmarkAt,
   itemAt,
+  landmarkNamed,
+  landmarks,
+  landmarksReachable,
+  MIN_SEPARATION,
   pickSeed,
   reachableFraction,
+  saltOf,
+  sanctumAt,
   sanctums,
   terrainAt,
+  uniqueAt,
 } from '../src/core/world.js';
 import {
   activeLight,
   activeShape,
   bankRun,
+  buy,
+  canBuy,
   createRun,
   equip,
   gateOnTile,
@@ -30,12 +41,17 @@ import {
   litTiles,
   maxWater,
   refillWater,
+  respawn,
   runSummary,
+  spendable,
   step,
   STARTING_WATER,
   WATER_PER_GEM,
 } from '../src/core/rules.js';
+import { compassTarget } from '../src/core/compass.js';
+import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
+import { PRICES } from '../src/data/shop.js';
 import { BLACKOUT_MEMORY_RADIUS, gemColour } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
 import { zoneColours } from '../src/ui/wizard.js';
@@ -46,6 +62,14 @@ import { zoneColours } from '../src/ui/wizard.js';
 // with it instead of silently invalidating them.
 
 const SEED = pickSeed(DEFAULT_SEED);
+
+// Consumables are salted with a nonce a run draws at the start, so the pure
+// tests fix one and the browser tests ask the page for its own (`itemRoute`).
+const NONCE = 20260818;
+const SALT = saltOf(NONCE, 0);
+
+// A run of this world with a known scatter, for tests that only need to read it.
+const scatter = (x, y, gems = 0, salt = SALT) => itemAt(x, y, SEED, { salt, gems });
 
 // `gems` is what the walker is carrying, because a sanctum gate is only
 // walkable to a run holding the gem it wants — routing with 0 would send a test
@@ -85,32 +109,64 @@ function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], gems = 0) {
 // A chain of `count` routes to distinct copies of `wantId`, each leg starting
 // where the previous one left off — for tests that need to actually collect
 // several of the same item by playing, rather than one.
+//
+// Every tile a leg *walks over* is struck off, not just the one it stops on: a
+// later leg aimed at an item an earlier leg already picked up in passing would
+// walk to an empty tile, which is a flake rather than a failure.
 function bfsChain(seed, wantId, count, maxDepth = 24) {
   const used = new Set();
   let start = [0, 0];
   const legs = [];
   for (let i = 0; i < count; i++) {
-    const found = bfs(seed, (x, y) => itemAt(x, y, seed) === wantId && !used.has(tileKey(x, y)), maxDepth, start);
-    used.add(tileKey(found.x, found.y));
+    const found = bfs(
+      seed,
+      (x, y) => scatter(x, y) === wantId && !used.has(tileKey(x, y)),
+      maxDepth,
+      start
+    );
+    let [x, y] = start;
+    for (const dir of found.path) {
+      const [dx, dy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[dir];
+      x += dx;
+      y += dy;
+      used.add(tileKey(x, y));
+    }
     legs.push(found.path);
     start = [found.x, found.y];
   }
   return legs;
 }
 
-// The nearest medium torch, the nearest water drop, and the nearest spot with
-// a rock to walk into.
-const TORCH_ROUTE = bfs(SEED, (x, y) => itemAt(x, y, SEED) === 'torch-medium');
-const WATER_ROUTE = bfs(SEED, (x, y) => itemAt(x, y, SEED) === 'water-drop');
+// The nearest medium torch and the nearest water drop in the pinned world, and
+// the nearest spot with a rock to walk into. Terrain doesn't move with the
+// nonce; the item routes only hold for a page opened on NONCE (`WORLD` below).
+const TORCH_ROUTE = bfs(SEED, (x, y) => scatter(x, y) === 'torch-medium', 60);
+const WATER_ROUTE = bfs(SEED, (x, y) => scatter(x, y) === 'water-drop', 60);
 const ROCK_ROUTE = bfs(SEED, (x, y) => {
   const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
     ([, dx, dy]) => !isWalkable(x + dx, y + dy, SEED)
   );
   return into ? into[0] : null;
 });
-// Six copies of the same light, chained leg to leg — enough to overflow the
-// item card's instance list and force it to scroll.
-const MEDIUM_TORCH_CHAIN = bfsChain(SEED, 'torch-medium', 6);
+// Four copies of the same light, chained leg to leg — one more than the item
+// card's instance list shows at once, so it has to scroll. Four rather than
+// more because the world spreads its items out (core/world.js MIN_SEPARATION),
+// and every extra copy is another twenty taps through a real browser. Only
+// valid for a page opened on NONCE, which is what `WORLD` below pins.
+const MEDIUM_TORCH_COPIES = 4;
+const MEDIUM_TORCH_CHAIN = bfsChain(SEED, 'torch-medium', MEDIUM_TORCH_COPIES, 60);
+
+// Opening the game on a named seed and nonce reproduces an expedition exactly
+// (TitleScene reads both off the URL), which is how a browser test can know
+// where the coins are before the page has drawn any.
+const WORLD = `seed=${DEFAULT_SEED}&nonce=${NONCE}`;
+
+async function walkPath(game, path) {
+  for (const dir of path) {
+    await game.tapDpad(dir);
+    await game.settle();
+  }
+}
 
 // The four sanctums of this world, and the walk to the first gem. Sanctum 1's
 // arch is the one that stands open, so this route is walkable carrying nothing
@@ -122,6 +178,10 @@ const GEM_ROUTE = bfs(
   (x, y) => x === FIRST_GEM.centre.x && y === FIRST_GEM.centre.y,
   90
 );
+// The walk to the merchant. Landmarks don't move with the nonce, so this route
+// holds for any page — but it is 20-odd taps, so only one test walks it.
+const MERCHANT_ROUTE = bfs(SEED, (x, y) => isMerchant(x, y, SEED), 60);
+
 // The nearest tile from which a step walks into a gate that is still shut.
 const SHUT_GATE = SANCTUMS.find((s) => s.requires === 1);
 
@@ -153,7 +213,7 @@ unit('lamp torch re-aims with facing', () => {
 });
 
 unit('a step burns exactly one durability and sets facing', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   const before = activeLight(state).durability;
   const result = step(state, ROCK_ROUTE.path[0] || 'up');
   assert(result.moved, 'the first step off the base should be legal');
@@ -162,7 +222,7 @@ unit('a step burns exactly one durability and sets facing', () => {
 });
 
 unit('a step also burns one water, same as durability', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   const before = state.water;
   const result = step(state, ROCK_ROUTE.path[0] || 'up');
   assert(result.moved, 'the first step off the base should be legal');
@@ -170,7 +230,7 @@ unit('a step also burns one water, same as durability', () => {
 });
 
 unit('refillWater tops the tank back up to the ceiling, once', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   state.water = 5;
   assert(refillWater(state), 'reports a refill happened');
   assertEqual(state.water, maxWater(state.gems), 'topped back up to the ceiling');
@@ -178,7 +238,7 @@ unit('refillWater tops the tank back up to the ceiling, once', () => {
 });
 
 unit('walking onto a water drop refills water, capped at the starting amount', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   for (const dir of WATER_ROUTE.path) step(state, dir);
   const plainDepletion = STARTING_WATER - WATER_ROUTE.path.length;
   assert(state.water > plainDepletion, 'the drop topped water back up');
@@ -187,7 +247,7 @@ unit('walking onto a water drop refills water, capped at the starting amount', (
 });
 
 unit('running out of water ends the run, and nothing else can move it again', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   const first = ROCK_ROUTE.path[0] || 'up';
   const back = { up: 'down', down: 'up', left: 'right', right: 'left' }[first];
   let i = 0;
@@ -203,7 +263,7 @@ unit('running out of water ends the run, and nothing else can move it again', ()
 });
 
 unit('walking into rock is rejected and costs nothing', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   for (const dir of ROCK_ROUTE.path) assert(step(state, dir).moved, 'route step');
   const durability = activeLight(state).durability;
   const facing = state.facing;
@@ -218,7 +278,7 @@ unit('walking into rock is rejected and costs nothing', () => {
 });
 
 unit('a spent light is removed and the next one auto-equips', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   state.inventory.push({ id: 'torch-medium', durability: 50 });
 
   let burnout = null;
@@ -238,7 +298,7 @@ unit('a spent light is removed and the next one auto-equips', () => {
 });
 
 unit('with no lights left you see only your own tile', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   const first = ROCK_ROUTE.path[0] || 'up';
   const back = { up: 'down', down: 'up', left: 'right', right: 'left' }[first];
   for (let i = 0; i < 100; i++) step(state, i % 2 === 0 ? first : back);
@@ -265,7 +325,7 @@ unit('the wizard accumulates one colour per gem, keeping the base band', () => {
 });
 
 unit('equipping a carried light changes what you can see', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   assertEqual(litTiles(state).length, 9, 'small torch');
   state.inventory.push({ id: 'torch-medium', durability: 50 });
   assert(equip(state, 1), 'equip should succeed');
@@ -273,7 +333,7 @@ unit('equipping a carried light changes what you can see', () => {
 });
 
 unit('inventoryStacks groups same-id copies while keeping their flat index', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   state.inventory.push({ id: 'torch-medium', durability: 50 });
   state.inventory.push({ id: 'torch-medium', durability: 12 });
   state.inventory.push({ id: 'torch-lamp', durability: 60 });
@@ -334,15 +394,15 @@ unit('nothing spawns on the base clearing, and the best loot is far out', () => 
 });
 
 unit('a picked-up item does not come back', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   for (const dir of TORCH_ROUTE.path) step(state, dir);
   assertEqual(state.inventory.length, 2, 'the torch is in the inventory');
   assertEqual(itemOnTile(state, state.x, state.y), null, 'the tile is empty now');
-  assertEqual(itemAt(state.x, state.y, SEED), 'torch-medium', 'the pristine world still has it');
+  assertEqual(scatter(state.x, state.y), 'torch-medium', 'the pristine world still has it');
 });
 
 unit('a step reports arriving back at the hut', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   // The base clearing is forced floor, so stepping out and back is always legal.
   assertEqual(step(state, 'right').atBase, false, 'stepping off the hut');
   assertEqual(step(state, 'left').atBase, true, 'stepping back onto it');
@@ -350,7 +410,7 @@ unit('a step reports arriving back at the hut', () => {
 });
 
 unit('the run summary counts how far out you got and what you found', () => {
-  const state = createRun(SEED);
+  const state = createRun(SEED, emptySave(), NONCE);
   assertEqual(runSummary(state).furthest, 0, 'a fresh run has been nowhere');
 
   for (const dir of TORCH_ROUTE.path) step(state, dir);
@@ -418,11 +478,11 @@ unit('the sanctums sit at different distances and in different directions', () =
 });
 
 unit('pickSeed guarantees every sanctum door can be walked to from the hut', () => {
-  assert(gatesReachable(SEED), 'the chosen seed opens all four doors');
+  assert(landmarksReachable(SEED), 'the chosen seed opens all four doors');
   // And it holds for seeds picked from elsewhere, not just the default one.
   for (const preferred of [1, 5, 77, 12345]) {
     const picked = pickSeed(preferred);
-    assert(gatesReachable(picked), `seed picked from ${preferred} leaves a door sealed`);
+    assert(landmarksReachable(picked), `seed picked from ${preferred} leaves a door sealed`);
   }
 });
 
@@ -430,7 +490,7 @@ unit('a gate stays shut until you hold the gem it wants', () => {
   const { gate, approach, requires } = SHUT_GATE;
   assertEqual(requires, 1, 'the second sanctum wants one gem');
 
-  const empty = createRun(SEED, emptySave());
+  const empty = createRun(SEED, emptySave(), NONCE);
   assertEqual(canEnter(gate.x, gate.y, SEED, 0), false, 'shut with no gems');
   assertEqual(gateOnTile(empty, gate.x, gate.y), { requires: 1, open: false }, 'and reads as shut');
 
@@ -447,28 +507,60 @@ unit('a gate stays shut until you hold the gem it wants', () => {
   assertEqual(blocked.needs, 1, 'saying how many gems it wants');
 
   // The same tile, for a run that has carried a gem home, is just a doorway.
-  const armed = createRun(SEED, { ...emptySave(), gems: 1 });
+  const armed = createRun(SEED, { ...emptySave(), gems: 1 }, NONCE);
   assertEqual(canEnter(gate.x, gate.y, SEED, 1), true, 'open with one gem');
   armed.x = approach.x;
   armed.y = approach.y;
   assertEqual(step(armed, dir).moved, true, 'and it can be walked through');
 });
 
-unit('gem-tier items are in the world all along, invisible until their gem', () => {
-  // A tile the world put a flask on, found by search rather than hardcoded.
-  let flask = null;
-  for (let y = -40; y <= 40 && !flask; y++)
-    for (let x = -40; x <= 40 && !flask; x++)
-      if (itemAt(x, y, SEED) === 'water-flask') flask = { x, y };
-  assert(flask, 'the world should generate water flasks within 40 tiles');
+unit('a gem upgrades what the world spawns without spawning more of it', () => {
+  // Sanctum clearings are skipped: a sanctum's cache is a hoard fixed at what
+  // it was built holding, and doesn't follow the open world's swaps.
+  const count = (gems) => {
+    const tally = {};
+    let total = 0;
+    for (let y = -45; y <= 45; y++)
+      for (let x = -45; x <= 45; x++) {
+        if (sanctumAt(x, y, SEED)) continue;
+        const id = consumableAt(x, y, SEED, SALT, gems);
+        if (!id) continue;
+        total += 1;
+        tally[id] = (tally[id] || 0) + 1;
+      }
+    return { tally, total };
+  };
 
-  const before = createRun(SEED, emptySave());
-  assertEqual(itemOnTile(before, flask.x, flask.y), null, 'no gem, nothing there');
+  const none = count(0);
+  assert(none.total > 50, 'the sample window should hold plenty to compare');
 
-  const after = createRun(SEED, { ...emptySave(), gems: 1 });
-  assertEqual(itemOnTile(after, flask.x, flask.y), 'water-flask', 'one gem, and there it is');
-  // The pristine world never changed — only what the run can see of it.
-  assertEqual(itemAt(flask.x, flask.y, SEED), 'water-flask', 'the world held it either way');
+  // One kind out, one kind in, at every gem — so the map never fills up and
+  // never empties out. Not exactly equal, because thinning is per kind and the
+  // swap moves which kind is crowding itself, but within a few percent.
+  for (const gems of [1, 2, 3]) {
+    const after = count(gems);
+    const drift = Math.abs(after.total - none.total) / none.total;
+    assert(drift < 0.12, `gem ${gems} leaves the map about as full (drifted ${drift})`);
+    assertEqual(
+      Object.keys(after.tally).length,
+      Object.keys(none.tally).length,
+      `gem ${gems} keeps the same number of kinds in play`
+    );
+  }
+
+  assert(none.tally['water-drop'] > 0, 'water drops before the first gem');
+  assertEqual(none.tally['water-flask'], undefined, 'and no flasks');
+  const one = count(1);
+  assert(one.tally['water-flask'] > 0, 'flasks after it');
+  assertEqual(one.tally['water-drop'], undefined, 'and the drop it replaced is retired');
+
+  const two = count(2);
+  assert(two.tally['torch-beacon'] > 0, 'beacons after the second gem');
+  assertEqual(two.tally['torch-medium'], undefined, 'the medium torch it replaced is retired');
+
+  const three = count(3);
+  assert(three.tally['spring-vial'] > 0, 'spring vials after the third gem');
+  assertEqual(three.tally['water-flask'], undefined, 'the flask it replaced is retired');
 });
 
 unit('each gem carried raises the water ceiling', () => {
@@ -478,11 +570,11 @@ unit('each gem carried raises the water ceiling', () => {
   // gemless run could survive even in a straight line. The ladder has to reach.
   const round = 2 * SANCTUMS[SANCTUMS.length - 1].distance;
   assert(maxWater(MAX_GEMS) > round, `${maxWater(MAX_GEMS)} water cannot cover a ${round}-step round trip`);
-  assertEqual(createRun(SEED, { ...emptySave(), gems: 2 }).water, maxWater(2), 'a run starts topped up');
+  assertEqual(createRun(SEED, { ...emptySave(), gems: 2 }, NONCE).water, maxWater(2), 'a run starts topped up');
 });
 
 unit('walking onto a gem restores a colour and opens the next gate', () => {
-  const state = createRun(SEED, emptySave());
+  const state = createRun(SEED, emptySave(), NONCE);
   assertEqual(state.gems, 0, 'a fresh save has no colour');
   let found = null;
   for (const dir of GEM_ROUTE.path) {
@@ -501,7 +593,7 @@ unit('walking onto a gem restores a colour and opens the next gate', () => {
 });
 
 unit('a gem is only kept if the run banks it at the hut', () => {
-  const state = createRun(SEED, emptySave());
+  const state = createRun(SEED, emptySave(), NONCE);
   for (const dir of GEM_ROUTE.path) step(state, dir);
   assertEqual(runSummary(state).gemsCarried, 1, 'carrying one that was not already banked');
 
@@ -512,7 +604,7 @@ unit('a gem is only kept if the run banks it at the hut', () => {
   assertEqual(saved.runs, 1, 'and the run is counted');
 
   // A later run that starts from that save opens the gate without walking back.
-  const next = createRun(SEED, saved);
+  const next = createRun(SEED, saved, NONCE);
   assertEqual(next.gems, 1, 'the next run starts holding it');
   assertEqual(runSummary(next).gemsCarried, 0, 'and is no longer carrying it at risk');
 });
@@ -558,10 +650,332 @@ unit('each gem gets a colour the world did not already have', () => {
 
 unit('a corrupt or hand-edited save cannot break a run', () => {
   for (const bad of [null, 'nonsense', { gems: 99 }, { gems: -4 }, { gems: 'two', coins: NaN }]) {
-    const state = createRun(SEED, bad);
+    const state = createRun(SEED, bad, NONCE);
     assert(state.gems >= 0 && state.gems <= MAX_GEMS, `gems clamped for ${JSON.stringify(bad)}`);
     assertEqual(state.water, maxWater(state.gems), 'water matches whatever gem count survived');
   }
+});
+
+// --- The world's three layers ------------------------------------------------
+
+unit('rock thins out to about a fifth of the world', () => {
+  let rock = 0;
+  let total = 0;
+  for (let y = -70; y <= 70; y++)
+    for (let x = -70; x <= 70; x++) {
+      if (sanctumAt(x, y, SEED) || landmarkAt(x, y, SEED)) continue;
+      total += 1;
+      if (terrainAt(x, y, SEED) === 'rock') rock += 1;
+    }
+  const share = rock / total;
+  // Enough to grow caves worth navigating, few enough that the world reads as
+  // floor with rock in it rather than the other way round.
+  assert(share > 0.15 && share < 0.26, `rock covers ${(share * 100).toFixed(1)}% of the world`);
+});
+
+unit('no two of the same consumable ever land within 15 tiles', () => {
+  // The anti-clustering promise, asserted outright rather than sampled: with a
+  // Chebyshev minimum of 15, no 15x15 square anywhere can hold two of a kind.
+  const byKind = new Map();
+  for (let y = -70; y <= 70; y++)
+    for (let x = -70; x <= 70; x++) {
+      // A sanctum clearing is a deliberate hoard and has its own rule below.
+      if (sanctumAt(x, y, SEED)) continue;
+      const id = consumableAt(x, y, SEED, SALT, 0);
+      if (!id) continue;
+      if (!byKind.has(id)) byKind.set(id, []);
+      byKind.get(id).push([x, y]);
+    }
+  assert(byKind.size >= 4, 'the sample should contain several kinds');
+
+  for (const [id, points] of byKind) {
+    assert(points.length > 10, `${id} should appear often enough to be worth checking`);
+    for (let i = 0; i < points.length; i++)
+      for (let j = i + 1; j < points.length; j++) {
+        const gap = chebyshev(points[i][0], points[i][1], points[j][0], points[j][1]);
+        assert(
+          gap >= MIN_SEPARATION,
+          `two ${id} landed ${gap} apart at ${points[i]} and ${points[j]}`
+        );
+      }
+  }
+});
+
+unit('a sanctum clearing is a hoard, not a pile', () => {
+  for (const sanctum of sanctums(SEED)) {
+    const tally = {};
+    const span = sanctum.radius - 1;
+    for (let dy = -span; dy <= span; dy++)
+      for (let dx = -span; dx <= span; dx++) {
+        const id = consumableAt(sanctum.centre.x + dx, sanctum.centre.y + dy, SEED, SALT, 0);
+        if (id) tally[id] = (tally[id] || 0) + 1;
+      }
+    for (const [id, count] of Object.entries(tally))
+      assert(count <= 2, `sanctum ${sanctum.index} holds ${count} of ${id}`);
+    assert(Object.keys(tally).length >= 3, `sanctum ${sanctum.index} should hold a cache`);
+  }
+});
+
+unit('a new run relays the consumables and leaves the unique objects alone', () => {
+  const other = saltOf(NONCE + 1, 0);
+  let moved = 0;
+  let same = 0;
+  for (let y = -40; y <= 40; y++)
+    for (let x = -40; x <= 40; x++) {
+      const before = consumableAt(x, y, SEED, SALT, 0);
+      const after = consumableAt(x, y, SEED, other, 0);
+      if (before || after) {
+        if (before === after) same += 1;
+        else moved += 1;
+      }
+      assertEqual(uniqueAt(x, y, SEED), uniqueAt(x, y, SEED), 'unique objects are seed-only');
+    }
+  assert(moved > same, 'a different nonce should lay the consumables out differently');
+
+  // The gems, the merchant and the two tools are exactly where they were.
+  for (const sanctum of sanctums(SEED))
+    if (sanctum.gem)
+      assertEqual(uniqueAt(sanctum.centre.x, sanctum.centre.y, SEED), sanctum.gem, 'the gem');
+  for (const landmark of landmarks(SEED))
+    assertEqual(uniqueAt(landmark.x, landmark.y, SEED), landmark.item, `the ${landmark.id}`);
+});
+
+unit('everything on the ground comes back when the world respawns', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  // Consumables only: a gem doesn't respawn, and there is one inside this window.
+  const items = () => {
+    const found = [];
+    for (let y = -25; y <= 25; y++)
+      for (let x = -25; x <= 25; x++)
+        if (itemOnTile(state, x, y) && !uniqueAt(x, y, SEED)) found.push(tileKey(x, y));
+    return found;
+  };
+
+  const before = items();
+  assert(before.length > 5, 'the window should hold a few items to empty');
+  // Empty every one of them, the way a very thorough walk would.
+  for (const key of before) state.collected.add(key);
+  assertEqual(items().length, 0, 'nothing left to pick up');
+
+  respawn(state);
+  const after = items();
+  assert(after.length > 5, 'a respawn puts everything back');
+  assert(
+    after.some((key) => !before.includes(key)),
+    'and puts it somewhere new'
+  );
+  assertEqual(itemOnTile(state, state.x, state.y), null, 'never under the character');
+});
+
+unit('a gem and a stop at the hut are what respawn the world', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  const start = state.epoch;
+
+  // Walking about doesn't.
+  for (const dir of ['right', 'right', 'up', 'up']) step(state, dir);
+  assertEqual(state.epoch, start, 'ordinary steps leave the world where it is');
+
+  // Stepping back onto the hut does.
+  const home = bfs(SEED, (x, y) => x === 0 && y === 0, 24, [state.x, state.y]);
+  let result = null;
+  for (const dir of home.path) result = step(state, dir);
+  assertEqual(result.atBase, true, 'back at the hut');
+  assertEqual(result.respawned, true, 'which relays the world');
+  assertEqual(state.epoch, start + 1, 'one respawn');
+
+  // And so does a gem: the first sanctum's arch stands open.
+  const gemRun = createRun(SEED, emptySave(), NONCE);
+  let last = null;
+  for (const dir of GEM_ROUTE.path) last = step(gemRun, dir);
+  assertEqual(last.gemFound, 1, 'the first colour');
+  assertEqual(last.respawned, true, 'a gem relays the world too');
+  assertEqual(gemRun.epoch, 1, 'one respawn');
+});
+
+unit('a coin is a small pile, and it adds up', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  const coin = bfs(SEED, (x, y) => scatter(x, y) === 'coin', 60);
+  let result = null;
+  for (const dir of coin.path) result = step(state, dir);
+  assertEqual(result.picked, 'coin', 'walked onto a coin');
+  assert(result.coinsGained >= 1 && result.coinsGained <= 5, 'a pile is worth one to five');
+  assertEqual(state.coins, result.coinsGained, 'and that is what the run banked');
+});
+
+// --- Landmarks: the merchant and the two tools -------------------------------
+
+unit('the merchant stands one walk from the hut, and there is only one', () => {
+  const found = landmarks(SEED).filter((l) => l.id === 'merchant');
+  assertEqual(found.length, 1, 'exactly one merchant');
+  const distance = chebyshev(found[0].x, found[0].y);
+  assert(distance >= 20 && distance <= 25, `the merchant sits ${distance} tiles out`);
+  assertEqual(isMerchant(found[0].x, found[0].y, SEED), true, 'and the tile says so');
+  assertEqual(terrainAt(found[0].x, found[0].y, SEED), 'floor', 'you can stand on it');
+});
+
+unit('every landmark can be walked to from the hut, on any seed', () => {
+  for (let i = 0; i < 8; i++) {
+    const picked = pickSeed((DEFAULT_SEED + i * 7919) | 0);
+    assert(landmarksReachable(picked), `seed ${picked} seals a landmark off`);
+    // And each sits on ground, with a clearing around it.
+    for (const landmark of landmarks(picked))
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          assertEqual(
+            isWalkable(landmark.x + dx, landmark.y + dy, picked),
+            true,
+            `${landmark.id}'s apron is walkable`
+          );
+  }
+});
+
+unit('the compass and the map lie out in the dark, one of each', () => {
+  for (const id of ['compass', 'map']) {
+    const landmark = landmarkNamed(id, SEED);
+    assert(landmark, `the world places a ${id}`);
+    assertEqual(uniqueAt(landmark.x, landmark.y, SEED), id, 'and it is lying on its tile');
+    assert(chebyshev(landmark.x, landmark.y) > 25, `the ${id} is a proper walk out`);
+  }
+
+  // Owning one takes it off the ground: it was the same object.
+  const compass = landmarkNamed('compass', SEED);
+  const without = createRun(SEED, emptySave(), NONCE);
+  assertEqual(itemOnTile(without, compass.x, compass.y), 'compass', 'there for a run without one');
+  const with_ = createRun(SEED, { ...emptySave(), compass: true }, NONCE);
+  assertEqual(itemOnTile(with_, compass.x, compass.y), null, 'gone for a run that owns one');
+});
+
+// --- The merchant's counter ---------------------------------------------------
+
+unit('the merchant spends banked coins before the ones you are carrying', () => {
+  const state = createRun(SEED, { ...emptySave(), coins: 30 }, NONCE);
+  state.coins = 10; // as if this run had found a pile
+  assertEqual(spendable(state), 40, 'the purse is both');
+
+  assertEqual(buy(state, 'torch-medium'), 'torch-medium', 'bought');
+  assertEqual(state.banked.coins, 5, 'the bank paid first');
+  assertEqual(state.coins, 10, 'and the pocket is untouched');
+  assertEqual(spendable(state), 15, 'the purse is down by the price');
+  assertEqual(state.inventory.length, 2, 'the torch arrived');
+  assertEqual(state.activeIndex, 0, 'unequipped, like any other light');
+
+  // Once the bank is empty the pocket pays the rest.
+  assertEqual(buy(state, 'torch-small'), 'torch-small', 'bought the cheap one');
+  assertEqual(state.banked.coins, 0, 'bank drained');
+  assertEqual(state.coins, 5, 'the rest came out of the pocket');
+});
+
+unit('the merchant refuses what you cannot afford and sells one compass', () => {
+  const state = createRun(SEED, { ...emptySave(), coins: PRICES.compass }, NONCE);
+  assertEqual(canBuy(state, 'map'), false, 'the map is out of reach');
+  assertEqual(buy(state, 'map'), null, 'and refuses to sell');
+
+  assertEqual(buy(state, 'compass'), 'compass', 'the compass is affordable');
+  assertEqual(state.tools.has('compass'), true, 'and owned');
+  assertEqual(canBuy(state, 'compass'), false, 'there is only one');
+  assertEqual(buy(state, 'compass'), null, 'so it will not sell a second');
+
+  // Water and lights have no such limit.
+  const rich = createRun(SEED, { ...emptySave(), coins: 1000 }, NONCE);
+  rich.water = 10;
+  for (let i = 0; i < 4; i++) assertEqual(buy(rich, 'water-drop'), 'water-drop', 'water again');
+  assertEqual(rich.water, 10 + 4 * ITEMS['water-drop'].water, 'each one refilled');
+  for (let i = 0; i < 3; i++) assertEqual(buy(rich, 'torch-lamp'), 'torch-lamp', 'lights again');
+  assertEqual(rich.inventory.length, 4, 'three lamps on top of the starting torch');
+});
+
+unit('a tool is only kept if the run banks it at the hut', () => {
+  const bought = createRun(SEED, { ...emptySave(), coins: 200 }, NONCE);
+  buy(bought, 'compass');
+  assertEqual(runSummary(bought).toolsCarried, ['compass'], 'carrying it home is the risk');
+
+  // Dying writes nothing, so the compass — and the coins that paid for it — are
+  // both still where they were.
+  const banked = bankRun(createRun(SEED, { ...emptySave(), coins: 200 }, NONCE));
+  assertEqual(banked.compass, false, 'a run that never bought one banks none');
+
+  const kept = bankRun(bought);
+  assertEqual(kept.compass, true, 'stopping at the hut keeps it');
+  assertEqual(kept.coins, 200 - PRICES.compass, 'and the coins really were spent');
+
+  // The next run starts owning it.
+  assertEqual(createRun(SEED, kept, NONCE).tools.has('compass'), true, 'yours from now on');
+});
+
+// --- The compass ---------------------------------------------------------------
+
+unit('the compass points at the nearest thing it can actually reach', () => {
+  const state = createRun(SEED, { ...emptySave(), compass: true }, NONCE);
+
+  // From the hut, everything is available except the gems behind shut gates.
+  const first = compassTarget(state);
+  const reachable = sanctums(SEED)
+    .filter((s) => s.gem && s.requires <= 0)
+    .concat(landmarks(SEED).map((l) => ({ centre: { x: l.x, y: l.y } })));
+  const nearest = Math.min(
+    ...reachable.map((t) => chebyshev(t.centre.x, t.centre.y, state.x, state.y))
+  );
+  assertEqual(first.distance, nearest, 'it points at the nearest of them');
+
+  // A gem behind a gate this run cannot open is not a target.
+  const shut = sanctums(SEED).find((s) => s.requires > 0);
+  const targets = [];
+  for (let g = 0; g <= 3; g++) {
+    const run = createRun(SEED, { ...emptySave(), gems: g, compass: true }, NONCE);
+    targets.push(compassTarget(run).id);
+  }
+  assert(!targets[0].startsWith('gem-2'), 'the second gem is not offered with no gems');
+  assert(shut, 'the world has a gated sanctum');
+
+  // With everything taken and both tools owned, only the hut is left.
+  const done = createRun(
+    SEED,
+    { ...emptySave(), gems: MAX_GEMS, compass: true, map: true },
+    NONCE
+  );
+  done.x = 30;
+  done.y = 30;
+  assertEqual(compassTarget(done).id, 'hut', 'and then it points home');
+  assertEqual(compassTarget(done).distance, 30, 'from wherever you are');
+});
+
+// --- The map -------------------------------------------------------------------
+
+unit('the map remembers where you walked, and only if you own it', () => {
+  const walked = new Set(['0,0', '1,0', '2,0', '3,0', '-4,7', '-3,7']);
+  const encoded = encodeExplored(walked);
+  const back = decodeExplored(encoded);
+  assertEqual(back.size, walked.size, 'round trip keeps every tile');
+  for (const key of walked) assert(back.has(key), `kept ${key}`);
+  assertEqual(decodeExplored('not a map;4,x,2').size, 0, 'and a corrupt one costs the drawing');
+
+  // A run without the map banks no ground.
+  const plain = createRun(SEED, emptySave(), NONCE);
+  assertEqual(bankRun(plain).mapped, '', 'no map, nothing drawn');
+
+  // A run with it banks what it lit, and the next run starts with it.
+  const mapped = createRun(SEED, { ...emptySave(), map: true }, NONCE);
+  for (const dir of ['right', 'right', 'right', 'up', 'up']) step(mapped, dir);
+  const saved = bankRun(mapped);
+  assert(saved.mapped.length > 0, 'the ground was written down');
+  assertEqual(saved.mappedSeed, SEED, 'against the world it belongs to');
+
+  const next = createRun(SEED, saved, NONCE);
+  assertEqual(next.explored.size, mapped.explored.size, 'the next run opens with it drawn');
+
+  // A map drawn in another world is discarded rather than drawn wrong.
+  const elsewhere = createRun(SEED, { ...saved, mappedSeed: (SEED + 1) | 0 }, NONCE);
+  assert(elsewhere.explored.size < next.explored.size, 'a stale map is dropped');
+});
+
+unit('the map only marks unique objects the run has actually seen', () => {
+  const state = createRun(SEED, { ...emptySave(), map: true }, NONCE);
+  assertEqual(state.seenUnique.size, 0, 'nothing seen from the doorway');
+
+  // Walk to the first gem: its sanctum and the gem itself become markable.
+  for (const dir of GEM_ROUTE.path) step(state, dir);
+  assert(state.seenUnique.has('gem-1'), 'the gem it walked onto is on the map');
+  assert(!state.seenUnique.has('map'), 'and the map lying 90 tiles out is not');
 });
 
 // --- The real game in a browser --------------------------------------------
@@ -752,7 +1166,7 @@ test('the coin counter opens the coin card', async (game) => {
   await game.waitForScene('ExploreScene');
 
   await game.tapCoins();
-  assert(await game.hasText('COIN'), 'the coin card');
+  assert(await game.hasText('COINS'), 'the coin card');
   assert(await game.hasText(ITEMS.coin.effect), 'effect text');
   await game.clickText('CLOSE');
   assertEqual((await game.state()).cardOpen, false, 'card is closed');
@@ -801,7 +1215,7 @@ test('finding a torch and equipping it widens the light', async (game) => {
     25,
     'the lit shape grew to radius 2'
   );
-});
+}, { query: WORLD });
 
 test('collecting two of the same torch stacks them in the HUD, badged with a count', async (game) => {
   await game.clickText('EXPLORE');
@@ -821,7 +1235,7 @@ test('collecting two of the same torch stacks them in the HUD, badged with a cou
   await game.tapSlot(1);
   assertEqual((await game.state()).cardOpen, true, 'the stack opens one card');
   assert(await game.hasText('MEDIUM TORCH'), 'the stacked item\'s name');
-});
+}, { query: WORLD });
 
 test('the inventory panel lists every stack and opens the tapped one', async (game) => {
   await game.clickText('EXPLORE');
@@ -845,7 +1259,7 @@ test('the inventory panel lists every stack and opens the tapped one', async (ga
   assertEqual(state.inventoryOpen, false, 'tapping a row closes the panel');
   assertEqual(state.cardOpen, true, 'and opens that stack\'s item card');
   assert(await game.hasText('MEDIUM TORCH'), 'the right stack\'s card');
-});
+}, { query: WORLD });
 
 test('a multi-copy item card lists every instance and equips exactly the one tapped', async (game) => {
   await game.clickText('EXPLORE');
@@ -858,13 +1272,13 @@ test('a multi-copy item card lists every instance and equips exactly the one tap
     }
 
   let state = await game.state();
-  assertEqual(state.inventory.length, 7, 'small torch plus six mediums');
+  assertEqual(state.inventory.length, MEDIUM_TORCH_COPIES + 1, 'small torch plus every medium');
 
   await game.tapSlot(1);
   assertEqual(
     (await game.texts()).filter((t) => t === '50 / 50').length,
-    6,
-    'all six copies are listed, even though only a few show at once'
+    MEDIUM_TORCH_COPIES,
+    'every copy is listed, even though only a few show at once'
   );
 
   const before = await game.scrollContentY();
@@ -873,18 +1287,23 @@ test('a multi-copy item card lists every instance and equips exactly the one tap
   await game.dragCardList(-200);
   const after = await game.scrollContentY();
   assert(after < before, 'the list scrolled');
-  assertEqual(before - after, 6 * 40 - 120, 'scroll clamps to the content height, not the drag distance');
+  assertEqual(
+    before - after,
+    MEDIUM_TORCH_COPIES * 40 - 120,
+    'scroll clamps to the content height, not the drag distance'
+  );
 
   // With the list scrolled all the way down, the bottom of the three visible
-  // rows (visual slot 2) is now the sixth and last copy picked up — tapping
-  // it should equip that exact copy, not whichever one happened to occupy
-  // that screen position before scrolling.
+  // rows (visual slot 2) is now the last copy picked up — tapping it should
+  // equip that exact copy, not whichever one happened to occupy that screen
+  // position before scrolling.
   await game.tapCardInstance(2);
   state = await game.state();
+  const last = MEDIUM_TORCH_COPIES; // the small torch holds flat index 0
   assertEqual(state.cardOpen, false, 'tapping an instance closes the card');
-  assertEqual(state.activeIndex, 6, 'the last copy picked up is now equipped');
-  assertEqual(state.inventory[6].id, 'torch-medium', 'sanity: that slot really is a medium torch');
-});
+  assertEqual(state.activeIndex, last, 'the last copy picked up is now equipped');
+  assertEqual(state.inventory[last].id, 'torch-medium', 'sanity: that slot really is a medium torch');
+}, { query: WORLD });
 
 test('the menu button returns to the title screen', async (game) => {
   await game.clickText('EXPLORE');
@@ -1055,5 +1474,83 @@ test('the whole game fits a portrait phone screen', async (game) => {
   assert(fit.bottom <= fit.viewport.height + 1, `canvas runs off the bottom: ${where}`);
   assert(!fit.pageScrollsX && !fit.pageScrollsY, `the page scrolls behind the canvas: ${where}`);
 });
+
+
+test('walking onto the merchant opens the counter, and buying spends the purse', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  await walkPath(game, MERCHANT_ROUTE.path);
+
+  let state = await game.state();
+  assertEqual(state.shopOpen, true, 'arriving at the stall opens it');
+  assert(await game.hasText('THE MERCHANT'), 'the counter');
+  assert(await game.hasText(`YOU HAVE ${spendable(state)} COINS`), 'and what you can spend');
+
+  // The first row is the water drop (src/data/shop.js STOCK).
+  const before = { water: state.water, coins: spendable(state) };
+  await game.tapShopRow(0);
+  state = await game.state();
+  assert(state.water > before.water, 'the drop refilled the tank');
+  assertEqual(spendable(state), before.coins - PRICES['water-drop'], 'and cost its price');
+  assertEqual(state.shopOpen, true, 'the counter stays open for another purchase');
+
+  await game.clickText('LEAVE');
+  assertEqual((await game.state()).shopOpen, false, 'and closes when you leave');
+}, { query: WORLD, save: { ...emptySave(), coins: 200 } });
+
+test('the coin counter shows the purse the merchant spends, not just this run', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  const state = await game.state();
+  assertEqual(state.coins, 0, 'this run has found nothing yet');
+  assertEqual(state.banked.coins, 120, 'but there is a fortune banked');
+  assert(await game.hasText('COINS 120'), 'and the counter says what can be spent');
+}, { query: WORLD, save: { ...emptySave(), coins: 120 } });
+
+test('the compass sits in the corner and points where the rules say', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  const state = await game.state();
+  assertEqual(state.compassShown, true, 'a run that owns one sees it');
+  assertEqual(state.tools, ['compass'], 'and owns exactly that');
+
+  const expected = compassTarget(createRun(SEED, { ...emptySave(), compass: true }, NONCE));
+  assertEqual(state.compassTarget.sprite, expected.sprite, 'the icon is what it is pointing at');
+  assert(
+    ['arrow-up', 'arrow-diagonal'].includes(state.compassTarget.arrow),
+    'and the needle is one of the eight headings'
+  );
+}, { query: WORLD, save: { ...emptySave(), compass: true } });
+
+test('a run without the compass has no needle and no map button', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+  const state = await game.state();
+  assertEqual(state.compassShown, false, 'nothing in the corner');
+  assertEqual(state.tools, [], 'because nothing is owned');
+});
+
+test('the map draws the ground this run has walked', async (game) => {
+  await game.clickText('EXPLORE');
+  await game.waitForScene('ExploreScene');
+
+  for (const dir of ['right', 'right', 'up', 'up', 'up']) {
+    await game.tapDpad(dir);
+    await game.settle();
+  }
+
+  const before = await game.state();
+  await game.tapMapButton();
+  const open = await game.state();
+  assertEqual(open.mapOpen, true, 'the map button opens it');
+  assert(await game.hasText('THE MAP'), 'the overlay');
+  assert(await game.hasText(`${before.explored} TILES WALKED`), 'and it draws what was lit');
+
+  await game.clickText('CLOSE');
+  assertEqual((await game.state()).mapOpen, false, 'and closes again');
+}, { query: WORLD, save: { ...emptySave(), map: true } });
 
 run();

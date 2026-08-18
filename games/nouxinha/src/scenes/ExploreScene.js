@@ -4,11 +4,13 @@ import { FONT, GAME_WIDTH, VIEW_H, getPalette, hex } from '../config.js';
 import {
   DIRECTIONS,
   bankRun,
+  buy,
   createRun,
   equip,
   inventoryStacks,
   refillWater,
   runSummary,
+  spendable,
   step,
 } from '../core/rules.js';
 import { DEFAULT_SEED } from '../core/world.js';
@@ -20,14 +22,48 @@ import { Hud } from '../ui/hud.js';
 import { ItemCard } from '../ui/itemCard.js';
 import { InventoryPanel } from '../ui/inventoryPanel.js';
 import { Dialog } from '../ui/dialog.js';
+import { Shop } from '../ui/shop.js';
+import { WorldMap } from '../ui/worldMap.js';
+import { CompassBadge, BADGE_H, BADGE_W } from '../ui/compassBadge.js';
 import { makeDpad } from '../ui/dpad.js';
 import { playPickup, unlockAudio } from '../ui/sfx.js';
 
 const DPAD_CX = 388;
 const DPAD_CY = 748;
 
+// The right edge of the map viewport is the navigation rail: the way out at the
+// top, then whichever of the two tools this run owns, stacked under it. Both
+// tools can be bought mid-run, so the rail lays itself out again on every
+// change rather than being positioned once.
+const RAIL_X = GAME_WIDTH - 62;
+const RAIL_TOP = 58;
+const RAIL_GAP = 10;
+const MAP_BUTTON_H = 34;
+
 // Below this, a drag is a tap that wandered rather than a swipe.
 const SWIPE_MIN = 24;
+
+// "a, b and c" — the hut's warning reads as a sentence, not a list.
+function joinWords(words) {
+  if (words.length < 2) return words[0] || '';
+  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
+function sentence(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// What this run would lose by not making it back: gems it hasn't banked, and
+// tools it bought or found on the way. Both the hut and the death screen name
+// them, because a player who doesn't know the rule can lose an hour to it.
+function carriedAtRisk(summary) {
+  return [
+    ...(summary.gemsCarried
+      ? [summary.gemsCarried === 1 ? 'the colour' : `all ${summary.gemsCarried} colours`]
+      : []),
+    ...summary.toolsCarried.map((id) => `the ${itemDef(id).name.toLowerCase()}`),
+  ];
+}
 
 export class ExploreScene extends Phaser.Scene {
   constructor() {
@@ -39,7 +75,15 @@ export class ExploreScene extends Phaser.Scene {
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
 
-    this.run = createRun(data && data.seed !== undefined ? data.seed : DEFAULT_SEED);
+    // A run can be handed a seed and a nonce (TitleScene reads them off the URL),
+    // which is what makes an expedition reproducible; without them it takes the
+    // one world and draws its own nonce.
+    const asked = data || {};
+    this.run = createRun(
+      asked.seed !== undefined ? asked.seed : DEFAULT_SEED,
+      undefined,
+      asked.nonce
+    );
     // Blocks input while the world is sliding, so a fast tapper can't queue
     // steps the renderer hasn't caught up with.
     this.animating = false;
@@ -54,13 +98,54 @@ export class ExploreScene extends Phaser.Scene {
     this.card = new ItemCard(this, { onEquip: (i) => this.equipSlot(i) });
     this.inventory = new InventoryPanel(this, { onOpenStack: (stack) => this.openStack(stack) });
     this.dialog = new Dialog(this);
+    this.shop = new Shop(this, {
+      onBuy: (id) => this.buyFromMerchant(id),
+      onLeave: () => this.shop.hide(),
+    });
+    this.worldMap = new WorldMap(this, { onClose: () => this.worldMap.hide() });
 
     makeDpad(this, DPAD_CX, DPAD_CY, (dir) => this.tryStep(dir));
     this.buildMenuButton(pal);
+    this.buildRail(pal);
     this.bindInput();
 
     this.map.refresh(this.run);
     this.hud.update(this.run);
+    this.layOutRail();
+  }
+
+  // The compass badge and the map button, both built once and shown only for the
+  // tools the run actually owns.
+  buildRail(pal) {
+    this.compass = new CompassBadge(this, RAIL_X, RAIL_TOP);
+
+    this.mapButton = this.add.container(RAIL_X, RAIL_TOP).setVisible(false).setDepth(50);
+    const frame = this.add.graphics();
+    frame.lineStyle(2, pal.fg, 1);
+    frame.strokeRect(0, 0, BADGE_W, MAP_BUTTON_H);
+    const label = this.add
+      .text(BADGE_W / 2, MAP_BUTTON_H / 2, 'MAP', {
+        fontFamily: FONT,
+        fontSize: '13px',
+        color: hex(pal.fg),
+      })
+      .setOrigin(0.5);
+    const zone = this.add
+      .zone(0, 0, BADGE_W, MAP_BUTTON_H)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerdown', () => !this.modalOpen() && this.worldMap.show(this.run));
+    this.mapButton.add([frame, label, zone]);
+  }
+
+  layOutRail() {
+    let y = RAIL_TOP;
+    this.compass.update(this.run);
+    if (this.run.tools.has('compass')) {
+      this.compass.setPosition(RAIL_X, y);
+      y += BADGE_H + RAIL_GAP;
+    }
+    this.mapButton.setVisible(this.run.tools.has('map')).setPosition(RAIL_X, y);
   }
 
   buildMenuButton(pal) {
@@ -80,7 +165,13 @@ export class ExploreScene extends Phaser.Scene {
   // The card, the inventory panel, and the hut's dialog all own the whole
   // screen while they're up: nothing behind them steps, swipes, or reacts to a key.
   modalOpen() {
-    return this.card.isOpen() || this.inventory.isOpen() || this.dialog.isOpen();
+    return (
+      this.card.isOpen() ||
+      this.inventory.isOpen() ||
+      this.dialog.isOpen() ||
+      this.shop.isOpen() ||
+      this.worldMap.isOpen()
+    );
   }
 
   bindInput() {
@@ -120,6 +211,8 @@ export class ExploreScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ESC', () => {
       if (this.card.isOpen()) this.card.hide();
       if (this.inventory.isOpen()) this.inventory.hide();
+      if (this.shop.isOpen()) this.shop.hide();
+      if (this.worldMap.isOpen()) this.worldMap.hide();
     });
   }
 
@@ -144,6 +237,7 @@ export class ExploreScene extends Phaser.Scene {
 
     this.map.refresh(this.run);
     this.hud.update(this.run);
+    this.layOutRail();
     this.announce(result);
     if (result.picked) playPickup(result.picked);
 
@@ -155,6 +249,7 @@ export class ExploreScene extends Phaser.Scene {
       // the hut's question — dying in the doorway is still dying.
       if (result.died) this.showDeath();
       else if (result.atBase) this.askToStop();
+      else if (result.atMerchant) this.openShop();
     });
   }
 
@@ -169,13 +264,14 @@ export class ExploreScene extends Phaser.Scene {
     if (this.inventory.isOpen()) this.inventory.hide();
     // The hut is the only place a run can be written down, so a player carrying
     // a gem needs telling that this is the moment it stops being at risk.
-    const carrying = runSummary(this.run).gemsCarried;
+    const summary = runSummary(this.run);
+    const atRisk = carriedAtRisk(summary);
     this.dialog.show({
       title: 'BACK AT THE HUT',
-      lines: carrying
+      lines: atRisk.length
         ? [
-            `Stopping here saves ${carrying === 1 ? 'the colour' : `all ${carrying} colours`} you are carrying.`,
-            'Head back out and you carry them at your own risk.',
+            `Stopping here saves ${joinWords(atRisk)} you are carrying.`,
+            'Head back out and you carry it at your own risk.',
           ]
         : ['Call it here, or head back out?'],
       buttons: [
@@ -183,6 +279,28 @@ export class ExploreScene extends Phaser.Scene {
         { label: 'STOP HERE', onClick: () => this.showRecap() },
       ],
     });
+  }
+
+  // The merchant is the only place coins go (DESIGN.md §4.5). Arriving opens the
+  // counter the same way arriving at the hut asks its question — after the slide,
+  // and over anything the player opened during it.
+  openShop() {
+    if (this.card.isOpen()) this.card.hide();
+    if (this.inventory.isOpen()) this.inventory.hide();
+    this.shop.show(this.run);
+  }
+
+  buyFromMerchant(id) {
+    const bought = buy(this.run, id);
+    if (!bought) return;
+    playPickup(bought);
+    this.map.refresh(this.run);
+    this.hud.update(this.run);
+    this.layOutRail();
+    // Re-rendered rather than closed: a purchase moves the purse, which moves
+    // what every other row on the counter can do.
+    this.shop.show(this.run);
+    this.hud.flash(`BOUGHT ${itemDef(id).name}. ${spendable(this.run)} COINS LEFT.`);
   }
 
   // The hut tops water back up on the way out, not just on the way home —
@@ -201,11 +319,10 @@ export class ExploreScene extends Phaser.Scene {
     const summary = runSummary(this.run);
     const saved = bankRun(this.run);
     // What's coming home, and how much walking is left in it.
-    const carried = summary.lights.length
-      ? summary.lights
-          .map((light) => `${itemDef(light.id).name} ${light.durability}`)
-          .join(', ')
-      : 'NOTHING';
+    const carried = [
+      ...summary.lights.map((light) => `${itemDef(light.id).name} ${light.durability}`),
+      ...summary.tools.map((id) => itemDef(id).name),
+    ];
     this.dialog.show({
       title: 'EXPEDITION OVER',
       rows: [
@@ -216,7 +333,7 @@ export class ExploreScene extends Phaser.Scene {
         ['FURTHEST OUT', summary.furthest],
         ['STEPS TAKEN', summary.steps],
       ],
-      footer: `CARRYING ${carried}`,
+      footer: `CARRYING ${carried.length ? carried.join(', ') : 'NOTHING'}`,
       buttons: [{ label: 'HOME', onClick: () => this.scene.start('TitleScene') }],
     });
   }
@@ -228,11 +345,14 @@ export class ExploreScene extends Phaser.Scene {
     if (this.card.isOpen()) this.card.hide();
     if (this.inventory.isOpen()) this.inventory.hide();
     const summary = runSummary(this.run);
+    const atRisk = carriedAtRisk(summary);
     this.dialog.show({
       title: 'OUT OF WATER',
       lines: [
-        summary.gemsCarried
-          ? 'You collapsed in the dark. The colour you were carrying is back where you found it.'
+        atRisk.length
+          ? `You collapsed in the dark. ${sentence(joinWords(atRisk))} you were carrying ${
+              atRisk.length > 1 ? 'are' : 'is'
+            } back where you found ${atRisk.length > 1 ? 'them' : 'it'}.`
           : 'You collapsed in the dark. Everything you carried is lost.',
       ],
       rows: [
@@ -253,13 +373,27 @@ export class ExploreScene extends Phaser.Scene {
       this.hud.flash(`${itemDef(result.picked).name} IS BACK. CARRY IT HOME TO KEEP IT.`);
       return;
     }
+    // A tool is the other pickup worth its own line: it changes what is on
+    // screen, and it is only kept by walking it home.
+    if (result.picked && itemDef(result.picked).tool) {
+      this.hud.flash(`FOUND THE ${itemDef(result.picked).name}. CARRY IT HOME TO KEEP IT.`);
+      return;
+    }
     if (result.burnedOut) {
       const burned = itemDef(result.burnedId).name;
       if (result.blackout) this.hud.flash(`${burned} BURNED OUT. NO LIGHT LEFT.`);
       else this.hud.flash(`${burned} BURNED OUT. SWITCHED TO NEXT LIGHT.`);
       return;
     }
+    if (result.picked === 'coin') {
+      this.hud.flash(`FOUND ${result.coinsGained} COIN${result.coinsGained === 1 ? '' : 'S'}.`);
+      return;
+    }
     if (result.picked) this.hud.flash(`FOUND ${itemDef(result.picked).name}.`);
+    // Walking back onto the hut relays everything on the ground (DESIGN.md
+    // §4.3), which is worth saying — otherwise the world quietly changing under
+    // a player who was heading somewhere specific reads as a bug.
+    else if (result.respawned) this.hud.flash('THE DARK HAS PUT EVERYTHING BACK SOMEWHERE NEW.');
   }
 
   // `stack` is one entry of `inventoryStacks(run)` — see core/rules.js. Called

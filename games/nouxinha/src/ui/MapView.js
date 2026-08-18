@@ -20,7 +20,7 @@ import {
   gemColour,
   getPalette,
 } from '../config.js';
-import { isBase, terrainAt } from '../core/world.js';
+import { isBase, isMerchant, terrainAt } from '../core/world.js';
 import { gateOnTile, isBlackout, itemOnTile, litTiles, tileKey } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
 import { makeWizard, paintWizard } from './wizard.js';
@@ -141,13 +141,19 @@ export class MapView {
         continue;
       }
 
-      // The base is the only thing that sits on top of bare floor. The wizard
-      // stands in its doorway rather than on top of it: both sprites are dense,
-      // and together they read as one unidentifiable blob.
+      // The hut and the merchant's stall are the two things that sit on top of
+      // bare floor. The wizard stands in the doorway rather than on top of
+      // either: both sprites are dense, and together they read as one
+      // unidentifiable blob.
+      const structure = isBase(wx, wy)
+        ? 'base'
+        : isMerchant(wx, wy, run.seed)
+          ? 'merchant'
+          : null;
       cell.overlay
-        .setTexture('base')
+        .setTexture(structure || 'base')
         .setTint(fg)
-        .setVisible(isBase(wx, wy) && !underCharacter)
+        .setVisible(!!structure && !underCharacter)
         .setAlpha(alpha);
 
       const item = itemOnTile(run, wx, wy);

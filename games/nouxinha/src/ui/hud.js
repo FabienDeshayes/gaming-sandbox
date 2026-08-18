@@ -3,7 +3,7 @@
 
 import { FONT, GAME_WIDTH, HUD_Y, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
-import { activeLight, inventoryStacks, maxWater } from '../core/rules.js';
+import { activeLight, inventoryStacks, maxWater, spendable } from '../core/rules.js';
 import { MAX_GEMS } from '../core/save.js';
 import { makeButton } from './button.js';
 
@@ -36,6 +36,10 @@ export class Hud {
     divider.lineBetween(0, HUD_Y, GAME_WIDTH, HUD_Y);
 
     this.explored = text(PAD, HUD_Y + 12, 14);
+    // The purse, not this run's haul: it is the number that decides whether the
+    // merchant will sell you something, and it is what the counter shows you
+    // (DESIGN.md §4.5). What this expedition found on its own is a separate line
+    // in the recap.
     this.coins = text(PAD + 170, HUD_Y + 12, 14).setInteractive({ useHandCursor: true });
     this.coins.on('pointerdown', () => this.onCoins());
     // Water is the run's one hard failure state (DESIGN.md §6), so it gets its
@@ -66,7 +70,7 @@ export class Hud {
   update(run) {
     const pal = getPalette();
     this.explored.setText(`EXPLORED ${run.explored.size}`);
-    this.coins.setText(`COINS ${run.coins}`);
+    this.coins.setText(`COINS ${spendable(run)}`);
     this.water.setText(`WATER ${run.water}/${maxWater(run.gems)}`);
 
     this.gems.removeAll(true);

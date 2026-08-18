@@ -51,9 +51,10 @@ reaches in to *set* game state.
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
-| `state()` | The live run: position, facing, steps, coins, water, gems, seed, explored count, furthest distance, inventory, active light, and whether the item card or the hut dialog is open |
+| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, hut dialog, merchant's counter or map |
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground texture, alpha, **tint**, overlay, item and item tint. This is the render, not the model — it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its four colour-zone layers — the wizard wears one colour per gem carried, plus the base colour |
+| `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
 | `save()` | The single save slot straight out of `localStorage`. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
@@ -83,6 +84,31 @@ This keeps the suite honest if the noise is ever retuned: the route moves with t
 silently pointing at a tile that is now rock. Hardcoding `(-8, 0)` would pass today and rot at the
 next threshold change.
 
+**Consumables move; terrain and unique objects don't.** Coins, water and lights are salted with a
+nonce the run draws at the start and re-salted every time the world respawns (DESIGN.md §4.3), so a
+route to one is only valid for a run with that salt. The suite pins one:
+
+```js
+const NONCE = 20260818;
+const SALT = saltOf(NONCE, 0);
+const scatter = (x, y, gems = 0, salt = SALT) => itemAt(x, y, SEED, { salt, gems });
+```
+
+Pure tests build their runs with `createRun(SEED, save, NONCE)`. Browser tests open the page on the
+same world — the game reads a seed and a nonce off its own URL, which is what `WORLD` passes:
+
+```js
+const WORLD = `seed=${DEFAULT_SEED}&nonce=${NONCE}`;
+test('...', async (game) => { ... }, { query: WORLD });
+```
+
+Routes to terrain (the nearest rock to bump into) and to unique objects (a gem, the merchant, the
+compass lying in the dark) need none of this — those don't move with the nonce.
+
+**`bfsChain` strikes off every tile a leg walks over**, not just the one it stops on. With items
+spread 15 tiles apart, legs are long enough that an earlier one routinely picks up in passing the
+item a later one was aiming at — which fails as a flake rather than as a bug.
+
 The same applies to the sanctums, which move with the seed: a test that wants the first gem asks
 `sanctums(SEED)[0].centre` for it rather than naming a tile.
 
@@ -111,6 +137,37 @@ A gem changes three things and each is asserted where it actually lives:
 - **The save** — that a gem is only kept if the run banked it at the hut — is read back with
   `save()`. Every browser test gets its own page and so its own empty `localStorage`; no test
   inherits another's save.
+
+## Starting from a player who already has something
+
+A run's starting gems come from the save it is handed, and so do its coins and its tools. In a pure
+test that is `createRun(SEED, { ...emptySave(), gems: 2, compass: true }, NONCE)`. In a browser test
+it is the `save` page option, which plants a save slot before the page loads:
+
+```js
+test('the compass sits in the corner', async (game) => { ... },
+  { query: WORLD, save: { ...emptySave(), compass: true } });
+```
+
+That is prior state, not live state — the browser's version of handing `createRun` a save. Nothing in
+the harness ever reaches into a running scene to change it, which is still the rule.
+
+## Testing the world's three layers
+
+The separation rule is the one thing here worth asserting outright rather than sampling: a test walks
+a 141x141 window, buckets every consumable by kind, and checks no two of a kind are within
+`MIN_SEPARATION`. It is quadratic in the number of items per kind and still runs in milliseconds,
+because the whole point of the rule is that there aren't many. Sanctum clearings are skipped — a
+clearing is a deliberate hoard with its own cap (two of a kind), tested separately.
+
+The other two invariants worth keeping honest:
+
+- **A gem swaps one kind for one kind.** Count the window at 0, 1, 2 and 3 gems: the totals stay
+  within a few percent and the number of distinct kinds stays equal. A retired kind disappearing and
+  its replacement appearing is asserted by name.
+- **A respawn puts everything back somewhere new.** Empty every item in a window by hand
+  (`state.collected.add(...)`), call `respawn(state)`, and assert the window refills, that some of it
+  landed on tiles that were empty before, and that nothing is under the character.
 
 Walking a browser test to a sanctum costs roughly 200ms a step, so only the first (20 tiles out) is
 driven through the real canvas. Gates further out are covered by the pure tests, which reach them

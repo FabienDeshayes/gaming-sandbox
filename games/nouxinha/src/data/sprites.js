@@ -394,6 +394,116 @@ export const TORCH_BEACON = [
   '................',
 ];
 
+// The merchant: a stall with an awning, a hooded trader behind it, and goods on
+// the counter. It has to read as "somebody is here" against the hut's roof-and-
+// flag at the edge of a light, so the awning's stripes and the counter's goods
+// are the two shapes doing the work.
+export const MERCHANT = [
+  '................',
+  '..############..',
+  '..#..##..##..#..',
+  '..############..',
+  '.....#....#.....',
+  '......####......',
+  '.....######.....',
+  '.....##..##.....',
+  '.....######.....',
+  '....########....',
+  '....##....##....',
+  '..############..',
+  '..#..........#..',
+  '..#.##.##.##.#..',
+  '..############..',
+  '................',
+];
+
+// The compass: a hollow case with a slanted needle, drawn hollow like every
+// other item so the tint doesn't turn it to mush (DESIGN.md §9).
+export const COMPASS = [
+  '................',
+  '.....######.....',
+  '...##......##...',
+  '..#....#.....#..',
+  '.#....###.....#.',
+  '.#.....#......#.',
+  '#......#.......#',
+  '#.......#......#',
+  '#.......#......#',
+  '.#......#.....#.',
+  '.#.....###....#.',
+  '..#....#.....#..',
+  '...##......##...',
+  '.....######.....',
+  '................',
+  '................',
+];
+
+// The map: a sheet with a route drawn across it. The zigzag is what separates it
+// from any other rectangle at 16 pixels.
+export const MAP = [
+  '................',
+  '................',
+  '..############..',
+  '..#..........#..',
+  '..#..##......#..',
+  '..#....##....#..',
+  '..#......##..#..',
+  '..#........#.#..',
+  '..#.......#..#..',
+  '..#.....##...#..',
+  '..#...##.....#..',
+  '..#..#.......#..',
+  '..#.#........#..',
+  '..############..',
+  '................',
+  '................',
+];
+
+// The compass needle in the HUD. Solid rather than hollow: this one is an
+// instrument reading, not an object lying on the ground, and it has to be
+// legible at a glance in the corner of the screen.
+//
+// Two masks cover all eight headings — the cardinals are this one turned by
+// exact quarter turns, the diagonals the next one — because a pixel sprite
+// survives a 90-degree rotation and nothing in between.
+export const ARROW_UP = [
+  '.......##.......',
+  '......####......',
+  '.....######.....',
+  '....########....',
+  '...##########...',
+  '..############..',
+  '.....######.....',
+  '.....######.....',
+  '.....######.....',
+  '.....######.....',
+  '.....######.....',
+  '.....######.....',
+  '.....######.....',
+  '.....######.....',
+  '................',
+  '................',
+];
+
+export const ARROW_DIAGONAL = [
+  '......##########',
+  '......##########',
+  '......##......##',
+  '......##....##..',
+  '......##...##...',
+  '......##..##....',
+  '......##.##.....',
+  '......####......',
+  '.....####.......',
+  '....####........',
+  '...####.........',
+  '..####..........',
+  '.####...........',
+  '####............',
+  '###.............',
+  '................',
+];
+
 // The left-facing wizard is the right-facing mask mirrored — same silhouette,
 // same staff hand, no second drawing to keep in sync.
 export function mirror(mask) {
@@ -468,4 +578,9 @@ export const SPRITES = {
   'water-flask': WATER_FLASK,
   'spring-vial': SPRING_VIAL,
   gem: GEM,
+  merchant: MERCHANT,
+  compass: COMPASS,
+  map: MAP,
+  'arrow-up': ARROW_UP,
+  'arrow-diagonal': ARROW_DIAGONAL,
 };

@@ -6,9 +6,9 @@
 //
 // Two fields tie an item to the gems (DESIGN.md §4.4):
 //
-//   `unlock` — how many gems you need before this exists for you at all. The
-//              world always generated it; without the gem you walk straight
-//              past the tile without seeing a thing.
+//   `tier`   — the gem that brings this item into the world. Below that many
+//              gems the world simply doesn't spawn it; see the SCATTER table in
+//              core/world.js, which is where the gating actually happens.
 //   `hue`    — which gem's colour it is drawn in. 0 is the palette's own
 //              foreground, 1-3 the colour that gem gave back.
 //
@@ -52,16 +52,16 @@ export const ITEMS = {
     isLight: true,
     maxDurability: 140,
     shape: { kind: 'radius', radius: 3 },
-    unlock: 2,
+    tier: 2,
     hue: 2,
     effect: 'Lights 3 tiles in every direction, and burns longer than anything.',
   },
   coin: {
     id: 'coin',
-    name: 'COIN',
+    name: 'COINS',
     sprite: 'coin',
     isLight: false,
-    effect: 'Currency. The merchant is not open yet.',
+    effect: 'What the merchant takes. The counter shows everything you have banked plus what you are carrying.',
   },
   'water-drop': {
     id: 'water-drop',
@@ -77,7 +77,7 @@ export const ITEMS = {
     sprite: 'water-flask',
     isLight: false,
     water: 60,
-    unlock: 1,
+    tier: 1,
     hue: 1,
     effect: 'Refills 60 water. Three drops in one, and it carries you further out.',
   },
@@ -87,12 +87,12 @@ export const ITEMS = {
     sprite: 'spring-vial',
     isLight: false,
     water: Infinity,
-    unlock: 3,
+    tier: 3,
     hue: 3,
     effect: 'Fills your water right back up, however far from home you are.',
   },
-  // The three gems. They are never hidden by `unlock` — the sanctum wall around
-  // each one is the gate, so nothing else needs to be.
+  // The three gems. Nothing hides them — the sanctum wall around each one is
+  // the gate, so nothing else needs to be.
   'gem-1': {
     id: 'gem-1',
     name: 'FIRST COLOUR',
@@ -120,16 +120,39 @@ export const ITEMS = {
     hue: 3,
     effect: 'The last colour. Opens the gate at the far edge of everything.',
   },
+
+  // The two tools. Neither is consumed and neither stacks — you own one or you
+  // don't — so they sit outside the inventory entirely and show up in the HUD
+  // instead. Each can be bought from the merchant or found lying in the dark
+  // (core/world.js `LANDMARK_PLAN`); owning one takes it off both.
+  compass: {
+    id: 'compass',
+    name: 'COMPASS',
+    sprite: 'compass',
+    isLight: false,
+    tool: true,
+    effect: 'Points at whatever is worth walking to next, or at the hut.',
+  },
+  map: {
+    id: 'map',
+    name: 'MAP',
+    sprite: 'map',
+    isLight: false,
+    tool: true,
+    effect: 'Draws everywhere you have walked, and remembers it between runs.',
+  },
 };
 
 export const STARTING_LIGHT = 'torch-small';
 
-export function itemDef(id) {
-  return ITEMS[id] || null;
+// The tools, in the order they are offered and shown.
+export const TOOLS = ['compass', 'map'];
+
+export function isTool(id) {
+  const def = itemDef(id);
+  return !!def && !!def.tool;
 }
 
-// How many gems you need before this item is part of your world at all.
-export function unlockOf(id) {
-  const def = itemDef(id);
-  return def && def.unlock ? def.unlock : 0;
+export function itemDef(id) {
+  return ITEMS[id] || null;
 }

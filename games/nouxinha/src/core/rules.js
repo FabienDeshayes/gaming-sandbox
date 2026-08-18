@@ -23,8 +23,8 @@ import {
   uniqueAt,
 } from './world.js';
 import { decodeExplored, encodeExplored } from './cartography.js';
-import { loadSave, normaliseSave, writeSave } from './save.js';
-import { itemDef, STARTING_LIGHT } from '../data/items.js';
+import { loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
+import { ITEMS, itemDef, STARTING_LIGHT, TOOLS } from '../data/items.js';
 import { isOneOff, priceOf } from '../data/shop.js';
 
 export { DIRECTIONS, tileKey };
@@ -63,7 +63,7 @@ function drawNonce() {
   return (Math.random() * 0x7fffffff) | 0;
 }
 
-export function createRun(seed = DEFAULT_SEED, save = loadSave(), nonce) {
+export function createRun(seed = DEFAULT_SEED, save = loadSave(), nonce, options = {}) {
   // Normalised here rather than trusted: a save arrives off disk, from a test,
   // or from the run that banked it, and a hand-edited one must cost the player
   // their progress at worst — never the run's arithmetic.
@@ -71,10 +71,12 @@ export function createRun(seed = DEFAULT_SEED, save = loadSave(), nonce) {
   const gems = banked.gems;
   const salted = nonce === undefined ? drawNonce() : nonce | 0;
   const picked = pickSeed(seed);
-  // The map is the one thing that carries ground between runs, and only for the
-  // world it drew: a save whose seed no longer matches loses its drawing rather
+  // Ground is the one thing every run inherits, map or no map: what you have
+  // already lit stays lit, so a new expedition starts from the edge of the last
+  // one instead of from scratch (DESIGN.md §6.1). It is tied to the world that
+  // drew it, so a save whose seed no longer matches loses the drawing rather
   // than showing one from a world that isn't there (core/cartography.js).
-  const carriesMap = banked.map && banked.mappedSeed === picked;
+  const carriesGround = banked.mappedSeed === picked;
   const state = {
     seed: picked,
     x: 0,
@@ -111,17 +113,63 @@ export function createRun(seed = DEFAULT_SEED, save = loadSave(), nonce) {
     inventory: [newLight(STARTING_LIGHT)],
     activeIndex: 0,
     // Tiles ever lit. The only thing about the world a run has to remember —
-    // terrain and items are both re-derived from the seed. A run carrying the
-    // map starts with everywhere it has ever been already drawn.
-    explored: carriesMap ? decodeExplored(banked.mapped) : new Set(),
+    // terrain and items are both re-derived from the seed. A run opens with
+    // everywhere the slot has ever been already drawn.
+    explored: carriesGround ? decodeExplored(banked.mapped) : new Set(),
     // Which unique objects have been laid eyes on, for the map's markers.
-    seenUnique: new Set(carriesMap ? banked.seen : []),
+    seenUnique: new Set(carriesGround ? banked.seen : []),
     // Consumable tiles this run has emptied *this epoch*, so a pickup doesn't
     // come straight back. Cleared whenever the world respawns.
     collected: new Set(),
+    // A cheat run is a sandbox for looking at the late game, and it is walled
+    // off from the save slots: nothing it does is ever written (`bankRun`,
+    // `rememberGround`), because a run handed three gems is not a campaign.
+    cheats: !!options.cheats,
   };
+  if (state.cheats) applyCheats(state);
+  // How much ground the slot had already drawn before this expedition took a
+  // step, so the recap can report what *this* walk added rather than the
+  // campaign's running total (DESIGN.md §6).
+  state.startExplored = state.explored.size;
   reveal(state);
   return state;
+}
+
+// --- Cheats ------------------------------------------------------------------
+//
+// One toggle in Settings, for looking at what the late game actually does
+// without walking to it (DESIGN.md §6.2): every colour recovered, one of every
+// light and both tools in hand, a purse the merchant can't exhaust, and the
+// ground already drawn out past the furthest sanctum.
+//
+// It reveals rather than lights: the world is drawn from memory, the same
+// dimmed ground a real expedition leaves behind, so what a cheat run looks at
+// is what a long campaign would have looked at.
+
+// Past the fourth sanctum's ring (110 + 7) and every landmark, with room to
+// spare — the whole of the world the game actually has anything in.
+export const CHEAT_REVEAL_RADIUS = 130;
+export const CHEAT_COINS = 9999;
+
+function applyCheats(state) {
+  state.gems = MAX_GEMS;
+  state.water = maxWater(state.gems);
+  state.coins = CHEAT_COINS;
+  for (const id of TOOLS) state.tools.add(id);
+
+  // One of every light, longest leash first, so the run starts under the widest
+  // shape in the game and can still equip its way down the list.
+  const lights = Object.values(ITEMS)
+    .filter((def) => def.isLight)
+    .sort((a, b) => b.maxDurability - a.maxDurability);
+  state.inventory = lights.map((def) => newLight(def.id));
+  state.activeIndex = 0;
+
+  for (let y = -CHEAT_REVEAL_RADIUS; y <= CHEAT_REVEAL_RADIUS; y++)
+    for (let x = -CHEAT_REVEAL_RADIUS; x <= CHEAT_REVEAL_RADIUS; x++)
+      state.explored.add(tileKey(x, y));
+  for (const sanctum of sanctums(state.seed)) if (sanctum.gem) state.seenUnique.add(sanctum.gem);
+  for (const landmark of landmarks(state.seed)) state.seenUnique.add(landmark.id);
 }
 
 // Everything on the ground goes back, in new places. This is what a gem and a
@@ -416,11 +464,16 @@ export function tilesExplored(state) {
   return state.explored.size;
 }
 
-// Banks the run into the single save slot. Only the hut calls this (DESIGN.md
-// §6): dying of thirst or leaving by the map's X ends a run without writing,
-// which is what makes carrying a gem home the moment that matters.
+// Banks the run into the active save slot. Only the hut calls this (DESIGN.md
+// §6): dying of thirst or leaving by the map's X ends a run without banking,
+// which is what makes carrying a gem home the moment that matters. Those two
+// still keep the ground they walked — see `rememberGround`.
+//
+// A cheat run banks nothing at all: it was handed its gems rather than walking
+// them home, so writing it into a slot would overwrite a campaign with a
+// sandbox (DESIGN.md §6.2).
 export function bankRun(state) {
-  const hasMap = state.tools.has('map');
+  if (state.cheats) return loadSave();
   return writeSave({
     v: 1,
     gems: Math.max(state.gems, state.banked.gems),
@@ -431,13 +484,34 @@ export function bankRun(state) {
     runs: state.banked.runs + 1,
     furthest: Math.max(state.furthest, state.banked.furthest),
     compass: state.tools.has('compass'),
-    map: hasMap,
-    // The map is what makes walking persist, so it is the only thing that writes
-    // ground back out (DESIGN.md §4.6). Without it a run's memory dies with it,
-    // exactly like everything else a run doesn't carry home.
-    mapped: hasMap ? encodeExplored(state.explored) : '',
+    map: state.tools.has('map'),
+    // Ground is written whichever way a run ends, so this is the same drawing
+    // `rememberGround` would have left — banking simply gets there first.
+    mapped: encodeExplored(state.explored),
     mappedSeed: state.seed,
-    seen: hasMap ? [...state.seenUnique] : [],
+    seen: [...state.seenUnique],
+  });
+}
+
+// Writes the ground this run lit back into the slot, and nothing else.
+//
+// This is what a run that ends badly still leaves behind (DESIGN.md §6.1): die
+// of thirst or walk out by the map's X and the gems, coins and tools in hand are
+// all gone, but the dark you lit stays lit, because starting the next
+// expedition by re-walking ground you have already crossed is not the tension
+// this game is about.
+//
+// It merges onto whatever is in the slot rather than onto `state.banked`, since
+// the run may have spent banked coins at the merchant on a walk it never
+// finished — money a run that never got home never actually spent.
+export function rememberGround(state) {
+  if (state.cheats) return loadSave();
+  const stored = loadSave();
+  return writeSave({
+    ...stored,
+    mapped: encodeExplored(state.explored),
+    mappedSeed: state.seed,
+    seen: [...state.seenUnique],
   });
 }
 
@@ -449,7 +523,13 @@ export function runSummary(state) {
   }));
   return {
     explored: state.explored.size,
+    // Tiles this expedition lit that no earlier one had — the ground it can
+    // claim, now that the rest of it came out of the slot.
+    newGround: Math.max(0, state.explored.size - (state.startExplored || 0)),
     coins: state.coins,
+    // A cheat run reports itself, because none of its numbers are going
+    // anywhere (DESIGN.md §6.2) and the recap has to say so.
+    cheats: !!state.cheats,
     water: state.water,
     steps: state.steps,
     furthest: state.furthest,

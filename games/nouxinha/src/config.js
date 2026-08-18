@@ -71,6 +71,37 @@ export function setPalette(id) {
   }
 }
 
+// --- Cheats ------------------------------------------------------------------
+//
+// A developer switch, in Settings next to the palettes and persisted the same
+// way: a run started with it on gets the whole map revealed and one of
+// everything, so the late game can be looked at without walking to it
+// (DESIGN.md §6.2). It is a preference rather than run state, which is why it
+// lives here — `core/rules.js` is handed the flag, it never reads it.
+const CHEATS_KEY = 'nouxinha.cheats';
+
+let cheatsOn = false;
+
+try {
+  cheatsOn = localStorage.getItem(CHEATS_KEY) === '1';
+} catch (e) {
+  /* off by default */
+}
+
+export function getCheats() {
+  return cheatsOn;
+}
+
+export function setCheats(on) {
+  cheatsOn = !!on;
+  try {
+    localStorage.setItem(CHEATS_KEY, cheatsOn ? '1' : '0');
+  } catch (e) {
+    /* preference just won't persist */
+  }
+  return cheatsOn;
+}
+
 // The colour a gem gave back (DESIGN.md §9). Each of the three takes the
 // foreground of a palette you are *not* playing in, so restoring a colour
 // always adds one the world genuinely did not have — and the four CRT

@@ -1,6 +1,6 @@
 // The game: a wizard, a torch burning down a step at a time, and a lot of dark.
 
-import { FONT, GAME_WIDTH, VIEW_H, getPalette, hex } from '../config.js';
+import { FONT, GAME_WIDTH, VIEW_H, getCheats, getPalette, hex } from '../config.js';
 import {
   DIRECTIONS,
   bankRun,
@@ -9,6 +9,7 @@ import {
   equip,
   inventoryStacks,
   refillWater,
+  rememberGround,
   runSummary,
   spendable,
   step,
@@ -75,14 +76,17 @@ export class ExploreScene extends Phaser.Scene {
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
 
-    // A run can be handed a seed and a nonce (TitleScene reads them off the URL),
+    // A run can be handed a seed and a nonce (SlotScene reads them off the URL),
     // which is what makes an expedition reproducible; without them it takes the
     // one world and draws its own nonce.
     const asked = data || {};
+    // The cheat switch is a setting rather than run state (config.js), so the
+    // scene reads it and hands it over — core/rules.js never asks.
     this.run = createRun(
       asked.seed !== undefined ? asked.seed : DEFAULT_SEED,
       undefined,
-      asked.nonce
+      asked.nonce,
+      { cheats: getCheats() }
     );
     // Blocks input while the world is sliding, so a fast tapper can't queue
     // steps the renderer hasn't caught up with.
@@ -159,7 +163,15 @@ export class ExploreScene extends Phaser.Scene {
       .zone(GAME_WIDTH - 62, 14, 48, 34)
       .setOrigin(0)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => !this.modalOpen() && this.scene.start('TitleScene'));
+      .on('pointerdown', () => !this.modalOpen() && this.leave());
+  }
+
+  // Leaving by the X abandons the expedition — nothing it was carrying is
+  // banked (DESIGN.md §6.1) — but the ground it lit is kept, the same as when a
+  // run dies out there. Cartography is not progress.
+  leave() {
+    rememberGround(this.run);
+    this.scene.start('TitleScene');
   }
 
   // The card, the inventory panel, and the hut's dialog all own the whole
@@ -327,13 +339,16 @@ export class ExploreScene extends Phaser.Scene {
       title: 'EXPEDITION OVER',
       rows: [
         ['TILES EXPLORED', summary.explored],
+        ['NEW GROUND', summary.newGround],
         ['COINS', summary.coins],
         ['LIGHTS FOUND', summary.lightsFound],
         ['COLOURS SAVED', `${saved.gems}/${MAX_GEMS}`],
         ['FURTHEST OUT', summary.furthest],
         ['STEPS TAKEN', summary.steps],
       ],
-      footer: `CARRYING ${carried.length ? carried.join(', ') : 'NOTHING'}`,
+      footer: summary.cheats
+        ? 'CHEATS ON — NOTHING WAS WRITTEN TO THE SLOT'
+        : `CARRYING ${carried.length ? carried.join(', ') : 'NOTHING'}`,
       buttons: [{ label: 'HOME', onClick: () => this.scene.start('TitleScene') }],
     });
   }
@@ -346,6 +361,10 @@ export class ExploreScene extends Phaser.Scene {
     if (this.inventory.isOpen()) this.inventory.hide();
     const summary = runSummary(this.run);
     const atRisk = carriedAtRisk(summary);
+    // Nothing this run was carrying is banked, but the ground it lit is kept —
+    // written here rather than on the way out, so closing the tab on the death
+    // screen doesn't cost the walk (DESIGN.md §6.1).
+    rememberGround(this.run);
     this.dialog.show({
       title: 'OUT OF WATER',
       lines: [
@@ -354,9 +373,11 @@ export class ExploreScene extends Phaser.Scene {
               atRisk.length > 1 ? 'are' : 'is'
             } back where you found ${atRisk.length > 1 ? 'them' : 'it'}.`
           : 'You collapsed in the dark. Everything you carried is lost.',
+        'The ground you lit stays on your map.',
       ],
       rows: [
         ['TILES EXPLORED', summary.explored],
+        ['NEW GROUND', summary.newGround],
         ['FURTHEST OUT', summary.furthest],
         ['STEPS TAKEN', summary.steps],
       ],

@@ -2,6 +2,7 @@
 
 import { GAME_HEIGHT, GAME_WIDTH, getPalette } from './config.js';
 import { TitleScene } from './scenes/TitleScene.js';
+import { SlotScene } from './scenes/SlotScene.js';
 import { SettingsScene } from './scenes/SettingsScene.js';
 import { ExploreScene } from './scenes/ExploreScene.js';
 
@@ -18,5 +19,5 @@ new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [TitleScene, SettingsScene, ExploreScene],
+  scene: [TitleScene, SlotScene, SettingsScene, ExploreScene],
 });

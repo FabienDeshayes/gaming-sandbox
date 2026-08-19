@@ -10,8 +10,8 @@ to keep searching or run for the door.
 
 Three meters — Lamp, Hearth, Tower — drain every night and never refill on their own.
 The only way to top them up is to go down among the rocks and pull things out of the
-surf one at a time, knowing that the third wave to reach you costs you everything
-you're carrying. The shore's contents are fully visible, so every "one more" is an
+surf one at a time, knowing that the third wave to reach you costs you half of
+what you're carrying. The shore's contents are fully visible, so every "one more" is an
 arithmetic decision a child can actually do out loud, and the tools you build between
 nights change what's out there — the risk is something you author, not something
 rolled at you.
@@ -26,7 +26,7 @@ Three nested loops.
 2. A resource goes into the basket; a Wave marks one of three strikes.
 3. Player reads what's left on the shore (always inspectable) and chooses: search
    again, or GO HOME with the basket.
-4. Third Wave ends the night with an empty basket.
+4. Third Wave ends the night; you get home with half the basket, rounded down.
 
 **B. At dawn — the allocation (1-3 decisions, ~10s)**
 
@@ -45,7 +45,7 @@ Three nested loops.
 
 | Mechanic | Description | Input |
 |---|---|---|
-| **Search the shore** | Push-your-luck draw from a known, finite, shuffled bag. Resource tokens fill the basket; the third Wave empties it and ends the night. Remaining contents are always visible. | Tap SEARCH / tap GO HOME |
+| **Search the shore** | Push-your-luck draw from a known, finite, shuffled bag. Resource tokens fill the basket; the third Wave ends the night and you scramble home with only half of what you had. Remaining contents are always visible. | Tap SEARCH / tap GO HOME |
 | **Three separate meters** | Lamp, Hearth and Tower drain independently and are each refilled by exactly one resource. A great haul of driftwood is worthless on the night the lamp is dying — the meter closest to zero sets your risk appetite, not the odds. | — (read-only display) |
 | **Pour or build** | Banked resources go into meters *or* into a tool, never both. Survive tonight, or survive later. | Tap a resource stack to route it |
 | **Tools rewrite the shore** | Each tool permanently adds a stronger token to the shore or removes a Wave from it. This is the only lever the player has over probability. | Tap a tool in the workshop |
@@ -64,6 +64,10 @@ Three nested loops.
 - **Win:** survive all 12 nights — night 12 resolves with all three meters above zero.
 - **Lose:** any meter hits 0 at dusk. There is no partial loss and no score.
 - **Session end:** a run is 12 nights, roughly 5-8 minutes.
+- **A bust is not a loss.** The third wave ends the night and halves the basket
+  (rounded down per resource); the run continues. Losing everything instead makes
+  the cost of a push scale with the basket you are already holding, which kills the
+  push decision outright — see §8.
 
 Survival, not accumulation, is deliberately the win condition: it puts a real stake on
 every push, and it means a surplus is only ever worth something if you spend it.
@@ -80,9 +84,12 @@ every push, and it means a surplus is only ever worth something if you spend it.
 
 ## 8. Numbers
 
-Starting values, to be tuned against playtests.
+Derived from simulation (see *Why these numbers* below), still to be confirmed by
+playtest.
 
-**Meters** — start at 8, cap at 12. Overflow is lost, which is itself pressure to build.
+**Meters** — start at 10, cap at 12. Only two nights of headroom, so a good haul
+cannot be hoarded as safety; overflow is lost, and the only place to put a surplus
+is the shore itself.
 
 | Nights | Drain per meter, per night |
 |---|---|
@@ -90,18 +97,18 @@ Starting values, to be tuned against playtests.
 | 5-8 | 2 |
 | 9-12 | 3 |
 
-Total drain per meter across a season is 24 against a starting stock of 8, so a run
-needs roughly 48 resources gathered in 12 nights — more than a cautious player pulls
+Total drain per meter across a season is 24 against a starting stock of 10, so a run
+needs roughly 42 resources gathered in 12 nights — more than a cautious player pulls
 out of the starting shore.
 
-**The shore** — starts at 9 tokens, reshuffled whole every night.
+**The shore** — starts at 15 tokens, reshuffled whole every night.
 
 | Token | Count | Effect |
 |---|---|---|
-| Oil flask | 2 | Lamp +1 |
-| Driftwood | 2 | Hearth +1 |
-| Plank | 2 | Tower +1 |
-| Wave | 3 | strike; the third empties the basket and ends the night |
+| Oil flask | 4 | Lamp +1 |
+| Driftwood | 4 | Hearth +1 |
+| Plank | 4 | Tower +1 |
+| Wave | 3 | strike; the third ends the night and halves the basket |
 
 The storm adds one Wave after nights 3, 6 and 9.
 
@@ -115,6 +122,34 @@ The storm adds one Wave after nights 3, 6 and 9.
 | Lantern pole | 2 oil + 2 driftwood | add an *Oil* token |
 | Storm wall | 6 planks | remove a Wave |
 | Breakwater | 4 oil + 4 driftwood | remove a Wave |
+
+### Why these numbers
+
+`sim/simulate.mjs` plays 50,000 seasons per policy. The tuning is chosen so that
+the three things the player decides all change the outcome, and in the right order:
+
+| How it is played | Wins |
+|---|---|
+| reckless — never stop searching | 0.0% |
+| timid — home at the first wave | 0.1% |
+| safe — home at two waves, never build | 22.0% |
+| safe, and build tools | 39.9% |
+| build tools, and push past two waves at good odds | 49.4% |
+
+Two of those numbers are load-bearing, and `npm run sweep` keeps the ablations
+alongside the current tuning:
+
+- **The tight cap is what makes building worth it.** At cap 14 instead of 12 a
+  player can bank safety in the meters, "safe, never build" jumps to 42%, and
+  investing stops paying.
+- **The halved bust is what makes pushing worth it.** With an all-or-nothing bust
+  the push policy drops from 49% to 17% and never beats simply playing safe — in
+  all 180 tunings searched, not one made risk pay while a bust cost the whole basket.
+
+Two things that sound like fixes and are not: high-value tokens on the shore make
+pushing *worse* (a bigger token inflates the basket you are risking, and it is no
+likelier to appear late than early), and cheaper tools change almost nothing until
+the cap is tight enough that anyone can afford them in the first place.
 
 ## 9. Scope — MVP vs. cut
 
@@ -132,7 +167,7 @@ The storm adds one Wave after nights 3, 6 and 9.
   "I'm dying of thirst holding firewood." Left out of MVP because it roughly doubles
   the decision surface and the game is complete without it.
 - Storm-intensity flavour text per night.
-- A softer bust (keep half, rounded down) as a difficulty option for younger players.
+- An all-or-nothing bust as a hard mode, once a player has the hang of the odds.
 
 **Explicitly out of scope:**
 - Any action, timing or dexterity input.
@@ -171,7 +206,10 @@ season's salvage.
   tool costs and effects — belong in a pure `src/core/` module with no Phaser imports,
   so a test can play whole seasons headlessly. Follow `games/bibou/` for the layout and
   test harness.
-- **Key technical risks:** none technically; the risk is entirely in tuning. The
-  starting numbers above are a first guess, and whether the run is winnable-but-tense
-  can only be settled by simulating a few thousand seasons under simple policies
-  ("always bank at 2 waves", "always push to 3") and then by playing it.
+- **Built so far:** `src/core/rules.js` (the whole game as pure functions),
+  `sim/simulate.mjs` (season simulator, policy table, ablation sweep, tuning grid
+  search) and `tests/rules.test.mjs`. Nothing is drawn yet.
+- **Key technical risks:** none technically; the risk is in tuning, and the numbers
+  in §8 come from simulation rather than guesswork. What simulation cannot settle is
+  whether a 47% bust rate *feels* fair to an eight-year-old, or whether counting the
+  bag is fun or homework. Those need the screen and a playtest.

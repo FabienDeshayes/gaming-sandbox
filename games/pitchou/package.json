@@ -1,0 +1,12 @@
+{
+  "name": "pitchou",
+  "private": true,
+  "type": "module",
+  "description": "Tests and tuning simulator for the Pitchou prototype \u2014 the game itself needs no build step.",
+  "scripts": {
+    "test": "node --test tests/rules.test.mjs",
+    "sim": "node sim/simulate.mjs",
+    "sweep": "node sim/simulate.mjs --sweep",
+    "search": "node sim/simulate.mjs --search"
+  }
+}

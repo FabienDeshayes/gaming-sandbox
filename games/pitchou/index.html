@@ -9,19 +9,28 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      background: #111;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      background: #0b1016;
+      overflow: hidden;
+    }
+    /* The parent has to *be* the viewport: centring it with flexbox fights
+       Phaser.Scale.FIT, which sizes the canvas from the parent it is given. */
+    #game {
+      width: 100%;
+      height: 100%;
     }
     #game canvas {
       display: block;
+      /* The sprites are 16x16 masks scaled up whole — let them stay crisp. */
+      image-rendering: pixelated;
+      /* Without this the browser spends a moment deciding whether a touch is a
+         pan before handing it over, which eats the first tap of a night. */
+      touch-action: none;
     }
   </style>
 </head>
 <body>
   <div id="game"></div>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
-  <script src="main.js"></script>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>

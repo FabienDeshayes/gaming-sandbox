@@ -37,12 +37,14 @@ Same test setup as Bibou (`cd games/nouxinha && npm install && npm test`), inclu
 
 Pitchou is a push-your-luck survival game: a lighthouse keeper draws salvage from a
 fully-visible bag to refill three draining meters, and wins by surviving twelve
-nights. Nothing is drawn yet — `index.html`/`main.js` are still the untouched
-template, and the game so far is its rules plus the tooling that tuned them.
+nights. It is playable end to end. Read `games/pitchou/DESIGN.md` before changing it
+and `games/pitchou/TESTING.md` before adding a test.
 
 - **Nothing is hardcoded; everything lives in a tuning object.** `DEFAULT_TUNING` in
   `src/core/rules.js` holds every number, and each function takes the tuning from
-  `state.tuning`. Don't inline a constant — the simulator sweeps these.
+  `state.tuning`. Don't inline a constant — the simulator sweeps these. The view layer
+  holds no game numbers at all: `src/config.js` is layout, palette and settings, and
+  even the how-to-play screen reads its numbers back out of the tuning.
 - **The numbers are simulation-derived, and `DESIGN.md` §8 records why.** Three of them
   are load-bearing in a way that is easy to "simplify" and thereby break: the meter
   cap sits only two above the starting level (so a surplus can't be hoarded as safety
@@ -58,8 +60,21 @@ template, and the game so far is its rules plus the tooling that tuned them.
   whether building and pushing actually beat playing safe. Policies in `sim/policies.mjs`
   stand in for players — when a policy loses, check it isn't just playing badly before
   concluding the mechanic is broken.
-- `npm test` (`node --test tests/rules.test.mjs`) covers the rules the numbers rest on.
-  No browser and no Playwright yet; add a harness like Bibou's when there's a screen.
+- **The UI mirrors `playSeason` in `sim/simulate.mjs`, and has to.** Two things are
+  easy to get wrong: death happens inside `beginNight` and leaves the phase at
+  `'dusk'`, so the status is re-checked right after it; and `search()` can move to
+  `'dawn'` by itself (a bust, or a bag drawn dry), so GO HOME is re-gated after every
+  draw or `goHome` throws. `NightScene` is the whole run — dawn is an in-canvas
+  overlay, not a second scene, like every other modal in this repo.
+- **Sprites are text, and sound is synthesised.** 16×16 `#`/`.` masks in
+  `src/data/sprites.js` baked to white textures and tinted at draw time
+  (`src/ui/textures.js`); `src/ui/sfx.js` builds every sound through WebAudio. Nothing
+  is loaded, so nothing can fail to load.
+- `npm test` runs both suites: `test:rules` (`node --test tests/rules.test.mjs`) for
+  the rules the numbers rest on, and `test:ui` (`node tests/game.test.js`) driving the
+  real canvas through Playwright with the same CDN-rewriting harness Bibou uses. Tests
+  derive their seeds by replaying seasons against `rules.js` — there are no authored
+  levels, so nothing is hardcoded.
 
 ## Working in `games/bibou/` (the reference prototype)
 

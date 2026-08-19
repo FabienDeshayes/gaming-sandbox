@@ -43,13 +43,16 @@ template, and the game so far is its rules plus the tooling that tuned them.
 - **Nothing is hardcoded; everything lives in a tuning object.** `DEFAULT_TUNING` in
   `src/core/rules.js` holds every number, and each function takes the tuning from
   `state.tuning`. Don't inline a constant — the simulator sweeps these.
-- **The numbers are simulation-derived, and `DESIGN.md` §8 records why.** Two of them
+- **The numbers are simulation-derived, and `DESIGN.md` §8 records why.** Three of them
   are load-bearing in a way that is easy to "simplify" and thereby break: the meter
   cap sits only two above the starting level (so a surplus can't be hoarded as safety
-  and has to go into tools), and a bust keeps *half* the basket rather than none (with
+  and has to go into tools); a bust keeps *half* the basket rather than none (with
   all-or-nothing, pushing is never worth it and the search collapses to one dominant
-  line). Re-run `npm run sweep` before changing either — it keeps those ablations next
-  to the current tuning.
+  line); and every wave costs a unit off the basket, not just the third (without that,
+  only 12% of a night's taps are decisions — a wave can't end the night until two are
+  already out). Re-run `npm run sweep` before changing any of them — it keeps those
+  ablations next to the current tuning, and `--waves --fair` compares whole wave
+  structures at matched difficulty.
 - **`sim/simulate.mjs` is the tuning tool**: `npm run sim` for the policy table,
   `npm run sweep` for the ablations, `npm run search` to grid-search tunings scored on
   whether building and pushing actually beat playing safe. Policies in `sim/policies.mjs`

@@ -23,6 +23,7 @@ import {
   endNight,
   goHome,
   search,
+  waveDamageFor,
 } from '../src/core/rules.js';
 import { POLICIES, WAVE_POLICIES } from './policies.mjs';
 
@@ -32,7 +33,7 @@ import { POLICIES, WAVE_POLICIES } from './policies.mjs';
 // there is no reason not to.
 function drawIsLive(state) {
   if (!state.bag.some((token) => token.kind === 'wave')) return false;
-  return state.tuning.waveDamage > 0 || bustOdds(state) > 0;
+  return waveDamageFor(state.tuning, state.strikes) > 0 || bustOdds(state) > 0;
 }
 
 function playSeason(policy, { seed, tuning }) {
@@ -151,19 +152,14 @@ const GENTLER_DRAIN = [
 // Ablations against the current tuning. Each one turns a single number back to
 // what it was before the search, so the sweep is a standing record of why the
 // numbers in DESIGN.md §8 are what they are.
-const PROPOSED = tune({ waveDamage: 1, startShore: { oil: 5, wood: 5, plank: 5 } });
-
 const CANDIDATES = [
   { label: 'current tuning (DESIGN.md §8)', tuning: DEFAULT_TUNING },
-  { label: 'proposed: waves cost 1 loot, shore 5', tuning: PROPOSED },
-  { label: 'proposed + all-or-nothing bust', tuning: { ...PROPOSED, bustKeeps: 0 } },
+  { label: 'ablation: waves free until the third', tuning: tune({ waveDamage: 0 }) },
   { label: 'ablation: all-or-nothing bust', tuning: tune({ bustKeeps: 0 }) },
   { label: 'ablation: roomy cap 14', tuning: tune({ meterCap: 14 }) },
   { label: 'ablation: gentler drain', tuning: tune({ drainSteps: GENTLER_DRAIN }) },
-  {
-    label: 'ablation: original shore 2/2/2, start 8',
-    tuning: tune({ startMeter: 8, startShore: { oil: 2, wood: 2, plank: 2 } }),
-  },
+  { label: 'ablation: thinner shore 4/4/4', tuning: tune({ startShore: { oil: 4, wood: 4, plank: 4 } }) },
+  { label: 'ablation: richer shore 6/6/6', tuning: tune({ startShore: { oil: 6, wood: 6, plank: 6 } }) },
 ];
 
 function sweep(runs) {
@@ -279,6 +275,9 @@ const WAVE_STRUCTURES = [
   { label: 'budget 1, ONE wave, storm adds waves', tuning: tune({ waveBudget: 1, startWaves: [1] }) },
   { label: 'budget 2, 2 waves', tuning: tune({ waveBudget: 2, startWaves: [1, 1] }) },
   { label: 'waves cost 1 loot, budget 3', tuning: tune({ waveDamage: 1 }) },
+  { label: 'escalating damage 1 then 2', tuning: tune({ waveDamage: [1, 2] }) },
+  { label: 'escalating damage 0 then 2', tuning: tune({ waveDamage: [0, 2] }) },
+  { label: 'escalating damage 1 then 3', tuning: tune({ waveDamage: [1, 3] }) },
   { label: 'waves cost 2 loot, budget 3', tuning: tune({ waveDamage: 2 }) },
   { label: 'waves cost 1 loot, budget 3, 4 waves', tuning: tune({ waveDamage: 1, startWaves: [1, 1, 1, 1] }) },
   { label: 'graded 1/1/2, budget 3', tuning: tune({ startWaves: [1, 1, 2] }) },

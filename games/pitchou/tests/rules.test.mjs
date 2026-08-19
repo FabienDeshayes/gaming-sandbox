@@ -52,7 +52,8 @@ test('dusk drains every meter and a zero ends the run', () => {
 });
 
 test('a bust keeps half the basket, rounded down per resource', () => {
-  const state = createRun({ seed: 1 });
+  // waveDamage off, so this isolates the halving rule from the drop-a-thing rule.
+  const state = createRun({ seed: 1, tuning: tune({ waveDamage: 0 }) });
   beginNight(state);
   stackBag(state, [
     resourceToken('oil', 1),
@@ -69,8 +70,8 @@ test('a bust keeps half the basket, rounded down per resource', () => {
   assert.deepEqual(state.basket, { oil: 1, wood: 0, plank: 0 });
 });
 
-test('going home before the last wave keeps everything', () => {
-  const state = createRun({ seed: 1 });
+test('going home before the last wave banks what survived', () => {
+  const state = createRun({ seed: 1, tuning: tune({ waveDamage: 0 }) });
   beginNight(state);
   stackBag(state, [
     resourceToken('oil', 1),

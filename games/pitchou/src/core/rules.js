@@ -44,7 +44,7 @@ export const DEFAULT_TUNING = {
     { through: 12, drain: 3 },
   ],
   // What the tide holds on night 1.
-  startShore: { oil: 4, wood: 4, plank: 4 },
+  startShore: { oil: 5, wood: 5, plank: 5 },
   startWaves: [1, 1, 1],
   // Extra tokens seeded onto the shore beyond startShore — a couple of high
   // value finds give a push a bigger upside than "one more of the same".
@@ -62,9 +62,10 @@ export const DEFAULT_TUNING = {
   stormWaveSize: 1,
   // What a wave costs you when it does NOT end the night: units dropped from
   // the basket, taken off the biggest stack first. Zero makes every wave before
-  // the last one free, which is what leaves a stretch of each night with no
-  // decision in it.
-  waveDamage: 0,
+  // the last one free, which leaves most of a night with no decision in it. An
+  // array escalates per wave — [1, 2] means the first wave costs one and the
+  // second costs two.
+  waveDamage: 1,
   tools: DEFAULT_TOOLS,
 };
 
@@ -231,8 +232,9 @@ export function search(state) {
         state.basket[resource] = Math.floor(state.basket[resource] * keeps);
       }
       state.phase = 'dawn';
-    } else if (state.tuning.waveDamage > 0) {
-      dropFromBasket(state.basket, state.tuning.waveDamage * token.size);
+    } else {
+      const damage = waveDamageFor(state.tuning, state.strikes - token.size);
+      if (damage > 0) dropFromBasket(state.basket, damage * token.size);
     }
   } else {
     state.basket[token.resource] += token.amount;
@@ -245,6 +247,15 @@ export function goHome(state) {
   expectPhase(state, 'search');
   state.phase = 'dawn';
   return state;
+}
+
+// What the next wave costs, given how much budget the player has already spent.
+// A number is flat; an array escalates and holds at its last entry.
+export function waveDamageFor(tuning, strikesBefore) {
+  const damage = tuning.waveDamage;
+  if (!Array.isArray(damage)) return damage;
+  if (damage.length === 0) return 0;
+  return damage[Math.min(strikesBefore, damage.length - 1)];
 }
 
 // A wave knocks you about: you drop units off whatever stack is biggest.

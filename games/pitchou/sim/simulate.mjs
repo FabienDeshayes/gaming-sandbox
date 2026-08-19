@@ -18,16 +18,27 @@ import {
   beginNight,
   buildTool,
   canAfford,
+  bustOdds,
   createRun,
   endNight,
   goHome,
   search,
 } from '../src/core/rules.js';
-import { POLICIES } from './policies.mjs';
+import { POLICIES, WAVE_POLICIES } from './policies.mjs';
+
+// A draw is "live" when it can cost the player something: either a wave in the
+// bag could end the night, or waves damage the basket so any wave hurts. A draw
+// that is neither is not a decision — it is a button the player presses because
+// there is no reason not to.
+function drawIsLive(state) {
+  if (!state.bag.some((token) => token.kind === 'wave')) return false;
+  return state.tuning.waveDamage > 0 || bustOdds(state) > 0;
+}
 
 function playSeason(policy, { seed, tuning }) {
   const state = createRun({ seed, tuning });
   let draws = 0;
+  let liveDraws = 0;
   let busts = 0;
   let nights = 0;
   let banked = 0;
@@ -38,6 +49,7 @@ function playSeason(policy, { seed, tuning }) {
     nights += 1;
 
     while (state.phase === 'search' && policy.shouldSearch(state)) {
+      if (drawIsLive(state)) liveDraws += 1;
       search(state);
       draws += 1;
     }
@@ -61,6 +73,7 @@ function playSeason(policy, { seed, tuning }) {
     nightsReached: state.lost ? state.lost.night : tuning.seasonNights,
     killer: state.lost ? state.lost.meter : null,
     draws,
+    liveDraws,
     busts,
     nights,
     banked,
@@ -69,13 +82,14 @@ function playSeason(policy, { seed, tuning }) {
 }
 
 function evaluate(policy, { runs, tuning, seedBase = 0 }) {
-  const totals = { won: 0, nightsReached: 0, draws: 0, busts: 0, nights: 0, banked: 0, tools: 0 };
+  const totals = { won: 0, nightsReached: 0, draws: 0, liveDraws: 0, busts: 0, nights: 0, banked: 0, tools: 0 };
   const killers = Object.fromEntries(METERS.map((m) => [m, 0]));
   for (let i = 0; i < runs; i++) {
     const result = playSeason(policy, { seed: seedBase + i + 1, tuning });
     if (result.won) totals.won += 1;
     totals.nightsReached += result.nightsReached;
     totals.draws += result.draws;
+    totals.liveDraws += result.liveDraws;
     totals.busts += result.busts;
     totals.nights += result.nights;
     totals.banked += result.banked;
@@ -87,6 +101,7 @@ function evaluate(policy, { runs, tuning, seedBase = 0 }) {
     winRate: totals.won / runs,
     avgNight: totals.nightsReached / runs,
     drawsPerNight: totals.draws / totals.nights,
+    liveShare: totals.draws === 0 ? 0 : totals.liveDraws / totals.draws,
     bustRate: totals.busts / totals.nights,
     bankedPerNight: totals.banked / totals.nights,
     tools: totals.tools / runs,
@@ -136,8 +151,12 @@ const GENTLER_DRAIN = [
 // Ablations against the current tuning. Each one turns a single number back to
 // what it was before the search, so the sweep is a standing record of why the
 // numbers in DESIGN.md §8 are what they are.
+const PROPOSED = tune({ waveDamage: 1, startShore: { oil: 5, wood: 5, plank: 5 } });
+
 const CANDIDATES = [
   { label: 'current tuning (DESIGN.md §8)', tuning: DEFAULT_TUNING },
+  { label: 'proposed: waves cost 1 loot, shore 5', tuning: PROPOSED },
+  { label: 'proposed + all-or-nothing bust', tuning: { ...PROPOSED, bustKeeps: 0 } },
   { label: 'ablation: all-or-nothing bust', tuning: tune({ bustKeeps: 0 }) },
   { label: 'ablation: roomy cap 14', tuning: tune({ meterCap: 14 }) },
   { label: 'ablation: gentler drain', tuning: tune({ drainSteps: GENTLER_DRAIN }) },
@@ -243,11 +262,79 @@ function gridSearch(runs) {
   return feasible;
 }
 
+// --- wave structure comparison ---------------------------------------------
+
+// What are the early waves for? Each structure is measured on the same three
+// things: can you win, how often does a night end badly, and — the point of the
+// exercise — what share of the taps are actually a decision. A draw is "live"
+// when something in the bag could end the night; anything else is the player
+// pressing a button because there is no reason not to.
+const WAVE_STRUCTURES = [
+  { label: 'current: 3 waves, budget 3', tuning: tune({}) },
+  { label: 'budget 2, 3 waves', tuning: tune({ waveBudget: 2 }) },
+  { label: 'budget 2, 4 waves', tuning: tune({ waveBudget: 2, startWaves: [1, 1, 1, 1] }) },
+  { label: 'budget 1, 2 waves (any wave ends it)', tuning: tune({ waveBudget: 1, startWaves: [1, 1] }) },
+  { label: 'budget 1, 3 waves (any wave ends it)', tuning: tune({ waveBudget: 1 }) },
+  { label: 'budget 1, ONE wave, no storm waves', tuning: tune({ waveBudget: 1, startWaves: [1], stormWaveNights: [] }) },
+  { label: 'budget 1, ONE wave, storm adds waves', tuning: tune({ waveBudget: 1, startWaves: [1] }) },
+  { label: 'budget 2, 2 waves', tuning: tune({ waveBudget: 2, startWaves: [1, 1] }) },
+  { label: 'waves cost 1 loot, budget 3', tuning: tune({ waveDamage: 1 }) },
+  { label: 'waves cost 2 loot, budget 3', tuning: tune({ waveDamage: 2 }) },
+  { label: 'waves cost 1 loot, budget 3, 4 waves', tuning: tune({ waveDamage: 1, startWaves: [1, 1, 1, 1] }) },
+  { label: 'graded 1/1/2, budget 3', tuning: tune({ startWaves: [1, 1, 2] }) },
+  { label: 'graded 1/2/2, budget 3', tuning: tune({ startWaves: [1, 2, 2] }) },
+];
+
+// Comparing structures at a fixed shore is unfair — a harsher wave rule simply
+// loses more. Instead give each structure the shore richness that lands it
+// closest to the same win rate, then compare how many taps are decisions.
+function fairestShore(tuning, runs, target = 0.5) {
+  let best = null;
+  for (const shore of [4, 5, 6, 7, 8]) {
+    const candidate = { ...tuning, startShore: { oil: shore, wood: shore, plank: shore } };
+    const rows = WAVE_POLICIES.map((policy) => evaluate(policy, { runs, tuning: candidate }));
+    const top = rows.reduce((a, b) => (b.winRate > a.winRate ? b : a));
+    const distance = Math.abs(top.winRate - target);
+    if (best === null || distance < best.distance) best = { shore, top, distance, candidate };
+  }
+  return best;
+}
+
+function fairWaveReport(runs) {
+  const head = `${'structure'.padEnd(38)}  ${'shore'.padStart(5)}  ${'best policy'.padEnd(14)}  ${'win'.padStart(6)}  ${'live taps'.padStart(9)}  ${'bust'.padStart(6)}  ${'draws'.padStart(6)}`;
+  console.log('each structure given the shore that puts it nearest a 50% win rate\n');
+  console.log(head);
+  console.log('-'.repeat(head.length));
+  for (const structure of WAVE_STRUCTURES) {
+    const fit = fairestShore(structure.tuning, runs);
+    console.log(
+      `${structure.label.padEnd(38)}  ${String(fit.shore).padStart(5)}  ${fit.top.name.padEnd(14)}  ${pct(fit.top.winRate).padStart(6)}  ${pct(fit.top.liveShare).padStart(9)}  ${pct(fit.top.bustRate).padStart(6)}  ${num(fit.top.drawsPerNight, 1).padStart(6)}`,
+    );
+  }
+}
+
+function waveReport(runs) {
+  const head = `${'structure'.padEnd(38)}  ${'best policy'.padEnd(14)}  ${'win'.padStart(6)}  ${'live taps'.padStart(9)}  ${'bust'.padStart(6)}  ${'draws'.padStart(6)}`;
+  console.log(head);
+  console.log('-'.repeat(head.length));
+  for (const structure of WAVE_STRUCTURES) {
+    const rows = WAVE_POLICIES.map((policy) => evaluate(policy, { runs, tuning: structure.tuning }));
+    const best = rows.reduce((a, b) => (b.winRate > a.winRate ? b : a));
+    console.log(
+      `${structure.label.padEnd(38)}  ${best.name.padEnd(14)}  ${pct(best.winRate).padStart(6)}  ${pct(best.liveShare).padStart(9)}  ${pct(best.bustRate).padStart(6)}  ${num(best.drawsPerNight, 1).padStart(6)}`,
+    );
+  }
+}
+
 const args = process.argv.slice(2);
 const runsFlag = args.indexOf('--runs');
 const runs = runsFlag === -1 ? 20000 : Number(args[runsFlag + 1]);
 
-if (args.includes('--search')) {
+if (args.includes('--waves')) {
+  const n = args.includes('--runs') ? runs : 20000;
+  if (args.includes('--fair')) fairWaveReport(n);
+  else waveReport(n);
+} else if (args.includes('--search')) {
   gridSearch(args.includes("--runs") ? runs : 3000);
 } else if (args.includes('--sweep')) {
   sweep(runs);

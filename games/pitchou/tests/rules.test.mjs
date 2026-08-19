@@ -172,3 +172,27 @@ test('a seed replays a season exactly', () => {
   assert.equal(play(42), play(42));
   assert.notEqual(play(42), play(43));
 });
+
+test('a non-busting wave can cost loot off the biggest stack', () => {
+  const state = createRun({ seed: 1, tuning: tune({ waveDamage: 1 }) });
+  beginNight(state);
+  stackBag(state, [
+    resourceToken('oil', 3),
+    resourceToken('wood', 1),
+    waveToken(),
+    waveToken(),
+    resourceToken('plank', 1),
+  ]);
+  for (let i = 0; i < 4; i++) search(state);
+  // Two waves, one unit dropped each, both off the oil stack as the biggest.
+  assert.equal(state.busted, false);
+  assert.deepEqual(state.basket, { oil: 1, wood: 1, plank: 0 });
+});
+
+test('wave damage never drives the basket below empty', () => {
+  const state = createRun({ seed: 1, tuning: tune({ waveDamage: 2 }) });
+  beginNight(state);
+  stackBag(state, [waveToken(), resourceToken('wood', 1), waveToken(), resourceToken('oil', 1)]);
+  for (let i = 0; i < 3; i++) search(state);
+  assert.deepEqual(state.basket, { oil: 0, wood: 0, plank: 0 });
+});

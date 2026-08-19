@@ -60,6 +60,11 @@ export const DEFAULT_TUNING = {
   // The storm adds one wave to the shore at the end of each of these nights.
   stormWaveNights: [3, 6, 9],
   stormWaveSize: 1,
+  // What a wave costs you when it does NOT end the night: units dropped from
+  // the basket, taken off the biggest stack first. Zero makes every wave before
+  // the last one free, which is what leaves a stretch of each night with no
+  // decision in it.
+  waveDamage: 0,
   tools: DEFAULT_TOOLS,
 };
 
@@ -226,6 +231,8 @@ export function search(state) {
         state.basket[resource] = Math.floor(state.basket[resource] * keeps);
       }
       state.phase = 'dawn';
+    } else if (state.tuning.waveDamage > 0) {
+      dropFromBasket(state.basket, state.tuning.waveDamage * token.size);
     }
   } else {
     state.basket[token.resource] += token.amount;
@@ -238,6 +245,21 @@ export function goHome(state) {
   expectPhase(state, 'search');
   state.phase = 'dawn';
   return state;
+}
+
+// A wave knocks you about: you drop units off whatever stack is biggest.
+export function dropFromBasket(basket, units) {
+  for (let i = 0; i < units; i++) {
+    let biggest = null;
+    for (const resource of RESOURCES) {
+      if (basket[resource] > 0 && (biggest === null || basket[resource] > basket[biggest])) {
+        biggest = resource;
+      }
+    }
+    if (biggest === null) return basket;
+    basket[biggest] -= 1;
+  }
+  return basket;
 }
 
 export function basketIsEmpty(basket) {

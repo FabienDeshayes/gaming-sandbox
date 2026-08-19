@@ -26,6 +26,11 @@ export function pushUntilOdds(threshold) {
 
 export const reckless = () => true;
 
+// Take no risk at all: search only while nothing in the bag can end the night.
+// This is the honest "safe" baseline for any wave structure, including ones
+// where a single wave busts you.
+export const noRisk = (state) => bustOdds(state) === 0;
+
 // --- dawn plans -------------------------------------------------------------
 
 // Pour everything into the meters; never build anything.
@@ -66,6 +71,15 @@ export const THROUGHPUT_FIRST = ['gaff', 'net', 'funnel', 'pole', 'wall', 'break
 export const SAFETY_FIRST = ['wall', 'breakwater', 'gaff', 'net', 'funnel', 'pole'];
 
 // --- the policies the report covers ----------------------------------------
+
+// Used by the wave-structure comparison, where "stop at two waves" is not a
+// meaningful description of every structure.
+export const WAVE_POLICIES = [
+  { name: 'no risk at all', shouldSearch: noRisk, plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
+  { name: 'push at <=15%', shouldSearch: pushUntilOdds(0.15), plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
+  { name: 'push at <=25%', shouldSearch: pushUntilOdds(0.25), plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
+  { name: 'push at <=40%', shouldSearch: pushUntilOdds(0.4), plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
+];
 
 export const POLICIES = [
   { name: 'reckless (never stop)', shouldSearch: reckless, plan: pourEverything() },

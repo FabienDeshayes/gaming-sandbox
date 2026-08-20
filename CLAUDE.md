@@ -27,9 +27,11 @@ Things that are easy to break by not knowing them:
 - **The world is derived, never stored.** Terrain and item spawns are pure functions of `(x, y, seed)` in `src/core/world.js`. A run stores only which tiles it has *seen*, which item tiles it has emptied, and the few tallies the end-of-run recap reports. Don't add a world array.
 - **A run validates its seed at start.** `pickSeed` flood-fills a window around the base and bumps the seed if the spawn is sealed into a pocket — the design promises the character is never permanently stuck.
 - **Sprites are text.** 16×16 `#`/`.` masks in `src/data/sprites.js`, baked to white textures and tinted with the palette's foreground at draw time. That tinting is what enforces the two-colour rule, so anything drawn must be tinted — a stray untinted object breaks the palette.
-- **Tests derive their routes.** There are no hand-authored levels, so the suite BFSes the real world to find the nearest torch or rock and replays the path. Don't hardcode coordinates.
+- **Tests derive their routes.** There are no hand-authored levels, so the suite BFSes the real world to find the nearest torch, rock or tree and replays the path. Don't hardcode coordinates.
 - **Saving is slot-based, and progress and ground save differently.** Three `localStorage` slots (`src/core/save.js`), picked through the title screen's NEW GAME / LOAD GAME; only stopping at the hut banks progress, but the ground a run lit is written whichever way it ends, so a run never starts from black again.
 - **Cheats are a Settings toggle** (`getCheats()` in `src/config.js`, applied in `createRun`): the whole map revealed and one of everything, and a run under them never writes to a slot.
+- **Blocking terrain is rock in two formations plus trees.** Rock masses and loose boulders are the same terrain and the same sprite; trees are a third terrain value (`'tree'`) that blocks like rock and draws as foliage. Anything switching on terrain has to handle it, and anything added to the blocked share has to keep `pickSeed` able to find an open seed.
+- **All audio is synthesised and shares one `AudioContext`.** The pickup blips are in `src/ui/sfx.js`, which owns the context; the music loop in `src/ui/music.js` borrows it and is started and stopped with `ExploreScene`. Both are best-effort — a browser with no audio must cost the player nothing.
 
 Same test setup as Bibou (`cd games/nouxinha && npm install && npm test`), including the CDN-rewriting harness.
 

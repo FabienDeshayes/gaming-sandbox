@@ -3,7 +3,8 @@
 // Three layers sit on top of each other, and they differ in what they depend on:
 //
 //   terrain    — noise plus the built sanctums and landmark clearings. A pure
-//                function of (x, y, seed): the same every run, forever.
+//                function of (x, y, seed): the same every run, forever. Floor,
+//                two formations of rock, groves of trees, and the built walls.
 //   unique     — the gems, the merchant, and the one compass and one map lying
 //                out in the dark. Also pure in (x, y, seed), so a run always
 //                finds them where the last run left them.
@@ -20,9 +21,12 @@ export const DEFAULT_SEED = 0x6e6f7578; // "noux"
 // otherwise rocky ground would also be rich ground.
 const CH_TERRAIN = 1;
 const CH_TERRAIN_FINE = 2;
+const CH_GROVE = 3;
+const CH_GROVE_FINE = 4;
 const CH_SANCTUM = 5;
 const CH_LANDMARK = 6;
 const CH_COIN = 7;
+const CH_BOULDER = 8;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
@@ -31,6 +35,19 @@ const CH_SCATTER = 40; // + four per consumable kind
 // the spawn into a pocket — so connectivity is enforced by validating the seed
 // at run start instead (`pickSeed`).
 const ROCK_THRESHOLD = 0.64;
+
+// Rock comes in two formations that are the same terrain and draw the same
+// sprite: the masses the threshold above grows, and loose boulders standing on
+// their own out in the open. A wall you walk around and a boulder you step past
+// are different things to meet even though they are the same stone, and the
+// second is what keeps a wide stretch of floor from being an empty screen.
+const BOULDER_CHANCE = 0.03;
+
+// Groves: the one thing in the world that isn't stone and isn't floor. Blocking
+// like rock, on a lattice coarser than the rock masses so a grove arrives as a
+// stand you skirt rather than as scattered trunks, and drawn as foliage so it
+// is never mistaken for a wall.
+const GROVE_THRESHOLD = 0.72;
 
 // The base's 3x3 neighbourhood is forced to floor so spawn can never be walled in.
 export const BASE_X = 0;
@@ -88,7 +105,20 @@ function noiseTerrain(x, y, seed) {
   const n =
     0.65 * valueNoise(x, y, seed, CH_TERRAIN, 6) +
     0.35 * valueNoise(x, y, seed, CH_TERRAIN_FINE, 3);
-  return n > ROCK_THRESHOLD ? 'rock' : 'floor';
+  if (n > ROCK_THRESHOLD) return 'rock';
+
+  // Groves grow on a lattice of their own, so where the trees are owes nothing
+  // to where the rock is and a stand can run right up against a wall.
+  const g =
+    0.6 * valueNoise(x, y, seed, CH_GROVE, 9) + 0.4 * valueNoise(x, y, seed, CH_GROVE_FINE, 4);
+  if (g > GROVE_THRESHOLD) return 'tree';
+
+  // Boulders are thrown as white noise rather than grown on a lattice: what
+  // makes them the other kind of rock is precisely that they stand alone
+  // instead of massing, so they want no shape at all.
+  if (hash(x, y, seed, CH_BOULDER) < BOULDER_CHANCE) return 'rock';
+
+  return 'floor';
 }
 
 // --- Placement ---------------------------------------------------------------
@@ -400,8 +430,8 @@ export function terrainAt(x, y, seed = DEFAULT_SEED) {
   return noiseTerrain(x, y, seed);
 }
 
-// Plain floor: what you can walk on carrying nothing. Rock, sanctum wall, and
-// every gate are all "no" here — a gate needs `canEnter`, which knows what
+// Plain floor: what you can walk on carrying nothing. Rock, trees, sanctum wall,
+// and every gate are all "no" here — a gate needs `canEnter`, which knows what
 // gems you have.
 export function isWalkable(x, y, seed = DEFAULT_SEED) {
   return terrainAt(x, y, seed) === 'floor';
@@ -532,26 +562,31 @@ export function uniqueAt(x, y, seed = DEFAULT_SEED) {
 // MIN_SEPARATION, which is what keeps items from arriving in clumps.
 //
 // MIN_SEPARATION is that rule, and it is the one number that decides how much
-// there is to find. Measured over a 141x141 window against the world before the
-// rule existed, which held 4.4% of its floor tiles under an item:
+// there is to find. Measured over a 141x141 window; unthinned, the same lattice
+// puts something under 6.2% of its floor tiles:
 //
 //   D    items per floor tile   closest two of a kind ever land
-//   15   1.3%                   15
+//   15   1.4%                   15
 //   12   1.8%                   12
 //   10   2.3%                   10
-//    8   3.0%                    8
+//    8   2.9%                    8
+//    6   3.7%                    6
 //
 // Spreading items out costs items: a kind can never be denser than one per DxD,
 // so the world holds a fraction of what an unthinned scatter would, evenly,
 // instead of several times as much in clumps. That is the trade the rule asks
 // for, and this constant is where to change your mind about it.
 //
-// 10 is where the trade currently sits: a walk finds something often enough that
-// pushing one ring further out is worth the durability, while a 10-tile
-// exclusion still means a light's worth of ground never shows you the same kind
-// twice. What it gives up against a wider separation is the outright guarantee
-// that a screenful holds one of anything — at D = 10 a 15x15 square can hold up
-// to four of a kind, which reads as a good patch of ground rather than a clump.
+// 8 is where the trade currently sits, and playtesting is what moved it there
+// from 10. A light shows nine tiles and the viewport holds 165, so one item per
+// 44 floor tiles meant a walk could cross several screenfuls of lit ground with
+// nothing on any of them, and pushing one ring further out stopped reading as a
+// decision. 8 puts something under one floor tile in 35 — about a quarter more —
+// which keeps a walk paying without turning the ground into a shop. It is still
+// wider than any light in the game, so a lit ring can never show the same kind
+// twice. What it gives up is the outright guarantee that a screenful holds one
+// of anything: at D = 8 the 11x15 viewport can hold up to four of a kind, which
+// reads as a good patch of ground rather than a clump.
 //
 // The lattice is much finer than the separation on purpose. One candidate per
 // separation-sized cell would place its points far too politely — neighbouring
@@ -565,7 +600,7 @@ export function uniqueAt(x, y, seed = DEFAULT_SEED) {
 // from CELL_REACH cells away rather than one.
 
 const CONSUMABLE_CELL = 4;
-export const MIN_SEPARATION = 10;
+export const MIN_SEPARATION = 8;
 const CELL_REACH = Math.ceil(MIN_SEPARATION / CONSUMABLE_CELL);
 
 const BAND_MID = 8;

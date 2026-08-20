@@ -71,6 +71,36 @@ export function setPalette(id) {
   }
 }
 
+// --- Music -------------------------------------------------------------------
+//
+// The one thing in the game a player might want turned off, so it gets a switch
+// of its own next to the palettes and is persisted the same way. On by default:
+// the browser's autoplay policy means it can't make a sound until the player
+// has touched something anyway (ui/music.js).
+const MUSIC_KEY = 'nouxinha.music';
+
+let musicOn = true;
+
+try {
+  musicOn = localStorage.getItem(MUSIC_KEY) !== '0';
+} catch (e) {
+  /* on by default */
+}
+
+export function getMusic() {
+  return musicOn;
+}
+
+export function setMusic(on) {
+  musicOn = !!on;
+  try {
+    localStorage.setItem(MUSIC_KEY, musicOn ? '1' : '0');
+  } catch (e) {
+    /* preference just won't persist */
+  }
+  return musicOn;
+}
+
 // --- Cheats ------------------------------------------------------------------
 //
 // A developer switch, in Settings next to the palettes and persisted the same

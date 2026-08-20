@@ -28,6 +28,7 @@ import { WorldMap } from '../ui/worldMap.js';
 import { CompassBadge, BADGE_H, BADGE_W } from '../ui/compassBadge.js';
 import { makeDpad } from '../ui/dpad.js';
 import { playPickup, unlockAudio } from '../ui/sfx.js';
+import { startMusic, stopMusic } from '../ui/music.js';
 
 const DPAD_CX = 388;
 const DPAD_CY = 748;
@@ -75,6 +76,13 @@ export class ExploreScene extends Phaser.Scene {
     ensureTextures(this);
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
+
+    // The music runs for as long as the expedition does, and no longer — the
+    // title screen and the menus are quiet. Started here so a run resumed with
+    // the audio already unlocked picks it straight up, and again on the first
+    // input for the run that opened the page (ui/music.js).
+    startMusic();
+    this.events.once('shutdown', () => stopMusic());
 
     // A run can be handed a seed and a nonce (SlotScene reads them off the URL),
     // which is what makes an expedition reproducible; without them it takes the
@@ -188,9 +196,10 @@ export class ExploreScene extends Phaser.Scene {
 
   bindInput() {
     this.input.on('pointerdown', (p) => {
-      // The player has touched the page, which is what lets the pickup blip
-      // through the browser's autoplay policy.
+      // The player has touched the page, which is what lets the pickup blip and
+      // the music through the browser's autoplay policy.
       unlockAudio();
+      startMusic();
       // Only the map area swipes; the HUD is buttons, and an open overlay owns
       // every pointer on screen.
       this.swipeFrom = !this.modalOpen() && p.y < VIEW_H ? { x: p.x, y: p.y } : null;
@@ -231,6 +240,7 @@ export class ExploreScene extends Phaser.Scene {
   tryStep(direction) {
     if (this.animating || this.modalOpen()) return;
     unlockAudio();
+    startMusic();
 
     const result = step(this.run, direction);
     if (!result.moved) {

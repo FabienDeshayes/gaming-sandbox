@@ -1,4 +1,4 @@
-// The game's only sound: a blip when you pick something up.
+// The pickup blip, and the AudioContext everything audible in the game shares.
 //
 // Synthesised through WebAudio rather than loaded as a file, for the same reason
 // the sprites are text (DESIGN.md §9) — no binary assets, no build step, and the
@@ -24,6 +24,13 @@ function audio() {
     broken = true;
   }
   return ctx;
+}
+
+// The one context, handed out so the music (ui/music.js) plays through the same
+// clock and the same output as the blips. A second AudioContext would be a
+// second hardware voice on mobile, and some browsers only allow a couple.
+export function audioContext() {
+  return audio();
 }
 
 // Autoplay policy: a context created before the player has touched anything

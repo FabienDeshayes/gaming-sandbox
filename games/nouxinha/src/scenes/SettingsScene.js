@@ -1,20 +1,24 @@
-// Palette picker, the cheat switch, and the one destructive control in the
-// game. Each palette row is drawn in its *own* palette rather than the active
-// one, so the list shows you the four combinations instead of describing them.
+// Palette picker, the music and cheat switches, and the one destructive control
+// in the game. Each palette row is drawn in its *own* palette rather than the
+// active one, so the list shows you the four combinations instead of describing
+// them.
 
 import {
   FONT,
   GAME_WIDTH,
   PALETTES,
   getCheats,
+  getMusic,
   getPalette,
   hex,
   setCheats,
+  setMusic,
   setPalette,
 } from '../config.js';
 import { activeSlot, clearSave, loadSave } from '../core/save.js';
 import { ensureTextures } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
+import { startMusic, stopMusic } from '../ui/music.js';
 
 const ROW_H = 68;
 const ROW_W = 380;
@@ -30,6 +34,10 @@ export class SettingsScene extends Phaser.Scene {
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
     const cx = GAME_WIDTH / 2;
+
+    // Turning the music on here plays it, so the switch can be auditioned; the
+    // loop belongs to the expedition, so leaving this screen ends it again.
+    this.events.once('shutdown', () => stopMusic());
 
     this.add
       .text(cx, 110, 'PALETTE', { fontFamily: FONT, fontSize: '28px', color: hex(pal.fg) })
@@ -86,6 +94,24 @@ export class SettingsScene extends Phaser.Scene {
       });
     });
 
+    // The music switch (DESIGN.md §9). It takes effect where it is tapped rather
+    // than at the next run, because a player who has just turned the loop off
+    // wants it to stop, and one who has just turned it on wants to hear what
+    // they are agreeing to — Settings is the one screen that is otherwise quiet.
+    const music = makeButton(
+      this,
+      cx,
+      540,
+      musicLabel(getMusic()),
+      () => {
+        const on = setMusic(!getMusic());
+        music.setLabel(musicLabel(on));
+        if (on) startMusic();
+        else stopMusic();
+      },
+      { width: 300, fontSize: 14 }
+    );
+
     // The cheat switch (DESIGN.md §6.2): a run started with it on opens with the
     // map revealed and one of everything, which is how the late game gets looked
     // at without a campaign's worth of walking behind it. It says what it costs
@@ -93,7 +119,7 @@ export class SettingsScene extends Phaser.Scene {
     const cheats = makeButton(
       this,
       cx,
-      588,
+      600,
       cheatLabel(getCheats()),
       () => {
         const on = setCheats(!getCheats());
@@ -103,7 +129,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
     const note = this.add
-      .text(cx, 622, cheatNote(getCheats()), {
+      .text(cx, 634, cheatNote(getCheats()), {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -120,7 +146,7 @@ export class SettingsScene extends Phaser.Scene {
     const erase = makeButton(
       this,
       cx,
-      676,
+      688,
       save.started ? `ERASE SLOT ${slot}` : `SLOT ${slot} IS EMPTY`,
       () => {
         if (!save.started) return;
@@ -135,8 +161,12 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14, enabled: !!save.started }
     );
 
-    makeButton(this, cx, 744, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
+    makeButton(this, cx, 752, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
   }
+}
+
+function musicLabel(on) {
+  return `MUSIC: ${on ? 'ON' : 'OFF'}`;
 }
 
 function cheatLabel(on) {

@@ -45,11 +45,11 @@ Somewhere out there are three gems, and each one gives the world back a colour i
 
 ## 4. Core mechanics
 
-The world has three things in it: **terrain** (floor, rock, and the built walls and gates of the sanctums — all static and procedurally generated), **items** (lights, water, coins and gems, lying on floor tiles until picked up), and **the character** (one tile, one facing).
+The world has three things in it: **terrain** (floor, two formations of rock, groves of trees, and the built walls and gates of the sanctums — all static and procedurally generated), **items** (lights, water, coins and gems, lying on floor tiles until picked up), and **the character** (one tile, one facing).
 
 | Mechanic | Description | Input |
 |---|---|---|
-| Tile stepping | The character moves exactly one tile per input, in a cardinal direction. Rock and sanctum wall are impassable, and so is a gate you don't hold the gem for: a rejected step costs no durability and doesn't change facing. The character's **facing** is the direction of their last successful step (it starts pointing north from the base). | Swipe in a cardinal direction anywhere on the map, or tap the D-pad |
+| Tile stepping | The character moves exactly one tile per input, in a cardinal direction. Rock, trees and sanctum wall are impassable, and so is a gate you don't hold the gem for: a rejected step costs no durability and doesn't change facing. The character's **facing** is the direction of their last successful step (it starts pointing north from the base). | Swipe in a cardinal direction anywhere on the map, or tap the D-pad |
 | Gems and gates | Three gems sit at the centres of walled **sanctums** scattered around the hut. Picking one up gives a colour back to the world and opens the gate that wants it (§4.4). | Walk onto the gem |
 | Saving | A run is only banked by stopping at the hut (§6). Dying of thirst or leaving by the map's **X** banks nothing, so a gem picked up but not carried home is still out there next run — though the ground the run lit is kept whichever way it ends (§6.1). | **STOP HERE** on the hut's dialog |
 | Light & visibility | The active light source defines a **shape** of tiles visible from the character's tile (see §4.1). Every tile has one of three states: **unknown** (never lit — drawn as flat background, indistinguishable from any other unknown tile), **remembered** (lit at some point — drawn dimmed), **lit** (inside the current light shape — drawn full brightness). Items and terrain are only readable in the lit state; a remembered tile keeps showing whatever was there when you last saw it. | — |
@@ -99,7 +99,7 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
 
 | Layer | Depends on | Holds |
 |---|---|---|
-| **Terrain** | `(x, y, seed)` | Floor, rock, and the built walls, gates and clearings. The same every run, forever. |
+| **Terrain** | `(x, y, seed)` | Floor, rock in two formations, groves of trees, and the built walls, gates and clearings. The same every run, forever. |
 | **Unique objects** | `(x, y, seed)` | The three gems, the merchant, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
 | **Consumables** | `(x, y, seed, salt)` | Coins, water and lights. The salt changes every run and every respawn, so these are never twice in the same places. |
 
@@ -108,32 +108,48 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
   from the edge of your light, and it's the one tile that's always on the map. The hut isn't drawn
   while the wizard is standing on it — two dense sprites on one tile read as an unidentifiable blob,
   so the wizard is simply in the doorway.
-- **The seed is validated at run start.** A clearing at spawn isn't enough: at any rock density that
-  still looks like a cave system, a slice of seeds seals the base into a pocket of a few tiles, which
-  would break the promise that the character is never permanently stuck (§5). So a run flood-fills a
-  40-tile window from the base and rejects a seed that can't reach most of the floor in it, bumping
-  to the next seed until one opens up. The same fill checks that every sanctum door and every
+- **The seed is validated at run start.** A clearing at spawn isn't enough: at any density of blocked
+  ground that still looks like a cave system, a slice of seeds seals the base into a pocket of a few
+  tiles, which would break the promise that the character is never permanently stuck (§5). So a run
+  flood-fills a 40-tile window from the base and rejects a seed that can't reach most of the floor in
+  it, bumping to the next seed until one opens up. Rock and trees together block a bit over a quarter
+  of the world, and about one seed in eight needs a bump — a bump is cheap and one is always enough,
+  which is the whole reason the check exists rather than a guarantee baked into the noise. The same fill checks that every sanctum door and every
   landmark can be walked to. Carving guaranteed corridors into the noise would be the alternative,
   and it leaves a visible lattice; this keeps the terrain organic and costs a few milliseconds once
   per run.
 - **Rock covers about a fifth of the world**, from one noise channel with two octaves — broad masses
   from a coarse lattice, ragged edges from a fine one. It reads as floor with rock in it rather than
   the other way round: enough to grow caves worth navigating, not enough to make walking a maze.
+- **Rock arrives in two formations that draw the same tile.** The masses above are one; the other is
+  **loose boulders**, thrown as white noise into the open ground between them rather than grown on a
+  lattice, because what makes them the other kind of rock is precisely that they stand alone instead
+  of massing. Same terrain, same sprite, and a player meets them as two different things: a wall to
+  walk round, or a stone to step past. The boulders are there because a wide stretch of clear floor
+  was reading as an empty screen.
+- **Trees cover about a fifteenth**, in groves, and they block a step exactly the way rock does. They
+  grow on a lattice of their own, coarser than the rock masses, so a grove arrives as a stand you
+  skirt rather than as scattered trunks, and where the trees are owes nothing to where the rock is.
+  They are drawn as foliage rather than as stone (§9) — a blocked step that looks like something
+  *grew* there is the cheapest variety the world has, and every tree is floor the player lost, which
+  is why the share is small.
 
 **Consumables are spread, never clumped.** Every kind is thrown onto a lattice and then thinned so
-that **no two of the same kind ever land within 10 tiles of each other**. That rule is the whole
+that **no two of the same kind ever land within 8 tiles of each other**. That rule is the whole
 design of this layer, and it has a price worth being honest about: a kind can never be denser than
-one instance per 10×10, so the world holds a fraction of the items an unthinned scatter would,
+one instance per 8×8, so the world holds a fraction of the items an unthinned scatter would,
 evenly, instead of several times as many in bunches. `MIN_SEPARATION` in `src/core/world.js` is the
 single number that trades one against the other, and the measured curve is written down next to it.
 
-**10 is where that trade sits, and it is a dial rather than a law.** Wider separations were tried and
-made the walk too thin: at 15 a light's worth of ground was usually empty, and an expedition that
-found nothing on the way out had no reason to push further. At 10 roughly one floor tile in 43 has
-something on it — a little under twice as many as at 15 — which is often enough that walking one more
-ring out is a decision rather than a gamble. What it gives up is the outright guarantee that a
-screenful holds one of anything: a 15×15 square can now hold up to four of a kind, which reads as a
-good patch of ground rather than a clump. Two consequences fall out:
+**8 is where that trade sits, and it is a dial rather than a law.** Wider separations were tried and
+made the walk too thin: at 15 a light's worth of ground was usually empty, and at 10 — roughly one
+floor tile in 44 — a playtest still spent long stretches with nothing on screen at all, because a
+light shows nine tiles and a screenful is 165. An expedition that finds nothing on the way out has no
+reason to push further. At 8 something is under one floor tile in 35, about a quarter more, which
+keeps a walk paying without turning the ground into a shop. 8 is still wider than any light in the
+game, so a lit ring can never show the same kind twice. What it gives up is the outright guarantee
+that a screenful holds one of anything: the 11×15 viewport can hold up to four of a kind, which reads
+as a good patch of ground rather than a clump. Two consequences fall out:
 
 - **A coin pickup is a small pile worth 1-5**, because one coin per 100 tiles could never pay for a
   100-coin map.
@@ -255,11 +271,11 @@ underneath it discards the drawing rather than showing one from somewhere else.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
 - **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is still authored as a 1-bit mask, so what a gem changes is a tint at draw time, never an asset.
 - Every gem is optional. Nothing in the game requires finding one; the sanctums gate their own contents and nothing else. The compass and the map are optional too — they make the walk legible, never possible.
-- **No two of the same consumable within 10 tiles.** The world spreads items rather than scattering them, which caps how much there is to find (§4.3). One constant decides the trade.
+- **No two of the same consumable within 8 tiles.** The world spreads items rather than scattering them, which caps how much there is to find (§4.3). One constant decides the trade.
 - Portrait, mobile-first, touch as the primary input. 480×854 fixed canvas.
 - Turn-based: the world only advances when the player steps. No real-time pressure.
 - No build tooling: Phaser 3 from a CDN `<script>` tag, game code as plain ES modules.
-- No external art assets beyond the game's own pixel sprites.
+- No external art assets beyond the game's own pixel sprites, and no audio files: the blips and the loop are synthesised (§9).
 
 ## 6. Win / lose conditions
 
@@ -304,6 +320,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Start a run | **NEW GAME** or **LOAD GAME** on the title screen, then a slot on the picker | Click the same |
 | Overwrite a campaign | Tap an occupied slot under **NEW GAME**, then tap it again | Click the same |
 | Change palette | Settings, from the title screen | Same |
+| Turn the music off | Settings → **MUSIC** (§9) | Same |
 | Turn cheats on or off | Settings → **CHEATS** (§6.2) | Same |
 | Erase the slot you last played | Settings → **ERASE SLOT n**, then tap again | Same |
 | Leave the run | Tap **X** in the top right of the map | Click **X** |
@@ -369,7 +386,7 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
 
 **Explicitly out of scope:**
 - Combat, enemies, or any threat
-- Music, and any sound beyond the pickup blip
+- Voice, licensed music, or any audio that arrives as a file
 - Multiplayer, leaderboards
 - Save/load of a run *in progress*. The save records what a finished run banked, not where you were standing — quitting mid-expedition abandons it, which is the point of §6.1
 
@@ -380,7 +397,7 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
   - **An open gateway is drawn as plain floor while the character stands in it.** Two dense sprites on one tile read as one unidentifiable blob, which is the same reason the hut isn't drawn underneath them; it bites harder here, because a character wearing a gem's colour can be standing on a gate wearing the *same* colour.
   - **Tile edges:** a floor tile draws its dotted border on its top and left edges only, so the edge shared by two known tiles is drawn once rather than doubled. It closes off its right or bottom edge only where the neighbour there is still unknown, so the frontier of explored ground reads as a boundary instead of an unfinished grid.
   - **Three visibility states, one colour:** lit = foreground at full alpha; remembered = the same foreground at ~30% alpha; unknown = nothing drawn at all, just background. Dimming by alpha rather than by a third colour is what keeps the two-colour rule intact.
-  - **Floor is its border and nothing else.** An empty floor tile is bare background inside a dotted border — no stipple, no scatter, no per-tile decoration. The dotted grid alone separates "ground I have lit" from "dark I have never been to", and it holds that read at the remembered state's 30% alpha. Loose pixels in the middle of a tile were tried and cut: one tile's worth looks like texture, a viewport's worth looks like noise, and they compete with the things that actually matter — the wizard, the items, the frontier. Rock uses the inverse weight: a dense, near-solid mask, so a rock wall reads as a mass and floor reads as a surface.
+  - **Floor is its border and nothing else.** An empty floor tile is bare background inside a dotted border — no stipple, no scatter, no per-tile decoration. The dotted grid alone separates "ground I have lit" from "dark I have never been to", and it holds that read at the remembered state's 30% alpha. Loose pixels in the middle of a tile were tried and cut: one tile's worth looks like texture, a viewport's worth looks like noise, and they compete with the things that actually matter — the wizard, the items, the frontier. Rock uses the inverse weight: a dense, near-solid mask, so a rock wall reads as a mass and floor reads as a surface. A tree carries the same weight and spends it differently — a lobed canopy over a trunk, so a grove reads as foliage rather than stone and a player can see at a glance that this blocked step is a different kind of thing. Both are drawn in the palette's own foreground: they are terrain, which is the constant every restored colour has to read against.
   - **Items are drawn hollow.** A solid silhouette turns to mush at 16×16 once it's tinted flat, so the torches, the lantern, and the waters are outlines with small solid accents — the hollow interior is what gives the eye an edge to read. The lights differ in *silhouette* rather than in detail (a thin stick, a fat stick, a lantern, a bowl on splayed legs), because they have to be told apart at the edge of the light. The three waters have the same job and solve it the same way: the drop is a teardrop, the flask square-shouldered and hard-sided, the vial round-bottomed and sparkling, each with its water pooled solid in the bottom.
   - **Sanctum wall is a grid where rock is a blob.** Rock is a dense, near-solid organic mass; the wall is coursed masonry with staggered joints. That contrast is load-bearing rather than decorative — a player who reads a sanctum wall as terrain walks its perimeter looking for a way round instead of looking for the gate. A shut gate is a barred arch drawn in the palette's own foreground, because a gate you can't open yet is just more wall; an open one is the same arch with the leaves folded back, in the colour of the gem that opened it.
   - **The merchant is a stall, not a person.** An awning with stripes, a hooded figure behind it, and
@@ -413,7 +430,9 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
   | Magenta | `#14061a` | `#ff5fd2` |
 
 - **Reference:** monochrome terminal monitors, Downwell (two-tone discipline), classic roguelike fog of war.
-- **Audio:** one sound — a short rising square-wave arpeggio when you pick something up, two notes for a coin and three, landing higher, for a light. Synthesised through WebAudio rather than loaded as a file, for the same reason the sprites are text: no binary assets, no build step. Square waves are the audio equivalent of the two-colour rule. It is best-effort by design — a browser that blocks or lacks audio costs the player nothing.
+- **Audio:** two things, both synthesised through WebAudio rather than loaded as files, for the same reason the sprites are text — no binary assets, no build step, and the score diffs in git. Square waves are the audio equivalent of the two-colour rule, and both share one `AudioContext`. All of it is best-effort by design: a browser that blocks or lacks audio costs the player nothing.
+  - **A pickup blip:** a short rising arpeggio when you pick something up, two notes for a coin and three, landing higher, for a light.
+  - **A loop under the walk:** four eight-step phrases in A minor pentatonic over a filtered square-wave drone, about fifteen seconds end to end, written as text in `src/ui/music.js`. Most of its steps are rests — the loop marks time in a place where nothing else does, and a tune would start competing with the blips, which are the sounds that actually mean something. It sits well under them in level for the same reason: the blip is information, the loop is weather. It plays for the expedition and nowhere else, so the title screen and the menus are quiet and starting a run is when the dark gets a sound. **MUSIC** in Settings turns it off, persisted in `localStorage` like the palette.
 
 ## 10. Theme
 
@@ -429,7 +448,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | Path | Holds |
   |---|---|
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
-  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), the cheat switch (§6.2, persisted the same way), and `gemColour` — which colour each recovered gem paints in |
+  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), the music and cheat switches (§9, §6.2, persisted the same way), and `gemColour` — which colour each recovered gem paints in |
   | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums and landmarks (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `canEnter`); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation. `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
@@ -443,12 +462,13 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/MapView.js` | The tile pool, the three visibility states, per-tile tinting (gates and gem-tier items), the step slide and the blocked-step bump. Holds no game state |
   | `src/ui/hud.js` | Run counters, the stacked inventory strip, the **ITEMS** button, the active light's durability, the status line, the **COLOURS** gem row |
   | `src/ui/scroll.js` | A drag/wheel-scrollable, mask-clipped list region shared by the item card's instance list and the inventory panel |
-  | `src/ui/sfx.js` | The pickup blip, synthesised through WebAudio. No assets, and silently inert where audio is unavailable |
+  | `src/ui/sfx.js` | The pickup blip, and the one `AudioContext` everything audible shares. No assets, and silently inert where audio is unavailable |
+  | `src/ui/music.js` | The loop under the walk: the score as text, the two square-wave voices, and the lookahead scheduler that writes them to the clock. Started and stopped with `ExploreScene` |
   | `src/ui/shop.js` | The merchant's counter: a row per line of stock, over the purse it's paid from |
   | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers |
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |
   | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js` | The D-pad, the item card overlay (single-copy or scrollable instance list), the full scrollable inventory panel, the hut's title/rows/buttons dialog, the shared bordered button |
-  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker), `SettingsScene`, `ExploreScene` |
+  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker), `SettingsScene` (palettes, the music switch, the cheat switch, erase), `ExploreScene` |
   | `tests/` | `harness.js` (local server + Playwright driver + runner) and `game.test.js` — see `TESTING.md` |
 
 - **Sprites are text, not images.** Each is a 16×16 grid of `#`/`.` in `src/data/sprites.js`, baked into a white texture at boot and tinted at draw time. No binary assets, no image editor, no build step — and one texture set serves all four palettes.
@@ -456,7 +476,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
 - **Explored-tile storage:** a `Set` of `"x,y"` keys for tiles ever lit. Terrain and items are re-derived from the seed on demand, so nothing else about the world needs storing. A run additionally keeps only what the recap reports plus the water level: the coin count, the current water, the gem count, the two tools, the high-water mark of distance from the base, and a tally of what it has picked up — and, per epoch, the set of consumable tiles it has emptied, which a respawn simply clears.
 - **The structures are derived, then memoised.** Placing four sanctums and three landmarks costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same seven. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.
 - **The consumable scatter is thrown, then thinned, then memoised.** A tile asks its lattice cell whether a candidate lands there, and a candidate is crowded out only by a same-kind conflict that *itself* landed — resolved by a short recursion that only ever walks to higher-priority candidates, so it terminates. Dropping every candidate that merely has a stronger neighbour would keep only local maxima and thin the world to a third of what the separation rule actually allows. The recursion is memoised per (seed, salt, gems); a respawn moves the salt, and old memos are dropped wholesale because the cache is a speed-up and never state. A full viewport repaint costs about a tenth of a millisecond.
-- **Run-start cost.** `pickSeed` flood-fills for the base pocket check and again out past the furthest sanctum for the landmark check, which measures about 50ms on average and 104ms at worst — paid once, during a scene transition. The landmark fill short-circuits as soon as it has reached all four doors and all three landmarks, and never runs at all for a seed the cheaper pocket check has already rejected.
+- **Run-start cost.** `pickSeed` flood-fills for the base pocket check and again out past the furthest sanctum for the landmark check, which measures about 54ms on average and 131ms at worst — paid once, during a scene transition. The landmark fill short-circuits as soon as it has reached all four doors and all three landmarks, and never runs at all for a seed the cheaper pocket check has already rejected.
 - **The page has to be the viewport.** Phaser fits the canvas to its parent element, so `#game` is sized to the full viewport and Phaser's own `autoCenter` does the centring. Centring the parent with flexbox instead leaves it shrink-to-fit — a size Phaser cannot fit into, which on a portrait phone scaled the canvas to the viewport *height* and let the width overflow: the sides of the HUD ran off screen and the page panned sideways, which ate taps, because a touch the browser is still deciding might be a pan never becomes a click. The canvas also sets `touch-action: none` so there is no pan gesture to wait on. `tests/game.test.js` pins this with a phone-sized viewport.
 - **Rendering the viewport:** the tile window is repointed around the character's coordinate each step rather than instantiating sprites for a growing world — a fixed pool of 11×15 cells (three sprites each: ground, base hut, item) whose texture and alpha are reassigned from whatever tile now sits at that screen position. Sprite count stays constant however far you walk. A step slides the whole tile container one tile and tweens it home in 90ms, so the world moves and the wizard doesn't; input is blocked for that tween so a fast tapper can't outrun the renderer.
 - **Key technical risks:**

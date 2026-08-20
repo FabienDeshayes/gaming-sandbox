@@ -97,6 +97,7 @@ npm test        # node tests/game.test.js
 - `tests/game.test.js` — the suite itself. `unit(...)` tests exercise pure `src/core/rules.js` math with no browser; `test(...)` tests each drive a fresh page against the real canvas.
 - `node_modules/` is gitignored; `package.json` is committed and is test-only — the game itself needs no build step and runs straight from `index.html`.
 - Add a test whenever a bug fix covers something a player could hit by just playing. `TESTING.md` also covers "rule-math only" checks (import `src/core/rules.js` directly into a `.mjs`/ESM scratch file) for sanity-checking a new level's solution before wiring up the UI.
+- `tests/solver.js` replays a level through the real rules and searches its whole state space. Every level in `LEVELS` is checked by the suite for being winnable *and* for genuinely needing the actions it grants — so a new level that walking alone can solve fails `npm test`. Use it (`solve(level, { allow, prefix })`) while designing, before touching the UI.
 
 **Sandbox gotcha:** `index.html` loads Phaser from `cdn.jsdelivr.net`, but outbound CDN requests are blocked in this environment. The test harness works around this by installing Phaser from npm and serving it locally, rewriting the CDN `<script src>` on the fly in its own local server — never edit `index.html` itself to work around this.
 

@@ -36,18 +36,23 @@ Add a test here whenever you fix a bug that a player could hit by just playing.
 The rest of this doc is for **per-level verification**, which the suite
 deliberately doesn't try to cover exhaustively.
 
-## Two levels of checking
+## Three levels of checking
 
 1. **Rule math only (fast, no browser).** Move, Shift, and Flip are pure
    coordinate math living in `src/core/rules.js` (see `LEVEL_DESIGN.md` §5). You can
    import that module straight into Node and verify a solution's arithmetic without
    launching anything — good for sanity-checking a new level's intended solution
    before wiring the UI. See [Rule-math check](#rule-math-check).
-2. **Full browser smoke test (authoritative).** Actually loads `index.html`, clicks
+2. **Solver check (fast, no browser).** `tests/solver.js` replays a whole level
+   through those same rules and searches the entire reachable state space, so it
+   answers the two questions a level has to get right before anything else: *can
+   this be won at all*, and *does it actually need the action it hands out*. See
+   [Solver check](#solver-check).
+3. **Full browser smoke test (authoritative).** Actually loads `index.html`, clicks
    the cards/arrows, swipes, and asserts the win overlay appears. This is what
    proves a level is playable end to end. See [Browser smoke test](#browser-smoke-test).
 
-Prefer the browser test when claiming a level "works" — the math check can't catch
+Prefer the browser test when claiming a level "works" — the other two can't catch
 input wiring, budget, or scene-flow bugs.
 
 ## Source layout
@@ -197,6 +202,47 @@ console.log('L5 Move cannot reach the crate:', l5move.kind === 'illegal' ? 'OK' 
 > `package.json` sets `"type": "module"`, so a plain `.js` file in this directory
 > is already ESM and can `import` the game's modules directly — a scratch file
 > written as CommonJS (`require`) will *not* run here.
+
+## Solver check
+
+`tests/solver.js` is a headless replay of a level plus a breadth-first search over
+it. It is **not** a second copy of the rules: every transition calls into
+`src/core/rules.js` and then does what `PuzzleScene` does with the result — the
+same destroy/pickup handling, the same "a shift that changes nothing is free", the
+same per-action budgets and win check. If either of those changes, this file has
+to follow, and the browser tests stay the authority on what the game does.
+
+Because the search is exhaustive, a `false` from it is a proof, not a timeout:
+
+```js
+// check.js — run from games/bibou with: node check.js
+import { LEVELS } from './src/data/levels.js';
+import { describeAction, solve } from './tests/solver.js';
+
+const level = LEVELS.find((l) => l.id === 26);
+
+// Is it winnable at all, and by what shortest line?
+const best = solve(level);
+console.log(best.solved ? best.path.map(describeAction).join(' | ') : 'UNSOLVABLE');
+
+// Does it need the actions it grants? `allow` limits which budgeted actions the
+// search may spend — Move is always allowed, so `[]` is "walking only".
+console.log('walk-only:', solve(level, { allow: [] }).solved);
+console.log('flip-only:', solve(level, { allow: ['flip'] }).solved);
+
+// Is the level's trap a real dead end? `prefix` plays those actions first and
+// then searches what's left; it throws if the game would reject one of them.
+console.log('flip first:', solve(level, { prefix: [{ type: 'flip', axis: 'row' }] }).solved);
+```
+
+The suite runs the first three of those over **every** level in `LEVELS` (see the
+`unit(...)` tests at the top of `tests/game.test.js`), so a new level that can't be
+won, or that hands out a card it doesn't need, fails `npm test` rather than
+shipping. Levels whose whole design is a trap list theirs in `DEAD_ENDS` there.
+
+Replaying a level's *documented* solution is the other use: build the action list
+from `LEVEL_DESIGN.md` §7, feed it to `applyAction` in order, and assert `isWin` —
+that's how the doc's intended solutions are kept honest when rules change.
 
 ## Browser smoke test
 
@@ -415,6 +461,9 @@ const server = http.createServer((req, res) => {
   `gameOver` false with the `"Get the ... first"` hint, and that the objective
   flips to `"Objective: reach the goal"` once it's collected.
 - **Intended solution wins:** running the documented steps ends with `"You win!"`.
+  The [solver check](#solver-check) is the cheap way to confirm the documented
+  steps are still a solution — and that one exists at all — before writing the
+  browser test.
 - **Move is free and never runs out:** walking a level far past any old budget must
   leave `gameOver` false, spend nothing from `scene.remaining`, and keep counting
   in `movesUsed`. A blocked move isn't even counted.
@@ -424,7 +473,9 @@ const server = http.createServer((req, res) => {
   4's column flip leaves the key sealed), and that `↻` restores the level to its
   opening state either way. Where a level needs two actions in sequence (Level 7),
   assert the *wrong order* too: doing them the other way round has to leave the
-  board provably stuck, not merely longer.
+  board provably stuck, not merely longer. "Provably stuck" is exactly what the
+  solver's `prefix` option settles, so prove it there and assert the visible
+  consequence in the browser.
 - **A tap on a control must not also be read as a swipe.** Controls consume their
   own `pointerdown` with `stopPropagation`, so the scene's swipe handler never
   sees where that press began — but it still receives the `pointerup`. After

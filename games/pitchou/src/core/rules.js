@@ -31,7 +31,7 @@ export const DEFAULT_TOOLS = [
 export const DEFAULT_TUNING = {
   seasonNights: 12,
   startMeter: 10,
-  meterCap: 12,
+  meterCap: 14,
   // The night ends with an empty basket once the sizes of the waves drawn add
   // up to this. With every wave sized 1 and a budget of 3, this is exactly the
   // "third wave and you're out" rule in DESIGN.md; sized waves make the same
@@ -277,20 +277,15 @@ export function basketIsEmpty(basket) {
   return RESOURCES.every((resource) => basket[resource] === 0);
 }
 
-// Dawn: each resource stack goes to its meter or to the stockpile, never both
-// (DESIGN.md §4). Anything a meter can't hold is lost, which is itself pressure
-// to spend a surplus on tools rather than pour it away.
-export function allocate(state, routes = {}) {
+// Dawn: every resource in the basket pours into its meter. Anything the meter
+// can't hold is lost — the cap is pressure to spend a surplus on tools.
+export function allocate(state) {
   expectPhase(state, 'dawn');
   for (const resource of RESOURCES) {
     const amount = state.basket[resource];
     if (amount === 0) continue;
-    if (routes[resource] === 'stock') {
-      state.stock[resource] += amount;
-    } else {
-      const meter = METER_OF[resource];
-      state.meters[meter] = Math.min(state.tuning.meterCap, state.meters[meter] + amount);
-    }
+    const meter = METER_OF[resource];
+    state.meters[meter] = Math.min(state.tuning.meterCap, state.meters[meter] + amount);
     state.basket[resource] = 0;
   }
   return state;
@@ -300,9 +295,13 @@ export function canAfford(stock, cost) {
   return Object.entries(cost).every(([resource, amount]) => stock[resource] >= amount);
 }
 
+export function canAffordFromMeters(meters, cost) {
+  return Object.entries(cost).every(([resource, amount]) => meters[METER_OF[resource]] >= amount);
+}
+
 export function affordableTools(state) {
   return state.tuning.tools.filter(
-    (tool) => !state.toolsBuilt.includes(tool.id) && canAfford(state.stock, tool.cost),
+    (tool) => !state.toolsBuilt.includes(tool.id) && canAffordFromMeters(state.meters, tool.cost),
   );
 }
 
@@ -313,8 +312,8 @@ export function buildTool(state, toolId) {
   expectPhase(state, 'dawn');
   const tool = toolById(toolId, state.tuning.tools);
   if (state.toolsBuilt.includes(toolId)) throw new Error(`already built: ${toolId}`);
-  if (!canAfford(state.stock, tool.cost)) throw new Error(`cannot afford: ${toolId}`);
-  for (const [resource, amount] of Object.entries(tool.cost)) state.stock[resource] -= amount;
+  if (!canAffordFromMeters(state.meters, tool.cost)) throw new Error(`cannot afford: ${toolId}`);
+  for (const [resource, amount] of Object.entries(tool.cost)) state.meters[METER_OF[resource]] -= amount;
   if (tool.removeWave) {
     let index = -1;
     for (let i = 0; i < state.shore.length; i++) {

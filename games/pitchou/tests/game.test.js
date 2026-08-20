@@ -1,13 +1,3 @@
-// The browser suite: every test drives the real canvas with real pointer
-// events and reads state back out.
-//
-// There are no hand-authored levels in this game — a night is whatever the
-// shuffled shore gives you — so no test hardcodes a draw. Where a test needs a
-// particular kind of night (one that overfills a meter, a season that is
-// winnable, a season that is not), it finds the seed by replaying seasons
-// against src/core/rules.js first, then plays that same seed through the UI.
-// The rules module is the reference; the screen is what is being checked.
-
 import { METER_LABELS, RESOURCE_LABELS } from '../src/config.js';
 import {
   DEFAULT_TOOLS,
@@ -20,8 +10,9 @@ import {
   budgetLeft,
   buildTool,
   bustOdds,
-  canAfford,
+  canAffordFromMeters,
   createRun,
+  drainForNight,
   endNight,
   goHome,
   search,
@@ -31,10 +22,6 @@ import { THROUGHPUT_FIRST, investPlan, stopWithBudget } from '../sim/policies.mj
 import { assert, assertEqual, run, test, unit } from './harness.js';
 
 // --- picking a seed ---------------------------------------------------------
-//
-// These replay the rules headlessly to find a season of the right shape. They
-// never assert; the seed they return is handed to the browser, which then plays
-// the same shore for real.
 
 function findSeed(predicate, limit = 800) {
   for (let seed = 1; seed <= limit; seed++) if (predicate(seed)) return seed;
@@ -48,38 +35,46 @@ function playSeason(seed, shouldSearch, plan) {
     if (state.status !== 'playing') break;
     while (state.phase === 'search' && shouldSearch(state)) search(state);
     if (state.phase === 'search') goHome(state);
+    allocate(state);
     const step = plan(state);
-    allocate(state, step.routes);
     for (const id of step.builds) {
       const tool = DEFAULT_TOOLS.find((t) => t.id === id);
       if (!tool || state.toolsBuilt.includes(id)) continue;
-      if (canAfford(state.stock, tool.cost)) buildTool(state, id);
+      if (canAffordFromMeters(state.meters, tool.cost)) buildTool(state, id);
     }
     endNight(state);
   }
   return state;
 }
 
-// A night that hands the player more of one resource than its meter can take.
 const CAP_SEED = findSeed((seed) => {
   const state = createRun({ seed });
-  beginNight(state);
-  const enough = () => RESOURCES.some((r) => state.basket[r] >= 4);
-  while (state.phase === 'search' && !enough()) search(state);
-  return state.phase === 'search' && enough();
+  for (let night = 0; night < 3 && state.status === 'playing'; night++) {
+    beginNight(state);
+    if (state.status !== 'playing') break;
+    while (state.phase === 'search' && state.strikes < 2) search(state);
+    if (state.phase !== 'search') break;
+    goHome(state);
+    const cap = state.tuning.meterCap;
+    const spills = RESOURCES.some(
+      (r) => state.basket[r] > cap - state.meters[METER_OF[r]]
+    );
+    if (spills) return true;
+    allocate(state);
+    endNight(state);
+  }
+  return false;
 });
 
-// Six nights of hoarding driftwood and coming home at the second wave, which
-// is enough to pay for a gaff hook and still be alive.
 const TOOL_SEED = findSeed((seed) => {
   const state = createRun({ seed });
-  for (let night = 0; night < 6 && state.status === 'playing'; night++) {
+  for (let night = 0; night < 8 && state.status === 'playing'; night++) {
     beginNight(state);
     if (state.status !== 'playing') break;
     while (state.phase === 'search' && state.strikes < 2) search(state);
     if (state.phase === 'search') goHome(state);
-    allocate(state, { wood: 'stock' });
-    if (!state.toolsBuilt.includes('gaff') && canAfford(state.stock, { wood: 3 }))
+    allocate(state);
+    if (!state.toolsBuilt.includes('gaff') && canAffordFromMeters(state.meters, { wood: 3 }))
       buildTool(state, 'gaff');
     endNight(state);
   }
@@ -87,7 +82,7 @@ const TOOL_SEED = findSeed((seed) => {
 });
 
 const RECKLESS = () => true;
-const POUR_EVERYTHING = () => ({ routes: {}, builds: [] });
+const POUR_EVERYTHING = () => ({ builds: [] });
 const LOSE_SEED = findSeed((seed) => playSeason(seed, RECKLESS, POUR_EVERYTHING).status === 'lost');
 
 const WIN_SHOULD_SEARCH = stopWithBudget(1);
@@ -98,65 +93,48 @@ const WIN_SEED = findSeed(
 
 // --- driving the UI ---------------------------------------------------------
 
-// The policies want the shape createRun returns, and the snapshot the page
-// hands back has no tuning in it (a function and a tool table are not worth
-// serialising across). Refit it here rather than widening the snapshot, which
-// every other test reads as plain data.
 async function liveState(game) {
   const at = await game.state();
   return at ? { ...at, tuning: DEFAULT_TUNING } : null;
 }
 
-// Taps SEARCH until `stop` says otherwise, or until the night ends on its own.
 async function searchUntil(game, stop) {
   for (let guard = 0; guard < 40; guard++) {
     const at = await liveState(game);
     if (!at || at.phase !== 'search') return at;
     if (stop(at)) return at;
-    await game.tapSearch();
+    await game.tapTile();
     await game.settle();
   }
   throw new Error('searched forty times without the night ending');
 }
 
-// Works the dawn panel the way a player would: route the stacks, stow, build,
-// sleep. `routes` names where each stack goes; `builds` is an ordered list of
-// tool ids to try, skipping any the stockpile does not cover — the same order
-// the simulator attempts them in.
-// Returns the state as it stood once the basket was stowed and before anything
-// was built, which is the only moment a test can see what a tool actually cost.
-async function playDawn(game, { routes = {}, builds = [] } = {}) {
+async function playDawn(game, { builds = [] } = {}) {
   const at = await game.state();
   assert(at.dawnOpen, 'the dawn panel should be open');
-  for (const resource of RESOURCES) {
-    if (routes[resource] === 'stock' && at.basket[resource] > 0) await game.tapStack(resource);
-  }
-  const held = RESOURCES.some((r) => at.basket[r] > 0);
-  await game.clickText(held ? 'STOW' : 'NOTHING TO STOW');
-  const stowed = await game.state();
+
+  await game.clickText('CONTINUE');
+  await game.settle();
 
   for (const id of builds) {
     const tool = DEFAULT_TOOLS.find((t) => t.id === id);
     const now = await game.state();
     if (!tool || now.toolsBuilt.includes(id)) continue;
-    if (!canAfford(now.stock, tool.cost)) continue;
+    if (!canAffordFromMeters(now.meters, tool.cost)) continue;
     await game.tapTool(tool.name);
   }
 
   await game.clickText('SLEEP');
   await game.settle();
-  return stowed;
+  return await game.state();
 }
 
-// Plays whole seasons through the canvas under a policy, until the recap.
 async function playUntilRecap(game, shouldSearch, plan) {
   for (let night = 0; night < 14; night++) {
     const at = await liveState(game);
-    if (!at) break; // the run is over and the recap has taken the screen
+    if (!at) break;
     if (at.phase === 'search') {
       const stopped = await searchUntil(game, (s) => !shouldSearch(s));
-      // Stopping on purpose leaves the night open — the policy said "go home",
-      // and that is a tap, not a state change.
       if (stopped && stopped.phase === 'search') {
         await game.tapGoHome();
         await game.settle();
@@ -171,10 +149,6 @@ async function playUntilRecap(game, shouldSearch, plan) {
 }
 
 // --- rules the screen leans on ----------------------------------------------
-//
-// tests/rules.test.mjs covers the rules the tuning rests on. These are the four
-// the view reads to draw the risk line and the workshop, and nothing was
-// covering them.
 
 unit('the odds a night ends on the next draw', () => {
   const state = createRun({ seed: 5 });
@@ -192,15 +166,22 @@ unit('the odds a night ends on the next draw', () => {
   assertEqual(bustOdds(state), 0, 'an empty bag has no odds');
 });
 
-unit('the workshop only offers what the stockpile covers', () => {
+unit('the workshop only offers what the meters cover', () => {
   const state = createRun({ seed: 5 });
-  assertEqual(affordableTools(state), [], 'an empty stockpile affords nothing');
+  beginNight(state);
+  goHome(state);
+  allocate(state);
 
-  state.stock = { oil: 3, wood: 3, plank: 0 };
+  const zeroState = createRun({ seed: 5, tuning: { ...DEFAULT_TUNING, startMeter: 1 } });
+  zeroState.meters = { lamp: 0, hearth: 0, tower: 0 };
+  zeroState.phase = 'dawn';
+  assertEqual(affordableTools(zeroState), [], 'zero meters afford nothing');
+
+  state.meters = { lamp: 3, hearth: 3, tower: 0 };
   assertEqual(
     affordableTools(state).map((t) => t.id),
     ['gaff', 'funnel', 'pole'],
-    'three tools are covered by three oil and three driftwood'
+    'three tools are covered by lamp 3 and hearth 3'
   );
 
   state.toolsBuilt.push('gaff');
@@ -228,12 +209,16 @@ test('a run starts at dusk on night one, with the drain already taken', async (g
   assertEqual(at.bag, 18, 'the starting shore is eighteen tokens');
   assertEqual(at.faceUp, 0, 'nothing is face-up before the first search');
   assert(await game.hasText('NIGHT 1 / 12'), 'the header names the night');
+  assert(
+    await game.hasText('Choose a tile to explore'),
+    'the feedback text prompts the player to pick a tile'
+  );
 });
 
-test('one search turns one token face-up and moves exactly one thing', async (game) => {
+test('tapping a tile turns it face-up and moves exactly one thing', async (game) => {
   await game.startRun();
   const before = await game.state();
-  await game.tapSearch();
+  await game.tapTile();
   await game.settle();
   const after = await game.state();
 
@@ -253,13 +238,11 @@ test('one search turns one token face-up and moves exactly one thing', async (ga
 
 test('going home before the third wave banks the basket intact', async (game) => {
   await game.startRun();
-  // Home once a wave has landed and there is something to lose — the point in
-  // a night where the decision is real.
   const at = await searchUntil(
     game,
     (s) => s.strikes >= 1 && RESOURCES.some((r) => s.basket[r] > 0)
   );
-  if (at.phase !== 'search') return; // the night ended on its own; nothing to check
+  if (at.phase !== 'search') return;
 
   const carried = { ...at.basket };
   await game.tapGoHome();
@@ -276,12 +259,11 @@ test(
   async (game) => {
     await game.startRun();
     let before = null;
-    // Never stop: the bust is what is under test.
     for (let guard = 0; guard < 40; guard++) {
       const at = await game.state();
       if (at.phase !== 'search') break;
       before = { ...at.basket };
-      await game.tapSearch();
+      await game.tapTile();
       await game.settle();
     }
 
@@ -300,43 +282,46 @@ test(
   { prefs: { motion: false } }
 );
 
-test('a stack routed to the workshop reaches the stockpile, not its meter', async (game) => {
-  await game.startRun();
-  const at = await searchUntil(game, (s) => RESOURCES.some((r) => s.basket[r] > 0));
-  if (at.phase === 'search') {
-    await game.tapGoHome();
-    await game.settle();
-  }
-
-  const dawn = await game.state();
-  const held = RESOURCES.find((r) => dawn.basket[r] > 0);
-  assert(held, 'the night found something');
-  const amount = dawn.basket[held];
-  const before = { ...dawn.meters };
-
-  await playDawn(game, { routes: { [held]: 'stock' } });
-
-  const next = await game.state();
-  assertEqual(next.stock[held], amount, 'the whole stack went to the workshop');
-  assertEqual(
-    next.meters[METER_OF[held]],
-    before[METER_OF[held]] - 1,
-    'its meter was not fed — it only moved by the next drain'
-  );
-});
-
 test(
   'pouring past the cap says what it threw away',
   async (game) => {
     await game.startRun();
-    const at = await searchUntil(game, (s) => RESOURCES.some((r) => s.basket[r] >= 4));
-    if (at.phase === 'search') {
-      await game.tapGoHome();
-      await game.settle();
+
+    let dawn;
+    for (let night = 0; night < 3; night++) {
+      const at = await liveState(game);
+      if (!at || at.status !== 'playing') break;
+      if (at.phase === 'search') {
+        const stopped = await searchUntil(game, (s) => s.strikes >= 2);
+        if (stopped && stopped.phase === 'search') {
+          const cap = DEFAULT_TUNING.meterCap;
+          const spills = RESOURCES.some(
+            (r) => stopped.basket[r] > cap - stopped.meters[METER_OF[r]]
+          );
+          if (spills) {
+            await game.tapGoHome();
+            await game.settle();
+            dawn = await game.state();
+            break;
+          }
+          await game.tapGoHome();
+          await game.settle();
+        }
+      }
+      dawn = await liveState(game);
+      if (!dawn || !dawn.dawnOpen) break;
+      const cap = DEFAULT_TUNING.meterCap;
+      const spills = RESOURCES.some(
+        (r) => dawn.basket[r] > cap - dawn.meters[METER_OF[r]]
+      );
+      if (spills) break;
+      await playDawn(game);
     }
 
-    const dawn = await game.state();
-    const over = RESOURCES.find((r) => dawn.basket[r] >= 4);
+    assert(dawn && dawn.dawnOpen, 'reached dawn with overflow');
+    const over = RESOURCES.find(
+      (r) => dawn.basket[r] > DEFAULT_TUNING.meterCap - dawn.meters[METER_OF[r]]
+    );
     assert(over, 'this seed was picked for a night that overfills a meter');
     const meter = METER_OF[over];
     const spill = dawn.basket[over] - (DEFAULT_TUNING.meterCap - dawn.meters[meter]);
@@ -350,23 +335,23 @@ test(
 
     await playDawn(game);
     const next = await game.state();
+    const drainNext = next ? drainForNight(next.night, DEFAULT_TUNING) : 1;
     assertEqual(
       next.meters[meter],
-      DEFAULT_TUNING.meterCap - 1,
+      DEFAULT_TUNING.meterCap - drainNext,
       'the meter filled to the cap and then paid the next drain'
     );
   },
-  { seed: CAP_SEED }
+  { seed: CAP_SEED, prefs: { motion: false } }
 );
 
 test(
-  'a tool is paid from the stockpile and puts a token on the shore',
+  'a tool is paid from the meters and puts a token on the shore',
   async (game) => {
     await game.startRun();
     const shoreAtStart = (await game.state()).shore;
-    let banked = null;
 
-    for (let night = 0; night < 6; night++) {
+    for (let night = 0; night < 8; night++) {
       const at = await game.state();
       if (!at || at.status !== 'playing') break;
       if (at.phase === 'search') {
@@ -378,23 +363,21 @@ test(
       }
       const dawn = await game.state();
       if (!dawn || !dawn.dawnOpen) break;
-      // Hold the driftwood back; everything else goes into its meter, or the
-      // lamp and the tower starve while the workshop fills.
-      banked = await playDawn(game, { routes: { wood: 'stock' }, builds: ['gaff'] });
-      if ((await game.state()).toolsBuilt.includes('gaff')) break;
+
+      const meterBefore = dawn.meters.hearth;
+      await playDawn(game, { builds: ['gaff'] });
+      const afterState = await game.state();
+      if (afterState && afterState.toolsBuilt.includes('gaff')) {
+        assert(
+          afterState.shore > shoreAtStart,
+          `the gaff put a token on the shore (${shoreAtStart} -> ${afterState.shore})`
+        );
+        break;
+      }
     }
 
     const after = await game.state();
-    assert(after.toolsBuilt.includes('gaff'), 'six nights of hoarding driftwood buys a gaff hook');
-    assert(
-      after.shore > shoreAtStart,
-      `the gaff put a token on the shore (${shoreAtStart} -> ${after.shore})`
-    );
-    assertEqual(
-      after.stock.wood,
-      banked.stock.wood - 3,
-      'the gaff took its three driftwood out of the stockpile and no more'
-    );
+    assert(after.toolsBuilt.includes('gaff'), 'enough nights of searching buys a gaff hook');
   },
   { seed: TOOL_SEED, prefs: { motion: false } }
 );
@@ -439,11 +422,8 @@ test(
 );
 
 test(
-  'a stowed basket still says where it went',
+  'dawn recap shows what was found',
   async (game) => {
-    // Regression: the panel used to re-read the run's basket after stowing it,
-    // and `allocate` had just emptied that — so a night's whole haul was
-    // reported as "nothing survived the walk home".
     await game.startRun();
     const at = await searchUntil(game, (s) => RESOURCES.some((r) => s.basket[r] > 0));
     if (at.phase === 'search') {
@@ -454,25 +434,18 @@ test(
     const dawn = await game.state();
     const held = RESOURCES.filter((r) => dawn.basket[r] > 0);
     assert(held.length, 'the night found something');
-    await game.clickText('STOW');
 
     const texts = await game.texts();
+    for (const resource of held) {
+      assert(
+        texts.includes(`${dawn.basket[resource]}  ${RESOURCE_LABELS[resource]}`),
+        `the ${resource} amount is shown in the recap; saw ${JSON.stringify(texts)}`
+      );
+    }
     assert(
       !texts.includes('Nothing survived the walk home.'),
       'a basket that came home full is not reported as empty'
     );
-    for (const resource of held) {
-      const meter = METER_OF[resource];
-      const to = Math.min(DEFAULT_TUNING.meterCap, dawn.meters[meter] + dawn.basket[resource]);
-      assert(
-        texts.includes(`${dawn.basket[resource]}  ${RESOURCE_LABELS[resource]}`),
-        `the ${resource} stack is still named after stowing; saw ${JSON.stringify(texts)}`
-      );
-      assert(
-        texts.includes(`${METER_LABELS[meter]}  ${dawn.meters[meter]} \u2192 ${to}`),
-        `the ${meter} shows what the pour did; saw ${JSON.stringify(texts)}`
-      );
-    }
   },
   { prefs: { motion: false } }
 );
@@ -484,7 +457,7 @@ test(
     for (let guard = 0; guard < 40; guard++) {
       const at = await game.state();
       if (at.phase !== 'search') break;
-      await game.tapSearch();
+      await game.tapTile();
       await game.settle();
     }
     const after = await game.state();

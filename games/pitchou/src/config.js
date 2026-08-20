@@ -37,18 +37,16 @@ export const RISK_Y = 348;
 export const RISK_PIP_X = 40;
 export const RISK_PIP_GAP = 34;
 
-export const TALLY_Y = 392; // what is still out there, counted down
-
 // The shore grid sits in a fixed band and centres however many rows it needs.
 // Seven columns because a season can push the shore to 25 tokens (18 to start,
 // three from the storm, four more if every add-a-token tool gets built) and all
 // of it has to stay on one screen — the contents are inspectable at all times
 // (DESIGN.md §5), which is only true if they all fit.
-export const SHORE_TOP = 414;
-export const SHORE_BAND_H = 180;
+export const SHORE_TOP = 382;
+export const SHORE_BAND_H = 200;
 export const SHORE_COLS = 7;
-export const SHORE_CELL = 44;
-export const SHORE_LEFT = (GAME_WIDTH - SHORE_COLS * SHORE_CELL) / 2; // 86
+export const SHORE_CELL = 50;
+export const SHORE_LEFT = (GAME_WIDTH - SHORE_COLS * SHORE_CELL) / 2;
 
 export const BASKET_Y = 636;
 export const BASKET_XS = { oil: 92, wood: 240, plank: 388 };

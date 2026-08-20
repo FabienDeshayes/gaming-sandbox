@@ -9,6 +9,7 @@ import {
   METER_XS,
   PANEL_CONTENT_DEPTH,
   PANEL_DEPTH,
+  RESOURCE_LABELS,
   RISK_PIP_GAP,
   RISK_PIP_X,
   RISK_Y,
@@ -24,9 +25,9 @@ import {
 import {
   DEFAULT_TUNING,
   METERS,
+  RESOURCES,
   beginNight,
   budgetLeft,
-  countTokens,
   createRun,
   drainForNight,
   endNight,
@@ -51,23 +52,10 @@ import {
 } from '../ui/sfx.js';
 import { ensureTextures } from '../ui/textures.js';
 
-// The all-or-nothing bust DESIGN.md §9 holds in reserve. One field, because the
-// rules module already takes it as one.
 function tuningFor(hard) {
   return hard ? { ...DEFAULT_TUNING, bustKeeps: 0 } : DEFAULT_TUNING;
 }
 
-// How many draws left in the bag would end the night outright. The same set
-// `bustOdds` divides by the bag size — shown as a count instead of a fraction,
-// because nothing in this game is allowed to need a percentage (DESIGN.md §5).
-function killersLeft(state) {
-  const left = budgetLeft(state);
-  return state.bag.filter((token) => token.kind === 'wave' && token.size >= left).length;
-}
-
-// The whole run lives in one scene: dusk, the search, and the dawn panel over
-// the top of it. Dawn is an in-canvas overlay rather than a second scene, the
-// way every modal in this repo is built.
 export class NightScene extends Phaser.Scene {
   constructor() {
     super('NightScene');
@@ -76,14 +64,11 @@ export class NightScene extends Phaser.Scene {
   create(data) {
     ensureTextures(this);
 
-    // scene.restart preserves fields, so every one of these is reset here
-    // rather than only at construction.
     this.seed = data && data.seed !== undefined ? data.seed : 1;
     this.run = createRun({ seed: this.seed, tuning: tuningFor(getHardMode()) });
-    // Season tallies for the recap. They live here rather than in the run,
-    // because src/core/rules.js is the tuned part and a display counter has no
-    // business in it.
     this.gathered = { oil: 0, wood: 0, plank: 0 };
+    this.nightGathered = { oil: 0, wood: 0, plank: 0 };
+    this.nightLost = { oil: 0, wood: 0, plank: 0 };
     this.busts = 0;
     this.busy = false;
     this.confirmOpen = false;
@@ -120,18 +105,24 @@ export class NightScene extends Phaser.Scene {
     for (const meter of METERS) this.meters[meter] = createMeterBar(this, METER_XS[meter], meter);
 
     this.strikes = this.add.graphics();
-    this.strikeLabel = this.add
+    this.enduranceText = this.add
       .text(GAME_WIDTH - 20, RISK_Y, '', { fontFamily: FONT, fontSize: '12px', color: COLORS.muted })
       .setOrigin(1, 0.5);
 
     this.shore = createShoreView(this);
+    this.shore.setOnTileTap((index) => this.onTileTap(index));
+
     this.basket = createBasketView(this);
 
-    this.searchButton = createButton(this, cx, SEARCH_Y, 'SEARCH', () => this.onSearch(), {
-      width: 400,
-      fontSize: 30,
-      padY: 20,
-    });
+    this.feedbackText = this.add
+      .text(cx, SEARCH_Y, '', {
+        fontFamily: FONT,
+        fontSize: '20px',
+        color: COLORS.muted,
+        align: 'center',
+      })
+      .setOrigin(0.5);
+
     this.homeButton = createButton(this, cx, HOME_Y, 'GO HOME', () => this.onGoHome(), {
       width: 400,
       fontSize: 20,
@@ -155,8 +146,6 @@ export class NightScene extends Phaser.Scene {
       const now = i === this.run.night;
       this.track.fillStyle(now ? COLORS.lampHex : done ? COLORS.mutedHex : COLORS.dimHex, 1);
       this.track.fillCircle(x, TRACK_Y, now ? TRACK_PIP_R + 1 : TRACK_PIP_R - 1);
-      // The storm adds a wave after these nights — the squeeze is on a fixed
-      // schedule, so it is drawn on the calendar rather than sprung.
       if (tuning.stormWaveNights.includes(i)) {
         this.track.lineStyle(1, COLORS.foamHex, 0.8);
         this.track.strokeCircle(x, TRACK_Y, TRACK_PIP_R + 3);
@@ -187,32 +176,31 @@ export class NightScene extends Phaser.Scene {
       this.strikes.lineStyle(2, spent ? COLORS.foamHex : COLORS.panelEdgeHex, 1);
       this.strikes.strokeCircle(x, RISK_Y, 11);
     }
-    const killers = killersLeft(this.run);
-    this.strikeLabel.setText(
-      killers === 0
-        ? 'nothing out there can end it'
-        : `${killers} of ${this.run.bag.length} ends the night`
-    );
-    this.strikeLabel.setColor(killers === 0 ? COLORS.muted : COLORS.foam);
+    const remaining = budgetLeft(this.run);
+    if (remaining <= 0) {
+      this.enduranceText.setText('The waves swept you home');
+      this.enduranceText.setColor(COLORS.foam);
+    } else if (remaining === 1) {
+      this.enduranceText.setText('One more squall and the waves take you home');
+      this.enduranceText.setColor(COLORS.foam);
+    } else {
+      this.enduranceText.setText(`You can endure ${remaining} more squalls`);
+      this.enduranceText.setColor(COLORS.muted);
+    }
   }
 
   setControls(on) {
-    this.searchButton.setEnabled(on && this.run.bag.length > 0);
+    this.shore.setInteractive(on && this.run.bag.length > 0);
     this.homeButton.setEnabled(on);
   }
 
   // --- the loop -------------------------------------------------------------
-  //
-  // Mirrors playSeason in sim/simulate.mjs. The two easy mistakes it avoids:
-  // death happens inside beginNight and leaves the phase at 'dusk', and
-  // search() can move to 'dawn' on its own — so both are re-checked rather
-  // than assumed.
 
   enterDusk() {
-    // Held from here until the shore is dealt: the dusk drain animates, and a
-    // tap that landed during it would be a tap on a night that hasn't started.
     this.busy = true;
     this.setControls(false);
+    this.nightGathered = { oil: 0, wood: 0, plank: 0 };
+    this.nightLost = { oil: 0, wood: 0, plank: 0 };
     beginNight(this.run);
     this.paintHeader();
     this.paintMeters(getMotion()).then(() => {
@@ -226,14 +214,14 @@ export class NightScene extends Phaser.Scene {
 
   startSearch() {
     this.shore.deal(this.run.bag);
-    this.shore.setTally(countTokens(this.run.bag));
     this.basket.set(this.run.basket);
     this.paintRisk();
+    this.feedbackText.setText('Choose a tile to explore').setColor(COLORS.muted);
     this.busy = false;
     this.setControls(true);
   }
 
-  onSearch() {
+  onTileTap(tileIndex) {
     if (this.busy || this.confirmOpen) return;
     if (this.run.status !== 'playing' || this.run.phase !== 'search') return;
     if (this.run.bag.length === 0) return;
@@ -246,29 +234,48 @@ export class NightScene extends Phaser.Scene {
     const token = search(this.run);
     playDraw();
 
-    this.shore.reveal(token, motion).then(() => {
-      this.shore.setTally(countTokens(this.run.bag));
+    this.shore.reveal(tileIndex, token, motion).then(() => {
       this.paintRisk();
 
       let settled;
       if (token.kind === 'resource') {
         this.gathered[token.resource] += token.amount;
+        this.nightGathered[token.resource] += token.amount;
         playGain(token.resource, token.amount);
         this.basket.set(this.run.basket);
+        const label = RESOURCE_LABELS[token.resource];
+        this.feedbackText
+          .setText(`You found ${token.amount > 1 ? token.amount + ' ' : ''}${label}`)
+          .setColor(COLORS.text);
         settled = Promise.resolve();
       } else if (this.run.busted) {
         this.busts += 1;
+        for (const r of RESOURCES) {
+          const lost = before[r] - this.run.basket[r];
+          if (lost > 0) this.nightLost[r] += lost;
+        }
         playBust();
+        this.feedbackText
+          .setText('A rogue wave! Swept home with half your haul')
+          .setColor(COLORS.foam);
         settled = this.bustFlash(motion).then(() => this.basket.set(this.run.basket));
       } else {
         playWave();
         if (motion) this.cameras.main.shake(SHAKE_MS, 0.006);
+        const lostRes = RESOURCES.find((r) => this.run.basket[r] < before[r]);
+        if (lostRes) {
+          const amount = before[lostRes] - this.run.basket[lostRes];
+          this.nightLost[lostRes] += amount;
+          this.feedbackText
+            .setText(`A squall! Lost ${amount} ${RESOURCE_LABELS[lostRes]}`)
+            .setColor(COLORS.foam);
+        } else {
+          this.feedbackText.setText('A squall, but nothing to lose').setColor(COLORS.foam);
+        }
         settled = this.basket.knock(before, this.run.basket, motion);
       }
 
       settled.then(() => {
-        // A bust, or a bag drawn dry, has already moved the phase on. Offering
-        // GO HOME after that would throw.
         if (this.run.phase === 'dawn') {
           this.openDawn();
           return;
@@ -291,7 +298,11 @@ export class NightScene extends Phaser.Scene {
   openDawn() {
     this.busy = true;
     this.setControls(false);
-    this.dawn.open(this.run, () => this.afterDawn());
+    this.dawn.open(this.run, {
+      nightGathered: { ...this.nightGathered },
+      nightLost: { ...this.nightLost },
+      onDone: () => this.afterDawn(),
+    });
   }
 
   afterDawn() {
@@ -300,8 +311,6 @@ export class NightScene extends Phaser.Scene {
       this.finish();
       return;
     }
-    // The storm's extra waves are already on the shore by now; the wind follows
-    // them, so the season audibly closes in.
     const added = this.run.tuning.stormWaveNights.filter((n) => n < this.run.night).length;
     setWindLevel(added);
     this.enterDusk();

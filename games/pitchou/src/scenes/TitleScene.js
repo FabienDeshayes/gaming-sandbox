@@ -42,11 +42,7 @@ export class TitleScene extends Phaser.Scene {
     this.add.image(cx, 360, 'tower').setScale(96 / SPRITE_PX).setTint(COLORS.lampHex);
 
     createButton(this, cx, 520, 'PLAY', () => this.startRun(), { width: 240 });
-    createButton(this, cx, 596, 'HOW TO PLAY', () => this.scene.start('HowToScene'), {
-      width: 240,
-      fontSize: 22,
-    });
-    createButton(this, cx, 668, 'SETTINGS', () => this.scene.start('SettingsScene'), {
+    createButton(this, cx, 596, 'SETTINGS', () => this.scene.start('SettingsScene'), {
       width: 240,
       fontSize: 22,
     });

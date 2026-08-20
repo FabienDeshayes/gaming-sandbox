@@ -25,7 +25,7 @@ export class RecapScene extends Phaser.Scene {
     this.add
       .text(cx, 250, won ? 'THE LIGHT HELD' : 'THE LIGHT WENT OUT', {
         fontFamily: FONT,
-        fontSize: '28px',
+        fontSize: '29px',
         color: won ? COLORS.lamp : COLORS.text,
       })
       .setOrigin(0.5);
@@ -34,7 +34,7 @@ export class RecapScene extends Phaser.Scene {
       ? `Twelve nights of storm, and every meter still burning.`
       : `Night ${data.night}: the ${METER_LABELS[data.lost.meter].toLowerCase()} ran dry at dusk.`;
     this.add
-      .text(cx, 288, line, { fontFamily: FONT, fontSize: '15px', color: COLORS.muted })
+      .text(cx, 288, line, { fontFamily: FONT, fontSize: '16px', color: COLORS.muted })
       .setOrigin(0.5);
 
     const rows = [
@@ -55,10 +55,10 @@ export class RecapScene extends Phaser.Scene {
     rows.forEach(([label, value], i) => {
       const y = 364 + i * 36;
       this.add
-        .text(cx - 190, y, label, { fontFamily: FONT, fontSize: '12px', color: COLORS.dim })
+        .text(cx - 190, y, label, { fontFamily: FONT, fontSize: '13px', color: COLORS.dim })
         .setOrigin(0, 0.5);
       this.add
-        .text(cx + 190, y, value, { fontFamily: FONT, fontSize: '13px', color: COLORS.text })
+        .text(cx + 190, y, value, { fontFamily: FONT, fontSize: '14px', color: COLORS.text })
         .setOrigin(1, 0.5);
     });
 
@@ -67,7 +67,7 @@ export class RecapScene extends Phaser.Scene {
     this.add
       .text(cx, 568, `seed ${data.seed}${data.hard ? '  ·  hard bust' : ''}`, {
         fontFamily: FONT,
-        fontSize: '12px',
+        fontSize: '13px',
         color: COLORS.dim,
       })
       .setOrigin(0.5);
@@ -85,7 +85,7 @@ export class RecapScene extends Phaser.Scene {
     );
     createButton(this, cx, 724, 'TITLE', () => this.scene.start('TitleScene'), {
       width: 240,
-      fontSize: 22,
+      fontSize: 23,
     });
   }
 }

@@ -62,7 +62,7 @@ export function createShoreView(scene) {
         cell.amount = scene.add
           .text(at.x + PLATE / 2 - 4, at.y + PLATE / 2 - 3, '', {
             fontFamily: FONT,
-            fontSize: '13px',
+            fontSize: '14px',
             color: COLORS.text,
           })
           .setOrigin(1, 1);

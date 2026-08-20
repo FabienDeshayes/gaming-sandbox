@@ -86,12 +86,14 @@ export const COLORS = {
   panelEdge: '#22303f',
   panelEdgeHex: 0x22303f,
 
-  text: '#e6edf3',
-  textHex: 0xe6edf3,
-  muted: '#7a8b9c',
-  mutedHex: 0x7a8b9c,
-  dim: '#44586b',
-  dimHex: 0x44586b,
+  text: '#f2f6fa',
+  textHex: 0xf2f6fa,
+  // Both raised well past WCAG AA (4.5:1) against `bg` — `dim` used to sit at
+  // ~2.6:1, which is what read as unreadable grey-on-dark.
+  muted: '#b7c5d3',
+  mutedHex: 0xb7c5d3,
+  dim: '#8496a8',
+  dimHex: 0x8496a8,
 
   lamp: '#ffb547',
   lampHex: 0xffb547,
@@ -104,6 +106,10 @@ export const COLORS = {
   foamHex: 0x9fd8ff,
   bust: '#8c3a3a',
   bustHex: 0x8c3a3a,
+  // A brighter red for text (doomed meter numeral, overflow warning) — `bust`
+  // itself stays dark because it also paints the full-screen vignette flash,
+  // where a deep red is the point.
+  danger: '#ff6f6f',
 
   button: '#1b2733',
   buttonHex: 0x1b2733,
@@ -112,7 +118,7 @@ export const COLORS = {
   buttonEdgeHex: 0x35485c,
   disabled: '#131a21',
   disabledHex: 0x131a21,
-  disabledText: '#4a5865',
+  disabledText: '#7f93a6',
 };
 
 export const METER_COLORS = { lamp: COLORS.lampHex, hearth: COLORS.hearthHex, tower: COLORS.towerHex };

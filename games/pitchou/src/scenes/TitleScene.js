@@ -29,12 +29,12 @@ export class TitleScene extends Phaser.Scene {
     const cx = GAME_WIDTH / 2;
 
     this.add
-      .text(cx, 180, 'Pitchou', { fontFamily: FONT, fontSize: '62px', color: COLORS.text })
+      .text(cx, 180, 'Pitchou', { fontFamily: FONT, fontSize: '64px', color: COLORS.text })
       .setOrigin(0.5);
     this.add
       .text(cx, 232, 'twelve nights, one light', {
         fontFamily: FONT,
-        fontSize: '15px',
+        fontSize: '16px',
         color: COLORS.muted,
       })
       .setOrigin(0.5);
@@ -44,13 +44,13 @@ export class TitleScene extends Phaser.Scene {
     createButton(this, cx, 520, 'PLAY', () => this.startRun(), { width: 240 });
     createButton(this, cx, 596, 'SETTINGS', () => this.scene.start('SettingsScene'), {
       width: 240,
-      fontSize: 22,
+      fontSize: 23,
     });
 
     const pinned = seedFromUrl();
     if (pinned !== null)
       this.add
-        .text(cx, 736, `seed ${pinned}`, { fontFamily: FONT, fontSize: '12px', color: COLORS.dim })
+        .text(cx, 736, `seed ${pinned}`, { fontFamily: FONT, fontSize: '13px', color: COLORS.dim })
         .setOrigin(0.5);
   }
 

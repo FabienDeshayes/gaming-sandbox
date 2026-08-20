@@ -19,13 +19,17 @@ export const METER_OF = { oil: 'lamp', wood: 'hearth', plank: 'tower' };
 
 // A fixed shop; each tool is buildable once per run. Costs are paid from the
 // stockpile, which is fed by resources routed away from their meter at dawn.
+//
+// Each tool carries a `tier`, gated open by `tuning.toolTierNights` (see
+// below) rather than available from night one: the shore gets meaner on the
+// same schedule the drain does, and the workshop should too.
 export const DEFAULT_TOOLS = [
-  { id: 'gaff', name: 'Gaff hook', cost: { wood: 3 }, add: { resource: 'wood', amount: 2 } },
-  { id: 'net', name: 'Tide net', cost: { plank: 3 }, add: { resource: 'plank', amount: 2 } },
-  { id: 'funnel', name: 'Copper funnel', cost: { oil: 3 }, add: { resource: 'oil', amount: 2 } },
-  { id: 'pole', name: 'Lantern pole', cost: { oil: 2, wood: 2 }, add: { resource: 'oil', amount: 1 } },
-  { id: 'wall', name: 'Storm wall', cost: { plank: 6 }, removeWave: true },
-  { id: 'breakwater', name: 'Breakwater', cost: { oil: 4, wood: 4 }, removeWave: true },
+  { id: 'gaff', name: 'Gaff hook', tier: 1, cost: { wood: 3 }, add: { resource: 'wood', amount: 2 } },
+  { id: 'net', name: 'Tide net', tier: 1, cost: { plank: 3 }, add: { resource: 'plank', amount: 2 } },
+  { id: 'funnel', name: 'Copper funnel', tier: 2, cost: { oil: 3 }, add: { resource: 'oil', amount: 2 } },
+  { id: 'pole', name: 'Lantern pole', tier: 2, cost: { oil: 2, wood: 2 }, add: { resource: 'oil', amount: 2 } },
+  { id: 'wall', name: 'Storm wall', tier: 3, cost: { plank: 6 }, removeWave: true },
+  { id: 'breakwater', name: 'Breakwater', tier: 3, cost: { oil: 4, wood: 4 }, removeWave: true },
 ];
 
 export const DEFAULT_TUNING = {
@@ -43,6 +47,11 @@ export const DEFAULT_TUNING = {
     { through: 8, drain: 2 },
     { through: 12, drain: 3 },
   ],
+  // The night a tool of tier N (1-indexed) unlocks in the workshop. Lines up
+  // with drainSteps: tier 2 opens the night the drain first rises to 2, tier 3
+  // the night it first rises to 3 — the workshop gets more dangerous on the
+  // same schedule the shore does.
+  toolTierNights: [1, 5, 9],
   // What the tide holds on night 1.
   startShore: { oil: 5, wood: 5, plank: 5 },
   startWaves: [1, 1, 1],
@@ -73,6 +82,19 @@ export function toolById(id, tools = DEFAULT_TOOLS) {
   const tool = tools.find((t) => t.id === id);
   if (!tool) throw new Error(`unknown tool: ${id}`);
   return tool;
+}
+
+// Whether a tool's tier has opened yet. Tier 1 is always open (index 0 of
+// toolTierNights is night 1); a tool with no tier (none currently) is treated
+// as always available.
+export function toolUnlocked(tool, night, tuning = DEFAULT_TUNING) {
+  if (!tool.tier) return true;
+  const unlockNight = tuning.toolTierNights[tool.tier - 1] ?? 1;
+  return night >= unlockNight;
+}
+
+export function toolUnlockNight(tool, tuning = DEFAULT_TUNING) {
+  return tool.tier ? tuning.toolTierNights[tool.tier - 1] ?? 1 : 1;
 }
 
 // --- randomness -------------------------------------------------------------
@@ -301,7 +323,10 @@ export function canAffordFromMeters(meters, cost) {
 
 export function affordableTools(state) {
   return state.tuning.tools.filter(
-    (tool) => !state.toolsBuilt.includes(tool.id) && canAffordFromMeters(state.meters, tool.cost),
+    (tool) =>
+      !state.toolsBuilt.includes(tool.id) &&
+      toolUnlocked(tool, state.night, state.tuning) &&
+      canAffordFromMeters(state.meters, tool.cost),
   );
 }
 
@@ -312,6 +337,7 @@ export function buildTool(state, toolId) {
   expectPhase(state, 'dawn');
   const tool = toolById(toolId, state.tuning.tools);
   if (state.toolsBuilt.includes(toolId)) throw new Error(`already built: ${toolId}`);
+  if (!toolUnlocked(tool, state.night, state.tuning)) throw new Error(`not yet unlocked: ${toolId}`);
   if (!canAffordFromMeters(state.meters, tool.cost)) throw new Error(`cannot afford: ${toolId}`);
   for (const [resource, amount] of Object.entries(tool.cost)) state.meters[METER_OF[resource]] -= amount;
   if (tool.removeWave) {

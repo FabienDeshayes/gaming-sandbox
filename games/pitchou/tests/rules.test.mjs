@@ -104,8 +104,23 @@ test('a tool is paid from the meters and rewrites the shore', () => {
   assert.equal(state.shore.length, before + 1);
   assert.equal(countTokens(state.shore).wood, countTokens(state.shore).plank + 2);
   assert.throws(() => buildTool(state, 'gaff'), /already built/);
+  state.night = 9; // breakwater is tier 3, unlocked night 9
   state.meters.lamp = 2;
   assert.throws(() => buildTool(state, 'breakwater'), /cannot afford/);
+});
+
+test('a tool is locked until its tier opens', () => {
+  const state = createRun({ seed: 1 });
+  beginNight(state);
+  goHome(state);
+  allocate(state);
+  state.meters = { lamp: 10, hearth: 10, tower: 10 };
+  assert.throws(() => buildTool(state, 'funnel'), /not yet unlocked/);
+  state.night = 5;
+  buildTool(state, 'funnel');
+  assert.throws(() => buildTool(state, 'wall'), /not yet unlocked/);
+  state.night = 9;
+  buildTool(state, 'wall');
 });
 
 test('a wave removal takes the biggest wave off the shore', () => {
@@ -114,6 +129,7 @@ test('a wave removal takes the biggest wave off the shore', () => {
   goHome(state);
   allocate(state);
   state.meters.tower = 10;
+  state.night = 9; // wall is tier 3, unlocked night 9
   assert.equal(countTokens(state.shore).waveSize, 4);
   buildTool(state, 'wall');
   assert.equal(state.meters.tower, 4);

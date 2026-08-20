@@ -33,7 +33,7 @@ export function createMeterBar(scene, x, meterId) {
   const level = scene.add
     .text(x, barTop + barH + 16, '10', {
       fontFamily: FONT,
-      fontSize: '30px',
+      fontSize: '32px',
       color: COLORS.text,
     })
     .setOrigin(0.5, 0);
@@ -41,7 +41,7 @@ export function createMeterBar(scene, x, meterId) {
   const label = scene.add
     .text(x, barTop + barH + 58, METER_LABELS[meterId], {
       fontFamily: FONT,
-      fontSize: '13px',
+      fontSize: '14px',
       color: COLORS.muted,
     })
     .setOrigin(0.5, 0);
@@ -88,7 +88,7 @@ export function createMeterBar(scene, x, meterId) {
     set(value, cap, drain, animate = false) {
       doomed = value - drain <= 0;
       level.setText(String(value));
-      level.setColor(doomed ? COLORS.bust : COLORS.text);
+      level.setColor(doomed ? COLORS.danger : COLORS.text);
       paintFrame(cap);
       if (!animate) {
         shown.value = value;

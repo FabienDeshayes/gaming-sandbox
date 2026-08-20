@@ -24,7 +24,7 @@ export function createBasketView(scene) {
   const heading = scene.add
     .text(GAME_WIDTH / 2, BASKET_Y - 34, 'IN THE BASKET', {
       fontFamily: FONT,
-      fontSize: '11px',
+      fontSize: '12px',
       color: COLORS.dim,
     })
     .setOrigin(0.5);
@@ -37,12 +37,12 @@ export function createBasketView(scene) {
       .setScale(32 / SPRITE_PX)
       .setTint(RESOURCE_COLORS[resource]);
     const count = scene.add
-      .text(x - 4, BASKET_Y, '0', { fontFamily: FONT, fontSize: '28px', color: COLORS.text })
+      .text(x - 4, BASKET_Y, '0', { fontFamily: FONT, fontSize: '30px', color: COLORS.text })
       .setOrigin(0, 0.5);
     const label = scene.add
       .text(x, BASKET_Y + 26, RESOURCE_SHORT[resource], {
         fontFamily: FONT,
-        fontSize: '11px',
+        fontSize: '12px',
         color: COLORS.muted,
       })
       .setOrigin(0.5, 0);

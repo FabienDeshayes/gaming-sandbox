@@ -180,14 +180,21 @@ unit('the workshop only offers what the meters cover', () => {
   state.meters = { lamp: 3, hearth: 3, tower: 0 };
   assertEqual(
     affordableTools(state).map((t) => t.id),
-    ['gaff', 'funnel', 'pole'],
-    'three tools are covered by lamp 3 and hearth 3'
+    ['gaff'],
+    'on night one, only tier-one tools are unlocked'
   );
 
   state.toolsBuilt.push('gaff');
   assert(
     !affordableTools(state).some((t) => t.id === 'gaff'),
     'a tool already built is off the list however rich you are'
+  );
+
+  state.night = 5;
+  assertEqual(
+    affordableTools(state).map((t) => t.id),
+    ['funnel', 'pole'],
+    'reaching night five unlocks tier two'
   );
 });
 

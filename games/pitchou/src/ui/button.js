@@ -1,4 +1,4 @@
-import { COLORS, FONT, SWIPE_THRESHOLD } from '../config.js';
+import { COLORS, FONT, SWIPE_THRESHOLD, TEXT_RESOLUTION } from '../config.js';
 import { unlockAudio } from './sfx.js';
 
 // The one interactive control in the game, reused by every scene.
@@ -21,6 +21,7 @@ export function createButton(scene, x, y, label, onClick, style = {}) {
       color: COLORS.text,
       padding: { x: padX, y: padY },
       align: 'center',
+      resolution: TEXT_RESOLUTION,
     })
     .setOrigin(0.5);
 

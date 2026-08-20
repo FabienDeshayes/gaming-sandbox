@@ -1,4 +1,12 @@
-import { COLORS, FONT, GAME_WIDTH, METER_LABELS, RESOURCE_LABELS, SPRITE_PX } from '../config.js';
+import {
+  COLORS,
+  FONT,
+  GAME_WIDTH,
+  METER_LABELS,
+  RESOURCE_LABELS,
+  SPRITE_PX,
+  TEXT_RESOLUTION,
+} from '../config.js';
 import { METERS, RESOURCES } from '../core/rules.js';
 import { createButton } from '../ui/button.js';
 import { ensureTextures } from '../ui/textures.js';
@@ -27,6 +35,7 @@ export class RecapScene extends Phaser.Scene {
         fontFamily: FONT,
         fontSize: '29px',
         color: won ? COLORS.lamp : COLORS.text,
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
@@ -34,7 +43,12 @@ export class RecapScene extends Phaser.Scene {
       ? `Twelve nights of storm, and every meter still burning.`
       : `Night ${data.night}: the ${METER_LABELS[data.lost.meter].toLowerCase()} ran dry at dusk.`;
     this.add
-      .text(cx, 288, line, { fontFamily: FONT, fontSize: '16px', color: COLORS.muted })
+      .text(cx, 288, line, {
+        fontFamily: FONT,
+        fontSize: '16px',
+        color: COLORS.muted,
+        resolution: TEXT_RESOLUTION,
+      })
       .setOrigin(0.5);
 
     const rows = [
@@ -55,10 +69,20 @@ export class RecapScene extends Phaser.Scene {
     rows.forEach(([label, value], i) => {
       const y = 364 + i * 36;
       this.add
-        .text(cx - 190, y, label, { fontFamily: FONT, fontSize: '13px', color: COLORS.dim })
+        .text(cx - 190, y, label, {
+          fontFamily: FONT,
+          fontSize: '13px',
+          color: COLORS.dim,
+          resolution: TEXT_RESOLUTION,
+        })
         .setOrigin(0, 0.5);
       this.add
-        .text(cx + 190, y, value, { fontFamily: FONT, fontSize: '14px', color: COLORS.text })
+        .text(cx + 190, y, value, {
+          fontFamily: FONT,
+          fontSize: '14px',
+          color: COLORS.text,
+          resolution: TEXT_RESOLUTION,
+        })
         .setOrigin(1, 0.5);
     });
 
@@ -69,6 +93,7 @@ export class RecapScene extends Phaser.Scene {
         fontFamily: FONT,
         fontSize: '13px',
         color: COLORS.dim,
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 

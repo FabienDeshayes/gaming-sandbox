@@ -132,6 +132,17 @@ export const RESOURCE_SHORT = { oil: 'OIL', wood: 'WOOD', plank: 'PLANK' };
 
 export const FONT = 'sans-serif';
 
+// Phaser renders Text to its own internal canvas at 1x by default, then that
+// texture gets drawn onto the game canvas and stretched by Scale.FIT to fill
+// whatever viewport it's given — rarely an integer multiple, especially on a
+// high-DPI phone. Combined with `pixelArt: true` (nearest-neighbour filtering,
+// no antialiasing — correct for the chunky sprite masks), that stretch makes
+// anti-aliased glyph edges look blocky. Rendering text at a higher internal
+// resolution gives that stretch enough source detail to sample cleanly, same
+// fix sprites don't need because their blockiness is the intended look.
+const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1;
+export const TEXT_RESOLUTION = Math.min(4, Math.max(2, dpr));
+
 // --- Preferences ------------------------------------------------------------
 //
 // Read once at import and written through on change. localStorage throws in

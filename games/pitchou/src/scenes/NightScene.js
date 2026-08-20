@@ -15,6 +15,7 @@ import {
   RISK_Y,
   SEARCH_Y,
   SHAKE_MS,
+  TEXT_RESOLUTION,
   TRACK_GAP,
   TRACK_PIP_R,
   TRACK_Y,
@@ -90,13 +91,19 @@ export class NightScene extends Phaser.Scene {
     const cx = GAME_WIDTH / 2;
 
     this.nightText = this.add
-      .text(cx, HEADER_Y, '', { fontFamily: FONT, fontSize: '23px', color: COLORS.text })
+      .text(cx, HEADER_Y, '', {
+        fontFamily: FONT,
+        fontSize: '23px',
+        color: COLORS.text,
+        resolution: TEXT_RESOLUTION,
+      })
       .setOrigin(0.5);
     this.drainText = this.add
       .text(GAME_WIDTH - 20, HEADER_Y, '', {
         fontFamily: FONT,
         fontSize: '13px',
         color: COLORS.muted,
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(1, 0.5);
     this.track = this.add.graphics();
@@ -106,7 +113,12 @@ export class NightScene extends Phaser.Scene {
 
     this.strikes = this.add.graphics();
     this.enduranceText = this.add
-      .text(GAME_WIDTH - 20, RISK_Y, '', { fontFamily: FONT, fontSize: '13px', color: COLORS.muted })
+      .text(GAME_WIDTH - 20, RISK_Y, '', {
+        fontFamily: FONT,
+        fontSize: '13px',
+        color: COLORS.muted,
+        resolution: TEXT_RESOLUTION,
+      })
       .setOrigin(1, 0.5);
 
     this.shore = createShoreView(this);
@@ -120,6 +132,7 @@ export class NightScene extends Phaser.Scene {
         fontSize: '21px',
         color: COLORS.muted,
         align: 'center',
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
@@ -377,6 +390,7 @@ export class NightScene extends Phaser.Scene {
           fontFamily: FONT,
           fontSize: '25px',
           color: COLORS.text,
+          resolution: TEXT_RESOLUTION,
         })
         .setOrigin(0.5)
         .setDepth(PANEL_CONTENT_DEPTH)
@@ -387,6 +401,7 @@ export class NightScene extends Phaser.Scene {
           fontFamily: FONT,
           fontSize: '14px',
           color: COLORS.muted,
+          resolution: TEXT_RESOLUTION,
         })
         .setOrigin(0.5)
         .setDepth(PANEL_CONTENT_DEPTH)

@@ -8,6 +8,7 @@ import {
   RESOURCE_SHORT,
   SPRITE_PX,
   GAME_WIDTH,
+  TEXT_RESOLUTION,
 } from '../config.js';
 import { RESOURCES } from '../core/rules.js';
 
@@ -26,6 +27,7 @@ export function createBasketView(scene) {
       fontFamily: FONT,
       fontSize: '12px',
       color: COLORS.dim,
+      resolution: TEXT_RESOLUTION,
     })
     .setOrigin(0.5);
   objects.push(heading);
@@ -37,13 +39,19 @@ export function createBasketView(scene) {
       .setScale(32 / SPRITE_PX)
       .setTint(RESOURCE_COLORS[resource]);
     const count = scene.add
-      .text(x - 4, BASKET_Y, '0', { fontFamily: FONT, fontSize: '30px', color: COLORS.text })
+      .text(x - 4, BASKET_Y, '0', {
+        fontFamily: FONT,
+        fontSize: '30px',
+        color: COLORS.text,
+        resolution: TEXT_RESOLUTION,
+      })
       .setOrigin(0, 0.5);
     const label = scene.add
       .text(x, BASKET_Y + 26, RESOURCE_SHORT[resource], {
         fontFamily: FONT,
         fontSize: '12px',
         color: COLORS.muted,
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5, 0);
     stacks[resource] = { icon, count, label };

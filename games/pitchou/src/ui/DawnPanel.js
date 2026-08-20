@@ -10,6 +10,7 @@ import {
   RESOURCE_LABELS,
   SPRITE_PX,
   SWIPE_THRESHOLD,
+  TEXT_RESOLUTION,
 } from '../config.js';
 import {
   allocate,
@@ -63,7 +64,7 @@ export function createDawnPanel(scene) {
   function text(x, y, str, size, color, originX = 0, originY = 0.5) {
     return add(
       scene.add
-        .text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color })
+        .text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, resolution: TEXT_RESOLUTION })
         .setOrigin(originX, originY)
         .setDepth(PANEL_CONTENT_DEPTH)
     );

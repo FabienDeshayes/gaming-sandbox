@@ -130,7 +130,7 @@ export const METER_LABELS = { lamp: 'LAMP', hearth: 'HEARTH', tower: 'TOWER' };
 export const RESOURCE_LABELS = { oil: 'OIL', wood: 'DRIFTWOOD', plank: 'PLANK' };
 export const RESOURCE_SHORT = { oil: 'OIL', wood: 'WOOD', plank: 'PLANK' };
 
-export const FONT = 'sans-serif';
+export const FONT = 'Georgia, "Times New Roman", serif';
 
 // Phaser renders Text to its own internal canvas at 1x by default, then that
 // texture gets drawn onto the game canvas and stretched by Scale.FIT to fill

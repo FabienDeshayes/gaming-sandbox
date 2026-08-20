@@ -315,41 +315,24 @@ export async function openGame(
       await game.settle();
     },
 
-    // The two taps a night is made of. They go to the buttons' own coordinates
-    // rather than by label, so a disabled button is still "tapped" and the test
-    // sees that nothing happened.
-    tapSearch: () => clickAt(CENTER_X, SEARCH_Y),
-    tapGoHome: () => clickAt(CENTER_X, HOME_Y),
-
-    // Clicks the first visible label matching a regex. The dawn panel prints
-    // the same words in three places (a basket row, the stock line, a tool's
-    // cost), so a stack can only be picked out by its whole shape.
-    clickTextMatching: async (pattern) => {
-      const pos = await page.evaluate((src) => {
-        const re = new RegExp(src);
-        const hits = [];
-        const walk = (list) => {
-          for (const c of list) {
-            if (!c.visible) continue;
-            if (c.text !== undefined && re.test(c.text)) hits.push(c);
-            if (c.list) walk(c.list);
-          }
-        };
-        walk(window.__game.scene.getScenes(true).slice(-1)[0].children.list);
-        if (!hits.length) return null;
-        const b = hits[0].getBounds();
+    // Taps the first face-down tile on the shore — the player picks a tile to
+    // explore instead of pressing a search button.
+    tapTile: async () => {
+      const pos = await page.evaluate(() => {
+        const s = window.__game.scene.getScene('NightScene');
+        if (!s || !s.shore) return null;
+        const idx = s.shore.firstUnflipped();
+        if (idx < 0) return null;
+        const cell = s.shore.cells[idx];
+        if (!cell || !cell.plate) return null;
+        const b = cell.plate.getBounds();
         return { x: b.centerX, y: b.centerY };
-      }, pattern);
-      if (!pos) throw new Error(`no text matching /${pattern}/ on screen`);
+      });
+      if (!pos) throw new Error('no unflipped tile to tap');
       await clickAt(pos.x, pos.y);
     },
 
-    // A basket stack in the dawn panel, by resource — toggles it between its
-    // meter and the workshop. The row reads "<n>  <LABEL>", two spaces.
-    tapStack: (resource) =>
-      game.clickTextMatching(
-        `^\\d+  ${{ oil: 'OIL', wood: 'DRIFTWOOD', plank: 'PLANK' }[resource]}$`
-      ),
+    tapGoHome: () => clickAt(CENTER_X, HOME_Y),
 
     tapTool: (name) => game.clickText(name),
 
@@ -368,7 +351,6 @@ export async function openGame(
           seed: s.seed,
           meters: { ...r.meters },
           basket: { ...r.basket },
-          stock: { ...r.stock },
           strikes: r.strikes,
           busted: r.busted,
           toolsBuilt: [...r.toolsBuilt],
@@ -378,8 +360,8 @@ export async function openGame(
           gathered: { ...s.gathered },
           busy: s.busy,
           dawnOpen: s.dawn.isOpen(),
-          stowed: s.dawn.isOpen() ? s.dawn.hasStowed() : false,
-          faceUp: s.shore.revealed,
+          dawnPhase: s.dawn.isOpen() ? s.dawn.currentPhase() : null,
+          faceUp: s.shore.cells.filter((c) => c.flipped).length,
         };
       }),
 

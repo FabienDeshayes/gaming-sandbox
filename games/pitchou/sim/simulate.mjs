@@ -17,7 +17,7 @@ import {
   basketIsEmpty,
   beginNight,
   buildTool,
-  canAfford,
+  canAffordFromMeters,
   bustOdds,
   createRun,
   endNight,
@@ -58,14 +58,13 @@ function playSeason(policy, { seed, tuning }) {
     if (state.busted) busts += 1;
     banked += state.basket.oil + state.basket.wood + state.basket.plank;
 
+    allocate(state);
     const plan = policy.plan(state);
-    allocate(state, plan.routes);
     for (const id of plan.builds) {
       const tool = state.tuning.tools.find((t) => t.id === id);
       if (!tool || state.toolsBuilt.includes(id)) continue;
-      if (canAfford(state.stock, tool.cost)) buildTool(state, id);
+      if (canAffordFromMeters(state.meters, tool.cost)) buildTool(state, id);
     }
-    if (!basketIsEmpty(state.basket)) allocate(state, {});
     endNight(state);
   }
 

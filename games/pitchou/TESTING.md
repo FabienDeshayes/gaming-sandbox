@@ -31,8 +31,8 @@ browser; `test(...)` tests each get a fresh page.
 - **A local server** that serves the real game directory and rewrites the blocked CDN
   `<script src>` to a locally-served copy of the npm Phaser **in the response**.
   `index.html` on disk is never modified — do not "fix" it to point at node_modules.
-- **A driver.** `startRun()`, `tapSearch()`, `tapGoHome()`, `tapStack(resource)`,
-  `tapTool(name)`, `clickText(label)`, `clickTextMatching(pattern)`, `texts()`,
+- **A driver.** `startRun()`, `tapTile()`, `tapGoHome()`,
+  `tapTool(name)`, `clickText(label)`, `texts()`,
   `state()` (a read-only snapshot of `NightScene`), `settle()`, `canvasFit()`.
   Chromium is found under `/opt/pw-browsers/` (override with `CHROMIUM_PATH`).
 - **A runner** with `test`, `unit`, `assert`, `assertEqual`, `run`.

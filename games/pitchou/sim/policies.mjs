@@ -1,22 +1,11 @@
-// Simple, dumb policies for the simulator. These are not AI — they are the
-// stand-ins for how a real player might think, so the tuning sweep can ask
-// "is there a way to play this that wins, and does playing it badly lose?"
-//
-// A policy answers two questions: keep searching or go home, and at dawn,
-// where does the basket go.
-
-import { RESOURCES, METER_OF, budgetLeft, bustOdds, drainForNight } from '../src/core/rules.js';
+import { RESOURCES, METER_OF, budgetLeft, bustOdds, drainForNight, canAffordFromMeters } from '../src/core/rules.js';
 
 // --- stop rules -------------------------------------------------------------
 
-// Go home once the wave budget is down to `keep`. With the default budget of 3
-// and size-1 waves, keep=1 is risk-free: one more wave cannot end the night.
 export function stopWithBudget(keep) {
   return (state) => budgetLeft(state) > keep;
 }
 
-// Risk-free until the last point of budget, then push while the chance the
-// next draw ends the night is at or under `threshold`.
 export function pushUntilOdds(threshold) {
   return (state) => {
     if (budgetLeft(state) > 1) return true;
@@ -26,54 +15,42 @@ export function pushUntilOdds(threshold) {
 
 export const reckless = () => true;
 
-// Take no risk at all: search only while nothing in the bag can end the night.
-// This is the honest "safe" baseline for any wave structure, including ones
-// where a single wave busts you.
 export const noRisk = (state) => bustOdds(state) === 0;
 
 // --- dawn plans -------------------------------------------------------------
 
-// Pour everything into the meters; never build anything.
 export function pourEverything() {
-  return () => ({ routes: {}, builds: [] });
+  return () => ({ builds: [] });
 }
 
-// Route each stack by three rules, in order:
-//   1. never overflow a meter — a wasted surplus is worse than a stockpiled one
-//   2. top up any meter with less than `buffer` nights of drain left
-//   3. otherwise stockpile toward the next tool on the priority list
+// After allocation, decide which tools to build from the priority list. Only
+// build when every meter that pays for it can still survive the next drain.
 export function investPlan(priority, { buffer = 2 } = {}) {
   return (state) => {
     const nextDrain = drainForNight(state.night + 1, state.tuning);
-    const target = state.tuning.tools.find(
-      (tool) => !state.toolsBuilt.includes(tool.id) && priority.includes(tool.id),
-    );
-    const wanted = target ? target.cost : {};
-    const routes = {};
-    for (const resource of RESOURCES) {
-      const level = state.meters[METER_OF[resource]];
-      const amount = state.basket[resource];
-      const overflows = level + amount > state.tuning.meterCap;
-      const short = level - nextDrain * buffer <= 0;
-      const neededForTool = (wanted[resource] || 0) > state.stock[resource];
-      if (overflows) routes[resource] = 'stock';
-      else if (short) routes[resource] = 'meter';
-      else if (neededForTool) routes[resource] = 'stock';
-      else routes[resource] = 'meter';
+    const builds = [];
+    for (const id of priority) {
+      const tool = state.tuning.tools.find((t) => t.id === id);
+      if (!tool || state.toolsBuilt.includes(id)) continue;
+      if (!canAffordFromMeters(state.meters, tool.cost)) continue;
+      let safe = true;
+      for (const [resource, amount] of Object.entries(tool.cost)) {
+        if (state.meters[METER_OF[resource]] - amount - nextDrain * buffer <= 0) {
+          safe = false;
+          break;
+        }
+      }
+      if (safe) builds.push(id);
     }
-    return { routes, builds: priority };
+    return { builds };
   };
 }
 
-// Priority orders worth contrasting: throughput first (bigger tokens) versus
-// safety first (fewer waves).
 export const THROUGHPUT_FIRST = ['gaff', 'net', 'funnel', 'pole', 'wall', 'breakwater'];
 export const SAFETY_FIRST = ['wall', 'breakwater', 'gaff', 'net', 'funnel', 'pole'];
 
 // --- the policies the report covers ----------------------------------------
 
-// Used by the wave-structure comparison, where "stop at two waves" is not a
-// meaningful description of every structure.
 export const WAVE_POLICIES = [
   { name: 'no risk at all', shouldSearch: noRisk, plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
   { name: 'push at <=15%', shouldSearch: pushUntilOdds(0.15), plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },

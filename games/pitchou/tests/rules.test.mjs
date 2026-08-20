@@ -1,17 +1,13 @@
-// Unit tests for the pure rules. There is no game to drive yet — these exist
-// because every number in DESIGN.md §8 comes out of sim/simulate.mjs, and the
-// simulator is only as trustworthy as the rules underneath it.
-//
-//   npm test
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
   DEFAULT_TUNING,
+  METER_OF,
   allocate,
   beginNight,
   buildTool,
+  canAffordFromMeters,
   countTokens,
   createRun,
   drainForNight,
@@ -24,7 +20,6 @@ import {
 
 const tune = (overrides) => ({ ...DEFAULT_TUNING, ...overrides });
 
-// The bag is popped from the end, so the last entry is drawn first.
 function stackBag(state, tokens) {
   state.bag = tokens.slice().reverse();
 }
@@ -52,7 +47,6 @@ test('dusk drains every meter and a zero ends the run', () => {
 });
 
 test('a bust keeps half the basket, rounded down per resource', () => {
-  // waveDamage off, so this isolates the halving rule from the drop-a-thing rule.
   const state = createRun({ seed: 1, tuning: tune({ waveDamage: 0 }) });
   beginNight(state);
   stackBag(state, [
@@ -78,7 +72,7 @@ test('going home before the last wave banks what survived', () => {
     waveToken(),
     resourceToken('plank', 2),
     waveToken(),
-    resourceToken('wood', 1), // left on the shore — going home leaves it there
+    resourceToken('wood', 1),
   ]);
   for (let i = 0; i < 4; i++) search(state);
   assert.equal(state.busted, false);
@@ -87,45 +81,42 @@ test('going home before the last wave banks what survived', () => {
   assert.deepEqual(state.basket, { oil: 1, wood: 0, plank: 2 });
 });
 
-test('pouring clamps at the cap and stockpiling does not', () => {
+test('pouring clamps at the cap', () => {
   const state = createRun({ seed: 1 });
   beginNight(state);
-  state.meters.lamp = 11;
+  state.meters.lamp = 13;
   state.basket = { oil: 4, wood: 0, plank: 0 };
   goHome(state);
-  allocate(state, { oil: 'meter' });
+  allocate(state);
   assert.equal(state.meters.lamp, DEFAULT_TUNING.meterCap);
-
-  const saver = createRun({ seed: 1 });
-  beginNight(saver);
-  saver.basket = { oil: 0, wood: 4, plank: 0 };
-  goHome(saver);
-  allocate(saver, { wood: 'stock' });
-  assert.equal(saver.stock.wood, 4);
-  assert.equal(saver.meters.hearth, 9);
 });
 
-test('a tool is paid from the stockpile and rewrites the shore', () => {
+test('a tool is paid from the meters and rewrites the shore', () => {
   const state = createRun({ seed: 1 });
   beginNight(state);
   goHome(state);
-  state.stock.wood = 3;
+  allocate(state);
   const before = state.shore.length;
+  const meterBefore = state.meters.hearth;
+  assert.ok(meterBefore >= 3, 'hearth must be at least 3 to afford the gaff');
   buildTool(state, 'gaff');
-  assert.equal(state.stock.wood, 0);
+  assert.equal(state.meters.hearth, meterBefore - 3);
   assert.equal(state.shore.length, before + 1);
   assert.equal(countTokens(state.shore).wood, countTokens(state.shore).plank + 2);
   assert.throws(() => buildTool(state, 'gaff'), /already built/);
-  assert.throws(() => buildTool(state, 'net'), /cannot afford/);
+  state.meters.lamp = 2;
+  assert.throws(() => buildTool(state, 'breakwater'), /cannot afford/);
 });
 
 test('a wave removal takes the biggest wave off the shore', () => {
   const state = createRun({ seed: 1, tuning: tune({ startWaves: [1, 1, 2], waveBudget: 4 }) });
   beginNight(state);
   goHome(state);
-  state.stock.plank = 6;
+  allocate(state);
+  state.meters.tower = 10;
   assert.equal(countTokens(state.shore).waveSize, 4);
   buildTool(state, 'wall');
+  assert.equal(state.meters.tower, 4);
   const after = countTokens(state.shore);
   assert.equal(after.waves, 2);
   assert.equal(after.waveSize, 2);
@@ -136,7 +127,7 @@ test('the storm adds a wave on its scheduled nights only', () => {
   for (let night = 1; night <= 4; night++) {
     beginNight(state);
     goHome(state);
-    allocate(state, {});
+    allocate(state);
     const before = countTokens(state.shore).waves;
     endNight(state);
     const expected = DEFAULT_TUNING.stormWaveNights.includes(night) ? before + 1 : before;
@@ -145,17 +136,17 @@ test('the storm adds a wave on its scheduled nights only', () => {
 });
 
 test('surviving the last night wins, and an unallocated basket blocks the night', () => {
-  const state = createRun({ seed: 1, tuning: tune({ seasonNights: 2, startMeter: 12 }) });
+  const state = createRun({ seed: 1, tuning: tune({ seasonNights: 2, startMeter: 14 }) });
   beginNight(state);
   stackBag(state, [resourceToken('oil', 1)]);
   search(state);
   assert.throws(() => endNight(state), /must be allocated/);
-  allocate(state, {});
+  allocate(state);
   endNight(state);
   assert.equal(state.night, 2);
   beginNight(state);
   goHome(state);
-  allocate(state, {});
+  allocate(state);
   endNight(state);
   assert.equal(state.status, 'won');
 });
@@ -185,7 +176,6 @@ test('a non-busting wave can cost loot off the biggest stack', () => {
     resourceToken('plank', 1),
   ]);
   for (let i = 0; i < 4; i++) search(state);
-  // Two waves, one unit dropped each, both off the oil stack as the biggest.
   assert.equal(state.busted, false);
   assert.deepEqual(state.basket, { oil: 1, wood: 1, plank: 0 });
 });
@@ -196,4 +186,12 @@ test('wave damage never drives the basket below empty', () => {
   stackBag(state, [waveToken(), resourceToken('wood', 1), waveToken(), resourceToken('oil', 1)]);
   for (let i = 0; i < 3; i++) search(state);
   assert.deepEqual(state.basket, { oil: 0, wood: 0, plank: 0 });
+});
+
+test('canAffordFromMeters checks meter levels via METER_OF', () => {
+  const meters = { lamp: 5, hearth: 3, tower: 2 };
+  assert.ok(canAffordFromMeters(meters, { oil: 5 }));
+  assert.ok(!canAffordFromMeters(meters, { oil: 6 }));
+  assert.ok(canAffordFromMeters(meters, { oil: 2, wood: 3 }));
+  assert.ok(!canAffordFromMeters(meters, { oil: 2, wood: 4 }));
 });

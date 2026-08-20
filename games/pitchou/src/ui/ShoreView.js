@@ -9,58 +9,15 @@ import {
   SHORE_LEFT,
   SHORE_TOP,
   SPRITE_PX,
-  TALLY_Y,
-  GAME_WIDTH,
+  SWIPE_THRESHOLD,
 } from '../config.js';
 
-const TOKEN_PX = 32;
+const TOKEN_PX = 38;
 const PLATE = SHORE_CELL - 8;
 
-// The shore: one face-down plate per token in tonight's bag, each flipping in
-// place as it is drawn and staying face-up until the night ends, plus the tally
-// of what is still out there.
-//
-// The tally counts *down*, in whole tokens, because the only unknown in this
-// game is draw order — the contents are inspectable at all times (DESIGN.md §5)
-// and the odds are meant to be arithmetic a child can do out loud, which a
-// percentage is not.
-//
-// The plates are slots, not positions in the bag. `search()` pops the bag from
-// the end, so nothing on screen may imply that the leftmost plate is next: the
-// first token drawn flips the first slot, and that is all the order there is.
 export function createShoreView(scene) {
   const cells = [];
-  const tally = {};
-  const objects = [];
-
-  const heading = scene.add
-    .text(GAME_WIDTH / 2, TALLY_Y - 24, 'STILL OUT THERE', {
-      fontFamily: FONT,
-      fontSize: '11px',
-      color: COLORS.dim,
-    })
-    .setOrigin(0.5);
-  objects.push(heading);
-
-  // Four groups across the width: the three resources and the waves.
-  const groups = [
-    { key: 'oil', tint: RESOURCE_COLORS.oil },
-    { key: 'wood', tint: RESOURCE_COLORS.wood },
-    { key: 'plank', tint: RESOURCE_COLORS.plank },
-    { key: 'waves', tint: COLORS.foamHex, sprite: 'wave' },
-  ];
-  groups.forEach((group, i) => {
-    const x = 72 + i * 112;
-    const icon = scene.add
-      .image(x - 16, TALLY_Y, group.sprite || group.key)
-      .setScale(24 / SPRITE_PX)
-      .setTint(group.tint);
-    const count = scene.add
-      .text(x + 6, TALLY_Y, '0', { fontFamily: FONT, fontSize: '18px', color: COLORS.text })
-      .setOrigin(0, 0.5);
-    tally[group.key] = count;
-    objects.push(icon, count);
-  });
+  let onTileTap = null;
 
   function cellAt(index) {
     const rows = Math.max(1, Math.ceil(cells.length / SHORE_COLS));
@@ -68,8 +25,6 @@ export function createShoreView(scene) {
     const top = SHORE_TOP + (SHORE_BAND_H - gridH) / 2;
     const col = index % SHORE_COLS;
     const row = Math.floor(index / SHORE_COLS);
-    // The last row is centred on its own, so a shore of 22 doesn't leave a
-    // ragged gap on the right.
     const inRow = Math.min(SHORE_COLS, cells.length - row * SHORE_COLS);
     const rowLeft = SHORE_LEFT + ((SHORE_COLS - inRow) * SHORE_CELL) / 2;
     return {
@@ -92,17 +47,13 @@ export function createShoreView(scene) {
       .setTexture(isWave ? 'wave' : token.resource)
       .setTint(isWave ? COLORS.foamHex : RESOURCE_COLORS[token.resource])
       .setScale(TOKEN_PX / SPRITE_PX);
-    // A doubled token is the whole point of a tool, so it says so.
     cell.amount.setText(!isWave && token.amount > 1 ? `x${token.amount}` : '');
     cell.amount.setColor(isWave ? COLORS.foam : COLORS.text);
   }
 
   const view = {
-    // Lay out one face-down plate per token in the bag.
     deal(bag) {
       view.destroyCells();
-      // Fill the array first: cellAt centres the grid from the total count, so
-      // it has to know how many plates there are before placing the first one.
       for (let i = 0; i < bag.length; i++) cells.push({});
       cells.forEach((cell, i) => {
         const at = cellAt(i);
@@ -115,17 +66,23 @@ export function createShoreView(scene) {
             color: COLORS.text,
           })
           .setOrigin(1, 1);
+        cell.flipped = false;
         faceDown(cell);
+
+        cell.plate.setInteractive({ useHandCursor: true });
+        cell.plate.on('pointerup', (pointer) => {
+          if (pointer.getDistance() >= SWIPE_THRESHOLD) return;
+          if (cell.flipped) return;
+          if (onTileTap) onTileTap(i);
+        });
       });
-      view.revealed = 0;
     },
 
-    // Turn the next slot face-up. Resolves when the flip is done, so the scene
-    // can hold input for exactly as long as the animation runs.
-    reveal(token, animate = true) {
-      const cell = cells[view.revealed];
-      view.revealed += 1;
-      if (!cell) return Promise.resolve();
+    reveal(index, token, animate = true) {
+      const cell = cells[index];
+      if (!cell || cell.flipped) return Promise.resolve();
+      cell.flipped = true;
+      if (cell.plate.input) cell.plate.disableInteractive();
       if (!animate) {
         faceUp(cell, token);
         return Promise.resolve();
@@ -158,13 +115,20 @@ export function createShoreView(scene) {
       });
     },
 
-    // Counts from `countTokens(state.bag)` — what a player would get by
-    // subtracting the face-up plates from the shore, done for them.
-    setTally(counts) {
-      tally.oil.setText(String(counts.oil));
-      tally.wood.setText(String(counts.wood));
-      tally.plank.setText(String(counts.plank));
-      tally.waves.setText(String(counts.waves));
+    setOnTileTap(callback) {
+      onTileTap = callback;
+    },
+
+    setInteractive(on) {
+      for (const cell of cells) {
+        if (cell.flipped) continue;
+        if (on) cell.plate.setInteractive({ useHandCursor: true });
+        else if (cell.plate.input) cell.plate.disableInteractive();
+      }
+    },
+
+    firstUnflipped() {
+      return cells.findIndex((c) => !c.flipped);
     },
 
     destroyCells() {
@@ -179,10 +143,8 @@ export function createShoreView(scene) {
 
     destroy() {
       view.destroyCells();
-      objects.forEach((o) => o.destroy());
     },
 
-    revealed: 0,
     cells,
   };
 

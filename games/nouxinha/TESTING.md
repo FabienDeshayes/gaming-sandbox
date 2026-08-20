@@ -57,6 +57,7 @@ reaches in to *set* game state.
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its four colour-zone layers — the wizard wears one colour per gem carried, plus the base colour |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
+| `music()` | Whether the music loop's scheduler is running — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
 | `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |
@@ -73,8 +74,8 @@ which pushes controls off the edge and lets a tap turn into a sideways pan inste
 
 The world has no hand-authored level to write coordinates against, so **derive the route instead of
 hardcoding it**. `tests/game.test.js` runs a BFS over the real world at load time to find the
-nearest medium torch and the nearest spot with a rock to walk into, then replays those paths in the
-browser:
+nearest medium torch, the nearest spot with a rock to walk into and the nearest one with a tree,
+then replays those paths in the browser:
 
 ```js
 const SEED = pickSeed(DEFAULT_SEED);
@@ -103,8 +104,8 @@ const WORLD = `seed=${DEFAULT_SEED}&nonce=${NONCE}`;
 test('...', async (game) => { ... }, { query: WORLD });
 ```
 
-Routes to terrain (the nearest rock to bump into) and to unique objects (a gem, the merchant, the
-compass lying in the dark) need none of this — those don't move with the nonce.
+Routes to terrain (the nearest rock or tree to bump into) and to unique objects (a gem, the
+merchant, the compass lying in the dark) need none of this — those don't move with the nonce.
 
 **`bfsChain` strikes off every tile a leg walks over**, not just the one it stops on. With items
 spread `MIN_SEPARATION` tiles apart, legs are long enough that an earlier one routinely picks up in

@@ -124,9 +124,11 @@ export class MapView {
           : 'gate'
         : terrain === 'rock'
           ? 'rock'
-          : terrain === 'wall'
-            ? 'wall'
-            : this.floorVariant(run, wx, wy);
+          : terrain === 'tree'
+            ? 'tree'
+            : terrain === 'wall'
+              ? 'wall'
+              : this.floorVariant(run, wx, wy);
 
       cell.ground
         .setTexture(ground)
@@ -134,7 +136,7 @@ export class MapView {
         .setVisible(true)
         .setAlpha(alpha);
 
-      // Nothing lies on rock, on wall, or in a gateway.
+      // Nothing lies on rock, on trees, on wall, or in a gateway.
       if (terrain !== 'floor') {
         cell.overlay.setVisible(false);
         cell.item.setVisible(false);

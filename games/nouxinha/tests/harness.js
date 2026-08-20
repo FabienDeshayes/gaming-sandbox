@@ -288,6 +288,13 @@ export async function openGame(
 
     shot: (file) => page.screenshot({ path: file }),
 
+    // Whether the music loop's scheduler is running. Read out of the module the
+    // game itself imported — a dynamic import of the same URL is the same module
+    // instance — because there is nothing about a loop of square waves that a
+    // headless browser can be asked to listen to.
+    music: () =>
+      page.evaluate(() => import('/src/ui/music.js').then((m) => m.isMusicPlaying())),
+
     activeScene: () =>
       page.evaluate(() => {
         const s = window.__game.scene.getScenes(true).slice(-1)[0];

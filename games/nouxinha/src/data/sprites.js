@@ -90,6 +90,31 @@ export const ROCK = [
   '..############..',
 ];
 
+// Tree: the other thing that stops a step, and it has to be told apart from
+// rock at a glance — a player who reads a grove as a rock mass looks for a way
+// round it instead of seeing that the world grew something. Rock is a blob that
+// fills its tile edge to edge; a tree keeps the same weight but spends it on a
+// lobed canopy over a trunk, so the silhouette does the work and a grove reads
+// as foliage rather than stone.
+export const TREE = [
+  '....##....##....',
+  '..######.#####..',
+  '.##############.',
+  '################',
+  '##.############.',
+  '################',
+  '###############.',
+  '.##############.',
+  '.###.##########.',
+  '..############..',
+  '...##########...',
+  '....########....',
+  '......####......',
+  '......####......',
+  '.....#.##.#.....',
+  '....##.##.##....',
+];
+
 // Floor: a dotted border on the top and left edges only, so the edge shared by
 // two tiles is drawn once rather than twice. The right and bottom edges are
 // added back per-tile (see FLOOR_VARIANTS) when the neighbour on that side is
@@ -564,6 +589,7 @@ export const SPRITES = {
   ...wizardZones(WIZARD_RIGHT, 'wizard-right'),
   ...wizardZones(mirror(WIZARD_RIGHT), 'wizard-left'),
   rock: ROCK,
+  tree: TREE,
   ...FLOOR_VARIANTS,
   base: BASE,
   wall: WALL,

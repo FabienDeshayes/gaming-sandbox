@@ -10,6 +10,7 @@ import {
   chebyshev,
   consumableAt,
   DEFAULT_SEED,
+  entryCost,
   isMerchant,
   isWalkable,
   landmarkAt,
@@ -77,6 +78,8 @@ const scatter = (x, y, gems = 0, salt = SALT) => itemAt(x, y, SEED, { salt, gems
 // `gems` is what the walker is carrying, because a sanctum gate is only
 // walkable to a run holding the gem it wants — routing with 0 would send a test
 // round the outside of a sanctum it is supposed to walk into.
+const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
 function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], gems = 0) {
   const [sx, sy] = start;
   const prev = new Map([[tileKey(sx, sy), null]]);
@@ -151,6 +154,12 @@ const ROCK_ROUTE = bfs(SEED, (x, y) => {
   );
   return into ? into[0] : null;
 });
+// The nearest spot with a tree next to it, for the test that a grove is drawn as
+// foliage rather than as more rock.
+const TREE_ROUTE = bfs(SEED, (x, y) =>
+  ORTHOGONAL.some(([dx, dy]) => terrainAt(x + dx, y + dy, SEED) === 'tree')
+);
+
 // Four copies of the same light, chained leg to leg — one more than the item
 // card's instance list shows at once, so it has to scroll. Four rather than
 // more because the world spreads its items out (core/world.js MIN_SEPARATION),
@@ -723,9 +732,67 @@ unit('rock thins out to about a fifth of the world', () => {
   assert(share > 0.15 && share < 0.26, `rock covers ${(share * 100).toFixed(1)}% of the world`);
 });
 
-unit('no two of the same consumable ever land within 15 tiles', () => {
+unit('rock comes in two formations that draw the same tile', () => {
+  // Masses grown on a lattice, and boulders thrown as white noise into the open
+  // ground between them. They are the same terrain and so the same sprite —
+  // what a player meets is a wall to walk round or a stone to step past, and
+  // the second is what keeps a wide stretch of floor from being an empty screen.
+  let masses = 0;
+  let loose = 0;
+  for (let y = -70; y <= 70; y++)
+    for (let x = -70; x <= 70; x++) {
+      if (sanctumAt(x, y, SEED) || landmarkAt(x, y, SEED)) continue;
+      if (terrainAt(x, y, SEED) !== 'rock') continue;
+      const alone = ORTHOGONAL.every(([dx, dy]) => terrainAt(x + dx, y + dy, SEED) !== 'rock');
+      if (alone) loose += 1;
+      else masses += 1;
+    }
+  assert(loose > 150, `only ${loose} boulders stand on their own`);
+  assert(masses > loose * 5, 'the masses should still be most of the rock in the world');
+});
+
+unit('trees grow in groves and stop a step the way rock does', () => {
+  let trees = 0;
+  let total = 0;
+  let inAStand = 0;
+  for (let y = -70; y <= 70; y++)
+    for (let x = -70; x <= 70; x++) {
+      if (sanctumAt(x, y, SEED) || landmarkAt(x, y, SEED)) continue;
+      total += 1;
+      if (terrainAt(x, y, SEED) !== 'tree') continue;
+      trees += 1;
+      assert(!isWalkable(x, y, SEED), `(${x},${y}) is a tree and should block`);
+      assertEqual(entryCost(x, y, SEED), null, 'no number of gems opens a tree');
+      if (ORTHOGONAL.some(([dx, dy]) => terrainAt(x + dx, y + dy, SEED) === 'tree')) inAStand += 1;
+    }
+  const share = trees / total;
+  // Enough that a walk meets one, few enough that the world is still mostly
+  // ground: trees block, so every one of them is floor the player lost.
+  assert(share > 0.04 && share < 0.1, `trees cover ${(share * 100).toFixed(1)}% of the world`);
+  // Groves, not scattered trunks — that is what the coarse lattice buys.
+  assert(inAStand / trees > 0.9, 'nearly every tree should have another beside it');
+});
+
+unit('the ground holds something about one floor tile in 35', () => {
+  // The density dial (core/world.js MIN_SEPARATION), pinned: playtesting moved
+  // it because a walk was crossing screenfuls of lit ground with nothing on
+  // any of them, and the thing that regresses silently is this number.
+  let items = 0;
+  let floor = 0;
+  for (let y = -70; y <= 70; y++)
+    for (let x = -70; x <= 70; x++) {
+      if (sanctumAt(x, y, SEED) || terrainAt(x, y, SEED) !== 'floor') continue;
+      floor += 1;
+      if (consumableAt(x, y, SEED, SALT, 0)) items += 1;
+    }
+  const share = items / floor;
+  assert(share > 0.025 && share < 0.035, `one floor tile in ${(floor / items).toFixed(0)}`);
+});
+
+unit('no two of the same consumable ever land within the separation distance', () => {
   // The anti-clustering promise, asserted outright rather than sampled: with a
-  // Chebyshev minimum of 15, no 15x15 square anywhere can hold two of a kind.
+  // Chebyshev minimum of MIN_SEPARATION, no square that wide can hold two of a
+  // kind anywhere in the sample.
   const byKind = new Map();
   for (let y = -70; y <= 70; y++)
     for (let x = -70; x <= 70; x++) {
@@ -1183,6 +1250,63 @@ test('blackout shrinks memory to a fog of war around the character', async (game
     ),
     'nothing further out is drawn as remembered any more'
   );
+});
+
+test('a grove is drawn as trees, not as more rock', async (game) => {
+  await game.startRun();
+  for (const dir of TREE_ROUTE.path) {
+    await game.tapDpad(dir);
+    await game.settle();
+  }
+
+  const tiles = await game.visibleTiles();
+  const drawn = tiles.filter((t) => terrainAt(t.x, t.y, SEED) === 'tree');
+  assert(drawn.length > 0, 'the walk should end with a grove in the light');
+  for (const tile of drawn)
+    assertEqual(tile.ground, 'tree', `(${tile.x},${tile.y}) should be drawn as a tree`);
+  // Terrain is the constant the gem colours read against (DESIGN.md §9), so a
+  // tree is the palette's own foreground like the rock beside it.
+  const rock = tiles.find((t) => t.ground === 'rock');
+  if (rock) assertEqual(drawn[0].tint, rock.tint, 'trees are terrain, tinted like rock');
+
+  // And they stop a step the way rock does.
+  const into = ORTHOGONAL.map(([dx, dy], i) => [['right', 'left', 'down', 'up'][i], dx, dy]).find(
+    ([, dx, dy]) => terrainAt(TREE_ROUTE.x + dx, TREE_ROUTE.y + dy, SEED) === 'tree'
+  );
+  const before = await game.state();
+  await game.tapDpad(into[0]);
+  await game.settle();
+  const after = await game.state();
+  assertEqual({ x: after.x, y: after.y }, { x: before.x, y: before.y }, 'did not move');
+});
+
+test('the music plays under the expedition and stops when it ends', async (game) => {
+  await game.startRun();
+  // The loop is started by the scene and again by the first input, because a
+  // page the player has not touched yet has no clock to schedule against.
+  await game.tapDpad('right');
+  await game.settle();
+  assertEqual(await game.music(), true, 'the dark has a sound while you are in it');
+
+  // The X in the corner of the map, which is the way out of a run.
+  await game.clickAt(456, 31);
+  await game.waitForScene('TitleScene');
+  assertEqual(await game.music(), false, 'and the title screen is quiet again');
+});
+
+test('the music switch turns the loop off and keeps it off', async (game) => {
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  assert(await game.hasText('MUSIC: ON'), 'on by default');
+  await game.clickText('MUSIC: ON');
+  assert(await game.hasText('MUSIC: OFF'), 'and the button says so once tapped');
+  await game.clickText('BACK');
+  await game.waitForScene('TitleScene');
+
+  await game.startRun();
+  await game.tapDpad('right');
+  await game.settle();
+  assertEqual(await game.music(), false, 'a run started with it off stays silent');
 });
 
 test('walking into rock bumps instead of moving', async (game) => {

@@ -10,6 +10,7 @@ import {
   SHORE_TOP,
   SPRITE_PX,
   SWIPE_THRESHOLD,
+  TEXT_RESOLUTION,
 } from '../config.js';
 
 const TOKEN_PX = 38;
@@ -64,6 +65,7 @@ export function createShoreView(scene) {
             fontFamily: FONT,
             fontSize: '14px',
             color: COLORS.text,
+            resolution: TEXT_RESOLUTION,
           })
           .setOrigin(1, 1);
         cell.flipped = false;

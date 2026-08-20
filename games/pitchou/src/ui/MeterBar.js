@@ -8,6 +8,7 @@ import {
   METER_TOP,
   METER_W,
   SPRITE_PX,
+  TEXT_RESOLUTION,
 } from '../config.js';
 
 // One meter: an icon, a vertical bar, the level as a big numeral, and a ghost
@@ -35,6 +36,7 @@ export function createMeterBar(scene, x, meterId) {
       fontFamily: FONT,
       fontSize: '32px',
       color: COLORS.text,
+      resolution: TEXT_RESOLUTION,
     })
     .setOrigin(0.5, 0);
 
@@ -43,6 +45,7 @@ export function createMeterBar(scene, x, meterId) {
       fontFamily: FONT,
       fontSize: '14px',
       color: COLORS.muted,
+      resolution: TEXT_RESOLUTION,
     })
     .setOrigin(0.5, 0);
 

@@ -8,6 +8,7 @@ import {
   setAudio,
   setHardMode,
   setMotion,
+  TEXT_RESOLUTION,
 } from '../config.js';
 import { createButton } from '../ui/button.js';
 import { ensureTextures } from '../ui/textures.js';
@@ -44,16 +45,31 @@ export class SettingsScene extends Phaser.Scene {
     const cx = GAME_WIDTH / 2;
 
     this.add
-      .text(cx, 96, 'SETTINGS', { fontFamily: FONT, fontSize: '27px', color: COLORS.text })
+      .text(cx, 96, 'SETTINGS', {
+        fontFamily: FONT,
+        fontSize: '27px',
+        color: COLORS.text,
+        resolution: TEXT_RESOLUTION,
+      })
       .setOrigin(0.5);
 
     OPTIONS.forEach((option, i) => {
       const y = 200 + i * 130;
       this.add
-        .text(cx, y - 42, option.label, { fontFamily: FONT, fontSize: '18px', color: COLORS.text })
+        .text(cx, y - 42, option.label, {
+          fontFamily: FONT,
+          fontSize: '18px',
+          color: COLORS.text,
+          resolution: TEXT_RESOLUTION,
+        })
         .setOrigin(0.5);
       this.add
-        .text(cx, y - 20, option.note, { fontFamily: FONT, fontSize: '13px', color: COLORS.muted })
+        .text(cx, y - 20, option.note, {
+          fontFamily: FONT,
+          fontSize: '13px',
+          color: COLORS.muted,
+          resolution: TEXT_RESOLUTION,
+        })
         .setOrigin(0.5);
 
       const button = createButton(

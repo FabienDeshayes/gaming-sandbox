@@ -1,4 +1,4 @@
-import { COLORS, FONT, GAME_WIDTH, SPRITE_PX } from '../config.js';
+import { COLORS, FONT, GAME_WIDTH, SPRITE_PX, TEXT_RESOLUTION } from '../config.js';
 import { createButton } from '../ui/button.js';
 import { ensureTextures } from '../ui/textures.js';
 
@@ -29,13 +29,19 @@ export class TitleScene extends Phaser.Scene {
     const cx = GAME_WIDTH / 2;
 
     this.add
-      .text(cx, 180, 'Pitchou', { fontFamily: FONT, fontSize: '64px', color: COLORS.text })
+      .text(cx, 180, 'Pitchou', {
+        fontFamily: FONT,
+        fontSize: '64px',
+        color: COLORS.text,
+        resolution: TEXT_RESOLUTION,
+      })
       .setOrigin(0.5);
     this.add
       .text(cx, 232, 'twelve nights, one light', {
         fontFamily: FONT,
         fontSize: '16px',
         color: COLORS.muted,
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
@@ -50,7 +56,12 @@ export class TitleScene extends Phaser.Scene {
     const pinned = seedFromUrl();
     if (pinned !== null)
       this.add
-        .text(cx, 736, `seed ${pinned}`, { fontFamily: FONT, fontSize: '13px', color: COLORS.dim })
+        .text(cx, 736, `seed ${pinned}`, {
+          fontFamily: FONT,
+          fontSize: '13px',
+          color: COLORS.dim,
+          resolution: TEXT_RESOLUTION,
+        })
         .setOrigin(0.5);
   }
 

@@ -56,6 +56,7 @@ Dawn is a two-phase overlay:
 | **Three separate meters** | Lamp, Hearth and Tower drain independently and are each refilled by exactly one resource. A great haul of driftwood is worthless on the night the lamp is dying — the meter closest to zero sets your risk appetite, not the odds. | — (read-only display) |
 | **Tools from the meters** | Tools are paid directly from the meters. Spending 3 driftwood on a gaff hook lowers the hearth by 3 — survive tonight, or survive later. | Tap a tool card in the workshop |
 | **Tools rewrite the shore** | Each tool permanently adds a stronger token to the shore or removes a squall from it. This is the only lever the player has over probability. | Tap a tool in the workshop |
+| **Tools unlock in tiers** | The six tools open two at a time — tier 2 on night 5, tier 3 on night 9, the same nights the drain steps up. A locked card shows the night it opens instead of its cost. | — (read-only until unlocked) |
 
 ## 5. Constraints
 
@@ -122,33 +123,45 @@ out of the starting shore.
 The storm adds one squall after nights 3, 6 and 9.
 
 **Tools** — a fixed shop, each buildable once per run. Costs are paid directly from
-the meters (each resource's cost lowers the meter it belongs to).
+the meters (each resource's cost lowers the meter it belongs to). Tools also unlock
+two at a time, on the tuning's `toolTierNights`: tier 2 opens night 5, tier 3 night
+9 — the same nights the drain (above) steps up, so the workshop gets more dangerous
+on the same schedule the shore does. A locked card shows "Unlocks night N" instead
+of a cost.
 
-| Tool | Cost | Effect on the shore |
-|---|---|---|
-| Gaff hook | 3 driftwood (hearth −3) | add a *Driftwood ×2* token |
-| Tide net | 3 planks (tower −3) | add a *Plank ×2* token |
-| Copper funnel | 3 oil (lamp −3) | add an *Oil ×2* token |
-| Lantern pole | 2 oil + 2 driftwood (lamp −2, hearth −2) | add an *Oil* token |
-| Storm wall | 6 planks (tower −6) | remove a squall |
-| Breakwater | 4 oil + 4 driftwood (lamp −4, hearth −4) | remove a squall |
+| Tool | Tier | Unlocks | Cost | Effect on the shore |
+|---|---|---|---|---|
+| Gaff hook | 1 | night 1 | 3 driftwood (hearth −3) | add a *Driftwood ×2* token |
+| Tide net | 1 | night 1 | 3 planks (tower −3) | add a *Plank ×2* token |
+| Copper funnel | 2 | night 5 | 3 oil (lamp −3) | add an *Oil ×2* token |
+| Lantern pole | 2 | night 5 | 2 oil + 2 driftwood (lamp −2, hearth −2) | add an *Oil ×2* token |
+| Storm wall | 3 | night 9 | 6 planks (tower −6) | remove a squall |
+| Breakwater | 3 | night 9 | 4 oil + 4 driftwood (lamp −4, hearth −4) | remove a squall |
 
 ### Why these numbers
 
-`sim/simulate.mjs` plays 50,000 seasons per policy. The tuning is chosen so that
+`sim/simulate.mjs` plays 20,000 seasons per policy. The tuning is chosen so that
 the three things the player decides all change the outcome, and in the right order:
 
 | How it is played | Wins |
 |---|---|
-| reckless — never stop searching | 0.0% |
-| timid — home at the first wave | 0.1% |
-| safe — home at two waves, never build | 11.1% |
-| safe, and build tools | 33.8% |
-| build tools, and push past two waves at good odds | 43.3% |
+| reckless — never stop searching | 0.1% |
+| timid — home at the first wave | 0.2% |
+| safe — home at two waves, never build | 23.3% |
+| safe, and build tools (buffered against next dusk) | 42.8% |
+| build tools, and push past two waves at good odds | 54.1% |
 
-Each step up in thinking is worth roughly ten points of win rate, and careless play
+Each step up in thinking is worth double-digit points of win rate, and careless play
 loses outright. Three numbers hold that shape up, and `npm run sweep` keeps the
 ablations alongside the current tuning:
+
+- **Tiered unlocks are what keep the workshop from flattening the early game.**
+  With tier 2 (the oil-side kit) and tier 3 (wave removal) locked behind nights 5
+  and 9, a player can't out-build the first squeeze — the shore, not the shop,
+  decides who survives night one to four. Spending on tools the moment they're
+  affordable rather than only when the meters can absorb it (no safety buffer)
+  drops the safe line from the low 40s to the high teens; the tiers make when you
+  build matter as much as what.
 
 - **Squall damage is what makes the early squalls matter.** With squalls free until the
   third, only 11.8% of a night's taps are decisions — `bustOdds` is zero until two

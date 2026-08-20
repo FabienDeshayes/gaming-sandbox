@@ -1,4 +1,12 @@
-import { RESOURCES, METER_OF, budgetLeft, bustOdds, drainForNight, canAffordFromMeters } from '../src/core/rules.js';
+import {
+  RESOURCES,
+  METER_OF,
+  budgetLeft,
+  bustOdds,
+  drainForNight,
+  canAffordFromMeters,
+  toolUnlocked,
+} from '../src/core/rules.js';
 
 // --- stop rules -------------------------------------------------------------
 
@@ -32,6 +40,7 @@ export function investPlan(priority, { buffer = 2 } = {}) {
     for (const id of priority) {
       const tool = state.tuning.tools.find((t) => t.id === id);
       if (!tool || state.toolsBuilt.includes(id)) continue;
+      if (!toolUnlocked(tool, state.night, state.tuning)) continue;
       if (!canAffordFromMeters(state.meters, tool.cost)) continue;
       let safe = true;
       for (const [resource, amount] of Object.entries(tool.cost)) {

@@ -11,7 +11,15 @@ import {
   SPRITE_PX,
   SWIPE_THRESHOLD,
 } from '../config.js';
-import { allocate, buildTool, canAffordFromMeters, METER_OF, RESOURCES } from '../core/rules.js';
+import {
+  allocate,
+  buildTool,
+  canAffordFromMeters,
+  METER_OF,
+  RESOURCES,
+  toolUnlocked,
+  toolUnlockNight,
+} from '../core/rules.js';
 import { createButton } from './button.js';
 import { playBuild, playPour, unlockAudio } from './sfx.js';
 
@@ -98,17 +106,17 @@ export function createDawnPanel(scene) {
         .setDepth(PANEL_DEPTH)
     );
 
-    text(GAME_WIDTH / 2, PANEL.y + 30, `DAWN  ·  NIGHT ${state.night}`, 22, COLORS.text, 0.5);
+    text(GAME_WIDTH / 2, PANEL.y + 30, `DAWN  ·  NIGHT ${state.night}`, 23, COLORS.text, 0.5);
 
     const totalBanked = RESOURCES.reduce((n, r) => n + banked[r], 0);
     const flavour = pickFlavour(state.busted, totalBanked);
-    text(GAME_WIDTH / 2, PANEL.y + 62, flavour, 13, state.busted ? COLORS.foam : COLORS.muted, 0.5);
+    text(GAME_WIDTH / 2, PANEL.y + 62, flavour, 14, state.busted ? COLORS.foam : COLORS.muted, 0.5);
 
     let y = PANEL.y + 102;
 
     const found = RESOURCES.filter((r) => nightGathered[r] > 0);
     if (found.length) {
-      text(PANEL.x + 20, y, 'FOUND', 11, COLORS.dim);
+      text(PANEL.x + 20, y, 'FOUND', 12, COLORS.dim);
       y += 24;
       for (const resource of found) {
         add(
@@ -122,7 +130,7 @@ export function createDawnPanel(scene) {
           PANEL.x + 60,
           y + ROW_H / 2 - 3,
           `${nightGathered[resource]}  ${RESOURCE_LABELS[resource]}`,
-          15,
+          16,
           COLORS.text
         );
         y += ROW_H - 6;
@@ -132,7 +140,7 @@ export function createDawnPanel(scene) {
 
     const lost = RESOURCES.filter((r) => nightLost[r] > 0);
     if (lost.length) {
-      text(PANEL.x + 20, y, 'LOST TO THE SQUALLS', 11, COLORS.dim);
+      text(PANEL.x + 20, y, 'LOST TO THE SQUALLS', 12, COLORS.dim);
       y += 24;
       for (const resource of lost) {
         add(
@@ -146,7 +154,7 @@ export function createDawnPanel(scene) {
           PANEL.x + 60,
           y + ROW_H / 2 - 3,
           `${nightLost[resource]}  ${RESOURCE_LABELS[resource]}`,
-          15,
+          16,
           COLORS.foam
         );
         y += ROW_H - 6;
@@ -156,7 +164,7 @@ export function createDawnPanel(scene) {
 
     const held = RESOURCES.filter((r) => banked[r] > 0);
     if (held.length) {
-      text(PANEL.x + 20, y, 'CARRIED HOME', 11, COLORS.dim);
+      text(PANEL.x + 20, y, 'CARRIED HOME', 12, COLORS.dim);
       y += 24;
       for (const resource of held) {
         const meter = METER_OF[resource];
@@ -174,7 +182,7 @@ export function createDawnPanel(scene) {
           PANEL.x + 60,
           y + ROW_H / 2 - 3,
           `${banked[resource]}  ${RESOURCE_LABELS[resource]}`,
-          15,
+          16,
           COLORS.text
         );
         const detail = `${METER_LABELS[meter]}  ${from} → ${to}`;
@@ -182,16 +190,16 @@ export function createDawnPanel(scene) {
           PANEL.x + PANEL.w - 34,
           y + ROW_H / 2 - 3 - (overflow > 0 ? 8 : 0),
           detail,
-          13,
+          14,
           RESOURCE_COLORS[resource],
           1
         );
         if (overflow > 0)
-          text(PANEL.x + PANEL.w - 34, y + ROW_H / 2 - 3 + 10, `${overflow} over the brim, lost`, 11, COLORS.bust, 1);
+          text(PANEL.x + PANEL.w - 34, y + ROW_H / 2 - 3 + 10, `${overflow} over the brim, lost`, 12, COLORS.danger, 1);
         y += ROW_H;
       }
     } else {
-      text(PANEL.x + 20, y + 14, 'Nothing survived the walk home.', 14, COLORS.muted);
+      text(PANEL.x + 20, y + 14, 'Nothing survived the walk home.', 15, COLORS.muted);
       y += 44;
     }
 
@@ -225,22 +233,22 @@ export function createDawnPanel(scene) {
         .setDepth(PANEL_DEPTH)
     );
 
-    text(GAME_WIDTH / 2, PANEL.y + 30, 'WORKSHOP', 22, COLORS.text, 0.5);
+    text(GAME_WIDTH / 2, PANEL.y + 30, 'WORKSHOP', 23, COLORS.text, 0.5);
 
     let y = PANEL.y + 70;
-    text(PANEL.x + 20, y, 'YOUR STORES', 11, COLORS.dim);
+    text(PANEL.x + 20, y, 'YOUR STORES', 12, COLORS.dim);
     const meterLine = RESOURCES.map((r) => {
       const meter = METER_OF[r];
       return `${METER_LABELS[meter]} ${state.meters[meter]}`;
     }).join('   ');
-    text(PANEL.x + PANEL.w - 20, y, meterLine, 12, COLORS.muted, 1);
+    text(PANEL.x + PANEL.w - 20, y, meterLine, 13, COLORS.muted, 1);
     y += 30;
 
     text(
       GAME_WIDTH / 2,
       y,
       'Tools are built from your stores — spending\nresources lowers your meters.',
-      12,
+      13,
       COLORS.dim,
       0.5
     );
@@ -252,15 +260,22 @@ export function createDawnPanel(scene) {
       const cx = PANEL.x + 12 + CARD.w / 2 + col * (CARD.w + CARD.gap);
       const cy = y + CARD.h / 2 + row * (CARD.h + CARD.gap);
       const built = state.toolsBuilt.includes(tool.id);
-      const affordable = !built && canAffordFromMeters(state.meters, tool.cost);
+      const unlocked = built || toolUnlocked(tool, state.night, state.tuning);
+      const affordable = !built && unlocked && canAffordFromMeters(state.meters, tool.cost);
 
       hitRect(
         cx,
         cy,
         CARD.w,
         CARD.h,
-        built ? COLORS.panelHex : COLORS.bgHex,
-        built ? COLORS.dimHex : affordable ? COLORS.lampHex : COLORS.panelEdgeHex,
+        built ? COLORS.panelHex : unlocked ? COLORS.bgHex : COLORS.disabledHex,
+        built
+          ? COLORS.dimHex
+          : affordable
+          ? COLORS.lampHex
+          : unlocked
+          ? COLORS.panelEdgeHex
+          : COLORS.dimHex,
         affordable
           ? () => {
               buildTool(state, tool.id);
@@ -269,7 +284,7 @@ export function createDawnPanel(scene) {
             }
           : null
       );
-      const tint = built ? COLORS.dimHex : affordable ? COLORS.lampHex : COLORS.mutedHex;
+      const tint = built ? COLORS.dimHex : affordable ? COLORS.lampHex : unlocked ? COLORS.mutedHex : COLORS.dimHex;
       add(
         scene.add
           .image(cx - CARD.w / 2 + 26, cy - 6, tool.id)
@@ -277,16 +292,17 @@ export function createDawnPanel(scene) {
           .setTint(tint)
           .setDepth(PANEL_CONTENT_DEPTH)
       );
-      const bodyColour = built ? COLORS.dim : affordable ? COLORS.text : COLORS.muted;
-      text(cx - CARD.w / 2 + 48, cy - 22, tool.name, 14, bodyColour);
+      const bodyColour = built ? COLORS.dim : affordable ? COLORS.text : unlocked ? COLORS.muted : COLORS.dim;
+      text(cx - CARD.w / 2 + 48, cy - 22, tool.name, 15, bodyColour);
       const cost = Object.entries(tool.cost)
         .map(([r, n]) => `${n} ${RESOURCE_LABELS[r]}`)
         .join(' + ');
-      text(cx - CARD.w / 2 + 48, cy - 3, built ? 'BUILT' : cost, 11, built ? COLORS.dim : COLORS.muted);
+      const costLine = built ? 'BUILT' : unlocked ? cost : `Unlocks night ${toolUnlockNight(tool, state.tuning)}`;
+      text(cx - CARD.w / 2 + 48, cy - 3, costLine, 12, built || !unlocked ? COLORS.dim : COLORS.muted);
       const effect = tool.removeWave
         ? 'Takes a wave off the shore'
         : `Adds ${RESOURCE_LABELS[tool.add.resource]} x${tool.add.amount}`;
-      text(cx - CARD.w / 2 + 12, cy + 24, effect, 11, built ? COLORS.dim : COLORS.foam);
+      text(cx - CARD.w / 2 + 12, cy + 24, effect, 12, built || !unlocked ? COLORS.dim : COLORS.foam);
     });
 
     const buttonY = PANEL.y + PANEL.h - 44;

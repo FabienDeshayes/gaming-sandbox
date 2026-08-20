@@ -12,7 +12,7 @@ import { unlockAudio } from './sfx.js';
 // than wrapping the two in a Container, so the test harness can still find a
 // button by scanning the scene's children for one with `.text` and `.input`.
 export function createButton(scene, x, y, label, onClick, style = {}) {
-  const { fontSize = 26, padX = 24, padY = 14, width = 0, enabled = true } = style;
+  const { fontSize = 27, padX = 24, padY = 14, width = 0, enabled = true } = style;
 
   const text = scene.add
     .text(x, y, label, {

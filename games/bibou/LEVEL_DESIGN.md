@@ -253,7 +253,7 @@ Suggested shape for encoding a level, for whoever implements level loading:
 
 **`actionBudget` is per action type, in two senses:**
 
-1. **Which actions the level offers.** An action type absent from the map, or set to `0`, cannot be used at all — this is how Levels 1–3 offer no cards whatsoever. Only the listed actions get a card.
+1. **Which actions the level offers.** An action type absent from the map, or set to `0`, cannot be used at all — this is how Levels 1–3 and 8–13 offer no cards whatsoever. Only the listed actions get a card.
 2. **How many times each may be used.** Each key is that action's own private pool. Using Flip draws down `flip` and nothing else, so `{ "shift": 1, "flip": 1 }` means *exactly one Shift and exactly one Flip* — not "two actions, spend them however you like".
 
 **Move is never listed.** It's free and unlimited on every level (§5.1), so `"actionBudget": {}` is a complete, valid budget: a pure movement puzzle with no cards at all.
@@ -264,7 +264,17 @@ This is the main knob for level difficulty. Levels usually grant exactly **one**
 
 ## 7. Levels
 
-Every level places exactly one `required` key, either loose on the board or sealed inside a crate, so the shape of every puzzle is *find the key, then reach the exit*. Each level introduces exactly one idea, in order: walking and the lock, wraparound, crates and crushing, Flip, Shift, the full-loop push, and finally both budgeted actions at once.
+Every level places exactly one `required` key, either loose on the board or sealed inside a crate, so the shape of every puzzle is *find the key, then reach the exit*. Each level is built on exactly one idea, and the list is in teaching order:
+
+| Levels | What they are about |
+|---|---|
+| 1–7 | One introduction each: walking and the lock, wraparound, crates and crushing, Flip, Shift, the full-loop push, then both budgeted actions at once. |
+| 8–13 | How far free Move goes on its own: which entity a jam claims, where a broken crate leaves its key, pushing from a side you have to walk the long way round to, chains that wrap, a packed line that *can't* rotate, and reaching into a corridor from outside it. |
+| 14–15 | Shift, where Move provably can't reach: breaking the spacing of a rotating line, and a guess the budget lets you get wrong. |
+| 16–25 | Flip, the only action that ignores walls — sealed keys, sealed exits, sealed characters, the fixed lines, the mirror tile you happen to be standing on, and what a second Flip is for. |
+| 26–27 | Both budgeted actions on one board, where the order and the tile you stand on both decide the run. |
+
+The wall lists below name a few structures by the helper that builds them in `src/data/levels.js`: **sealed tile** (all four edges of one cell — walk-proof and shift-proof, so Flip-only), **sealed row/column** (a one-tile corridor cut off from its neighbours at every index, wrapping into a closed ring unless a wall inside it says otherwise), and **door** (one edge of such a corridor deliberately left open).
 
 ### Level 1 — the key and the door
 
@@ -439,3 +449,353 @@ The board has two prisons. Column 1 is sealed down both its long sides, so the k
 - *The wrong flip axis.* A row flip leaves the key on `(1,2)`, untouched.
 - *Shifting the key's row instead of its column.* Walls on both sides mean the key can't move, so it's rejected and free — safe to try.
 - *Flipping yourself in.* From column 3 the character can flip itself into column 1 and collect the key by hand. It's then sealed in there with no flip left, and the goal is outside. A genuine dead end, and a good way to learn that Flip moves the character too.
+
+### Level 8 — the far crate breaks first
+
+Teaches which entity a jam actually claims (§5.4): the one *touching the wall*, not the one being pushed.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(1, 2)` |
+| Crates | `(2, 2)` containing a `required` key, `(3, 2)` |
+| Goal | `(4, 2)` |
+| Walls | `(3,2)`–`(4,2)` — 1 wall |
+| Available actions | None (Move only) |
+
+Both crates look identical, and pushing right jams them against the one wall. The crate that dies is the far one — the empty one — because the peel walks backward from the wall. Only once that shield is gone can the same push crush the near crate and spill the key.
+
+**Intended solution:** `Right` crushes the far crate; `Right` pushes the key crate into the freed tile; `Right` crushes it there, dropping the key on `(3,2)`; `Right` collects it; `Up`, `Right`, `Down` rounds the wall to the goal → **win** (7 moves).
+
+### Level 9 — a crate drops its key where it dies
+
+The tile a crushed crate leaves its key on is its *own* tile, not the one it was pushed toward — so here the crate is pushed onto the exit and breaks open on it.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(4, 4)` |
+| Crates | `(2, 2)` containing a `required` key |
+| Goal | `(0, 2)` |
+| Walls | row 2 sealed, with a door below `(4,2)`, plus `(4,2)`–`(0,2)` — 10 walls |
+| Available actions | None (Move only) |
+
+The seam wall turns Level 6's ring into a dead-end line, and the door at `(4,3)` is the only way in — which puts the character to the *right* of the crate for good. It can only ever be pushed left, into the dead end at `(0,2)`, which is the goal.
+
+**Intended solution:** `Up`, `Up` through the door; `Left` ×3 walks the crate to `(0,2)`; the fourth `Left` crushes it there and the key lands on the goal; the fifth `Left` steps onto it → **win** (7 moves).
+
+### Level 10 — push from the side you have to walk round to
+
+A crate is only crushable from the side that pushes it into the wall, and that side can be a whole lap away.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(2, 0)` |
+| Crates | `(2, 2)` containing a `required` key |
+| Goal | `(2, 1)` |
+| Walls | column 2 sealed, plus `(2,1)`–`(2,2)` — 11 walls |
+| Available actions | None (Move only) |
+
+Column 2 is a sealed ring cut by one wall, and the character starts on the wrong side of it: walking down at the crate pushes it away from the only wall it can break on. Going the other way — up, through the wraparound seam — arrives underneath it.
+
+**Intended solution:** `Up` ×3 to `(2,3)` (via the seam); `Up` crushes the crate against the `(2,1)`–`(2,2)` wall; `Up` collects the key at `(2,2)`; `Down` ×4 rounds the ring again to the goal at `(2,1)` → **win** (8 moves).
+
+### Level 11 — the chain wraps, and so does the casualty
+
+A push chain walks through the seam (§2.1), so the crate a push destroys can be on the opposite side of the board from the push.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(2, 2)` |
+| Crates | `(3, 2)`, `(4, 2)`, `(0, 2)` containing a `required` key |
+| Goal | `(1, 2)` |
+| Walls | `(0,2)`–`(1,2)` — 1 wall |
+| Available actions | None (Move only) |
+
+Pushing right walks the chain `(3,2) → (4,2) → (0,2)` and then into the wall, so the key crate — three tiles to the *right*, which is to say one to the left — is the one that jams and breaks. The same wall then stops the character stepping onto the key it dropped, so the way in is round through row 1.
+
+**Intended solution:** `Right` crushes the wrapped crate and drops the key on `(0,2)`; `Up`, `Left`, `Left`, `Down` comes round to it; `Up`, `Right`, `Down` returns to the goal at `(1,2)` → **win** (8 moves).
+
+### Level 12 — a packed row with a wall in it can't rotate
+
+The counterpart to Level 6: the full-loop push (§5.1.1 case 3) needs the loop, and one wall inside the ring takes it away.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(2, 2)` |
+| Crates | `(0, 2)` containing a `required` key, `(1, 2)`, `(3, 2)`, `(4, 2)` |
+| Goal | `(4, 2)` |
+| Walls | row 2 sealed, plus `(4,2)`–`(0,2)` — 11 walls |
+| Available actions | None (Move only) |
+
+Five entities fill five tiles, so there is no open tile for a push to resolve into — and with the ring cut, no rotation either. Every step is therefore a jam, and every jam breaks the crate at the far end of the line. Demolition is the only way to move, and the key is in the crate at the left end.
+
+**Intended solution:** `Left` ×4 breaks through to the key and collects it; `Right` ×6 breaks back down the line to the goal at `(4,2)` → **win** (10 moves).
+
+### Level 13 — out one door, round, and in the other
+
+A sealed corridor has no wall along its own axis, so nothing inside it can be crushed from inside it — but a door is a tile the character can stand *beside* the corridor at.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(1, 2)` containing a `required` key |
+| Goal | `(4, 2)` |
+| Walls | row 2 sealed, with a door below `(2,2)` and a door above `(3,2)` — 8 walls |
+| Available actions | None (Move only) |
+
+Pushing the crate along the corridor never crushes it. The lower door is the way out, the upper door is the way back in — and standing at `(3,1)`, above the corridor, is the one position from which a push drives the crate into the corridor's own floor.
+
+**Intended solution:** `Right` ×2 leaves the crate at `(3,2)` and the character at `(2,2)`; `Down` ×4 exits by the lower door and comes round the seam to `(2,1)`; `Right` to `(3,1)`; `Down` crushes the crate against `(3,2)`–`(3,3)`; `Down` steps onto the key; `Right` to the goal → **win** (10 moves).
+
+### Level 14 — a full row only rotates
+
+Introduces the other half of the rotation rule: a rotation moves *every* entity on the line by one, so the gaps between them never change, and walking can never close the two tiles between the character and the key.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(1, 2)`, `(3, 2)`, `(4, 2)` |
+| Collectibles | key at `(2, 2)`, `required: true` |
+| Goal | `(4, 2)` |
+| Walls | row 2 sealed — 10 walls |
+| Available actions | Shift |
+| Action budget | Shift: 1 |
+
+The character can walk forever and the board simply turns underneath it. The one Shift crushes a crate across the corridor (§5.2), and the hole it leaves is what finally lets the line move relative to itself.
+
+**Intended solution:** `Right` ×2 (two rotations, key still two ahead); Shift the column holding a crate — `▲` or `▼` on column 3 — to crush it; `Right` into the hole; `Right` onto the key, which is now on the goal → **win** (5 actions).
+
+### Level 15 — two crates, no telling them apart
+
+A crate's contents are invisible until it breaks (a known art gap — crates are drawn identically), so this level never asks the player to guess: it hands out two Shifts.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(2, 4)` |
+| Crates | `(2, 1)` containing a `required` key, `(2, 3)` |
+| Goal | `(2, 0)` |
+| Walls | column 2 sealed — 10 walls |
+| Available actions | Shift |
+| Action budget | Shift: 2 |
+
+Level 5's corridor turned on its side, with two candidates in it. Either crate can be crushed by shifting its row; the wrong one costs a Shift, not the run.
+
+**Intended solution:** `Down` (through the seam to `(2,0)`); Shift row 1 either way to crush the crate at `(2,1)`; `Down` onto the key it drops; `Up` to the goal → **win** (4 actions). Breaking the other crate first costs one extra Shift and still wins.
+
+### Level 16 — the middle column never moves
+
+The shortest level in the game, and the clearest statement of the fixed-line rule (§5.3).
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(2, 2)` |
+| Collectibles | key at `(3, 2)`, `required: true` |
+| Goal | `(0, 2)` |
+| Walls | row 2 sealed, plus `(2,2)`–`(3,2)` and `(4,2)`–`(0,2)` — 12 walls |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+Two walls inside the corridor cut it into rooms `{0,1,2}` and `{3,4}`. Neither Move nor Shift crosses a wall, so the key in the small room is unreachable — but a column flip mirrors `(3,2)` onto `(1,2)`, inside the character's room. The character stands on the middle column, so it watches the board move without moving; the row flip, with everything on the middle row, changes nothing at all and ends the run.
+
+**Intended solution:** Flip across the middle column (`↔`); `Left` onto the key at `(1,2)`; `Left` to the goal → **win** (3 actions).
+
+### Level 17 — flip out of the cage, not into the next one
+
+Level 4 sealed the key in. This one seals the character in, which makes the axis choice a choice about where *you* land.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(3, 1)`, a sealed tile |
+| Collectibles | key at `(0, 0)`, `required: true` |
+| Goal | `(4, 2)` |
+| Walls | `(3,1)` sealed, plus row 3 sealed — 14 walls |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+`(3,1)` mirrors onto `(3,3)` under a row flip — which is inside the sealed row-3 corridor, with no flip left to get out again: one prison traded for another. The column flip, to `(1,1)`, opens onto the rest of the board.
+
+**Intended solution:** Flip across the middle column (`↔`) → character to `(1,1)`, and the key — which mirrors too — from `(0,0)` to `(4,0)`; `Up` to `(1,0)`; `Left`, `Left` through the seam onto the key at `(4,0)`; `Down`, `Down` to the goal at `(4,2)` → **win** (6 actions).
+
+### Level 18 — two rooms, one flip
+
+Both seams walled down the columns split the board into `{0,1}` and `{2,3,4}`, and the single flip is the only crossing — so it has to be spent holding the key.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 0)` |
+| Collectibles | key at `(1, 3)`, `required: true` |
+| Goal | `(4, 2)` |
+| Walls | `(1,y)`–`(2,y)` and `(4,y)`–`(0,y)` for every `y`, plus `(3,3)` sealed — 14 walls |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+The key's own mirror tile, `(3,3)`, is a sealed cage: flipping before picking it up throws it across the board and into a cell nothing can reach. The character's landing matters for exactly the same reason — flipping while standing on `(1,3)` puts *it* in that cage instead.
+
+**Intended solution:** `Up`, `Up` (through the seam to `(0,3)`); `Right` onto the key at `(1,3)`; `Up`, `Left` to `(0,2)`; Flip across the middle column → `(4,2)`, the goal → **win** (6 actions).
+
+### Level 19 — you are standing where the key lands
+
+A flip is a reflection of the whole entity layer, so two entities on mirrored tiles simply trade places — it is not a pickup.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(3, 2)` |
+| Collectibles | key at `(1, 2)`, `required: true` |
+| Goal | `(0, 0)` |
+| Walls | `(1,2)` sealed — 4 walls |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+`(3,2)` is exactly the tile `(1,2)` mirrors onto. Flipping from there frees the key and puts the character in the cage it came out of, with nothing left to spend. One step off the mirror line first is the entire puzzle.
+
+**Intended solution:** `Left` to `(2,2)`; Flip across the middle column → key to `(3,2)`, character to `(2,2)`; `Right` onto the key; `Up`, `Up`, `Right`, `Right` to the goal at `(0,0)` through the seam → **win** (7 actions).
+
+### Level 20 — bring it out before you break it
+
+The key is in a crate inside a sealed ring, so Move can't reach it and a Shift could only crush it out of sight. Flip lifts the crate over the wall — and parks it against the far face of that same wall.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(1, 0)` containing a `required` key |
+| Goal | `(3, 2)` |
+| Walls | row 0 sealed — 10 walls |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+Row 0 is sealed from row 1 and, across the seam, from row 4. A row flip drops the crate on `(1,4)`, whose downward step is that same seam wall: exactly the anvil the character needs. A column flip only slides it along its own prison and ends the run.
+
+**Intended solution:** `Up`, `Right` to `(1,1)`; Flip across the middle row (`↕`) → crate to `(1,4)`, character to `(1,3)`; `Down` crushes the crate against the seam wall; `Down` collects the key at `(1,4)`; `Up`, `Up`, `Right`, `Right` to the goal → **win** (9 actions).
+
+### Level 21 — break it open in here, then flip yourself out
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 1)` |
+| Crates | `(2, 1)` containing a `required` key |
+| Goal | `(2, 3)` |
+| Walls | row 1 sealed, plus `(4,1)`–`(0,1)` — 11 walls |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+The character is shut in with the crate, in a corridor whose ring is cut — so unlike Level 14's, this line has a wall at each end, and Move can crush the crate on it. The flip is then the way out to the goal, which is outside. Flipping first isn't fatal (the crate is carried out too, and the corridor's outer wall cracks it just as well from that side), but the *column* flip is: it mirrors the corridor onto itself, so nothing ever leaves it.
+
+**Intended solution:** `Right` ×4 walks the crate to `(4,1)` and crushes it against the seam wall; `Right` collects the key; `Left`, `Left` to `(2,1)`; Flip across the middle row → `(2,3)`, the goal → **win** (8 actions).
+
+### Level 22 — tip the whole corridor out
+
+Level 14's trap, without a Shift to break it: the packed corridor rotates, the key stays two tiles away forever, and the answer is to stop working inside the corridor at all.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 1)` |
+| Crates | `(1, 1)`, `(2, 1)`, `(4, 1)` |
+| Collectibles | key at `(3, 1)`, `required: true` |
+| Goal | `(2, 0)` |
+| Walls | row 1 sealed — 10 walls |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+One row flip empties the corridor onto row 3, out in the open, where the character can walk *around* the crates instead of pushing them — and where the goal is.
+
+**Intended solution:** `Left` (a rotation, to line the key up); Flip across the middle row → everything lands on row 3; `Up`, `Left`, `Down`, `Left` walks round to the key; `Down`, `Down` to the goal at `(2,0)` through the seam → **win** (8 actions).
+
+### Level 23 — the exit is sealed, so land on it
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 0)` |
+| Collectibles | key at `(4, 4)`, `required: true` |
+| Goal | `(3, 3)`, a sealed tile |
+| Walls | `(3,3)` sealed, plus row 1 sealed — 14 walls |
+| Available actions | Flip |
+| Action budget | Flip: 1 |
+
+The goal has four walled edges, so the only way onto it is to *arrive* there — from `(1,3)`, the tile it mirrors onto under a column flip. (The other candidate, `(3,1)`, is inside the sealed row-1 corridor, where the character can't stand.) That makes the flip the last action of the run, which means the key has to be in hand before it's spent.
+
+**Intended solution:** `Up`, `Left` collects the key at `(4,4)` through the seam; `Up`, `Right`, `Right` to `(1,3)`; Flip across the middle column → `(3,3)`, the goal → **win** (6 actions).
+
+### Level 24 — flip in, take the key, flip back
+
+Flip is its own inverse (§5.3) — but the character isn't, and a collected key doesn't flip back.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(3, 1)` |
+| Collectibles | key at `(2, 1)`, a sealed tile, `required: true` |
+| Goal | `(0, 0)` |
+| Walls | `(2,1)` sealed, plus the sealed two-tile room `{(2,3), (3,3)}` (every edge but the one between them) — 10 walls |
+| Available actions | Flip |
+| Action budget | Flip: 2 |
+
+A row flip drops the caged key into the sealed room at the bottom *and* carries the character — standing on `(3,1)`, which mirrors onto the room's other half — in with it. Collect it there, step back across to `(3,3)`, and flip again: the board returns to exactly where it started, except the key is now in hand. Flipping back from `(2,3)` instead lands in the empty cage, and a column flip at any point moves only the character, since the key sits on the middle column.
+
+**Intended solution:** Flip across the middle row → character `(3,3)`, key `(2,3)`; `Left` collects it; `Right` back to `(3,3)`; Flip across the middle row → `(3,1)`; `Up`, `Right`, `Right` to the goal at `(0,0)` through the seam → **win** (7 actions).
+
+### Level 25 — two flips, two axes, a half turn
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(2, 2)` |
+| Collectibles | key at `(1, 0)`, a sealed tile, `required: true` |
+| Goal | `(0, 2)` |
+| Walls | `(1,0)` sealed, `(1,4)` sealed, `(3,0)` sealed — 11 walls |
+| Available actions | Flip |
+| Action budget | Flip: 2 |
+
+Both of the key's single mirrors are cages too: `(1,4)` under a row flip, `(3,0)` under a column flip. Neither flip alone frees it and two flips on the same axis put it back where it started, so the only line is one flip of each — a half turn, landing it on the open corner `(3,4)`. The character sits on `(2,2)`, the one tile both axes leave alone, and doesn't move for either.
+
+**Intended solution:** Flip across the middle row, then across the middle column (either order) → key `(1,0) → (1,4) → (3,4)`, character unmoved throughout; `Right`, `Down`, `Down` to `(3,4)` collects it; `Up`, `Up`, `Right`, `Right` rounds to the goal at `(0,2)` through the seam → **win** (9 actions).
+
+### Level 26 — slide it clear before you flip it out
+
+The first of the two-action boards, and the one where both actions land on the same crate.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(0, 2)` |
+| Crates | `(2, 0)` containing a `required` key |
+| Goal | `(4, 2)` |
+| Walls | row 0 sealed, plus `(2,4)` sealed (its top edge is the corridor's own seam wall) — 13 walls |
+| Available actions | Shift and Flip |
+| Action budget | Shift: 1, Flip: 1 |
+
+Level 20's board with a cage added directly under the crate's landing tile. Flipping first drops the crate into `(2,4)`, where nothing reaches it again. Shifting **row 0** first slides the crate one tile along its prison, so the flip lands it at `(1,4)` or `(3,4)` — in the open, against the seam wall it can be crushed on. Spending the Shift on the crate's **column** instead cracks it open where it stands and leaves the *key* to be flipped into that same cage: the same dead end, one step later.
+
+**Intended solution:** `Up`, `Left`, `Left` to `(3,1)`; Shift row 0 right → crate to `(3,0)`; Flip across the middle row → crate to `(3,4)`, character to `(3,3)`; `Down` crushes the crate against the seam wall and drops the key on `(3,4)`; `Down` collects it; `Up`, `Up`, `Right` to the goal at `(4,2)` → **win** (10 actions).
+
+### Level 27 — stand where the cage is going to land
+
+The capstone: a flip moves the whole entity layer, so what matters is where *you* are when it lands.
+
+| Field | Value |
+|---|---|
+| Grid | 5×5 |
+| Character start | `(4, 0)` |
+| Crates | `(1, 1)`, a sealed tile, containing a `required` key |
+| Goal | `(4, 3)` |
+| Walls | `(1,1)` sealed, plus row 3 sealed — 14 walls |
+| Available actions | Shift and Flip |
+| Action budget | Shift: 1, Flip: 1 |
+
+The goal is inside a sealed corridor with no door: the character has to arrive by flip, and can never leave again. Row 1 mirrors onto row 3, so it has to be standing **on row 1** when it flips, to come down inside the corridor alongside whatever the cage was holding. The Shift is what opens the crate — against the cage's own walls before the flip, or against the corridor's after it; either order works. Flipping from any other row lands the character outside the corridor with the key inside it, and ends the run.
+
+**Intended solution:** `Down` to `(4,1)`; Shift row 1 right — the caged crate is crushed against its own wall and drops the key on `(1,1)`, and the character rides the same shift round the seam to `(0,1)`; Flip across the middle row → character `(0,3)`, key `(1,3)`, both inside the corridor; `Right` collects the key; `Left`, `Left` to the goal at `(4,3)` through the seam → **win** (6 actions).

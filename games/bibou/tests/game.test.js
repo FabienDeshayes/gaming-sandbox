@@ -22,6 +22,8 @@ import {
   shiftEntity,
   shiftOrder,
 } from '../src/core/rules.js';
+import { LEVELS } from '../src/data/levels.js';
+import { describeAction, solve } from './solver.js';
 
 const N = 5;
 
@@ -62,6 +64,95 @@ unit('a wall makes the move across it illegal', () => {
     resolveMoveChain(walls, entities, { x: 1, y: 2 }, 'Up', N).kind,
     'open',
     'unblocked direction should resolve normally'
+  );
+});
+
+
+// --- Every level, checked against the rules (no browser) ---------------------
+// tests/solver.js replays a level through the real core/rules.js the same way
+// PuzzleScene does, and breadth-firsts the whole reachable state space — so
+// "unsolvable" below means genuinely unwinnable, not "the search gave up".
+// These are the checks a new level has to pass before it ships: it can be won,
+// and the actions it hands out are ones it actually needs.
+
+const flip = (axis) => ({ type: 'flip', axis });
+const shift = (axis, index, dir) => ({ type: 'shift', axis, index, dir });
+const move = (dir) => ({ type: 'move', dir });
+
+unit('every level is winnable inside its own budget', () => {
+  LEVELS.forEach((level) => {
+    const result = solve(level);
+    assert(result.solved, `level ${level.id} has no solution at all`);
+  });
+});
+
+unit('no level hands out an action it does not need', () => {
+  LEVELS.filter((level) => Object.keys(level.actionBudget ?? {}).length > 0).forEach(
+    (level) => {
+      // Move is always allowed; `allow: []` is "walking only".
+      assert(
+        !solve(level, { allow: [] }).solved,
+        `level ${level.id} is solvable by walking alone, so its cards are decoration`
+      );
+      const types = Object.keys(level.actionBudget);
+      if (types.length < 2) return;
+      types.forEach((type) => {
+        assert(
+          !solve(level, { allow: [type] }).solved,
+          `level ${level.id} can be solved with ${type} alone, so it doesn't need both`
+        );
+      });
+    }
+  );
+});
+
+// The dead ends each level is built around: a level with no lose condition
+// still has to be *losable* in the sense that a wrong action can strand a run
+// (LEVEL_DESIGN.md §4.1) — that's what the retry button is for, and what makes
+// spending an action a decision. Each prefix below is the tempting wrong move.
+const DEAD_ENDS = [
+  [4, 'the wrong flip axis leaves the key on its fixed point', [flip('column')]],
+  [7, 'flipping before shifting drops the key in the mirror cage', [flip('column')]],
+  [17, 'the row flip swaps one prison for another', [flip('row')]],
+  [18, 'flipping early strands the key in the far room\'s cage', [flip('column')]],
+  [19, 'flipping off the mirror tile trades places with the key', [flip('column')]],
+  [20, 'the column flip only slides the crate along its own ring', [flip('column')]],
+  [23, 'the flip is the way in, so it cannot be spent before the key', [flip('column')]],
+  [24, 'flipping back from the wrong tile lands in the empty cage', [flip('row'), move('Left'), flip('row')]],
+  [25, 'two flips on the same axis put the board back as it was', [flip('row'), flip('row')]],
+  [26, 'flipping first lands the crate in the cage under the ring', [flip('row')]],
+  [26, 'cracking the crate in place leaves the key to flip into that cage', [shift('column', 2, 'Up')]],
+  [27, 'flipping from anywhere but row 1 misses the sealed corridor', [flip('row')]],
+];
+
+unit('each level\'s trap really is a dead end', () => {
+  DEAD_ENDS.forEach(([id, what, prefix]) => {
+    const level = LEVELS.find((l) => l.id === id);
+    assert(level, `level ${id} is gone`);
+    assert(
+      !solve(level, { prefix }).solved,
+      `level ${id}: ${what} — but the run is still winnable, so it isn't a trap`
+    );
+  });
+});
+
+// Spot-check that the solver agrees with the solutions LEVEL_DESIGN.md §7
+// documents, rather than only proving *some* solution exists.
+unit('the documented solutions are the ones the search finds', () => {
+  const shortest = (id) => solve(LEVELS.find((l) => l.id === id)).path.map(describeAction);
+  assertEqual(shortest(16), ['Flip column', 'Move Left', 'Move Left'], 'level 16');
+  assert(
+    shortest(14).includes('Shift column 3 Up'),
+    'level 14 has to break a crate out of the packed row'
+  );
+  assert(
+    shortest(24).filter((a) => a === 'Flip row').length === 2,
+    'level 24 uses the same axis twice'
+  );
+  const l25 = shortest(25);
+  assert(
+    l25.includes('Flip row') && l25.includes('Flip column'),
+    'level 25 needs one flip of each axis'
   );
 });
 
@@ -188,6 +279,12 @@ test('the level list shows a description per level and stays scrollable', async 
     texts.includes('One Shift, one Flip — and only one order works.'),
     'Level 7 still shows its description after scrolling to it'
   );
+
+  // And the list still reaches its last row, however many levels there are.
+  const last = LEVELS[LEVELS.length - 1];
+  await game.scrollToLevel(last.id);
+  texts = await game.texts();
+  assert(texts.includes(last.description), 'the last level scrolls into view too');
 
   await game.clickText('Back');
   await game.waitForScene('TitleScene');
@@ -750,8 +847,144 @@ test('Level 7: shift then flip frees the key and solves the level', async (game)
   assertEqual(s.char, { x: 0, y: 2 }, 'character on the goal');
   assert((await game.texts()).includes('You win!'), 'level 7 solved');
   assert(
+    (await game.texts()).includes('Next level'),
+    'level 7 has levels after it, so the overlay offers to continue'
+  );
+});
+
+
+// --- The later levels, driven for real ---------------------------------------
+
+// Level 14 is the flip side of Level 6: a packed row rotates, and a rotation
+// moves everything on the line together, so walking never closes the gap to the
+// key. The Shift is what breaks the line's spacing.
+test('Level 14: walking rotates the packed row without ever reaching the key', async (game) => {
+  await game.clickText('Start');
+  await game.scrollToLevel(14);
+  await game.clickText('Level 14');
+  await game.waitForScene('PuzzleScene');
+
+  let s = await game.state();
+  assertEqual(s.char, { x: 0, y: 2 }, 'character at the left of the corridor');
+  assertEqual(s.collectibles, [{ type: 'key', x: 2, y: 2 }], 'key two tiles along');
+
+  // Two steps right: the whole row turns with the character both times, so the
+  // key is still exactly two tiles ahead.
+  await game.clickText('▶');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 1, y: 2 }, 'the row rotated by one');
+  assertEqual(s.collectibles, [{ type: 'key', x: 3, y: 2 }], 'and the key moved with it');
+
+  await game.clickText('▶');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 2, y: 2 }, 'rotated again');
+  assertEqual(s.collectibles, [{ type: 'key', x: 4, y: 2 }], 'still two tiles ahead');
+  assertEqual(s.crates.length, 3, 'nothing has broken yet');
+
+  // One shift across the corridor crushes a crate and leaves the hole the row
+  // needs to move relative to itself.
+  await game.clickText('Shift');
+  await game.clickText('▲', 3);
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.crates.length, 2, 'the crate on that column is crushed');
+  assertEqual(s.remaining.shift, 0, 'that spent the only shift');
+
+  await game.clickText('▶');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 3, y: 2 }, 'the character walks into the hole');
+
+  await game.clickText('▶');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.collectibles, [], 'and finally reaches the key');
+  assert((await game.texts()).includes('You win!'), 'level 14 solved');
+});
+
+// Level 24 is the "flip is its own inverse" level: the same axis twice puts the
+// board back exactly as it was, which is only useful because the character can
+// walk in between — and because a collected key doesn't flip back.
+test('Level 24: flip into the sealed room, take the key, flip back out', async (game) => {
+  await game.clickText('Start');
+  await game.scrollToLevel(24);
+  await game.clickText('Level 24');
+  await game.waitForScene('PuzzleScene');
+
+  await game.clickText('Flip');
+  await game.clickText('↕');
+  await game.settle();
+  let s = await game.state();
+  assertEqual(s.char, { x: 3, y: 3 }, 'the character lands in the sealed room');
+  assertEqual(s.collectibles, [{ type: 'key', x: 2, y: 3 }], 'and the key lands beside it');
+  assertEqual(s.remaining.flip, 1, 'one flip left');
+
+  await game.clickText('◀');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.collectibles, [], 'key collected inside the room');
+
+  // Flipping back from (2,3) would land in the now-empty cage, so step across
+  // to (3,3) first.
+  await game.clickText('▶');
+  await game.settle();
+  await game.clickText('Flip');
+  await game.clickText('↕');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 3, y: 1 }, 'back where it started, holding the key');
+  assertEqual(s.remaining.flip, 0, 'both flips spent');
+
+  for (const glyph of ['▲', '▶', '▶']) {
+    await game.clickText(glyph);
+    await game.settle();
+  }
+  s = await game.state();
+  assertEqual(s.char, { x: 0, y: 0 }, 'character on the goal');
+  assert((await game.texts()).includes('You win!'), 'level 24 solved');
+});
+
+// The last level in the list, reached through a picker that now has to scroll
+// a long way to get to it — and the one level whose win overlay has no next.
+test('Level 27: the last level is reachable and ends the run', async (game) => {
+  await game.clickText('Start');
+  await game.scrollToLevel(27);
+  await game.clickText('Level 27');
+  await game.waitForScene('PuzzleScene');
+
+  await game.clickText('▼'); // down onto row 1, the row that mirrors into the corridor
+  await game.settle();
+
+  // Shifting row 1 crushes the caged crate against its own wall and carries the
+  // character round the seam in the same action.
+  await game.clickText('Shift');
+  await game.clickText('▶', 1);
+  await game.settle();
+  let s = await game.state();
+  assertEqual(s.char, { x: 0, y: 1 }, 'the character rode the shift round the seam');
+  assertEqual(s.crates, [], 'and the crate was crushed inside its cage');
+  assertEqual(s.collectibles, [{ type: 'key', x: 1, y: 1 }], 'dropping the key in there');
+
+  // Both of them mirror into the sealed corridor at row 3.
+  await game.clickText('Flip');
+  await game.clickText('↕');
+  await game.settle();
+  s = await game.state();
+  assertEqual(s.char, { x: 0, y: 3 }, 'character lands inside the corridor');
+  assertEqual(s.collectibles, [{ type: 'key', x: 1, y: 3 }], 'and so does the key');
+
+  for (const glyph of ['▶', '◀', '◀']) {
+    await game.clickText(glyph);
+    await game.settle();
+  }
+  s = await game.state();
+  assertEqual(s.char, { x: 4, y: 3 }, 'character on the goal');
+  assert((await game.texts()).includes('You win!'), 'level 27 solved');
+  assert(
     !(await game.texts()).includes('Next level'),
-    'level 7 is the last level, so the win overlay offers no Next level button'
+    'level 27 is the last level, so the overlay offers no Next level button'
   );
 });
 

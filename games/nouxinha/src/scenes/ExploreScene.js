@@ -17,7 +17,7 @@ import {
 import { DEFAULT_SEED } from '../core/world.js';
 import { MAX_GEMS } from '../core/save.js';
 import { itemDef } from '../data/items.js';
-import { ensureTextures } from '../ui/textures.js';
+import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { MapView } from '../ui/MapView.js';
 import { Hud } from '../ui/hud.js';
 import { ItemCard } from '../ui/itemCard.js';
@@ -70,6 +70,10 @@ function carriedAtRisk(summary) {
 export class ExploreScene extends Phaser.Scene {
   constructor() {
     super('ExploreScene');
+  }
+
+  preload() {
+    preloadTiles(this);
   }
 
   create(data) {

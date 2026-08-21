@@ -59,6 +59,8 @@ import { PRICES } from '../src/data/shop.js';
 import { BLACKOUT_MEMORY_RADIUS, gemColour } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
 import { zoneColours } from '../src/ui/wizard.js';
+import { buildSprites, WIZARD_ZONES } from '../src/data/sprites.js';
+import { MIRRORED, SHEET_COLS, SHEET_ROWS, TILES } from '../src/data/tiles.js';
 
 // --- Routes through the real world -----------------------------------------
 //
@@ -1108,6 +1110,96 @@ unit('the map only marks unique objects the run has actually seen', () => {
   assert(!state.seenUnique.has('map'), 'and the map lying 90 tiles out is not');
 });
 
+// --- The tile sheet ---------------------------------------------------------
+
+// A stand-in for the sheet: every tile is its own coordinate written into the
+// mask — the first four rows spell out the column and the row, low nibble then
+// high — so no two tiles come out alike and a sprite can be traced back to the
+// tile it was cut from without a browser.
+function fakeSheet(col, row) {
+  const lit = [col % 16, Math.floor(col / 16), row % 16, Math.floor(row / 16)];
+  return Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => (y < lit.length && x === lit[y] ? '#' : '.')).join('')
+  );
+}
+
+unit('every tile the table names is on the sheet', () => {
+  for (const [key, tile] of Object.entries(TILES)) {
+    assert(Array.isArray(tile) && tile.length === 2, `${key} is a [col, row] pair`);
+    const [col, row] = tile;
+    assert(Number.isInteger(col) && col >= 0 && col < SHEET_COLS, `${key}: column ${col} is on the sheet`);
+    assert(Number.isInteger(row) && row >= 0 && row < SHEET_ROWS, `${key}: row ${row} is on the sheet`);
+  }
+  for (const [key, source] of Object.entries(MIRRORED))
+    assert(TILES[source], `${key} mirrors ${source}, which needs a tile of its own`);
+});
+
+unit('every sprite is 16x16 and comes from the tile it was pointed at', () => {
+  const sprites = buildSprites(fakeSheet);
+
+  for (const [key, mask] of Object.entries(sprites)) {
+    assertEqual(mask.length, 16, `${key} row count`);
+    for (const row of mask) assertEqual(row.length, 16, `${key} row width`);
+  }
+
+  // Nothing the table names goes missing on the way through.
+  for (const key of Object.keys(TILES)) assert(sprites[key], `${key} was cut from the sheet`);
+
+  // A tile repointed in the table is what the sprite is drawn from: `rock` is
+  // the tile at its own coordinates and not, say, the tree's.
+  assertEqual(sprites.rock, fakeSheet(...TILES.rock), 'rock is its own tile');
+  assert(sprites.rock !== sprites.tree, 'and not the tree next to it');
+});
+
+unit('the left-facing wizard is the right-facing tile mirrored', () => {
+  const sprites = buildSprites(fakeSheet);
+  const right = fakeSheet(...TILES[MIRRORED['wizard-left']]);
+  assertEqual(
+    sprites['wizard-left'],
+    right.map((row) => row.split('').reverse().join('')),
+    'same tile, flipped'
+  );
+});
+
+unit('each wizard facing is split into colour bands that rebuild the whole sprite', () => {
+  const sprites = buildSprites(fakeSheet);
+  for (const facing of ['down', 'up', 'right', 'left']) {
+    const whole = sprites[`wizard-${facing}`];
+    const bands = Array.from({ length: WIZARD_ZONES }, (_, z) => sprites[`wizard-${facing}-${z}`]);
+    // Stacking the bands back up has to give exactly the silhouette they were
+    // cut from — a band that drops a row loses pixels off the character.
+    const stacked = whole.map((_, y) =>
+      Array.from(whole[y], (_, x) => (bands.some((b) => b[y][x] === '#') ? '#' : '.')).join('')
+    );
+    assertEqual(stacked, whole, `${facing}: the bands are the whole wizard`);
+  }
+});
+
+unit('a floor tile draws its top and left edges, and closes the frontier', () => {
+  const sprites = buildSprites(() => Array.from({ length: 16 }, () => '.'.repeat(16)));
+  const dots = '#.#.#.#.#.#.#.#.';
+
+  assertEqual(sprites.floor[0], dots, 'the top edge is always drawn');
+  assert(
+    sprites.floor.every((row, y) => (y % 2 === 0 ? row[0] === '#' : row[0] === '.')),
+    'and so is the left one'
+  );
+  assertEqual(sprites.floor[15], '.'.repeat(16), 'the bottom is left to the neighbour below');
+  assert(
+    sprites.floor.every((row) => row[15] === '.'),
+    'and the right to the neighbour beside'
+  );
+
+  // The frontier variants close the edges the plain tile leaves open.
+  assert(
+    sprites['floor-r'].every((row, y) => (y % 2 === 0 ? row[15] === '#' : row[15] === '.')),
+    'floor-r closes the right edge'
+  );
+  assertEqual(sprites['floor-b'][15], dots, 'floor-b closes the bottom edge');
+  assertEqual(sprites['floor-rb'][15], dots, 'floor-rb closes both');
+  assertEqual(sprites['floor-rb'][0], dots.slice(0, 15) + '#', 'including the corner they share');
+});
+
 // --- The real game in a browser --------------------------------------------
 
 test('the title screen starts a run', async (game) => {
@@ -1787,5 +1879,35 @@ test('the map draws the ground this run has walked', async (game) => {
   await game.clickText('CLOSE');
   assertEqual((await game.state()).mapOpen, false, 'and closes again');
 }, { query: WORLD, save: { ...emptySave(), map: true } });
+
+test('the tile sheet is loaded and cut into every sprite the game draws', async (game) => {
+  const cut = await game.page.evaluate(async () => {
+    const textures = await import('/src/ui/textures.js');
+    const { SHEET_KEY } = await import('/src/data/tiles.js');
+    const manager = window.__game.textures;
+    const sheet = manager.get(SHEET_KEY).getSourceImage();
+    return {
+      sheet: { width: sheet.width, height: sheet.height },
+      sprites: textures.spriteKeys().map((key) => {
+        const frame = manager.getFrame(key);
+        return { key, width: frame && frame.width, height: frame && frame.height };
+      }),
+    };
+  });
+
+  // 49x22 tiles of 16px, one transparent pixel apart (src/data/tiles.js).
+  assertEqual(cut.sheet, { width: 832, height: 373 }, 'the sheet the page actually loaded');
+  assert(cut.sprites.length > 0, 'and it was cut into sprites');
+  for (const sprite of cut.sprites)
+    assertEqual(
+      { width: sprite.width, height: sprite.height },
+      { width: 16, height: 16 },
+      `${sprite.key} is one tile`
+    );
+
+  // The keys the renderer names have to be among them, or a tile draws blank.
+  for (const key of ['floor', 'floor-rb', 'rock', 'tree', 'base', 'merchant', 'wizard-down-0'])
+    assert(cut.sprites.some((s) => s.key === key), `${key} was cut`);
+});
 
 run();

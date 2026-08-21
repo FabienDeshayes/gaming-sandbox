@@ -16,7 +16,7 @@ import {
   setPalette,
 } from '../config.js';
 import { activeSlot, clearSave, loadSave } from '../core/save.js';
-import { ensureTextures } from '../ui/textures.js';
+import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
@@ -27,6 +27,10 @@ const FIRST_ROW_Y = 176;
 export class SettingsScene extends Phaser.Scene {
   constructor() {
     super('SettingsScene');
+  }
+
+  preload() {
+    preloadTiles(this);
   }
 
   create() {

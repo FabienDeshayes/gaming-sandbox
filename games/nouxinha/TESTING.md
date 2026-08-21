@@ -182,6 +182,27 @@ Walking a browser test to a sanctum costs roughly 200ms a step, so only the firs
 driven through the real canvas. Gates further out are covered by the pure tests, which reach them
 for free.
 
+## Testing the tile sheet
+
+The art is cut out of `assets/tiles.png` at boot (§9 of `DESIGN.md`), which splits the testing in
+two:
+
+- **The derivation is pure and tested without a browser.** `buildSprites(readTile)` in
+  `src/data/sprites.js` takes a `readTile(col, row) -> mask` rather than an image, so a `unit(...)`
+  test hands it a fake sheet whose every tile is its own coordinate spelled out in pixels — no two
+  tiles alike — and can then assert that `rock` really is the tile `src/data/tiles.js` points it at,
+  that the left-facing wizard is the right-facing tile mirrored, that stacking the four colour bands
+  back up reproduces the whole silhouette, and that a floor tile draws its top and left edges and
+  closes the frontier ones.
+- **That the real sheet loaded and was cut is a browser test.** Reading a PNG needs a canvas, so one
+  `test(...)` asserts the sheet is the size `src/data/tiles.js` says it is and that every sprite key
+  came out as a 16×16 texture. A sprite pointed off the sheet, or a sheet swapped for one of another
+  size, fails at boot with a page error — which fails whichever test provoked it.
+
+Don't assert on the *contents* of a real tile: which tile a sprite points at is a design choice that
+is meant to be repointed by editing one pair of numbers, and a test that pins the pixels would make
+that edit a test failure.
+
 ## Adding a test
 
 Add one whenever a fix covers something a player could hit by just playing. Prefer a `unit(...)`

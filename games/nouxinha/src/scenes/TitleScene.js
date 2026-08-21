@@ -1,12 +1,16 @@
 import { FONT, GAME_WIDTH, gemColour, getCheats, getPalette, hex } from '../config.js';
 import { anySlotUsed, loadSave, MAX_GEMS } from '../core/save.js';
-import { ensureTextures } from '../ui/textures.js';
+import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { makeWizard, paintWizard } from '../ui/wizard.js';
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
     super('TitleScene');
+  }
+
+  preload() {
+    preloadTiles(this);
   }
 
   create() {

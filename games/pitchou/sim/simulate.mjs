@@ -3,6 +3,8 @@
 //
 //   node sim/simulate.mjs           # policy table for the current tuning
 //   node sim/simulate.mjs --sweep   # candidate tunings, scored by policy spread
+//   node sim/simulate.mjs --falls   # whole fall structures, --fair to match difficulty
+//   node sim/simulate.mjs --search  # grid-search tunings
 //   node sim/simulate.mjs --runs N  # seasons per policy (default 20000)
 //
 // What a good tuning looks like: the careless policies lose most of the time,
@@ -11,29 +13,29 @@
 
 import {
   DEFAULT_TUNING,
-  DEFAULT_TOOLS,
   METERS,
   allocate,
   basketIsEmpty,
   beginNight,
   buildTool,
+  buildsLeft,
   canAffordFromMeters,
   bustOdds,
   createRun,
   endNight,
   goHome,
   search,
-  waveDamageFor,
+  fallDamageFor,
 } from '../src/core/rules.js';
-import { POLICIES, WAVE_POLICIES } from './policies.mjs';
+import { POLICIES, FALL_POLICIES } from './policies.mjs';
 
-// A draw is "live" when it can cost the player something: either a wave in the
-// bag could end the night, or waves damage the basket so any wave hurts. A draw
+// A draw is "live" when it can cost the player something: either a fall in the
+// bag could end the night, or falls damage the basket so any fall hurts. A draw
 // that is neither is not a decision — it is a button the player presses because
 // there is no reason not to.
 function drawIsLive(state) {
-  if (!state.bag.some((token) => token.kind === 'wave')) return false;
-  return waveDamageFor(state.tuning, state.strikes) > 0 || bustOdds(state) > 0;
+  if (!state.bag.some((token) => token.kind === 'fall')) return false;
+  return fallDamageFor(state.tuning, state.strikes) > 0 || bustOdds(state) > 0;
 }
 
 function playSeason(policy, { seed, tuning }) {
@@ -63,6 +65,7 @@ function playSeason(policy, { seed, tuning }) {
     for (const id of plan.builds) {
       const tool = state.tuning.tools.find((t) => t.id === id);
       if (!tool || state.toolsBuilt.includes(id)) continue;
+      if (buildsLeft(state) === 0) break;
       if (canAffordFromMeters(state.meters, tool.cost)) buildTool(state, id);
     }
     endNight(state);
@@ -137,15 +140,26 @@ function policyTable(tuning, runs) {
 
 // --- tuning candidates ------------------------------------------------------
 
-const withTools = (overrides) =>
-  DEFAULT_TOOLS.map((tool) => (overrides[tool.id] ? { ...tool, ...overrides[tool.id] } : tool));
-
 const tune = (overrides) => ({ ...DEFAULT_TUNING, ...overrides });
 
-const GENTLER_DRAIN = [
-  { through: 5, drain: 1 },
-  { through: 9, drain: 2 },
+// The drain the season ran on before the twelve-tool workshop: a step every
+// four nights instead of every five, which is two more units off every meter
+// across a season.
+const STEEPER_DRAIN = [
+  { through: 4, drain: 1 },
+  { through: 8, drain: 2 },
   { through: 12, drain: 3 },
+];
+
+// The pre-playtest workshop: two tools a tier, every one of them a plain
+// doubler or a fall removal.
+const PLAIN_TOOLS = [
+  { id: 'gaff', name: 'Gaff hook', tier: 1, cost: { wood: 3 }, add: { gains: [{ resource: 'wood', amount: 2 }] } },
+  { id: 'net', name: 'Tide net', tier: 1, cost: { plank: 3 }, add: { gains: [{ resource: 'plank', amount: 2 }] } },
+  { id: 'funnel', name: 'Oil funnel', tier: 2, cost: { oil: 3 }, add: { gains: [{ resource: 'oil', amount: 2 }] } },
+  { id: 'pole', name: 'Lantern pole', tier: 2, cost: { oil: 2, wood: 2 }, add: { gains: [{ resource: 'oil', amount: 2 }] } },
+  { id: 'wall', name: 'Storm wall', tier: 3, cost: { plank: 6 }, removeFall: true },
+  { id: 'breakwater', name: 'Breakwater', tier: 3, cost: { oil: 4, wood: 4 }, removeFall: true },
 ];
 
 // Ablations against the current tuning. Each one turns a single number back to
@@ -153,12 +167,19 @@ const GENTLER_DRAIN = [
 // numbers in DESIGN.md §8 are what they are.
 const CANDIDATES = [
   { label: 'current tuning (DESIGN.md §8)', tuning: DEFAULT_TUNING },
-  { label: 'ablation: waves free until the third', tuning: tune({ waveDamage: 0 }) },
-  { label: 'ablation: all-or-nothing bust', tuning: tune({ bustKeeps: 0 }) },
-  { label: 'ablation: roomy cap 14', tuning: tune({ meterCap: 14 }) },
-  { label: 'ablation: gentler drain', tuning: tune({ drainSteps: GENTLER_DRAIN }) },
-  { label: 'ablation: thinner shore 4/4/4', tuning: tune({ startShore: { oil: 4, wood: 4, plank: 4 } }) },
-  { label: 'ablation: richer shore 6/6/6', tuning: tune({ startShore: { oil: 6, wood: 6, plank: 6 } }) },
+  { label: 'ablation: falls free until the third', tuning: tune({ fallDamage: 0 }) },
+  { label: 'ablation: all-or-nothing fall', tuning: tune({ bustKeeps: 0 }) },
+  { label: 'ablation: hoardable cap 18', tuning: tune({ meterCap: 18 }) },
+  { label: 'ablation: steeper drain', tuning: tune({ drainSteps: STEEPER_DRAIN }) },
+  { label: 'ablation: thinner shore 3/3/3', tuning: tune({ startShore: { oil: 3, wood: 3, plank: 3 } }) },
+  { label: 'ablation: richer shore 5/5/5', tuning: tune({ startShore: { oil: 5, wood: 5, plank: 5 } }) },
+  // Build as many tools a night as the meters cover. The workshop stops being
+  // a choice and becomes a shopping list you work through.
+  { label: 'ablation: unlimited builds a night', tuning: tune({ buildsPerNight: 99 }) },
+  // The workshop the playtest replaced: six tools, all of them plain doublers
+  // or fall removals, and no mixed or rolled token anywhere. It is here so the
+  // sweep says what the expanded shop is worth rather than only asserting it.
+  { label: 'ablation: the old six-tool workshop', tuning: tune({ tools: PLAIN_TOOLS }) },
 ];
 
 function sweep(runs) {
@@ -175,24 +196,26 @@ function sweep(runs) {
 // pushing, and careless play has to lose. Win rate alone says nothing.
 const SEARCH_POLICIES = {
   reckless: POLICIES.find((p) => p.name === 'reckless (never stop)'),
-  timid: POLICIES.find((p) => p.name === 'timid (home at 1 wave)'),
+  timid: POLICIES.find((p) => p.name === 'timid (home at 1 fall)'),
   safe: POLICIES.find((p) => p.name === 'safe, no tools'),
   tools: POLICIES.find((p) => p.name === 'safe + tools (buf 3)'),
   push: POLICIES.find((p) => p.name === 'push 25% + tools'),
 };
 
+// Three genuinely different schedules. `baseline` is whatever the tuning
+// currently runs; the other two have to be a step either side of it, or the
+// grid spends a third of its rows re-measuring the same numbers.
 const DRAIN_SCHEDULES = {
   gentle: [
-    { through: 5, drain: 1 },
-    { through: 9, drain: 2 },
+    { through: 6, drain: 1 },
+    { through: 10, drain: 2 },
     { through: 12, drain: 3 },
   ],
   baseline: DEFAULT_TUNING.drainSteps,
   steep: [
-    { through: 3, drain: 1 },
-    { through: 6, drain: 2 },
-    { through: 9, drain: 3 },
-    { through: 12, drain: 4 },
+    { through: 4, drain: 1 },
+    { through: 8, drain: 2 },
+    { through: 12, drain: 3 },
   ],
 };
 
@@ -215,8 +238,8 @@ function gridSearch(runs) {
     cask: [{ resource: 'oil', amount: 3 }, { resource: 'wood', amount: 3 }, { resource: 'plank', amount: 3 }],
   };
   for (const startMeter of [8, 10]) {
-    for (const headroom of [2, 3]) {
-      for (const shore of [3, 4]) {
+    for (const headroom of [4, 6]) {
+      for (const shore of [4, 5]) {
         for (const [drainName, drainSteps] of Object.entries(DRAIN_SCHEDULES)) {
           for (const bustKeeps of [0, 0.5]) {
             for (const [caskName, extraTokens] of Object.entries(CASKS)) {
@@ -257,40 +280,40 @@ function gridSearch(runs) {
   return feasible;
 }
 
-// --- wave structure comparison ---------------------------------------------
+// --- fall structure comparison ---------------------------------------------
 
-// What are the early waves for? Each structure is measured on the same three
+// What are the early falls for? Each structure is measured on the same three
 // things: can you win, how often does a night end badly, and — the point of the
 // exercise — what share of the taps are actually a decision. A draw is "live"
 // when something in the bag could end the night; anything else is the player
 // pressing a button because there is no reason not to.
-const WAVE_STRUCTURES = [
-  { label: 'current: 3 waves, budget 3', tuning: tune({}) },
-  { label: 'budget 2, 3 waves', tuning: tune({ waveBudget: 2 }) },
-  { label: 'budget 2, 4 waves', tuning: tune({ waveBudget: 2, startWaves: [1, 1, 1, 1] }) },
-  { label: 'budget 1, 2 waves (any wave ends it)', tuning: tune({ waveBudget: 1, startWaves: [1, 1] }) },
-  { label: 'budget 1, 3 waves (any wave ends it)', tuning: tune({ waveBudget: 1 }) },
-  { label: 'budget 1, ONE wave, no storm waves', tuning: tune({ waveBudget: 1, startWaves: [1], stormWaveNights: [] }) },
-  { label: 'budget 1, ONE wave, storm adds waves', tuning: tune({ waveBudget: 1, startWaves: [1] }) },
-  { label: 'budget 2, 2 waves', tuning: tune({ waveBudget: 2, startWaves: [1, 1] }) },
-  { label: 'waves cost 1 loot, budget 3', tuning: tune({ waveDamage: 1 }) },
-  { label: 'escalating damage 1 then 2', tuning: tune({ waveDamage: [1, 2] }) },
-  { label: 'escalating damage 0 then 2', tuning: tune({ waveDamage: [0, 2] }) },
-  { label: 'escalating damage 1 then 3', tuning: tune({ waveDamage: [1, 3] }) },
-  { label: 'waves cost 2 loot, budget 3', tuning: tune({ waveDamage: 2 }) },
-  { label: 'waves cost 1 loot, budget 3, 4 waves', tuning: tune({ waveDamage: 1, startWaves: [1, 1, 1, 1] }) },
-  { label: 'graded 1/1/2, budget 3', tuning: tune({ startWaves: [1, 1, 2] }) },
-  { label: 'graded 1/2/2, budget 3', tuning: tune({ startWaves: [1, 2, 2] }) },
+const FALL_STRUCTURES = [
+  { label: 'current: 3 falls, budget 3', tuning: tune({}) },
+  { label: 'budget 2, 3 falls', tuning: tune({ fallBudget: 2 }) },
+  { label: 'budget 2, 4 falls', tuning: tune({ fallBudget: 2, startFalls: [1, 1, 1, 1] }) },
+  { label: 'budget 1, 2 falls (any fall ends it)', tuning: tune({ fallBudget: 1, startFalls: [1, 1] }) },
+  { label: 'budget 1, 3 falls (any fall ends it)', tuning: tune({ fallBudget: 1 }) },
+  { label: 'budget 1, ONE fall, no added falls', tuning: tune({ fallBudget: 1, startFalls: [1], extraFallNights: [] }) },
+  { label: 'budget 1, ONE fall, falls still added', tuning: tune({ fallBudget: 1, startFalls: [1] }) },
+  { label: 'budget 2, 2 falls', tuning: tune({ fallBudget: 2, startFalls: [1, 1] }) },
+  { label: 'falls cost 1 loot, budget 3', tuning: tune({ fallDamage: 1 }) },
+  { label: 'escalating damage 1 then 2', tuning: tune({ fallDamage: [1, 2] }) },
+  { label: 'escalating damage 0 then 2', tuning: tune({ fallDamage: [0, 2] }) },
+  { label: 'escalating damage 1 then 3', tuning: tune({ fallDamage: [1, 3] }) },
+  { label: 'falls cost 2 loot, budget 3', tuning: tune({ fallDamage: 2 }) },
+  { label: 'falls cost 1 loot, budget 3, 4 falls', tuning: tune({ fallDamage: 1, startFalls: [1, 1, 1, 1] }) },
+  { label: 'graded 1/1/2, budget 3', tuning: tune({ startFalls: [1, 1, 2] }) },
+  { label: 'graded 1/2/2, budget 3', tuning: tune({ startFalls: [1, 2, 2] }) },
 ];
 
-// Comparing structures at a fixed shore is unfair — a harsher wave rule simply
+// Comparing structures at a fixed shore is unfair — a harsher fall rule simply
 // loses more. Instead give each structure the shore richness that lands it
 // closest to the same win rate, then compare how many taps are decisions.
 function fairestShore(tuning, runs, target = 0.5) {
   let best = null;
   for (const shore of [4, 5, 6, 7, 8]) {
     const candidate = { ...tuning, startShore: { oil: shore, wood: shore, plank: shore } };
-    const rows = WAVE_POLICIES.map((policy) => evaluate(policy, { runs, tuning: candidate }));
+    const rows = FALL_POLICIES.map((policy) => evaluate(policy, { runs, tuning: candidate }));
     const top = rows.reduce((a, b) => (b.winRate > a.winRate ? b : a));
     const distance = Math.abs(top.winRate - target);
     if (best === null || distance < best.distance) best = { shore, top, distance, candidate };
@@ -298,12 +321,12 @@ function fairestShore(tuning, runs, target = 0.5) {
   return best;
 }
 
-function fairWaveReport(runs) {
+function fairFallReport(runs) {
   const head = `${'structure'.padEnd(38)}  ${'shore'.padStart(5)}  ${'best policy'.padEnd(14)}  ${'win'.padStart(6)}  ${'live taps'.padStart(9)}  ${'bust'.padStart(6)}  ${'draws'.padStart(6)}`;
   console.log('each structure given the shore that puts it nearest a 50% win rate\n');
   console.log(head);
   console.log('-'.repeat(head.length));
-  for (const structure of WAVE_STRUCTURES) {
+  for (const structure of FALL_STRUCTURES) {
     const fit = fairestShore(structure.tuning, runs);
     console.log(
       `${structure.label.padEnd(38)}  ${String(fit.shore).padStart(5)}  ${fit.top.name.padEnd(14)}  ${pct(fit.top.winRate).padStart(6)}  ${pct(fit.top.liveShare).padStart(9)}  ${pct(fit.top.bustRate).padStart(6)}  ${num(fit.top.drawsPerNight, 1).padStart(6)}`,
@@ -311,12 +334,12 @@ function fairWaveReport(runs) {
   }
 }
 
-function waveReport(runs) {
+function fallReport(runs) {
   const head = `${'structure'.padEnd(38)}  ${'best policy'.padEnd(14)}  ${'win'.padStart(6)}  ${'live taps'.padStart(9)}  ${'bust'.padStart(6)}  ${'draws'.padStart(6)}`;
   console.log(head);
   console.log('-'.repeat(head.length));
-  for (const structure of WAVE_STRUCTURES) {
-    const rows = WAVE_POLICIES.map((policy) => evaluate(policy, { runs, tuning: structure.tuning }));
+  for (const structure of FALL_STRUCTURES) {
+    const rows = FALL_POLICIES.map((policy) => evaluate(policy, { runs, tuning: structure.tuning }));
     const best = rows.reduce((a, b) => (b.winRate > a.winRate ? b : a));
     console.log(
       `${structure.label.padEnd(38)}  ${best.name.padEnd(14)}  ${pct(best.winRate).padStart(6)}  ${pct(best.liveShare).padStart(9)}  ${pct(best.bustRate).padStart(6)}  ${num(best.drawsPerNight, 1).padStart(6)}`,
@@ -328,12 +351,12 @@ const args = process.argv.slice(2);
 const runsFlag = args.indexOf('--runs');
 const runs = runsFlag === -1 ? 20000 : Number(args[runsFlag + 1]);
 
-if (args.includes('--waves')) {
+if (args.includes('--falls')) {
   const n = args.includes('--runs') ? runs : 20000;
-  if (args.includes('--fair')) fairWaveReport(n);
-  else waveReport(n);
+  if (args.includes('--fair')) fairFallReport(n);
+  else fallReport(n);
 } else if (args.includes('--search')) {
-  gridSearch(args.includes("--runs") ? runs : 3000);
+  gridSearch(args.includes('--runs') ? runs : 3000);
 } else if (args.includes('--sweep')) {
   sweep(runs);
 } else {

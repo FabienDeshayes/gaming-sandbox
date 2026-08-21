@@ -126,15 +126,16 @@ export function playGain(resource, amount = 1) {
   });
 }
 
-// A wave that reaches you but doesn't end the night: a slap and a low thud.
-export function playWave() {
+// A fall that costs you something but doesn't end the night: a slap and a low
+// thud, the sound of going down on wet rock.
+export function playFall() {
   safely((a, now) => {
     burst(a, { at: now, duration: 0.3, cutoff: 2400, sweepTo: 300, peak: 0.16 });
     tone(a, { freq: 150, at: now, duration: 0.22, peak: 0.1, type: 'sine', slideTo: 60 });
   });
 }
 
-// The third wave. Longer, and it takes the pitch down with it.
+// The fall that ends the night. Longer, and it takes the pitch down with it.
 export function playBust() {
   safely((a, now) => {
     burst(a, { at: now, duration: 0.9, cutoff: 3000, sweepTo: 200, peak: 0.2 });
@@ -178,9 +179,8 @@ export function playLose() {
 // --- the wind ---------------------------------------------------------------
 //
 // One looping noise source under a lowpass, held open for the whole run. The
-// storm gets worse on a fixed schedule (DESIGN.md §3C) and the shore picks up a
-// wave with it, so the drone opens up as the season goes — the squeeze is
-// audible before it is arithmetic.
+// shore picks up another fall on a fixed schedule (DESIGN.md §3C), so the drone
+// opens up as the season goes — the squeeze is audible before it is arithmetic.
 
 const WIND_LEVELS = [
   { cutoff: 260, gain: 0.018 },
@@ -213,7 +213,7 @@ export function startWind() {
   }
 }
 
-// `level` is how many waves the storm has already added, 0-3.
+// `level` is how many extra falls the shore has picked up so far, 0-3.
 export function setWindLevel(level) {
   if (!wind) return;
   const a = live();

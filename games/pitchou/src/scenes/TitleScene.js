@@ -1,4 +1,13 @@
-import { COLORS, FONT, GAME_WIDTH, SPRITE_PX, TEXT_RESOLUTION } from '../config.js';
+import {
+  COLORS,
+  FONT,
+  FONT_MD,
+  FONT_RG,
+  FONT_SM,
+  GAME_WIDTH,
+  SPRITE_PX,
+  TEXT_RESOLUTION,
+} from '../config.js';
 import { createButton } from '../ui/button.js';
 import { ensureTextures } from '../ui/textures.js';
 
@@ -39,7 +48,7 @@ export class TitleScene extends Phaser.Scene {
     this.add
       .text(cx, 232, 'twelve nights, one light', {
         fontFamily: FONT,
-        fontSize: '16px',
+        fontSize: `${FONT_RG}px`,
         color: COLORS.muted,
         resolution: TEXT_RESOLUTION,
       })
@@ -47,10 +56,10 @@ export class TitleScene extends Phaser.Scene {
 
     this.add.image(cx, 360, 'tower').setScale(96 / SPRITE_PX).setTint(COLORS.lampHex);
 
-    createButton(this, cx, 520, 'PLAY', () => this.startRun(), { width: 240 });
-    createButton(this, cx, 596, 'SETTINGS', () => this.scene.start('SettingsScene'), {
-      width: 240,
-      fontSize: 23,
+    createButton(this, cx, 528, 'PLAY', () => this.startRun(), { width: 250 });
+    createButton(this, cx, 610, 'SETTINGS', () => this.scene.start('SettingsScene'), {
+      width: 250,
+      fontSize: FONT_MD,
     });
 
     const pinned = seedFromUrl();
@@ -58,7 +67,7 @@ export class TitleScene extends Phaser.Scene {
       this.add
         .text(cx, 736, `seed ${pinned}`, {
           fontFamily: FONT,
-          fontSize: '13px',
+          fontSize: `${FONT_SM}px`,
           color: COLORS.dim,
           resolution: TEXT_RESOLUTION,
         })

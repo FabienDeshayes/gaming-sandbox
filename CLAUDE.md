@@ -38,34 +38,52 @@ Same test setup as Bibou (`cd games/nouxinha && npm install && npm test`), inclu
 Pitchou is a push-your-luck survival game: a lighthouse keeper draws salvage from a
 fully-visible bag to refill three draining meters, and wins by surviving twelve
 nights. It is playable end to end. Read `games/pitchou/DESIGN.md` before changing it
-and `games/pitchou/TESTING.md` before adding a test.
+and `games/pitchou/TESTING.md` before adding a test. `games/pitchou/TODO.md` is the
+owner's notes — don't implement from it unless asked.
 
+- **The hazard is called a FALL, and only that.** The keeper loses their footing and
+  drops loot. It was once a squall/wave/storm depending on which line of the screen you
+  read, and a playtest found that the single most confusing thing in the game — so
+  `kind: 'fall'`, `fallBudget`, `fallDamage`, `COLORS.fall`, `FALL_LABEL`, one sprite.
+  Don't reintroduce a second name for it anywhere, including in comments.
 - **Nothing is hardcoded; everything lives in a tuning object.** `DEFAULT_TUNING` in
   `src/core/rules.js` holds every number, and each function takes the tuning from
-  `state.tuning`. Don't inline a constant — the simulator sweeps these. The view layer
-  holds no game numbers at all: `src/config.js` is layout, palette and settings, and
-  even the how-to-play screen reads its numbers back out of the tuning.
-- **The numbers are simulation-derived, and `DESIGN.md` §8 records why.** Three of them
-  are load-bearing in a way that is easy to "simplify" and thereby break: the meter
-  cap sits only two above the starting level (so a surplus can't be hoarded as safety
-  and has to go into tools); a bust keeps *half* the basket rather than none (with
-  all-or-nothing, pushing is never worth it and the search collapses to one dominant
-  line); and every wave costs a unit off the basket, not just the third (without that,
-  only 12% of a night's taps are decisions — a wave can't end the night until two are
-  already out). Re-run `npm run sweep` before changing any of them — it keeps those
-  ablations next to the current tuning, and `--waves --fair` compares whole wave
-  structures at matched difficulty.
+  `state.tuning`. Don't inline a constant — the simulator sweeps these, and the tests
+  read the numbers back out of it. The view layer holds no game numbers at all:
+  `src/config.js` is layout, type scale, palette, labels and settings.
+- **A token is a list of gains.** `{ kind: 'resource', gains: [{ resource, amount }] }`,
+  or `{ resource, min, max }` for the 1-3 tokens, which `search()` rolls at the moment
+  of the draw and stashes back as `token.rolled`. Two or three gains make a mixed
+  token. Anything reading a token's value has to go through `rolled`/`gains`, never a
+  `token.resource` that no longer exists.
+- **The numbers are simulation-derived, and `DESIGN.md` §8 records why.** Five of them
+  are load-bearing in a way that is easy to "simplify" and thereby break: one build per
+  dawn (`buildsPerNight`) is what makes a twelve-tool shop a decision rather than a
+  shopping list; the 4/4/4 shore is thin *because* the shop is big, and putting it back
+  to 5/5/5 makes cautious play as good as pushing; a fall that ends the night keeps
+  *half* the basket rather than none (all-or-nothing and pushing never pays); every
+  fall costs a unit off the basket, not just the third; and the drain steps every five
+  nights, with the tool tiers opening on exactly those nights. Re-run `npm run sweep`
+  before changing any of them — it keeps those ablations next to the current tuning,
+  including the pre-expansion six-tool workshop — and `npm run falls -- --fair`
+  compares whole fall structures at matched difficulty.
 - **`sim/simulate.mjs` is the tuning tool**: `npm run sim` for the policy table,
-  `npm run sweep` for the ablations, `npm run search` to grid-search tunings scored on
-  whether building and pushing actually beat playing safe. Policies in `sim/policies.mjs`
-  stand in for players — when a policy loses, check it isn't just playing badly before
-  concluding the mechanic is broken.
-- **The UI mirrors `playSeason` in `sim/simulate.mjs`, and has to.** Two things are
+  `npm run sweep` for the ablations, `npm run falls` for fall structures, `npm run
+  search` to grid-search tunings scored on whether building and pushing actually beat
+  playing safe. Policies in `sim/policies.mjs` stand in for players — when a policy
+  loses, check it isn't just playing badly before concluding the mechanic is broken.
+- **The UI mirrors `playSeason` in `sim/simulate.mjs`, and has to.** Three things are
   easy to get wrong: death happens inside `beginNight` and leaves the phase at
-  `'dusk'`, so the status is re-checked right after it; and `search()` can move to
-  `'dawn'` by itself (a bust, or a bag drawn dry), so GO HOME is re-gated after every
-  draw or `goHome` throws. `NightScene` is the whole run — dawn is an in-canvas
-  overlay, not a second scene, like every other modal in this repo.
+  `'dusk'`, so the status is re-checked right after it; `search()` can move to
+  `'dawn'` by itself (a fall that ends the night, or a bag drawn dry), so GO HOME is
+  re-gated after every draw or `goHome` throws; and a dawn policy has to decide *after*
+  allocation, or it is playing a different game from the simulator (see `TESTING.md`).
+  `NightScene` is the whole run — dawn is an in-canvas overlay, not a second scene,
+  like every other modal in this repo.
+- **Type has a floor and the layout is built around it.** `FONT_SM` (16px) in
+  `src/config.js` is the smallest size in the game; the vertical bands were laid out to
+  fit the type, not the other way round. The shore grid sizes its own tiles
+  (`layoutFor` in `src/ui/ShoreView.js`) so a small shore is drawn big.
 - **Sprites are text, and sound is synthesised.** 16×16 `#`/`.` masks in
   `src/data/sprites.js` baked to white textures and tinted at draw time
   (`src/ui/textures.js`); `src/ui/sfx.js` builds every sound through WebAudio. Nothing

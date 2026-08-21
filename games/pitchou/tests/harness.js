@@ -19,8 +19,8 @@ const ROOT = path.resolve(HERE, '..');
 
 // Mirrored from src/config.js on purpose, so a layout change shows up as a
 // failing test rather than a silently-missed tap.
-const SEARCH_Y = 742;
-const HOME_Y = 812;
+const SEARCH_Y = 744;
+const HOME_Y = 808;
 const CENTER_X = 240;
 
 // --- Tiny test runner -------------------------------------------------------
@@ -356,7 +356,13 @@ export async function openGame(
           toolsBuilt: [...r.toolsBuilt],
           shore: r.shore.length,
           bag: r.bag.length,
-          drawn: r.drawn.map((t) => (t.kind === 'wave' ? 'wave' : t.resource + t.amount)),
+          // A drawn token as a short string: 'fall', or what the resource
+          // token actually paid ('oil1', 'wood1+plank1') once its roll settled.
+          drawn: r.drawn.map((t) =>
+            t.kind === 'fall'
+              ? 'fall'
+              : (t.rolled || t.gains).map((g) => g.resource + g.amount).join('+')
+          ),
           gathered: { ...s.gathered },
           busy: s.busy,
           dawnOpen: s.dawn.isOpen(),

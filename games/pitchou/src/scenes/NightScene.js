@@ -1,7 +1,12 @@
 import {
   COLORS,
   EFFECT_DEPTH,
+  FALL_LABEL,
   FONT,
+  FONT_LG,
+  FONT_MD,
+  FONT_RG,
+  FONT_SM,
   GAME_HEIGHT,
   GAME_WIDTH,
   HEADER_Y,
@@ -11,6 +16,7 @@ import {
   PANEL_DEPTH,
   RESOURCE_LABELS,
   RISK_PIP_GAP,
+  RISK_PIP_R,
   RISK_PIP_X,
   RISK_Y,
   SEARCH_Y,
@@ -43,9 +49,9 @@ import { createShoreView } from '../ui/ShoreView.js';
 import {
   playBust,
   playDraw,
+  playFall,
   playGain,
   playLose,
-  playWave,
   playWin,
   setWindLevel,
   startWind,
@@ -93,15 +99,15 @@ export class NightScene extends Phaser.Scene {
     this.nightText = this.add
       .text(cx, HEADER_Y, '', {
         fontFamily: FONT,
-        fontSize: '23px',
+        fontSize: `${FONT_LG}px`,
         color: COLORS.text,
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
     this.drainText = this.add
-      .text(GAME_WIDTH - 20, HEADER_Y, '', {
+      .text(GAME_WIDTH - 18, HEADER_Y, '', {
         fontFamily: FONT,
-        fontSize: '13px',
+        fontSize: `${FONT_SM}px`,
         color: COLORS.muted,
         resolution: TEXT_RESOLUTION,
       })
@@ -113,9 +119,9 @@ export class NightScene extends Phaser.Scene {
 
     this.strikes = this.add.graphics();
     this.enduranceText = this.add
-      .text(GAME_WIDTH - 20, RISK_Y, '', {
+      .text(GAME_WIDTH - 18, RISK_Y, '', {
         fontFamily: FONT,
-        fontSize: '13px',
+        fontSize: `${FONT_SM}px`,
         color: COLORS.muted,
         resolution: TEXT_RESOLUTION,
       })
@@ -129,7 +135,7 @@ export class NightScene extends Phaser.Scene {
     this.feedbackText = this.add
       .text(cx, SEARCH_Y, '', {
         fontFamily: FONT,
-        fontSize: '21px',
+        fontSize: `${FONT_MD}px`,
         color: COLORS.muted,
         align: 'center',
         resolution: TEXT_RESOLUTION,
@@ -138,17 +144,21 @@ export class NightScene extends Phaser.Scene {
 
     this.homeButton = createButton(this, cx, HOME_Y, 'GO HOME', () => this.onGoHome(), {
       width: 400,
-      fontSize: 21,
+      fontSize: FONT_MD,
       padY: 10,
     });
 
-    createButton(this, 40, HEADER_Y, 'X', () => this.askQuit(), { fontSize: 15, padX: 10, padY: 6 });
+    createButton(this, 40, HEADER_Y, 'X', () => this.askQuit(), {
+      fontSize: FONT_SM,
+      padX: 10,
+      padY: 6,
+    });
   }
 
   paintHeader() {
     const tuning = this.run.tuning;
     this.nightText.setText(`NIGHT ${this.run.night} / ${tuning.seasonNights}`);
-    this.drainText.setText(`DRAIN ${drainForNight(this.run.night, tuning)} EACH`);
+    this.drainText.setText(`-${drainForNight(this.run.night, tuning)} EACH DUSK`);
 
     const total = tuning.seasonNights;
     const left = GAME_WIDTH / 2 - ((total - 1) * TRACK_GAP) / 2;
@@ -159,8 +169,8 @@ export class NightScene extends Phaser.Scene {
       const now = i === this.run.night;
       this.track.fillStyle(now ? COLORS.lampHex : done ? COLORS.mutedHex : COLORS.dimHex, 1);
       this.track.fillCircle(x, TRACK_Y, now ? TRACK_PIP_R + 1 : TRACK_PIP_R - 1);
-      if (tuning.stormWaveNights.includes(i)) {
-        this.track.lineStyle(1, COLORS.foamHex, 0.8);
+      if (tuning.extraFallNights.includes(i)) {
+        this.track.lineStyle(1, COLORS.fallHex, 0.8);
         this.track.strokeCircle(x, TRACK_Y, TRACK_PIP_R + 3);
       }
     }
@@ -179,27 +189,40 @@ export class NightScene extends Phaser.Scene {
 
   paintRisk() {
     const tuning = this.run.tuning;
-    const budget = tuning.waveBudget;
+    const budget = tuning.fallBudget;
     this.strikes.clear();
     for (let i = 0; i < budget; i++) {
       const x = RISK_PIP_X + i * RISK_PIP_GAP;
       const spent = i < this.run.strikes;
-      this.strikes.fillStyle(spent ? COLORS.foamHex : COLORS.panelHex, 1);
-      this.strikes.fillCircle(x, RISK_Y, 11);
-      this.strikes.lineStyle(2, spent ? COLORS.foamHex : COLORS.panelEdgeHex, 1);
-      this.strikes.strokeCircle(x, RISK_Y, 11);
+      this.strikes.fillStyle(spent ? COLORS.fallHex : COLORS.panelHex, 1);
+      this.strikes.fillCircle(x, RISK_Y, RISK_PIP_R);
+      this.strikes.lineStyle(2, spent ? COLORS.fallHex : COLORS.panelEdgeHex, 1);
+      this.strikes.strokeCircle(x, RISK_Y, RISK_PIP_R);
     }
+    // One sentence, one word for the hazard, and a number a child can read off
+    // the pips beside it.
     const remaining = budgetLeft(this.run);
     if (remaining <= 0) {
-      this.enduranceText.setText('The waves swept you home');
-      this.enduranceText.setColor(COLORS.foam);
+      this.enduranceText.setText('That fall sent you home');
+      this.enduranceText.setColor(COLORS.fall);
     } else if (remaining === 1) {
-      this.enduranceText.setText('One more squall and the waves take you home');
-      this.enduranceText.setColor(COLORS.foam);
+      this.enduranceText.setText(`1 more ${FALL_LABEL} ends the night`);
+      this.enduranceText.setColor(COLORS.fall);
     } else {
-      this.enduranceText.setText(`You can endure ${remaining} more squalls`);
+      this.enduranceText.setText(`${remaining} more ${FALL_LABEL}S end the night`);
       this.enduranceText.setColor(COLORS.muted);
     }
+  }
+
+  // The feedback line is the loudest text on the screen and also the one whose
+  // length isn't under the layout's control — "You found 1 OIL + 1 WOOD + 1
+  // PLANK" is a legal sentence. Set it at the display size and step down only
+  // if it would run off the edge, so the common short lines stay big.
+  say(message, colour) {
+    this.feedbackText.setFontSize(FONT_MD).setText(message).setColor(colour);
+    if (this.feedbackText.width > GAME_WIDTH - 24) this.feedbackText.setFontSize(FONT_RG);
+    if (this.feedbackText.width > GAME_WIDTH - 24) this.feedbackText.setFontSize(FONT_SM);
+    return this.feedbackText;
   }
 
   setControls(on) {
@@ -229,7 +252,7 @@ export class NightScene extends Phaser.Scene {
     this.shore.deal(this.run.bag);
     this.basket.set(this.run.basket);
     this.paintRisk();
-    this.feedbackText.setText('Choose a tile to explore').setColor(COLORS.muted);
+    this.say('Pick a tile', COLORS.muted);
     this.busy = false;
     this.setControls(true);
   }
@@ -252,14 +275,20 @@ export class NightScene extends Phaser.Scene {
 
       let settled;
       if (token.kind === 'resource') {
-        this.gathered[token.resource] += token.amount;
-        this.nightGathered[token.resource] += token.amount;
-        playGain(token.resource, token.amount);
+        // `rolled` is what the rules settled at the draw: a mixed token pays
+        // two or three resources at once and a 1-3 token pays whatever it just
+        // rolled, so the line has to be built from the result, not the face.
+        for (const gain of token.rolled) {
+          this.gathered[gain.resource] += gain.amount;
+          this.nightGathered[gain.resource] += gain.amount;
+        }
+        const biggest = token.rolled.reduce((a, b) => (b.amount > a.amount ? b : a));
+        playGain(biggest.resource, token.rolled.reduce((n, g) => n + g.amount, 0));
         this.basket.set(this.run.basket);
-        const label = RESOURCE_LABELS[token.resource];
-        this.feedbackText
-          .setText(`You found ${token.amount > 1 ? token.amount + ' ' : ''}${label}`)
-          .setColor(COLORS.text);
+        const found = token.rolled
+          .map((g) => `${g.amount} ${RESOURCE_LABELS[g.resource]}`)
+          .join(' + ');
+        this.say(`You found ${found}`, COLORS.text);
         settled = Promise.resolve();
       } else if (this.run.busted) {
         this.busts += 1;
@@ -268,22 +297,18 @@ export class NightScene extends Phaser.Scene {
           if (lost > 0) this.nightLost[r] += lost;
         }
         playBust();
-        this.feedbackText
-          .setText('A rogue wave! Swept home with half your haul')
-          .setColor(COLORS.foam);
+        this.say('A bad fall! Half your basket is gone', COLORS.fall);
         settled = this.bustFlash(motion).then(() => this.basket.set(this.run.basket));
       } else {
-        playWave();
+        playFall();
         if (motion) this.cameras.main.shake(SHAKE_MS, 0.006);
         const lostRes = RESOURCES.find((r) => this.run.basket[r] < before[r]);
         if (lostRes) {
           const amount = before[lostRes] - this.run.basket[lostRes];
           this.nightLost[lostRes] += amount;
-          this.feedbackText
-            .setText(`A squall! Lost ${amount} ${RESOURCE_LABELS[lostRes]}`)
-            .setColor(COLORS.foam);
+          this.say(`You fell! Dropped ${amount} ${RESOURCE_LABELS[lostRes]}`, COLORS.fall);
         } else {
-          this.feedbackText.setText('A squall, but nothing to lose').setColor(COLORS.foam);
+          this.say('You fell! Nothing to drop', COLORS.fall);
         }
         settled = this.basket.knock(before, this.run.basket, motion);
       }
@@ -324,7 +349,7 @@ export class NightScene extends Phaser.Scene {
       this.finish();
       return;
     }
-    const added = this.run.tuning.stormWaveNights.filter((n) => n < this.run.night).length;
+    const added = this.run.tuning.extraFallNights.filter((n) => n < this.run.night).length;
     setWindLevel(added);
     this.enterDusk();
   }
@@ -388,7 +413,7 @@ export class NightScene extends Phaser.Scene {
       this.add
         .text(GAME_WIDTH / 2, 360, 'Leave the light?', {
           fontFamily: FONT,
-          fontSize: '25px',
+          fontSize: `${FONT_LG}px`,
           color: COLORS.text,
           resolution: TEXT_RESOLUTION,
         })
@@ -397,9 +422,9 @@ export class NightScene extends Phaser.Scene {
     );
     panel.push(
       this.add
-        .text(GAME_WIDTH / 2, 394, 'The season is not saved.', {
+        .text(GAME_WIDTH / 2, 398, 'This season is not saved.', {
           fontFamily: FONT,
-          fontSize: '14px',
+          fontSize: `${FONT_SM}px`,
           color: COLORS.muted,
           resolution: TEXT_RESOLUTION,
         })

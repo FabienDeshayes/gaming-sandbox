@@ -1,6 +1,11 @@
 import {
   COLORS,
+  FALL_LABEL,
   FONT,
+  FONT_LG,
+  FONT_MD,
+  FONT_RG,
+  FONT_SM,
   GAME_WIDTH,
   getAudio,
   getHardMode,
@@ -17,7 +22,7 @@ import { stopWind } from '../ui/sfx.js';
 const OPTIONS = [
   {
     label: 'SOUND',
-    note: 'Wind, waves and the workshop.',
+    note: 'Wind, falls and the workshop.',
     get: getAudio,
     set: setAudio,
   },
@@ -28,8 +33,8 @@ const OPTIONS = [
     set: setMotion,
   },
   {
-    label: 'HARD BUST',
-    note: 'The third wave takes the whole basket, not half.',
+    label: 'HARD FALLS',
+    note: `The third ${FALL_LABEL} takes everything, not half.`,
     get: getHardMode,
     set: setHardMode,
   },
@@ -47,18 +52,18 @@ export class SettingsScene extends Phaser.Scene {
     this.add
       .text(cx, 96, 'SETTINGS', {
         fontFamily: FONT,
-        fontSize: '27px',
+        fontSize: `${FONT_LG}px`,
         color: COLORS.text,
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
     OPTIONS.forEach((option, i) => {
-      const y = 200 + i * 130;
+      const y = 210 + i * 140;
       this.add
-        .text(cx, y - 42, option.label, {
+        .text(cx, y - 48, option.label, {
           fontFamily: FONT,
-          fontSize: '18px',
+          fontSize: `${FONT_MD}px`,
           color: COLORS.text,
           resolution: TEXT_RESOLUTION,
         })
@@ -66,7 +71,7 @@ export class SettingsScene extends Phaser.Scene {
       this.add
         .text(cx, y - 20, option.note, {
           fontFamily: FONT,
-          fontSize: '13px',
+          fontSize: `${FONT_SM}px`,
           color: COLORS.muted,
           resolution: TEXT_RESOLUTION,
         })
@@ -86,11 +91,14 @@ export class SettingsScene extends Phaser.Scene {
           // not just decline to start the next one.
           if (option.label === 'SOUND' && !on) stopWind();
         },
-        { width: 200, fontSize: 22 }
+        { width: 200, fontSize: FONT_MD }
       );
       if (!option.get()) button.setBaseFill(COLORS.disabledHex);
     });
 
-    createButton(this, cx, 720, 'BACK', () => this.scene.start('TitleScene'), { width: 200 });
+    createButton(this, cx, 730, 'BACK', () => this.scene.start('TitleScene'), {
+      width: 220,
+      fontSize: FONT_MD,
+    });
   }
 }

@@ -269,13 +269,13 @@ underneath it discards the drawing rather than showing one from somewhere else.
 - One light active at a time. Light and water are the two consumables — no food yet (§12), no timer.
 - The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
-- **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is still authored as a 1-bit mask, so what a gem changes is a tint at draw time, never an asset.
+- **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is a 1-bit tile baked white, so what a gem changes is a tint at draw time, never an asset.
 - Every gem is optional. Nothing in the game requires finding one; the sanctums gate their own contents and nothing else. The compass and the map are optional too — they make the walk legible, never possible.
 - **No two of the same consumable within 8 tiles.** The world spreads items rather than scattering them, which caps how much there is to find (§4.3). One constant decides the trade.
 - Portrait, mobile-first, touch as the primary input. 480×854 fixed canvas.
 - Turn-based: the world only advances when the player steps. No real-time pressure.
 - No build tooling: Phaser 3 from a CDN `<script>` tag, game code as plain ES modules.
-- No external art assets beyond the game's own pixel sprites, and no audio files: the blips and the loop are synthesised (§9).
+- One art asset — the tile sheet every sprite is cut from — and no audio files: the blips and the loop are synthesised (§9).
 
 ## 6. Win / lose conditions
 
@@ -392,34 +392,36 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
 
 ## 9. Art & audio style
 
-- **Visual style:** Pixel art, **duo-chromatic**, retro CRT. Two colours are on screen at any moment — a dark background and a single foreground used for every tile border, the character, items, HUD, and text — **and one more for each gem recovered**. Sprites are authored as 16×16 1-bit masks (foreground shape on transparent) drawn at 3× with nearest-neighbour filtering and tinted at draw time, which is what makes both a palette swap and a restored colour a tint change rather than an asset rebuild. The masks live in `src/data/sprites.js` as **text**, `#` and `.` — the art is data, it diffs in git, and changing it needs no image editor (see §11).
+- **Visual style:** Pixel art, **duo-chromatic**, retro CRT. Two colours are on screen at any moment — a dark background and a single foreground used for every tile border, the character, items, HUD, and text — **and one more for each gem recovered**. Every sprite is a 16×16 1-bit tile drawn at 3× with nearest-neighbour filtering and tinted at draw time, which is what makes both a palette swap and a restored colour a tint change rather than an asset rebuild.
+  - **The art is one sheet, addressed by coordinate.** `assets/tiles.png` holds 49×22 tiles of 16px, one transparent pixel apart, drawn in near-white on transparent. `src/data/tiles.js` maps each sprite key the game draws with — `rock`, `torch-lamp`, `wizard-down` — to the **(col, row)** of its tile, zero-based from the top-left, and that table is the only place in the game that knows the sheet exists. At boot the sheet is read once, the named tiles are cut out of it as 1-bit masks, and each is baked into a **white** texture; white rather than the sheet's own near-white so a tint lands exactly on its hex. Changing what something looks like is editing one pair of numbers: open `tiles.html` through the same server the game runs on and it draws the sheet with those coordinates on it, boxing the tiles already claimed.
   - **What a gem repaints, and what it doesn't.** Terrain is the constant: floor, rock and sanctum wall stay in the palette's own foreground however many gems you hold, because they are the thing every other colour has to read *against*. What changes is the character (who wears the newest colour brought home), the items of that gem's tier, the gem pips in the HUD, and any gate that gem opened. A gem's colour is the foreground of a palette you are **not** playing in — play PHOSPHOR and the three gems are amber, cyan and magenta — so a restored colour is always one the world genuinely did not have, and it is guaranteed to read against the background because those four combinations were already chosen to.
   - **An open gateway is drawn as plain floor while the character stands in it.** Two dense sprites on one tile read as one unidentifiable blob, which is the same reason the hut isn't drawn underneath them; it bites harder here, because a character wearing a gem's colour can be standing on a gate wearing the *same* colour.
   - **Tile edges:** a floor tile draws its dotted border on its top and left edges only, so the edge shared by two known tiles is drawn once rather than doubled. It closes off its right or bottom edge only where the neighbour there is still unknown, so the frontier of explored ground reads as a boundary instead of an unfinished grid.
   - **Three visibility states, one colour:** lit = foreground at full alpha; remembered = the same foreground at ~30% alpha; unknown = nothing drawn at all, just background. Dimming by alpha rather than by a third colour is what keeps the two-colour rule intact.
   - **Floor is its border and nothing else.** An empty floor tile is bare background inside a dotted border — no stipple, no scatter, no per-tile decoration. The dotted grid alone separates "ground I have lit" from "dark I have never been to", and it holds that read at the remembered state's 30% alpha. Loose pixels in the middle of a tile were tried and cut: one tile's worth looks like texture, a viewport's worth looks like noise, and they compete with the things that actually matter — the wizard, the items, the frontier. Rock uses the inverse weight: a dense, near-solid mask, so a rock wall reads as a mass and floor reads as a surface. A tree carries the same weight and spends it differently — a lobed canopy over a trunk, so a grove reads as foliage rather than stone and a player can see at a glance that this blocked step is a different kind of thing. Both are drawn in the palette's own foreground: they are terrain, which is the constant every restored colour has to read against.
-  - **Items are drawn hollow.** A solid silhouette turns to mush at 16×16 once it's tinted flat, so the torches, the lantern, and the waters are outlines with small solid accents — the hollow interior is what gives the eye an edge to read. The lights differ in *silhouette* rather than in detail (a thin stick, a fat stick, a lantern, a bowl on splayed legs), because they have to be told apart at the edge of the light. The three waters have the same job and solve it the same way: the drop is a teardrop, the flask square-shouldered and hard-sided, the vial round-bottomed and sparkling, each with its water pooled solid in the bottom.
-  - **Sanctum wall is a grid where rock is a blob.** Rock is a dense, near-solid organic mass; the wall is coursed masonry with staggered joints. That contrast is load-bearing rather than decorative — a player who reads a sanctum wall as terrain walks its perimeter looking for a way round instead of looking for the gate. A shut gate is a barred arch drawn in the palette's own foreground, because a gate you can't open yet is just more wall; an open one is the same arch with the leaves folded back, in the colour of the gem that opened it.
-  - **The merchant is a stall, not a person.** An awning with stripes, a hooded figure behind it, and
-    goods on the counter. It has to read as "somebody is here" against the hut's roof-and-flag at the
-    edge of a light, so the awning's stripes and the counter's goods carry it — a lone figure would
-    read as a second wizard. Like the hut it isn't drawn while the wizard is standing on it.
+  - **Items are drawn hollow.** A solid silhouette turns to mush at 16×16 once it's tinted flat, so the item tiles are outlines with small solid accents — the hollow interior is what gives the eye an edge to read. The four lights differ in *silhouette* rather than in detail, because they have to be told apart at the edge of the light: a candle, a lantern, a candelabra, and — for the beacon, the only one that has to say "this lights everything" — a radiating burst. The three waters have the same job: a teardrop, a hard-sided flask, a round-bottomed vial.
+  - **Sanctum wall is a grid where rock is a blob.** Rock's tile is chosen to *mass*: nine of them in a block read as one dense wall of stone, and one on its own still reads as a boulder. The sanctum wall is coursed masonry with staggered joints. That contrast is load-bearing rather than decorative — a player who reads a sanctum wall as terrain walks its perimeter looking for a way round instead of looking for the gate. A shut gate is a barred arch drawn in the palette's own foreground, because a gate you can't open yet is just more wall; an open one is the same arch with the leaves folded back, in the colour of the gem that opened it.
+  - **The merchant is a stall, not a person.** A pillared canopy over a counter. It has to read as
+    "somebody is here" against the hut's pitched roof and door at the edge of a light, so the awning
+    line carries it — a lone figure would read as a second wizard. Like the hut it isn't drawn while
+    the wizard is standing on it.
   - **The compass needle is solid where every item is hollow.** It is an instrument reading in the
     corner of the screen, not an object lying on the ground, and it has to be legible at a glance.
-    Two masks cover all eight headings — a straight arrow for the cardinals, a barbed one for the
-    diagonals — because a pixel sprite survives a 90-degree rotation and nothing in between. The icon
-    beside it takes the colour of whatever it points at, so a gem target reads in that gem's colour.
-  - **One gem sprite, three tints.** The gems differ by the colour they gave back and nothing else, so drawing three masks would be three ways of saying the same thing.
+    Two tiles cover all eight headings — a straight arrow for the cardinals, a barbed one for the
+    diagonals — because a pixel sprite survives a 90-degree rotation and nothing in between, so both
+    have to sit square in their tile. The icon beside it takes the colour of whatever it points at,
+    so a gem target reads in that gem's colour.
+  - **One gem sprite, three tints.** The gems differ by the colour they gave back and nothing else, so pointing them at three tiles would be three ways of saying the same thing.
 
-- **The character** is a small wizard: pointed hat, robe, staff held to one side. Four sprites, one per facing, and the sprite swaps on every step so the facing is always readable — this matters mechanically, because the lamp torch's cone points wherever the character does.
+- **The character** is a small wizard: pointed hat, robed, face-on. The sprite swaps on every step so the facing is readable — this matters mechanically, because the lamp torch's cone points wherever the character does.
 
   | Facing | Reads as |
   |---|---|
-  | Down (toward the player) | Front view: face under the hat brim, staff on the right |
-  | Up | Back view: hat and shoulders, no face, staff still visible past the shoulder |
-  | Left / Right | Profile: hat point trailing back, staff planted forward in the facing direction (one sprite mirrored for the other, unless the staff hand needs to differ) |
+  | Down (toward the player) | The pointed hat and the face under its brim — the character's own tile, and the one that carries the identity |
+  | Up | A blank hood: the same robed silhouette with no face, which is what "seen from behind" has to be at 16×16 |
+  | Left / Right | A hooded profile, one tile mirrored for the other |
 
-  At 16×16 the hat silhouette and the staff line are the whole identity — those two shapes have to survive the 1-bit mask; detail below that gets cut.
+  The sheet is drawn face-on throughout and holds no side or back view of a figure, so the three views are three different robed figures that read apart rather than one figure turned around. The hat silhouette is the whole identity; the *direction* the character is facing is carried mainly by the shape of the lit ground, which is why a weaker turn read is affordable. This is the part of the tile table most worth repointing by eye.
 - **Palettes:** four combinations, chosen in Settings, persisted in `localStorage`, all CRT-flavoured:
 
   | Name | Background | Foreground |
@@ -430,7 +432,7 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
   | Magenta | `#14061a` | `#ff5fd2` |
 
 - **Reference:** monochrome terminal monitors, Downwell (two-tone discipline), classic roguelike fog of war.
-- **Audio:** two things, both synthesised through WebAudio rather than loaded as files, for the same reason the sprites are text — no binary assets, no build step, and the score diffs in git. Square waves are the audio equivalent of the two-colour rule, and both share one `AudioContext`. All of it is best-effort by design: a browser that blocks or lacks audio costs the player nothing.
+- **Audio:** two things, both synthesised through WebAudio rather than loaded as files — the tile sheet is the game's one binary asset, there is no build step, and the score diffs in git. Square waves are the audio equivalent of the two-colour rule, and both share one `AudioContext`. All of it is best-effort by design: a browser that blocks or lacks audio costs the player nothing.
   - **A pickup blip:** a short rising arpeggio when you pick something up, two notes for a coin and three, landing higher, for a light.
   - **A loop under the walk:** four eight-step phrases in A minor pentatonic over a filtered square-wave drone, about fifteen seconds end to end, written as text in `src/ui/music.js`. Most of its steps are rests — the loop marks time in a place where nothing else does, and a tune would start competing with the blips, which are the sounds that actually mean something. It sits well under them in level for the same reason: the blip is information, the loop is weather. It plays for the expedition and nowhere else, so the title screen and the menus are quiet and starting a run is when the dark gets a sound. **MUSIC** in Settings turns it off, persisted in `localStorage` like the palette.
 
@@ -457,8 +459,11 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/core/save.js` | The three save slots and which one is active: load, write, erase, start, the slot listing the picker draws, and the normaliser every save passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
   | `src/data/items.js` | Item definitions (name, sprite key, durability, light shape, water refill, effect text) plus `tier`/`hue` — the gem that brings an item into the world and the gem colour it's drawn in — and the two tools |
   | `src/data/shop.js` | The merchant's prices, stock order, and which lines are one-offs. One table to retune the economy |
-  | `src/data/sprites.js` | Every sprite, as a 16×16 text mask — including the four floor-edge variants, derived from the base pattern rather than drawn a second time |
-  | `src/ui/textures.js` | Bakes the masks into white textures at boot, and rejects any mask that isn't 16×16 |
+  | `assets/tiles.png` | The tile sheet: 49×22 tiles of 16px, 1px apart, near-white on transparent. The game's only binary asset |
+  | `tiles.html` | A development page, not part of the game: draws the sheet with its coordinates on it and boxes the tiles the game claims, so a sprite can be repointed by reading a label off the screen |
+  | `src/data/tiles.js` | Which **(col, row)** of the sheet each sprite key is cut from, plus the sheet's geometry. The only place that knows the sheet exists — repointing a sprite is one pair of numbers |
+  | `src/data/sprites.js` | Everything the sheet can't give: the mirrored facing, the wizard's four colour bands, and the floor's dotted border and frontier edges, all derived from a sheet tile rather than drawn a second time |
+  | `src/ui/textures.js` | Loads the sheet, cuts the named tiles out of it as 1-bit masks, and bakes each into a white texture at boot. Rejects a sheet of the wrong size and a mask that isn't 16×16 |
   | `src/ui/MapView.js` | The tile pool, the three visibility states, per-tile tinting (gates and gem-tier items), the step slide and the blocked-step bump. Holds no game state |
   | `src/ui/hud.js` | Run counters, the stacked inventory strip, the **ITEMS** button, the active light's durability, the status line, the **COLOURS** gem row |
   | `src/ui/scroll.js` | A drag/wheel-scrollable, mask-clipped list region shared by the item card's instance list and the inventory panel |
@@ -471,7 +476,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker), `SettingsScene` (palettes, the music switch, the cheat switch, erase), `ExploreScene` |
   | `tests/` | `harness.js` (local server + Playwright driver + runner) and `game.test.js` — see `TESTING.md` |
 
-- **Sprites are text, not images.** Each is a 16×16 grid of `#`/`.` in `src/data/sprites.js`, baked into a white texture at boot and tinted at draw time. No binary assets, no image editor, no build step — and one texture set serves all four palettes.
+- **Sprites are coordinates on one sheet.** `src/data/tiles.js` names a **(col, row)** of `assets/tiles.png` per sprite key; the tile is cut out as a 1-bit mask at boot, baked into a white texture and tinted at draw time. One image, no image editor to repoint a sprite, no build step — and one texture set serves all four palettes.
 
 - **Explored-tile storage:** a `Set` of `"x,y"` keys for tiles ever lit. Terrain and items are re-derived from the seed on demand, so nothing else about the world needs storing. A run additionally keeps only what the recap reports plus the water level: the coin count, the current water, the gem count, the two tools, the high-water mark of distance from the base, and a tally of what it has picked up — and, per epoch, the set of consumable tiles it has emptied, which a respawn simply clears.
 - **The structures are derived, then memoised.** Placing four sanctums and three landmarks costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same seven. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.

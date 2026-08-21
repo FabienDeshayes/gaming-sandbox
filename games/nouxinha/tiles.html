@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nouxinha — tile sheet</title>
+  <style>
+    /* A development page, not part of the game: it draws assets/tiles.png with
+       its coordinates on it so a sprite can be repointed by reading a label off
+       the screen and editing one pair of numbers in src/data/tiles.js. */
+    :root { --bg: #0b1a0b; --fg: #33ff66; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 monospace;
+      -webkit-font-smoothing: none;
+    }
+    header {
+      position: sticky; top: 0; z-index: 2;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+    }
+    h1 { font-size: 15px; margin: 0 0 4px; letter-spacing: 2px; }
+    p { margin: 0; opacity: 0.65; max-width: 70ch; }
+    .controls { display: flex; gap: 18px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    label { opacity: 0.65; }
+    select, button {
+      font: inherit; color: var(--fg); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+      padding: 2px 6px; cursor: pointer;
+    }
+    /* The readout: what is under the cursor, and what the last click picked. */
+    .readout { display: flex; gap: 22px; align-items: center; margin-top: 10px; min-height: 76px; }
+    .swatch canvas { image-rendering: pixelated; display: block; }
+    .swatch { display: flex; gap: 10px; align-items: center; }
+    .swatch b { font-size: 20px; letter-spacing: 1px; }
+    .swatch .key { opacity: 0.65; font-size: 12px; }
+    .dim { opacity: 0.4; }
+    main { padding: 16px; overflow-x: auto; }
+    #sheet { image-rendering: pixelated; display: block; cursor: crosshair; }
+    #claimed {
+      padding: 0 16px 40px; display: grid; gap: 4px 22px;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    }
+    #claimed div { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+    #claimed div:hover { background: color-mix(in srgb, var(--fg) 14%, transparent); }
+    #claimed canvas { image-rendering: pixelated; }
+    #claimed .co { margin-left: auto; opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>NOUXINHA TILE SHEET</h1>
+    <p>
+      <code>assets/tiles.png</code> — 49&times;22 tiles of 16px, 1px apart. A tile is named
+      <b>(col, row)</b>, zero-based from the top-left. Hover to read a coordinate, click to copy it,
+      then paste it into <code>src/data/tiles.js</code>. Tiles the game already claims are boxed.
+    </p>
+    <div class="controls">
+      <label>palette <select id="palette"></select></label>
+      <label>zoom <select id="zoom"></select></label>
+      <label><input type="checkbox" id="labels" checked /> coordinates</label>
+    </div>
+    <div class="readout">
+      <div class="swatch"><canvas id="hoverPix" width="64" height="64"></canvas>
+        <div><b id="hoverCo">—</b><div class="key" id="hoverKey">hover a tile</div></div></div>
+      <div class="swatch"><canvas id="pickPix" width="64" height="64"></canvas>
+        <div><b id="pickCo">—</b><div class="key" id="pickKey">click to copy</div></div></div>
+    </div>
+  </header>
+
+  <main><canvas id="sheet"></canvas></main>
+  <div id="claimed"></div>
+
+<script type="module">
+import { TILES, MIRRORED, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import { PALETTES } from './src/config.js';
+
+const TILE = 16;
+const STRIDE = TILE + SHEET_GAP;
+const GUTTER = { left: 30, top: 16 };
+const CELL_GAP = 2;
+
+// Which sprite keys sit on a given tile — more than one key can share a tile.
+const claims = new Map();
+for (const [key, [col, row]] of Object.entries(TILES)) {
+  const at = `${col},${row}`;
+  claims.set(at, (claims.get(at) || []).concat(key));
+}
+for (const [key, source] of Object.entries(MIRRORED)) {
+  const at = TILES[source].join(',');
+  claims.set(at, claims.get(at).concat(`${key} (mirrored)`));
+}
+
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+const sheetEl = document.getElementById('sheet');
+const ctx = sheetEl.getContext('2d');
+
+const paletteSel = document.getElementById('palette');
+PALETTES.forEach((p, i) => paletteSel.add(new Option(p.name, String(i))));
+const zoomSel = document.getElementById('zoom');
+[2, 3, 4].forEach((z) => zoomSel.add(new Option(`${z}x`, String(z))));
+zoomSel.value = '3';
+const labelsBox = document.getElementById('labels');
+
+let scale = 3;
+let palette = PALETTES[0];
+let tinted = null; // the sheet, recoloured to the palette's foreground
+let picked = null;
+
+// Recolours the whole sheet in one pass: draw it, then flood the foreground
+// through its own alpha. Same trick the game plays with a tint, so this page
+// shows what a tile will actually look like in play.
+function retint(image) {
+  const off = document.createElement('canvas');
+  off.width = image.width;
+  off.height = image.height;
+  const c = off.getContext('2d');
+  c.drawImage(image, 0, 0);
+  c.globalCompositeOperation = 'source-in';
+  c.fillStyle = hex(palette.fg);
+  c.fillRect(0, 0, off.width, off.height);
+  return off;
+}
+
+const cellPitch = () => TILE * scale + CELL_GAP;
+const cellX = (col) => GUTTER.left + col * cellPitch();
+const cellY = (row) => GUTTER.top + row * cellPitch();
+
+function draw() {
+  const pitch = cellPitch();
+  sheetEl.width = GUTTER.left + SHEET_COLS * pitch;
+  sheetEl.height = GUTTER.top + SHEET_ROWS * pitch;
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = hex(palette.bg);
+  ctx.fillRect(0, 0, sheetEl.width, sheetEl.height);
+
+  ctx.font = '9px monospace';
+  ctx.textBaseline = 'middle';
+
+  if (labelsBox.checked) {
+    ctx.fillStyle = hex(palette.fg);
+    ctx.globalAlpha = 0.55;
+    ctx.textAlign = 'center';
+    for (let col = 0; col < SHEET_COLS; col++)
+      ctx.fillText(String(col), cellX(col) + (TILE * scale) / 2, GUTTER.top / 2);
+    ctx.textAlign = 'right';
+    for (let row = 0; row < SHEET_ROWS; row++)
+      ctx.fillText(String(row), GUTTER.left - 6, cellY(row) + (TILE * scale) / 2);
+    ctx.globalAlpha = 1;
+  }
+
+  for (let row = 0; row < SHEET_ROWS; row++) {
+    for (let col = 0; col < SHEET_COLS; col++) {
+      const x = cellX(col);
+      const y = cellY(row);
+      const size = TILE * scale;
+      ctx.fillStyle = hex(palette.fg);
+      ctx.globalAlpha = 0.07;
+      ctx.fillRect(x, y, size, size);
+      ctx.globalAlpha = 1;
+      ctx.drawImage(tinted, col * STRIDE, row * STRIDE, TILE, TILE, x, y, size, size);
+
+      const keys = claims.get(`${col},${row}`);
+      if (keys) {
+        ctx.strokeStyle = hex(palette.fg);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+      }
+      if (picked && picked[0] === col && picked[1] === row) {
+        ctx.strokeStyle = hex(palette.fg);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - 1, y - 1, size + 2, size + 2);
+      }
+    }
+  }
+}
+
+// Screen position -> tile, or null in a gutter or a gap between cells.
+function tileAt(px, py) {
+  const pitch = cellPitch();
+  const col = Math.floor((px - GUTTER.left) / pitch);
+  const row = Math.floor((py - GUTTER.top) / pitch);
+  if (col < 0 || row < 0 || col >= SHEET_COLS || row >= SHEET_ROWS) return null;
+  return [col, row];
+}
+
+function showIn(canvasId, coId, keyId, tile) {
+  const pix = document.getElementById(canvasId).getContext('2d');
+  pix.imageSmoothingEnabled = false;
+  pix.clearRect(0, 0, 64, 64);
+  const co = document.getElementById(coId);
+  const key = document.getElementById(keyId);
+  if (!tile) {
+    co.textContent = '—';
+    key.textContent = '';
+    return;
+  }
+  pix.drawImage(tinted, tile[0] * STRIDE, tile[1] * STRIDE, TILE, TILE, 0, 0, 64, 64);
+  co.textContent = `${tile[0]}, ${tile[1]}`;
+  const keys = claims.get(tile.join(','));
+  key.textContent = keys ? keys.join(', ') : 'unused';
+  key.className = keys ? 'key' : 'key dim';
+}
+
+sheetEl.addEventListener('mousemove', (e) => {
+  const r = sheetEl.getBoundingClientRect();
+  showIn('hoverPix', 'hoverCo', 'hoverKey', tileAt(e.clientX - r.left, e.clientY - r.top));
+});
+
+sheetEl.addEventListener('click', (e) => {
+  const r = sheetEl.getBoundingClientRect();
+  const tile = tileAt(e.clientX - r.left, e.clientY - r.top);
+  if (!tile) return;
+  picked = tile;
+  showIn('pickPix', 'pickCo', 'pickKey', tile);
+  // Best-effort: a page opened without a secure context has no clipboard, and
+  // the coordinate is on screen either way.
+  navigator.clipboard?.writeText(`[${tile[0]}, ${tile[1]}]`).catch(() => {});
+  draw();
+});
+
+// The table as it stands, so what the game currently draws is readable without
+// hunting for the boxes on the sheet.
+function listClaimed() {
+  const host = document.getElementById('claimed');
+  host.replaceChildren();
+  for (const [key, [col, row]] of Object.entries(TILES)) {
+    const line = document.createElement('div');
+    const pix = document.createElement('canvas');
+    pix.width = pix.height = 32;
+    const c = pix.getContext('2d');
+    c.imageSmoothingEnabled = false;
+    c.drawImage(tinted, col * STRIDE, row * STRIDE, TILE, TILE, 0, 0, 32, 32);
+    const name = document.createElement('span');
+    name.textContent = key;
+    const co = document.createElement('span');
+    co.className = 'co';
+    co.textContent = `${col}, ${row}`;
+    line.append(pix, name, co);
+    line.addEventListener('click', () => {
+      picked = [col, row];
+      showIn('pickPix', 'pickCo', 'pickKey', picked);
+      draw();
+      window.scrollTo({ top: cellY(row), behavior: 'smooth' });
+    });
+    host.append(line);
+  }
+}
+
+function repaint() {
+  document.documentElement.style.setProperty('--bg', hex(palette.bg));
+  document.documentElement.style.setProperty('--fg', hex(palette.fg));
+  draw();
+  listClaimed();
+  showIn('pickPix', 'pickCo', 'pickKey', picked);
+}
+
+paletteSel.addEventListener('change', () => {
+  palette = PALETTES[Number(paletteSel.value)];
+  tinted = retint(source);
+  repaint();
+});
+zoomSel.addEventListener('change', () => {
+  scale = Number(zoomSel.value);
+  draw();
+});
+labelsBox.addEventListener('change', draw);
+
+const source = new Image();
+source.src = SHEET_PATH;
+await source.decode();
+tinted = retint(source);
+repaint();
+</script>
+</body>
+</html>

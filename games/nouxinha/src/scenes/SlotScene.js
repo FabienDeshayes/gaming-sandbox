@@ -12,7 +12,7 @@
 
 import { FONT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { loadSlot, MAX_GEMS, slots, startSlot } from '../core/save.js';
-import { ensureTextures } from '../ui/textures.js';
+import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 
 const ROW_W = 400;
@@ -23,6 +23,10 @@ const ROW_GAP = 18;
 export class SlotScene extends Phaser.Scene {
   constructor() {
     super('SlotScene');
+  }
+
+  preload() {
+    preloadTiles(this);
   }
 
   create(data) {

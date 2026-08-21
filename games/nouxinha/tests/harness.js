@@ -288,12 +288,21 @@ export async function openGame(
 
     shot: (file) => page.screenshot({ path: file }),
 
-    // Whether the music loop's scheduler is running. Read out of the module the
-    // game itself imported — a dynamic import of the same URL is the same module
-    // instance — because there is nothing about a loop of square waves that a
-    // headless browser can be asked to listen to.
+    // Whether the music loop's scheduler is running, and which of the two loops
+    // it is playing. Read out of the module the game itself imported — a dynamic
+    // import of the same URL is the same module instance — because there is
+    // nothing about a loop of square waves that a headless browser can be asked
+    // to listen to.
     music: () =>
       page.evaluate(() => import('/src/ui/music.js').then((m) => m.isMusicPlaying())),
+
+    musicTrack: () =>
+      page.evaluate(() => import('/src/ui/music.js').then((m) => m.musicTrack())),
+
+    // Every sound played so far, in order ('tap', 'coin', 'pickup', 'gem',
+    // 'torch', 'death'). Same trick as `music()`, and the only way to assert
+    // that a button makes a noise and the D-pad doesn't.
+    sounds: () => page.evaluate(() => import('/src/ui/sfx.js').then((m) => m.soundLog())),
 
     activeScene: () =>
       page.evaluate(() => {

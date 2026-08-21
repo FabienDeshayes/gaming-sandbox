@@ -3,6 +3,7 @@ import { anySlotUsed, loadSave, MAX_GEMS } from '../core/save.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { makeWizard, paintWizard } from '../ui/wizard.js';
+import { startMusic } from '../ui/music.js';
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -18,6 +19,11 @@ export class TitleScene extends Phaser.Scene {
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
     const cx = GAME_WIDTH / 2;
+
+    // The menu loop. Every scene asks for the track it wants on create and none
+    // of them stop the music on the way out, so the handover from the menus to
+    // an expedition is a crossfade rather than a silence (ui/music.js).
+    startMusic('menu');
     // The slot last played, which is what the title screen reports and what
     // EXPLORE would pick up again (core/save.js).
     const save = loadSave();

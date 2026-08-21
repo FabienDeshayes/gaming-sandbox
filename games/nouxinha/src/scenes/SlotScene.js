@@ -14,6 +14,8 @@ import { FONT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { loadSlot, MAX_GEMS, slots, startSlot } from '../core/save.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
+import { playTap } from '../ui/sfx.js';
+import { startMusic } from '../ui/music.js';
 
 const ROW_W = 400;
 const ROW_H = 104;
@@ -34,6 +36,8 @@ export class SlotScene extends Phaser.Scene {
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
     const cx = GAME_WIDTH / 2;
+    // The menu loop, carried on from the title screen (ui/music.js).
+    startMusic('menu');
     this.mode = (data && data.mode) === 'load' ? 'load' : 'new';
     // Which occupied row is one tap away from being written over. Only ever set
     // in `new` mode, and cleared by tapping anything else.
@@ -117,7 +121,10 @@ export class SlotScene extends Phaser.Scene {
     // Fire on release, not on touch-down (see ui/button.js) — a scene start on
     // pointerdown is what made a row sometimes need a second tap.
     let pressed = false;
-    zone.on('pointerdown', () => (pressed = true));
+    zone.on('pointerdown', () => {
+      pressed = true;
+      playTap();
+    });
     zone.on('pointerout', () => (pressed = false));
     zone.on('pointerup', () => {
       if (!pressed) return;

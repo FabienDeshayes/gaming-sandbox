@@ -57,7 +57,8 @@ reaches in to *set* game state.
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its four colour-zone layers — the wizard wears one colour per gem carried, plus the base colour |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
-| `music()` | Whether the music loop's scheduler is running — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
+| `music()` / `musicTrack()` | Whether the music loop's scheduler is running, and which of the two loops it is playing (`'menu'`, `'explore'`, or `null`) — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
+| `sounds()` | Every sound played so far, in order — `'tap'`, `'coin'`, `'pickup'`, `'gem'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` the same way, and the only way to assert that a button makes a noise and the D-pad doesn't |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
 | `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |

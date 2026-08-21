@@ -1465,18 +1465,51 @@ test('a grove is drawn as trees, not as more rock', async (game) => {
   assertEqual({ x: after.x, y: after.y }, { x: before.x, y: before.y }, 'did not move');
 });
 
-test('the music plays under the expedition and stops when it ends', async (game) => {
+test('the music follows the scene: the menus get one loop, the dark another', async (game) => {
+  assertEqual(await game.musicTrack(), 'menu', 'the title screen has its own small loop');
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  assertEqual(await game.musicTrack(), 'menu', 'and it carries on across the menus');
+  await game.clickText('BACK');
+  await game.waitForScene('TitleScene');
+
   await game.startRun();
   // The loop is started by the scene and again by the first input, because a
   // page the player has not touched yet has no clock to schedule against.
   await game.tapDpad('right');
   await game.settle();
-  assertEqual(await game.music(), true, 'the dark has a sound while you are in it');
+  assertEqual(await game.musicTrack(), 'explore', 'the dark gets the longer loop');
 
   // The X in the corner of the map, which is the way out of a run.
   await game.clickAt(456, 31);
   await game.waitForScene('TitleScene');
-  assertEqual(await game.music(), false, 'and the title screen is quiet again');
+  assertEqual(await game.musicTrack(), 'menu', 'and the menus take theirs back');
+});
+
+test('every button taps back, and the D-pad does not', async (game) => {
+  const taps = async () => (await game.sounds()).filter((s) => s === 'tap').length;
+  assertEqual(await taps(), 0, 'nothing has been touched yet');
+
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  assertEqual(await taps(), 1, 'a button makes a sound');
+  await game.clickText('BACK');
+  await game.waitForScene('TitleScene');
+  assertEqual(await taps(), 2, 'so does the one that comes back');
+
+  await game.startRun();
+  // Walking is the one control tapped often enough that a sound on it would
+  // turn an expedition into a rattle, so the D-pad is the exception.
+  const before = await taps();
+  for (const dir of ['right', 'up', 'left']) {
+    await game.tapDpad(dir);
+    await game.settle();
+  }
+  assertEqual(await taps(), before, 'the D-pad walks silently');
+
+  // The HUD is buttons again, so it is audible again.
+  await game.tapCoins();
+  assertEqual(await taps(), before + 1, 'the coin counter is a button like any other');
 });
 
 test('the music switch turns the loop off and keeps it off', async (game) => {
@@ -1605,11 +1638,14 @@ test('finding a torch and equipping it widens the light', async (game) => {
   assertEqual(state.activeIndex, 0, 'a found light arrives unequipped');
   assertEqual((await game.visibleTiles()).filter((t) => t.alpha === 1).length, 9, 'still radius 1');
 
+  assert((await game.sounds()).includes('pickup'), 'picking the torch up blipped');
+
   await game.tapSlot(1);
   await game.clickText('EQUIP');
 
   state = await game.state();
   assertEqual(state.activeIndex, 1, 'the medium torch is equipped');
+  assertEqual((await game.sounds()).slice(-1)[0], 'torch', 'and it is heard catching');
   assertEqual(
     (await game.visibleTiles()).filter((t) => t.alpha === 1).length,
     25,
@@ -1801,6 +1837,8 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   const state = await game.state();
   assertEqual({ x: state.x, y: state.y }, FIRST_GEM.centre, 'standing on the gem');
   assertEqual(state.gems, 1, 'which is now in hand');
+  // A gem gets the fanfare, not the two-note blip every other pickup gets.
+  assert((await game.sounds()).includes('gem'), 'and it announced itself');
   assert(await game.hasText('FIRST COLOUR IS BACK. CARRY IT HOME TO KEEP IT.'), 'the status line');
 
   // The colour actually reached the screen — this is the whole point of a gem,

@@ -20,6 +20,7 @@ import {
 import { activeSlot, clearSave, loadSave } from '../core/save.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
+import { playTap } from '../ui/sfx.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
 const ROW_H = 68;
@@ -41,9 +42,10 @@ export class SettingsScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(pal.bg);
     const cx = GAME_WIDTH / 2;
 
-    // Turning the music on here plays it, so the switch can be auditioned; the
-    // loop belongs to the expedition, so leaving this screen ends it again.
-    this.events.once('shutdown', () => stopMusic());
+    // The menu loop, the same one the title screen and the slot picker play —
+    // asking for the track already playing doesn't restart it (ui/music.js), so
+    // walking between the menus is one continuous tune.
+    startMusic('menu');
 
     this.add
       .text(cx, 110, 'PALETTE', { fontFamily: FONT, fontSize: '28px', color: hex(pal.fg) })
@@ -88,7 +90,10 @@ export class SettingsScene extends Phaser.Scene {
       // Fire on release, not on touch-down (see ui/button.js) — pointerdown
       // here is what made a row sometimes eat a tap and need a second one.
       let pressed = false;
-      zone.on('pointerdown', () => (pressed = true));
+      zone.on('pointerdown', () => {
+        pressed = true;
+        playTap();
+      });
       zone.on('pointerout', () => (pressed = false));
       zone.on('pointerup', () => {
         if (!pressed) return;
@@ -112,7 +117,7 @@ export class SettingsScene extends Phaser.Scene {
       () => {
         const on = setMusic(!getMusic());
         music.setLabel(musicLabel(on));
-        if (on) startMusic();
+        if (on) startMusic('menu');
         else stopMusic();
       },
       { width: 300, fontSize: 14 }

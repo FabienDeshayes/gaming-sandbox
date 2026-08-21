@@ -8,10 +8,12 @@ import {
   GAME_WIDTH,
   PALETTES,
   getCheats,
+  getFloorBorder,
   getMusic,
   getPalette,
   hex,
   setCheats,
+  setFloorBorder,
   setMusic,
   setPalette,
 } from '../config.js';
@@ -116,6 +118,22 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
 
+    // The floor border switch (DESIGN.md §9): the dotted line that used to be
+    // the only thing marking a lit tile now sits on top of ground texture, so
+    // turning it off costs the game nothing it doesn't already draw. Takes
+    // effect on the next repaint, same as the palette does for a running map.
+    const border = makeButton(
+      this,
+      cx,
+      600,
+      borderLabel(getFloorBorder()),
+      () => {
+        const on = setFloorBorder(!getFloorBorder());
+        border.setLabel(borderLabel(on));
+      },
+      { width: 300, fontSize: 14 }
+    );
+
     // The cheat switch (DESIGN.md §6.2): a run started with it on opens with the
     // map revealed and one of everything, which is how the late game gets looked
     // at without a campaign's worth of walking behind it. It says what it costs
@@ -123,7 +141,7 @@ export class SettingsScene extends Phaser.Scene {
     const cheats = makeButton(
       this,
       cx,
-      600,
+      660,
       cheatLabel(getCheats()),
       () => {
         const on = setCheats(!getCheats());
@@ -133,7 +151,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
     const note = this.add
-      .text(cx, 634, cheatNote(getCheats()), {
+      .text(cx, 694, cheatNote(getCheats()), {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -150,7 +168,7 @@ export class SettingsScene extends Phaser.Scene {
     const erase = makeButton(
       this,
       cx,
-      688,
+      748,
       save.started ? `ERASE SLOT ${slot}` : `SLOT ${slot} IS EMPTY`,
       () => {
         if (!save.started) return;
@@ -165,7 +183,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14, enabled: !!save.started }
     );
 
-    makeButton(this, cx, 752, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
+    makeButton(this, cx, 812, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
   }
 }
 
@@ -175,6 +193,10 @@ function musicLabel(on) {
 
 function cheatLabel(on) {
   return `CHEATS: ${on ? 'ON' : 'OFF'}`;
+}
+
+function borderLabel(on) {
+  return `TILE BORDER: ${on ? 'ON' : 'OFF'}`;
 }
 
 function cheatNote(on) {

@@ -109,12 +109,12 @@ export const TILES = {
 
   // --- HUD -----------------------------------------------------------------
   // The compass needle, one tile per direction. Four for now: the sheet's
-  // chevrons are drawn pointing, so a heading is a texture swap rather than a
+  // arrows are drawn pointing, so a heading is a texture swap rather than a
   // rotation, and `compassHeading` snaps to the four these can draw.
-  'arrow-up': [23, 20],
-  'arrow-right': [24, 20],
-  'arrow-down': [25, 20],
-  'arrow-left': [26, 20],
+  'arrow-up': [28, 20],
+  'arrow-right': [29, 20],
+  'arrow-down': [30, 20],
+  'arrow-left': [31, 20],
 };
 
 // How many tiles a key alternates between; 1 for the single-tile ones.

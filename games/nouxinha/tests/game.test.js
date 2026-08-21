@@ -1494,6 +1494,46 @@ test('the music switch turns the loop off and keeps it off', async (game) => {
   assertEqual(await game.music(), false, 'a run started with it off stays silent');
 });
 
+test('the tile border switch turns the dotted line off, and back on', async (game) => {
+  await game.startRun();
+  await game.tapDpad('right');
+  await game.settle();
+
+  const bordered = (await game.visibleTiles()).filter((t) => t.ground.startsWith('floor'));
+  assert(bordered.length > 0, 'floor tiles are on screen');
+  assert(
+    bordered.every((t) => t.ground === 'floor' || /^floor-[rb]+$/.test(t.ground)),
+    'and drawn with the border by default'
+  );
+
+  await game.clickAt(456, 31);
+  await game.waitForScene('TitleScene');
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  assert(await game.hasText('TILE BORDER: ON'), 'on by default');
+  await game.clickText('TILE BORDER: ON');
+  assert(await game.hasText('TILE BORDER: OFF'), 'and the button says so once tapped');
+  await game.clickText('BACK');
+  await game.waitForScene('TitleScene');
+
+  await game.startRun();
+  await game.tapDpad('right');
+  await game.settle();
+  const plain = (await game.visibleTiles()).filter((t) => t.ground.startsWith('floor'));
+  assert(plain.length > 0, 'floor tiles are still on screen');
+  assert(plain.every((t) => t.ground === 'floor-plain'), 'and none of them draw the border');
+
+  // Leaves the switch as it found it, so it doesn't change what every other
+  // test sees.
+  await game.clickAt(456, 31);
+  await game.waitForScene('TitleScene');
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  await game.clickText('TILE BORDER: OFF');
+  assert(await game.hasText('TILE BORDER: ON'), 'restored');
+  await game.clickText('BACK');
+});
+
 test('walking into rock bumps instead of moving', async (game) => {
   await game.startRun();
   for (const dir of ROCK_ROUTE.path) {

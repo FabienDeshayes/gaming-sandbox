@@ -99,8 +99,13 @@ export function buildSprites(readTile) {
   for (const facing of ['down', 'up', 'right', 'left'])
     Object.assign(sprites, wizardZones(sprites[`wizard-${facing}`], `wizard-${facing}`));
 
-  // Floor: ground texture at half strength under a border at full.
-  const floor = withTopEdge(withLeftEdge(dimmed(sprites.floor)));
+  // Floor: ground texture at half strength, with and without the dotted
+  // border on top. `floor-plain` is the border switched off in Settings
+  // (DESIGN.md §9) — just the texture, since there is no frontier to mark
+  // once nothing is drawing a boundary at all.
+  const texture = dimmed(sprites.floor);
+  sprites['floor-plain'] = texture;
+  const floor = withTopEdge(withLeftEdge(texture));
   sprites.floor = floor;
   sprites['floor-r'] = withRightEdge(floor);
   sprites['floor-b'] = withBottomEdge(floor);

@@ -27,6 +27,7 @@ const CH_SANCTUM = 5;
 const CH_LANDMARK = 6;
 const CH_COIN = 7;
 const CH_BOULDER = 8;
+const CH_VARIANT = 9;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
@@ -70,6 +71,14 @@ function hash(x, y, seed, channel) {
 
 export function randomAt(x, y, seed, channel) {
   return hash(x | 0, y | 0, seed | 0, channel);
+}
+
+// Which of a terrain's several tiles this one draws, as a roll in [0, 1). Part
+// of the world rather than of the renderer for the reason everything else here
+// is: it has to be the same every time you walk back past it, and nothing about
+// the world is stored. Rock and trees share the channel — no tile is ever both.
+export function variantAt(x, y, seed = DEFAULT_SEED) {
+  return hash(x | 0, y | 0, seed | 0, CH_VARIANT);
 }
 
 const lerp = (a, b, t) => a + (b - a) * t;

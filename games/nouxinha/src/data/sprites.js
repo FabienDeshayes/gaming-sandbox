@@ -1,23 +1,27 @@
 // Every sprite in the game, as a 16x16 1-bit mask.
 //
-// '#' is a lit pixel, '.' is transparent. The masks are not authored here any
-// more — they are cut out of the tile sheet (`src/data/tiles.js`) at boot and
-// then baked into white textures (src/ui/textures.js) and tinted with the
-// palette's foreground at draw time, which is what keeps the two-colour rule
-// (DESIGN.md §9) a property of the renderer rather than something each asset
-// has to be re-authored for.
+// '#' is a pixel drawn in the palette's foreground, '+' one drawn at half its
+// strength, '.' transparent. The masks are not authored here — they are cut out
+// of the tile sheet (`src/data/tiles.js`) at boot and then baked into textures
+// (src/ui/textures.js) that are tinted with the foreground at draw time, which
+// is what keeps the two-colour rule (DESIGN.md §9) a property of the renderer
+// rather than something each asset has to be re-authored for.
 //
-// What lives here is everything the sheet cannot give: the mirrored facing, the
-// wizard's colour bands, and the floor's frontier edges. All three are
-// *derived* from a sheet tile, so repointing a sprite at a different tile
-// (src/data/tiles.js) carries them along with it.
+// What lives here is everything the sheet cannot give: the wizard's colour
+// bands, the floor's dotted border, and a terrain's alternate tiles. All of it
+// is *derived* from a sheet tile, so repointing a sprite (src/data/tiles.js)
+// carries it along.
 
-import { MIRRORED, TILES } from './tiles.js';
+import { TILES, variantCount } from './tiles.js';
 
-// The left-facing wizard is the right-facing tile mirrored — same silhouette,
-// no second tile to keep in sync.
-export function mirror(mask) {
-  return mask.map((row) => row.split('').reverse().join(''));
+// The two levels a mask pixel can be drawn at. `DIM` is the same colour at
+// FLOOR_TEXTURE_LEVEL (src/config.js) — one texture, two weights, still one
+// colour on screen.
+export const LIT = '#';
+export const DIM = '+';
+
+function dimmed(mask) {
+  return mask.map((row) => row.replace(/#/g, DIM));
 }
 
 // The wizard wears one colour per gem recovered, plus the base colour they
@@ -43,15 +47,14 @@ function wizardZones(mask, key) {
   return out;
 }
 
-// Floor's dotted border, which is drawn rather than taken from the sheet —
-// it is a property of what has been explored, not of the ground itself.
+// Floor's dotted border, which is drawn rather than taken from the sheet — it
+// is a property of what has been explored, not of the ground itself, and it is
+// drawn at full strength over ground texture that isn't.
 //
 // A tile always closes its top and left edges, so the edge shared by two known
 // tiles is drawn once rather than doubled, and closes its right or bottom edge
 // only where the neighbour there is still unknown. The frontier of explored
 // ground then reads as a boundary instead of an unfinished grid (DESIGN.md §9).
-// The border goes on top of whatever tile `floor` points at, so pointing it at
-// textured ground keeps the grid.
 const EDGE_DOTS = '#.#.#.#.#.#.#.#.';
 
 function withTopEdge(mask) {
@@ -75,43 +78,38 @@ function withBottomEdge(mask) {
 // stays pure and testable, and so nothing in `src/data/` has to know how a PNG
 // is decoded.
 export function buildSprites(readTile) {
-  const at = (key) => {
-    const tile = TILES[key];
-    if (!tile) throw new Error(`sprite "${key}" has no tile in src/data/tiles.js`);
-    return readTile(tile[0], tile[1]);
-  };
+  const sprites = {};
 
-  const wizard = {
-    down: at('wizard-down'),
-    up: at('wizard-up'),
-    right: at('wizard-right'),
-    left: mirror(at(MIRRORED['wizard-left'])),
-  };
-
-  const floor = withTopEdge(withLeftEdge(at('floor')));
-
-  const sprites = {
-    'wizard-down': wizard.down,
-    'wizard-up': wizard.up,
-    'wizard-right': wizard.right,
-    'wizard-left': wizard.left,
-    ...wizardZones(wizard.down, 'wizard-down'),
-    ...wizardZones(wizard.up, 'wizard-up'),
-    ...wizardZones(wizard.right, 'wizard-right'),
-    ...wizardZones(wizard.left, 'wizard-left'),
-    floor,
-    'floor-r': withRightEdge(floor),
-    'floor-b': withBottomEdge(floor),
-    'floor-rb': withBottomEdge(withRightEdge(floor)),
-  };
-
-  // Everything else is its sheet tile and nothing more. Driven off the table
-  // rather than listed again here, so adding a sprite is one line in
-  // `src/data/tiles.js`.
-  for (const key of Object.keys(TILES)) {
-    if (key in sprites) continue;
-    sprites[key] = at(key);
+  // Everything the table names, straight off the sheet. A key naming several
+  // tiles becomes `key-0`, `key-1`, ... plus the bare key as an alias for the
+  // first, so anything that just wants one of them (a Settings preview, say)
+  // can still ask for `rock`.
+  for (const [key, tile] of Object.entries(TILES)) {
+    if (variantCount(key) === 1) {
+      sprites[key] = readTile(tile[0], tile[1]);
+      continue;
+    }
+    tile.forEach(([col, row], n) => {
+      sprites[`${key}-${n}`] = readTile(col, row);
+    });
+    sprites[key] = sprites[`${key}-0`];
   }
+
+  // The wizard's four colour bands, per facing.
+  for (const facing of ['down', 'up', 'right', 'left'])
+    Object.assign(sprites, wizardZones(sprites[`wizard-${facing}`], `wizard-${facing}`));
+
+  // Floor: ground texture at half strength, with and without the dotted
+  // border on top. `floor-plain` is the border switched off in Settings
+  // (DESIGN.md §9) — just the texture, since there is no frontier to mark
+  // once nothing is drawing a boundary at all.
+  const texture = dimmed(sprites.floor);
+  sprites['floor-plain'] = texture;
+  const floor = withTopEdge(withLeftEdge(texture));
+  sprites.floor = floor;
+  sprites['floor-r'] = withRightEdge(floor);
+  sprites['floor-b'] = withBottomEdge(floor);
+  sprites['floor-rb'] = withBottomEdge(withRightEdge(floor));
 
   return sprites;
 }

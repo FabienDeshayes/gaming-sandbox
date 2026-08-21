@@ -62,14 +62,21 @@ export function compassTarget(state) {
   return { ...home, distance: chebyshev(home.x, home.y, state.x, state.y) };
 }
 
-// The heading to walk, snapped to the eight the arrow sprite can draw. Returns
-// null when the target is the tile you're standing on.
+// The heading to walk, snapped to the four the needle can draw. Returns null
+// when the target is the tile you're standing on.
+//
+// Four rather than eight because the sheet's chevrons are drawn pointing: a
+// heading is a texture swap, not a rotation, and there are four of them
+// (DESIGN.md §9). A target on an exact diagonal rounds clockwise, which is
+// arbitrary but never flickers.
+export const COMPASS_SECTORS = 4;
+
 export function compassHeading(state, target) {
   const dx = target.x - state.x;
   const dy = target.y - state.y;
   if (!dx && !dy) return null;
-  // Eight sectors of 45 degrees, measured from north and going clockwise.
+  // Quarter turns, measured from north and going clockwise: 0 N, 1 E, 2 S, 3 W.
   const angle = Math.atan2(dx, -dy);
-  const sector = ((Math.round((angle / (Math.PI * 2)) * 8) % 8) + 8) % 8;
-  return sector;
+  const turns = Math.round((angle / (Math.PI * 2)) * COMPASS_SECTORS);
+  return ((turns % COMPASS_SECTORS) + COMPASS_SECTORS) % COMPASS_SECTORS;
 }

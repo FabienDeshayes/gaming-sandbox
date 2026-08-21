@@ -76,7 +76,7 @@
   <div id="claimed"></div>
 
 <script type="module">
-import { TILES, MIRRORED, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import { TILES, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
 import { PALETTES } from './src/config.js';
 
 const TILE = 16;
@@ -84,15 +84,19 @@ const STRIDE = TILE + SHEET_GAP;
 const GUTTER = { left: 30, top: 16 };
 const CELL_GAP = 2;
 
+// The table flattened to one row per tile, since a key can name several — the
+// terrains that alternate between tiles list each one as `key #n`.
+const entries = [];
+for (const [key, tile] of Object.entries(TILES)) {
+  if (Array.isArray(tile[0])) tile.forEach(([col, row], n) => entries.push([`${key} #${n}`, col, row]));
+  else entries.push([key, tile[0], tile[1]]);
+}
+
 // Which sprite keys sit on a given tile — more than one key can share a tile.
 const claims = new Map();
-for (const [key, [col, row]] of Object.entries(TILES)) {
+for (const [key, col, row] of entries) {
   const at = `${col},${row}`;
   claims.set(at, (claims.get(at) || []).concat(key));
-}
-for (const [key, source] of Object.entries(MIRRORED)) {
-  const at = TILES[source].join(',');
-  claims.set(at, claims.get(at).concat(`${key} (mirrored)`));
 }
 
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
@@ -228,7 +232,7 @@ sheetEl.addEventListener('click', (e) => {
 function listClaimed() {
   const host = document.getElementById('claimed');
   host.replaceChildren();
-  for (const [key, [col, row]] of Object.entries(TILES)) {
+  for (const [key, col, row] of entries) {
     const line = document.createElement('div');
     const pix = document.createElement('canvas');
     pix.width = pix.height = 32;

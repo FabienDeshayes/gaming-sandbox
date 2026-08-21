@@ -32,6 +32,12 @@ export const VIEW_ROWS = 15;
 export const LIT_ALPHA = 1;
 export const REMEMBERED_ALPHA = 0.3;
 
+// Ground texture is drawn at this fraction of the foreground's strength, so an
+// explored floor tile reads as a surface without competing with the wizard, the
+// items and the frontier standing on it (DESIGN.md §9). Still one colour: the
+// tile is baked with a dimmed grey that the same tint multiplies through.
+export const FLOOR_TEXTURE_LEVEL = 0.5;
+
 // In blackout, remembered ground beyond this Chebyshev distance is hidden
 // too — memory shrinks to a fog of war around the character instead of
 // staying legible over the whole run (DESIGN.md §4).
@@ -99,6 +105,36 @@ export function setMusic(on) {
     /* preference just won't persist */
   }
   return musicOn;
+}
+
+// --- Floor border --------------------------------------------------------------
+//
+// The dotted border that separates explored ground from the dark (DESIGN.md
+// §9). On by default; a player can turn it off in Settings now that floor
+// carries its own ground texture and the border is no longer the only thing
+// telling a lit tile apart from bare background.
+const FLOOR_BORDER_KEY = 'nouxinha.floorBorder';
+
+let floorBorderOn = true;
+
+try {
+  floorBorderOn = localStorage.getItem(FLOOR_BORDER_KEY) !== '0';
+} catch (e) {
+  /* on by default */
+}
+
+export function getFloorBorder() {
+  return floorBorderOn;
+}
+
+export function setFloorBorder(on) {
+  floorBorderOn = !!on;
+  try {
+    localStorage.setItem(FLOOR_BORDER_KEY, floorBorderOn ? '1' : '0');
+  } catch (e) {
+    /* preference just won't persist */
+  }
+  return floorBorderOn;
 }
 
 // --- Cheats ------------------------------------------------------------------

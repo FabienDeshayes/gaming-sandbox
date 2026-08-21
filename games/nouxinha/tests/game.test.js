@@ -26,6 +26,7 @@ import {
   sanctums,
   terrainAt,
   uniqueAt,
+  variantAt,
 } from '../src/core/world.js';
 import {
   activeLight,
@@ -59,8 +60,15 @@ import { PRICES } from '../src/data/shop.js';
 import { BLACKOUT_MEMORY_RADIUS, gemColour } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
 import { zoneColours } from '../src/ui/wizard.js';
-import { buildSprites, WIZARD_ZONES } from '../src/data/sprites.js';
-import { MIRRORED, SHEET_COLS, SHEET_ROWS, TILES } from '../src/data/tiles.js';
+import { DIM, LIT, buildSprites, WIZARD_ZONES } from '../src/data/sprites.js';
+import {
+  SHEET_COLS,
+  SHEET_ROWS,
+  TILES,
+  variantCount,
+  variantKey,
+  wallSprite,
+} from '../src/data/tiles.js';
 
 // --- Routes through the real world -----------------------------------------
 //
@@ -1125,13 +1133,22 @@ function fakeSheet(col, row) {
 
 unit('every tile the table names is on the sheet', () => {
   for (const [key, tile] of Object.entries(TILES)) {
-    assert(Array.isArray(tile) && tile.length === 2, `${key} is a [col, row] pair`);
-    const [col, row] = tile;
-    assert(Number.isInteger(col) && col >= 0 && col < SHEET_COLS, `${key}: column ${col} is on the sheet`);
-    assert(Number.isInteger(row) && row >= 0 && row < SHEET_ROWS, `${key}: row ${row} is on the sheet`);
+    // A key names one [col, row], or a list of them to alternate between.
+    const pairs = Array.isArray(tile[0]) ? tile : [tile];
+    assert(pairs.length === variantCount(key), `${key}: the variant count matches the table`);
+    for (const pair of pairs) {
+      assert(Array.isArray(pair) && pair.length === 2, `${key} is a [col, row] pair`);
+      const [col, row] = pair;
+      assert(
+        Number.isInteger(col) && col >= 0 && col < SHEET_COLS,
+        `${key}: column ${col} is on the sheet`
+      );
+      assert(
+        Number.isInteger(row) && row >= 0 && row < SHEET_ROWS,
+        `${key}: row ${row} is on the sheet`
+      );
+    }
   }
-  for (const [key, source] of Object.entries(MIRRORED))
-    assert(TILES[source], `${key} mirrors ${source}, which needs a tile of its own`);
 });
 
 unit('every sprite is 16x16 and comes from the tile it was pointed at', () => {
@@ -1145,20 +1162,70 @@ unit('every sprite is 16x16 and comes from the tile it was pointed at', () => {
   // Nothing the table names goes missing on the way through.
   for (const key of Object.keys(TILES)) assert(sprites[key], `${key} was cut from the sheet`);
 
-  // A tile repointed in the table is what the sprite is drawn from: `rock` is
-  // the tile at its own coordinates and not, say, the tree's.
-  assertEqual(sprites.rock, fakeSheet(...TILES.rock), 'rock is its own tile');
-  assert(sprites.rock !== sprites.tree, 'and not the tree next to it');
+  // A tile repointed in the table is what the sprite is drawn from: the gem is
+  // the tile at its own coordinates and not, say, the coin's.
+  assertEqual(sprites.gem, fakeSheet(...TILES.gem), 'the gem is its own tile');
+  assert(sprites.gem !== sprites.coin, 'and not the coin next to it');
 });
 
-unit('the left-facing wizard is the right-facing tile mirrored', () => {
+unit('a terrain that alternates gets one sprite per tile, and the bare key is the first', () => {
   const sprites = buildSprites(fakeSheet);
-  const right = fakeSheet(...TILES[MIRRORED['wizard-left']]);
-  assertEqual(
-    sprites['wizard-left'],
-    right.map((row) => row.split('').reverse().join('')),
-    'same tile, flipped'
-  );
+
+  for (const key of ['rock', 'tree']) {
+    const count = variantCount(key);
+    assert(count > 1, `${key} alternates`);
+    TILES[key].forEach((tile, n) =>
+      assertEqual(sprites[`${key}-${n}`], fakeSheet(...tile), `${key}-${n} is the tile it names`)
+    );
+    assertEqual(sprites[key], sprites[`${key}-0`], `bare ${key} is the first of them`);
+
+    // A roll anywhere in [0, 1) lands on one of them, and 1 would too if a
+    // caller ever handed one over.
+    const rolled = new Set();
+    for (let i = 0; i <= 100; i++) rolled.add(variantKey(key, i / 100));
+    assertEqual(rolled.size, count, `${key}: every tile is reachable`);
+    for (const chosen of rolled) assert(sprites[chosen], `${chosen} exists`);
+  }
+
+  // A single-tile key is left alone: no suffix, no second texture.
+  assertEqual(variantKey('coin', 0.99), 'coin', 'a single-tile key keeps its name');
+});
+
+unit('a sanctum ring draws corners on its corners and runs down its sides', () => {
+  const radius = 4;
+  // Walk the whole ring and check every tile against where it sits: the four
+  // corners, then the runs between them.
+  const seen = new Map();
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+      const piece = wallSprite(dx, dy, radius);
+      seen.set(piece, (seen.get(piece) || 0) + 1);
+    }
+  }
+
+  assertEqual(wallSprite(-radius, -radius, radius), 'wall-tl', 'top-left');
+  assertEqual(wallSprite(radius, -radius, radius), 'wall-tr', 'top-right');
+  assertEqual(wallSprite(-radius, radius, radius), 'wall-bl', 'bottom-left');
+  assertEqual(wallSprite(radius, radius, radius), 'wall-br', 'bottom-right');
+  assertEqual(wallSprite(0, -radius, radius), 'wall-t', 'the top run');
+  assertEqual(wallSprite(0, radius, radius), 'wall-b', 'the bottom run');
+  assertEqual(wallSprite(-radius, 0, radius), 'wall-l', 'the left run');
+  assertEqual(wallSprite(radius, 0, radius), 'wall-r', 'the right run');
+
+  // Each corner exactly once, and each run the length of a side between them.
+  for (const corner of ['wall-tl', 'wall-tr', 'wall-bl', 'wall-br'])
+    assertEqual(seen.get(corner), 1, `${corner} is a corner, so there is one`);
+  for (const run of ['wall-t', 'wall-b', 'wall-l', 'wall-r'])
+    assertEqual(seen.get(run), radius * 2 - 1, `${run} spans its side`);
+  assertEqual(seen.get('wall'), undefined, 'and nothing on a ring needs the standalone piece');
+
+  // Which is what the standalone piece is for.
+  assertEqual(wallSprite(0, 0, radius), 'wall', 'a wall tile on no ring');
+
+  // Every piece the ring asks for has to exist as a sprite.
+  const sprites = buildSprites(fakeSheet);
+  for (const piece of [...seen.keys(), 'wall']) assert(sprites[piece], `${piece} was cut`);
 });
 
 unit('each wizard facing is split into colour bands that rebuild the whole sprite', () => {
@@ -1169,19 +1236,20 @@ unit('each wizard facing is split into colour bands that rebuild the whole sprit
     // Stacking the bands back up has to give exactly the silhouette they were
     // cut from — a band that drops a row loses pixels off the character.
     const stacked = whole.map((_, y) =>
-      Array.from(whole[y], (_, x) => (bands.some((b) => b[y][x] === '#') ? '#' : '.')).join('')
+      Array.from(whole[y], (_, x) => (bands.some((b) => b[y][x] !== '.') ? whole[y][x] : '.')).join('')
     );
     assertEqual(stacked, whole, `${facing}: the bands are the whole wizard`);
   }
 });
 
 unit('a floor tile draws its top and left edges, and closes the frontier', () => {
-  const sprites = buildSprites(() => Array.from({ length: 16 }, () => '.'.repeat(16)));
+  const blank = () => Array.from({ length: 16 }, () => '.'.repeat(16));
+  const sprites = buildSprites(blank);
   const dots = '#.#.#.#.#.#.#.#.';
 
   assertEqual(sprites.floor[0], dots, 'the top edge is always drawn');
   assert(
-    sprites.floor.every((row, y) => (y % 2 === 0 ? row[0] === '#' : row[0] === '.')),
+    sprites.floor.every((row, y) => (y % 2 === 0 ? row[0] === LIT : row[0] === '.')),
     'and so is the left one'
   );
   assertEqual(sprites.floor[15], '.'.repeat(16), 'the bottom is left to the neighbour below');
@@ -1192,12 +1260,30 @@ unit('a floor tile draws its top and left edges, and closes the frontier', () =>
 
   // The frontier variants close the edges the plain tile leaves open.
   assert(
-    sprites['floor-r'].every((row, y) => (y % 2 === 0 ? row[15] === '#' : row[15] === '.')),
+    sprites['floor-r'].every((row, y) => (y % 2 === 0 ? row[15] === LIT : row[15] === '.')),
     'floor-r closes the right edge'
   );
   assertEqual(sprites['floor-b'][15], dots, 'floor-b closes the bottom edge');
   assertEqual(sprites['floor-rb'][15], dots, 'floor-rb closes both');
   assertEqual(sprites['floor-rb'][0], dots.slice(0, 15) + '#', 'including the corner they share');
+});
+
+unit('floor texture is drawn at half strength, its border at full', () => {
+  const solid = () => Array.from({ length: 16 }, () => '#'.repeat(16));
+  const sprites = buildSprites(solid);
+
+  // Row 1 is interior: all ground, none of it border.
+  assertEqual(sprites.floor[1], DIM.repeat(16), 'the ground the tile stands on is dimmed');
+  // Row 2 is interior with the left edge on it.
+  assertEqual(sprites.floor[2], LIT + DIM.repeat(15), 'and the border over it is not');
+  assertEqual(sprites.floor[0], '#.#.#.#.#.#.#.#.', 'the top edge replaces the texture under it');
+
+  // Nothing else on the sheet is dimmed — a dim pixel anywhere but the floor
+  // would be a second weight on an object, which the palette rule doesn't have.
+  for (const [key, mask] of Object.entries(sprites)) {
+    if (key.startsWith('floor')) continue;
+    assert(!mask.join('').includes(DIM), `${key} is drawn at one strength`);
+  }
 });
 
 // --- The real game in a browser --------------------------------------------
@@ -1354,11 +1440,18 @@ test('a grove is drawn as trees, not as more rock', async (game) => {
   const tiles = await game.visibleTiles();
   const drawn = tiles.filter((t) => terrainAt(t.x, t.y, SEED) === 'tree');
   assert(drawn.length > 0, 'the walk should end with a grove in the light');
+  // Trees alternate between several tiles, so what is asserted is that the tile
+  // drawn is one of the tree ones — never a rock one — and that it is the one
+  // the world says belongs there, which is what keeps a grove from shimmering.
   for (const tile of drawn)
-    assertEqual(tile.ground, 'tree', `(${tile.x},${tile.y}) should be drawn as a tree`);
+    assertEqual(
+      tile.ground,
+      variantKey('tree', variantAt(tile.x, tile.y, SEED)),
+      `(${tile.x},${tile.y}) should be drawn as the tree the world put there`
+    );
   // Terrain is the constant the gem colours read against (DESIGN.md §9), so a
   // tree is the palette's own foreground like the rock beside it.
-  const rock = tiles.find((t) => t.ground === 'rock');
+  const rock = tiles.find((t) => t.ground.startsWith('rock'));
   if (rock) assertEqual(drawn[0].tint, rock.tint, 'trees are terrain, tinted like rock');
 
   // And they stop a step the way rock does.
@@ -1399,6 +1492,46 @@ test('the music switch turns the loop off and keeps it off', async (game) => {
   await game.tapDpad('right');
   await game.settle();
   assertEqual(await game.music(), false, 'a run started with it off stays silent');
+});
+
+test('the tile border switch turns the dotted line off, and back on', async (game) => {
+  await game.startRun();
+  await game.tapDpad('right');
+  await game.settle();
+
+  const bordered = (await game.visibleTiles()).filter((t) => t.ground.startsWith('floor'));
+  assert(bordered.length > 0, 'floor tiles are on screen');
+  assert(
+    bordered.every((t) => t.ground === 'floor' || /^floor-[rb]+$/.test(t.ground)),
+    'and drawn with the border by default'
+  );
+
+  await game.clickAt(456, 31);
+  await game.waitForScene('TitleScene');
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  assert(await game.hasText('TILE BORDER: ON'), 'on by default');
+  await game.clickText('TILE BORDER: ON');
+  assert(await game.hasText('TILE BORDER: OFF'), 'and the button says so once tapped');
+  await game.clickText('BACK');
+  await game.waitForScene('TitleScene');
+
+  await game.startRun();
+  await game.tapDpad('right');
+  await game.settle();
+  const plain = (await game.visibleTiles()).filter((t) => t.ground.startsWith('floor'));
+  assert(plain.length > 0, 'floor tiles are still on screen');
+  assert(plain.every((t) => t.ground === 'floor-plain'), 'and none of them draw the border');
+
+  // Leaves the switch as it found it, so it doesn't change what every other
+  // test sees.
+  await game.clickAt(456, 31);
+  await game.waitForScene('TitleScene');
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  await game.clickText('TILE BORDER: OFF');
+  assert(await game.hasText('TILE BORDER: ON'), 'restored');
+  await game.clickText('BACK');
 });
 
 test('walking into rock bumps instead of moving', async (game) => {
@@ -1677,7 +1810,7 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   assertEqual(zoneTints[1], gemColour(1), 'the first gem band wears the colour it gave back');
   const tiles = await game.visibleTiles();
   assert(
-    tiles.some((t) => t.ground === 'wall'),
+    tiles.some((t) => t.ground.startsWith('wall')),
     'the sanctum around them is drawn as masonry, not as rock'
   );
   // The arch they walked in through is drawn open, in the palette's own colour
@@ -1849,8 +1982,8 @@ test('the compass sits in the corner and points where the rules say', async (gam
   const expected = compassTarget(createRun(SEED, { ...emptySave(), compass: true }, NONCE));
   assertEqual(state.compassTarget.sprite, expected.sprite, 'the icon is what it is pointing at');
   assert(
-    ['arrow-up', 'arrow-diagonal'].includes(state.compassTarget.arrow),
-    'and the needle is one of the eight headings'
+    ['arrow-up', 'arrow-right', 'arrow-down', 'arrow-left'].includes(state.compassTarget.arrow),
+    'and the needle is one of the four headings'
   );
 }, { query: WORLD, save: { ...emptySave(), compass: true } });
 
@@ -1906,7 +2039,7 @@ test('the tile sheet is loaded and cut into every sprite the game draws', async 
     );
 
   // The keys the renderer names have to be among them, or a tile draws blank.
-  for (const key of ['floor', 'floor-rb', 'rock', 'tree', 'base', 'merchant', 'wizard-down-0'])
+  for (const key of ['floor', 'floor-rb', 'rock-2', 'tree-7', 'wall-tl', 'base', 'wizard-down-0'])
     assert(cut.sprites.some((s) => s.key === key), `${key} was cut`);
 });
 

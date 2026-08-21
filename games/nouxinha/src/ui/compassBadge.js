@@ -5,25 +5,16 @@
 // is a gem" is a decision. Built only for a run that owns one, and rebuilt
 // whenever ownership changes.
 
-import { FONT, SPRITE_PX, gemColour, getPalette, hex } from '../config.js';
+import { FONT, gemColour, getPalette, hex } from '../config.js';
 import { compassHeading, compassTarget } from '../core/compass.js';
 
 export const BADGE_W = 48;
 export const BADGE_H = 78;
 
-// Eight headings from two masks: the cardinals are the straight arrow turned by
-// exact quarter turns, the diagonals the barbed one. A pixel sprite survives a
-// 90-degree rotation and nothing in between.
-const HEADINGS = [
-  ['arrow-up', 0],
-  ['arrow-diagonal', 0],
-  ['arrow-up', 90],
-  ['arrow-diagonal', 90],
-  ['arrow-up', 180],
-  ['arrow-diagonal', 180],
-  ['arrow-up', 270],
-  ['arrow-diagonal', 270],
-];
+// One tile per heading, in the order `compassHeading` counts them: north, then
+// clockwise. Drawn pointing rather than rotated, so nothing depends on a pixel
+// sprite surviving a turn.
+const HEADINGS = ['arrow-up', 'arrow-right', 'arrow-down', 'arrow-left'];
 
 export class CompassBadge {
   constructor(scene, x, y) {
@@ -73,8 +64,7 @@ export class CompassBadge {
       this.arrow.setVisible(false);
       this.here.setVisible(true);
     } else {
-      const [texture, angle] = HEADINGS[sector];
-      this.arrow.setVisible(true).setTexture(texture).setAngle(angle).setTint(getPalette().fg);
+      this.arrow.setVisible(true).setTexture(HEADINGS[sector]).setTint(getPalette().fg);
       this.here.setVisible(false);
     }
     this.icon.setTexture(target.sprite).setTint(gemColour(target.hue || 0));

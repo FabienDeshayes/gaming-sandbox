@@ -20,10 +20,23 @@ import {
   gemColour,
   getPalette,
 } from '../config.js';
-import { isBase, isMerchant, terrainAt } from '../core/world.js';
+import { isBase, isMerchant, sanctumAt, terrainAt, variantAt } from '../core/world.js';
 import { gateOnTile, isBlackout, itemOnTile, litTiles, tileKey } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
+import { variantKey, wallSprite } from '../data/tiles.js';
 import { makeWizard, paintWizard } from './wizard.js';
+
+// Which piece of the wall nine-slice a sanctum's ring tile draws. The ring is a
+// square one tile thick, so where a tile sits on it is enough — no need to look
+// at what its neighbours are, which would not tell a top run from a bottom one
+// anyway (both have wall to the left and right and open ground above and
+// below).
+function wallPiece(x, y, seed) {
+  const site = sanctumAt(x, y, seed);
+  if (!site) return 'wall';
+  const { centre, radius } = site.sanctum;
+  return wallSprite(x - centre.x, y - centre.y, radius);
+}
 
 export class MapView {
   constructor(scene) {
@@ -122,13 +135,11 @@ export class MapView {
         ? gate.open
           ? 'gate-open'
           : 'gate'
-        : terrain === 'rock'
-          ? 'rock'
-          : terrain === 'tree'
-            ? 'tree'
-            : terrain === 'wall'
-              ? 'wall'
-              : this.floorVariant(run, wx, wy);
+        : terrain === 'rock' || terrain === 'tree'
+          ? variantKey(terrain, variantAt(wx, wy, run.seed))
+          : terrain === 'wall'
+            ? wallPiece(wx, wy, run.seed)
+            : this.floorVariant(run, wx, wy);
 
       cell.ground
         .setTexture(ground)

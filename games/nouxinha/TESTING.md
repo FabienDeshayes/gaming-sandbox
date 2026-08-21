@@ -190,10 +190,11 @@ two:
 - **The derivation is pure and tested without a browser.** `buildSprites(readTile)` in
   `src/data/sprites.js` takes a `readTile(col, row) -> mask` rather than an image, so a `unit(...)`
   test hands it a fake sheet whose every tile is its own coordinate spelled out in pixels — no two
-  tiles alike — and can then assert that `rock` really is the tile `src/data/tiles.js` points it at,
-  that the left-facing wizard is the right-facing tile mirrored, that stacking the four colour bands
-  back up reproduces the whole silhouette, and that a floor tile draws its top and left edges and
-  closes the frontier ones.
+  tiles alike — and can then assert that a sprite really is the tile `src/data/tiles.js` points it
+  at, that a terrain naming several tiles gets one sprite each with the bare key aliasing the first,
+  that stacking the four colour bands back up reproduces the whole silhouette, and that a floor tile
+  draws its border at full strength over ground texture at half. `wallSprite` is pure too, so
+  walking a whole ring and counting the pieces it asks for needs no browser either.
 - **That the real sheet loaded and was cut is a browser test.** Reading a PNG needs a canvas, so one
   `test(...)` asserts the sheet is the size `src/data/tiles.js` says it is and that every sprite key
   came out as a 16×16 texture. A sprite pointed off the sheet, or a sheet swapped for one of another

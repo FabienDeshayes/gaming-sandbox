@@ -13,6 +13,12 @@
 // the game runs on and it draws the sheet with those coordinates printed on it,
 // marking the tiles this table already claims. Repointing a sprite is editing
 // one pair of numbers below; nothing else in the game names a tile.
+//
+// A key can also name a **list** of tiles, and then the terrain alternates
+// between them — one is picked per world tile, from the seed, so a rock field
+// isn't the same rock stamped fifty times and the choice never changes as you
+// walk back past it. Those become `key-0`, `key-1`, ... with the bare `key`
+// staying as an alias for the first, for anything that just wants one of them.
 
 export const SHEET_KEY = 'tiles';
 export const SHEET_PATH = 'assets/tiles.png';
@@ -29,28 +35,57 @@ export const SHEET_GAP = 1;
 // place that knows the sheet exists.
 export const TILES = {
   // --- The character -------------------------------------------------------
-  // The sheet has no side or back views of a figure, so the three views are
-  // three different robed characters that read apart at 16x16 rather than one
-  // character turned around: a pointed-hat wizard face-on, a blank hood for
-  // the back of a head, and a hooded figure for the profile. This is the part
-  // of the table most worth repointing by eye.
-  'wizard-down': [26, 9],
-  'wizard-up': [28, 9],
-  'wizard-right': [27, 9],
+  // One tile for all four facings until side and back views are drawn. The
+  // sheet is face-on throughout and holds no figure seen from behind, and a
+  // wrong-looking turn is worse than no turn at all — the direction the
+  // character is facing is carried by the shape of the lit ground meanwhile.
+  'wizard-down': [24, 1],
+  'wizard-up': [24, 1],
+  'wizard-right': [24, 1],
+  'wizard-left': [24, 1],
 
   // --- Terrain -------------------------------------------------------------
-  // Floor points at the sheet's blank tile: an explored floor tile is its
-  // dotted border and nothing else (DESIGN.md §9), and the border is derived
-  // rather than drawn. Point this at a textured tile and the border still
-  // draws on top of it.
-  floor: [0, 0],
-  // Rock has to mass: nine of these in a block read as one rock wall, and one
-  // on its own still reads as a boulder. Both formations draw this tile.
-  rock: [9, 1],
-  tree: [4, 2],
-  wall: [8, 0],
+  // Floor's tile is ground texture, drawn at half strength (FLOOR_TEXTURE_LEVEL
+  // in src/config.js) so it reads as a surface without competing with the
+  // things standing on it. The dotted border on top of it is derived, not drawn
+  // (src/data/sprites.js).
+  floor: [5, 0],
+  // Rock and trees each alternate between several tiles, picked per world tile
+  // from the seed. Rock's three are one terrain and one formation rule — a
+  // mass and a loose boulder draw from the same list (DESIGN.md §4.3).
+  rock: [
+    [12, 4],
+    [12, 1],
+    [5, 2],
+  ],
+  tree: [
+    [0, 1],
+    [2, 1],
+    [3, 1],
+    [5, 1],
+    [4, 1],
+    [3, 2],
+    [1, 1],
+    [4, 2],
+  ],
   gate: [13, 11],
   'gate-open': [12, 11],
+
+  // --- The sanctum wall ----------------------------------------------------
+  // A sanctum is a square ring of wall one tile thick (DESIGN.md §4.4), so its
+  // masonry is a nine-slice: four corners, four runs, and the standalone piece
+  // for a wall tile that isn't on a ring at all. They sit on the sheet in the
+  // same 3x3 arrangement they are drawn in, and `wallSprite` below picks one
+  // from where the tile sits on its ring.
+  'wall-tl': [16, 13],
+  'wall-t': [17, 13],
+  'wall-tr': [18, 13],
+  'wall-l': [16, 14],
+  wall: [17, 14],
+  'wall-r': [18, 14],
+  'wall-bl': [16, 15],
+  'wall-b': [17, 15],
+  'wall-br': [18, 15],
 
   // --- Structures ----------------------------------------------------------
   base: [1, 20],
@@ -73,15 +108,38 @@ export const TILES = {
   map: [46, 5],
 
   // --- HUD -----------------------------------------------------------------
-  // Two arrows cover the compass badge's eight headings, each rotated in 90°
-  // steps (src/ui/compassBadge.js), so both have to sit square in their tile.
-  'arrow-up': [24, 13],
-  'arrow-diagonal': [41, 5],
+  // The compass needle, one tile per direction. Four for now: the sheet's
+  // chevrons are drawn pointing, so a heading is a texture swap rather than a
+  // rotation, and `compassHeading` snaps to the four these can draw.
+  'arrow-up': [23, 20],
+  'arrow-right': [24, 20],
+  'arrow-down': [25, 20],
+  'arrow-left': [26, 20],
 };
 
-// Sprites that are another sprite's tile flipped left-to-right. The sheet is
-// drawn face-on, so this is only ever the character's two profiles — one tile,
-// two facings, nothing to keep in sync.
-export const MIRRORED = {
-  'wizard-left': 'wizard-right',
-};
+// How many tiles a key alternates between; 1 for the single-tile ones.
+export function variantCount(key) {
+  const tile = TILES[key];
+  if (!tile) return 0;
+  return Array.isArray(tile[0]) ? tile.length : 1;
+}
+
+// The texture key for one of a terrain's tiles, given a roll in [0, 1) — which
+// the caller derives from the world (`variantAt` in src/core/world.js), so the
+// same tile always draws the same way.
+export function variantKey(key, roll) {
+  const count = variantCount(key);
+  if (count <= 1) return key;
+  return `${key}-${Math.min(count - 1, Math.floor(roll * count))}`;
+}
+
+// Which piece of the wall nine-slice a ring tile needs. `dx`/`dy` are the
+// tile's offset from the sanctum's centre and `radius` the ring's half-width,
+// so a tile is on the top run when `dy` is at the near edge, on a corner when
+// both are at an edge, and the bare `wall` piece when it is on no ring at all.
+export function wallSprite(dx, dy, radius) {
+  const vertical = dy === -radius ? 't' : dy === radius ? 'b' : '';
+  const horizontal = dx === -radius ? 'l' : dx === radius ? 'r' : '';
+  const piece = vertical + horizontal;
+  return piece ? `wall-${piece}` : 'wall';
+}

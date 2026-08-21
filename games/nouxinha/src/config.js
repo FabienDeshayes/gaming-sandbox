@@ -32,6 +32,12 @@ export const VIEW_ROWS = 15;
 export const LIT_ALPHA = 1;
 export const REMEMBERED_ALPHA = 0.3;
 
+// Ground texture is drawn at this fraction of the foreground's strength, so an
+// explored floor tile reads as a surface without competing with the wizard, the
+// items and the frontier standing on it (DESIGN.md §9). Still one colour: the
+// tile is baked with a dimmed grey that the same tint multiplies through.
+export const FLOOR_TEXTURE_LEVEL = 0.5;
+
 // In blackout, remembered ground beyond this Chebyshev distance is hidden
 // too — memory shrinks to a fog of war around the character instead of
 // staying legible over the whole run (DESIGN.md §4).

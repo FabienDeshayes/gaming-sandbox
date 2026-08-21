@@ -8,6 +8,7 @@
 import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
 import { makeButton } from './button.js';
+import { playTap } from './sfx.js';
 import { makeScrollable } from './scroll.js';
 
 const PANEL_W = 380;
@@ -48,7 +49,10 @@ export class InventoryPanel {
       .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, pal.bg, 0.88)
       .setOrigin(0)
       .setInteractive();
-    backdrop.on('pointerdown', () => this.hide());
+    backdrop.on('pointerdown', () => {
+      playTap();
+      this.hide();
+    });
 
     const panel = scene.add.graphics();
     panel.fillStyle(pal.bg, 1);

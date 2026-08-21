@@ -55,7 +55,7 @@ The world has three things in it: **terrain** (floor, two formations of rock, gr
 | Light & visibility | The active light source defines a **shape** of tiles visible from the character's tile (see §4.1). Every tile has one of three states: **unknown** (never lit — drawn as flat background, indistinguishable from any other unknown tile), **remembered** (lit at some point — drawn dimmed), **lit** (inside the current light shape — drawn full brightness). Items and terrain are only readable in the lit state; a remembered tile keeps showing whatever was there when you last saw it. | — |
 | Durability | Each successful step costs **1 durability** off the *active* light only. Rejected steps (into rock) cost nothing. Carried-but-inactive lights never burn. At 0 the light is spent and removed from the inventory, and the next light in inventory order auto-equips. With no lights left the character is in **blackout**: the light shape shrinks to the character's own tile, and memory shrinks with it — a remembered tile more than one step away stops being drawn until it's lit again, so the screen is the character's own tile plus a small ring of fog of war. Blackout is not death — the character can still feel their way home a step at a time — but it is the moment the walk actually gets dangerous. | — |
 | Water | Every successful step also costs **1 water**, independent of the light and never affected by blackout. Water starts at **200** and each gem held raises that ceiling by **50**, to 350 with all three. A water pickup refills by its own amount (§4.2), capped at the ceiling. Unlike light, water has no auto-swap or backup: hitting **0** is the run's one hard failure state — the run ends and everything carried is lost (§6). The balance numbers are named constants at the top of `src/core/rules.js` (`STARTING_WATER`, `WATER_PER_STEP`, `WATER_PER_GEM`) so they can be retuned without touching the mechanic itself. | — |
-| Pickup | Stepping onto a tile holding an item picks it up automatically, with a short rising blip (§9). Lights go into the inventory unequipped; coins, water and gems apply immediately (coin counter, water level, colour restored) rather than sitting in the inventory. An item needing more gems than you hold isn't there to pick up at all (§4.3). | — |
+| Pickup | Stepping onto a tile holding an item picks it up automatically, with a short rising blip — or, for a gem, a fanfare (§9). Lights go into the inventory unequipped; coins, water and gems apply immediately (coin counter, water level, colour restored) rather than sitting in the inventory. An item needing more gems than you hold isn't there to pick up at all (§4.3). | — |
 | Coming home | Stepping onto the base asks whether to stop: **KEEP GOING** tops water back up to the ceiling and the expedition continues, **STOP HERE** ends the run on a recap (§6) and returns to the title screen. It asks rather than assumes because the hut is also just a landmark to cross on the way somewhere else — but the hut is a base, not just a save point, so pushing out again always starts from a full tank. Arriving still costs a step and burns durability like any other. | Tap a button on the dialog |
 | The merchant | One stall, 20-25 tiles from the hut and always in the same place for a seed. Selling lights, water, a **compass** and a **map** for coins — the only thing coins are for (§4.5). | Walk onto the stall |
 | Compass & map | Two tools, each bought once or found lying in the dark. The compass points at whatever unique object is worth walking to next; the map draws everywhere you have walked (§4.6). | Owned, not carried — neither takes an inventory slot |
@@ -276,7 +276,7 @@ underneath it discards the drawing rather than showing one from somewhere else.
 - Portrait, mobile-first, touch as the primary input. 480×854 fixed canvas.
 - Turn-based: the world only advances when the player steps. No real-time pressure.
 - No build tooling: Phaser 3 from a CDN `<script>` tag, game code as plain ES modules.
-- One art asset — the tile sheet every sprite is cut from — and no audio files: the blips and the loop are synthesised (§9).
+- One art asset — the tile sheet every sprite is cut from — and no audio files: every sound and both loops are synthesised (§9).
 
 ## 6. Win / lose conditions
 
@@ -321,7 +321,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Start a run | **NEW GAME** or **LOAD GAME** on the title screen, then a slot on the picker | Click the same |
 | Overwrite a campaign | Tap an occupied slot under **NEW GAME**, then tap it again | Click the same |
 | Change palette | Settings, from the title screen | Same |
-| Turn the music off | Settings → **MUSIC** (§9) | Same |
+| Turn the music off | Settings → **MUSIC** (§9), which silences both loops | Same |
 | Turn the tile border off | Settings → **TILE BORDER** (§9) | Same |
 | Turn cheats on or off | Settings → **CHEATS** (§6.2) | Same |
 | Erase the slot you last played | Settings → **ERASE SLOT n**, then tap again | Same |
@@ -367,7 +367,7 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
 - Duo-chromatic rendering with four CRT palettes selectable in Settings, persisted
 - Tiles-explored counter
 - The hut's stop/continue question and the end-of-run recap
-- A synthesised pickup blip
+- Synthesised sound throughout: pickup blips, a gem fanfare, a torch catching, a death knell, a tap on every button but the D-pad, and a loop for the walk with a smaller one for the menus (§9)
 - Four seed-derived sanctums with masonry walls and gem-gated gates, guaranteed reachable (§4.4)
 - Three gems, each restoring a colour, opening its gate, raising the water ceiling, and revealing its tier of items
 - Three save slots, picked through NEW GAME / LOAD GAME, banked only by stopping at the hut, with progress on the title screen and an erase in Settings
@@ -429,9 +429,13 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
   | Magenta | `#14061a` | `#ff5fd2` |
 
 - **Reference:** monochrome terminal monitors, Downwell (two-tone discipline), classic roguelike fog of war.
-- **Audio:** two things, both synthesised through WebAudio rather than loaded as files — the tile sheet is the game's one binary asset, there is no build step, and the score diffs in git. Square waves are the audio equivalent of the two-colour rule, and both share one `AudioContext`. All of it is best-effort by design: a browser that blocks or lacks audio costs the player nothing.
+- **Audio:** every sound is synthesised through WebAudio rather than loaded as a file — the tile sheet is the game's one binary asset, there is no build step, and the score diffs in git. Square waves are the audio equivalent of the two-colour rule; the one exception is the torch, which is filtered noise, because a flame catching has no pitch. Everything goes through a single master gain in `src/ui/sfx.js`, so the game has one volume and the peaks below stay relative to each other, and everything shares one `AudioContext`. All of it is best-effort by design: a browser that blocks or lacks audio costs the player nothing.
   - **A pickup blip:** a short rising arpeggio when you pick something up, two notes for a coin and three, landing higher, for a light.
-  - **A loop under the walk:** four eight-step phrases in A minor pentatonic over a filtered square-wave drone, about fifteen seconds end to end, written as text in `src/ui/music.js`. Most of its steps are rests — the loop marks time in a place where nothing else does, and a tune would start competing with the blips, which are the sounds that actually mean something. It sits well under them in level for the same reason: the blip is information, the loop is weather. It plays for the expedition and nowhere else, so the title screen and the menus are quiet and starting a run is when the dark gets a sound. **MUSIC** in Settings turns it off, persisted in `localStorage` like the palette.
+  - **A gem fanfare:** a run up, a leading note and a held chord over a bass, about a second and a half. A gem is the only pickup that repaints the world, so it is the only one that gets a tune instead of a blip.
+  - **A torch catching:** a noise whoosh and a low thump whenever a light takes over — equipped from the item card, auto-equipped when the one before it burned out, or bought out of blackout. The player's choice and the dark's are the same event from two sides, and both change the shape of what is lit.
+  - **A death knell:** three falling notes and a low one sagging under them when the water runs out. The only sound in the game that descends, and the one place the music stops before the scene does (§6).
+  - **A tap:** a short tock on every button, panel and row in the game — except the D-pad, which is tapped often enough that a sound on it would turn walking into a rattle.
+  - **Two loops, following the scene:** the walk gets eight eight-step phrases in A minor pentatonic over a filtered square-wave drone, about half a minute end to end, with the second half an octave up; the menus get a smaller, slower, thinner one — three phrases, a single-octave drone, a long release — in the same key, so the title screen sounds like the dark heard from indoors. Both are written as text in `src/ui/music.js`, and most of their steps are rests: a loop marks time in a place where nothing else does, and a tune would start competing with the blips, which are the sounds that actually mean something. They sit well under them in level for the same reason: the blip is information, the loop is weather. Each scene asks for the track it wants when it opens and none of them stop the music on the way out, so the handover is a crossfade. **MUSIC** in Settings turns it off, persisted in `localStorage` like the palette.
 
 ## 10. Theme
 
@@ -464,8 +468,8 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/MapView.js` | The tile pool, the three visibility states, per-tile tinting (gates and gem-tier items), the step slide and the blocked-step bump. Holds no game state |
   | `src/ui/hud.js` | Run counters, the stacked inventory strip, the **ITEMS** button, the active light's durability, the status line, the **COLOURS** gem row |
   | `src/ui/scroll.js` | A drag/wheel-scrollable, mask-clipped list region shared by the item card's instance list and the inventory panel |
-  | `src/ui/sfx.js` | The pickup blip, and the one `AudioContext` everything audible shares. No assets, and silently inert where audio is unavailable |
-  | `src/ui/music.js` | The loop under the walk: the score as text, the two square-wave voices, and the lookahead scheduler that writes them to the clock. Started and stopped with `ExploreScene` |
+  | `src/ui/sfx.js` | Every sound but the music — the tap, the pickup blips, the gem fanfare, the torch and the death knell — plus the one `AudioContext` and the master gain everything audible goes through. No assets, and silently inert where audio is unavailable |
+  | `src/ui/music.js` | The two loops: both scores as text, the square-wave voices, and the lookahead scheduler that writes them to the clock. The track follows the scene — `menu` for the title, slot picker and settings, `explore` for a run |
   | `src/ui/shop.js` | The merchant's counter: a row per line of stock, over the purse it's paid from |
   | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers |
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |

@@ -11,6 +11,7 @@ import { itemDef } from '../data/items.js';
 import { PRICES, STOCK, isOneOff } from '../data/shop.js';
 import { canBuy, spendable } from '../core/rules.js';
 import { makeButton } from './button.js';
+import { playTap } from './sfx.js';
 
 const PANEL_W = 420;
 const PAD = 22;
@@ -105,7 +106,10 @@ export class Shop {
           .zone(left + PAD, y + 4, PANEL_W - PAD * 2, ROW_H - 8)
           .setOrigin(0)
           .setInteractive({ useHandCursor: true });
-        zone.on('pointerdown', () => this.onBuy(id));
+        zone.on('pointerdown', () => {
+          playTap();
+          this.onBuy(id);
+        });
         parts.push(zone);
       }
       y += ROW_H;

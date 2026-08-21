@@ -6,6 +6,7 @@ import { itemDef } from '../data/items.js';
 import { activeLight, inventoryStacks, maxWater, spendable } from '../core/rules.js';
 import { MAX_GEMS } from '../core/save.js';
 import { makeButton } from './button.js';
+import { playTap } from './sfx.js';
 
 const PAD = 14;
 const SLOT = 56;
@@ -41,11 +42,17 @@ export class Hud {
     // (DESIGN.md §4.5). What this expedition found on its own is a separate line
     // in the recap.
     this.coins = text(PAD + 170, HUD_Y + 12, 14).setInteractive({ useHandCursor: true });
-    this.coins.on('pointerdown', () => this.onCoins());
+    this.coins.on('pointerdown', () => {
+      playTap();
+      this.onCoins();
+    });
     // Water is the run's one hard failure state (DESIGN.md §6), so it gets its
     // own counter in the same row rather than living only in the item card.
     this.water = text(PAD + 260, HUD_Y + 12, 14).setInteractive({ useHandCursor: true });
-    this.water.on('pointerdown', () => this.onWater());
+    this.water.on('pointerdown', () => {
+      playTap();
+      this.onWater();
+    });
 
     this.slots = scene.add.container(0, 0);
     // Opens the full scrollable list (inventoryPanel.js) — the strip only ever
@@ -135,7 +142,10 @@ export class Hud {
         .zone(x, SLOT_Y, SLOT, SLOT)
         .setOrigin(0)
         .setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => this.onSlot(stack));
+      zone.on('pointerdown', () => {
+        playTap();
+        this.onSlot(stack);
+      });
       parts.push(zone);
 
       this.slots.add(parts);

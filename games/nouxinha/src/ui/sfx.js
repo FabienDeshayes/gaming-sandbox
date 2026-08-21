@@ -1,15 +1,25 @@
-// The pickup blip, and the AudioContext everything audible in the game shares.
+// Every sound the game makes that isn't the music loop, and the one
+// AudioContext everything audible shares.
 //
-// Synthesised through WebAudio rather than loaded as a file, for the same reason
-// the sprites are text (DESIGN.md §9) — no binary assets, no build step, and the
-// "art" diffs in git. Square waves at that, which is the audio equivalent of the
-// two-colour rule.
+// Synthesised through WebAudio rather than loaded as files, for the same reason
+// the sprites are cut from one sheet (DESIGN.md §9) — no audio assets, no build
+// step, and the "score" diffs in git. Square waves at that, which is the audio
+// equivalent of the two-colour rule; the only exception is the torch, which
+// needs noise because a flame catching is not a pitch.
 //
 // Everything here is best-effort: a browser that blocks or lacks audio must cost
 // the player nothing, so every call is wrapped and a failure is silently dropped.
 
 let ctx = null;
+let out = null;
 let broken = false;
+
+// Everything the game plays — the blips, the tunes and the music loop — goes
+// through this one gain, so the mix stays relative and the game has a single
+// volume. It sits above 1 because the whole game was mixed 40% quieter than it
+// wanted to be on a phone speaker; the individual peaks below are still the
+// numbers that say how loud each sound is *relative to the others*.
+const MASTER_VOLUME = 1.4;
 
 function audio() {
   if (ctx || broken) return ctx;
@@ -33,6 +43,23 @@ export function audioContext() {
   return audio();
 }
 
+// The node every voice in the game connects to instead of `destination`.
+export function audioOut() {
+  const a = audio();
+  if (!a) return null;
+  if (!out) {
+    try {
+      out = a.createGain();
+      out.gain.setValueAtTime(MASTER_VOLUME, a.currentTime);
+      out.connect(a.destination);
+    } catch (e) {
+      broken = true;
+      return null;
+    }
+  }
+  return out;
+}
+
 // Autoplay policy: a context created before the player has touched anything
 // starts suspended and stays silent. Called from every input the scene handles,
 // so the first tap or key press is what opens it.
@@ -41,20 +68,100 @@ export function unlockAudio() {
   if (a && a.state === 'suspended') a.resume().catch(() => {});
 }
 
-// One square-wave note with a fast attack and an exponential tail, so it reads
-// as a blip rather than a beep.
-function note(a, freq, at, duration, peak) {
+// What has been played, in order — there is nothing about a square wave that a
+// headless browser can be asked to listen to, so this is how the suite checks a
+// tap makes a sound and the D-pad doesn't (TESTING.md). Capped, because a long
+// session plays a lot of blips and none of them are worth keeping.
+const LOG_MAX = 64;
+const log = [];
+
+export function soundLog() {
+  return log.slice();
+}
+
+// Schedules a sound, or doesn't, and never throws. A context the player hasn't
+// opened yet is resumed first and the sound follows it — the tap that unlocks
+// the audio is usually a tap that should be heard.
+function play(name, schedule) {
+  const a = audio();
+  const bus = audioOut();
+  if (!a || !bus) return;
+  const run = () => {
+    try {
+      schedule(a, bus, a.currentTime);
+      log.push(name);
+      if (log.length > LOG_MAX) log.shift();
+    } catch (e) {
+      /* a sound is never worth taking the game down for */
+    }
+  };
+  if (a.state === 'running') return run();
+  a.resume().then(run, () => {});
+}
+
+// One note: a square through a low-pass, with a fast attack and an exponential
+// tail, so it reads as a struck thing rather than a beep. `glide` bends the
+// pitch across the note, which is what makes the tap a tock and the last note
+// of the death tune sag.
+function note(a, bus, { freq, at, duration, peak, cutoff = 3000, glide }) {
   const osc = a.createOscillator();
   const gain = a.createGain();
+  const tone = a.createBiquadFilter();
   osc.type = 'square';
   osc.frequency.setValueAtTime(freq, at);
+  if (glide) osc.frequency.exponentialRampToValueAtTime(glide, at + duration);
+  tone.type = 'lowpass';
+  tone.frequency.setValueAtTime(cutoff, at);
   gain.gain.setValueAtTime(0.0001, at);
   gain.gain.exponentialRampToValueAtTime(peak, at + 0.008);
   gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
-  osc.connect(gain);
-  gain.connect(a.destination);
+  osc.connect(tone);
+  tone.connect(gain);
+  gain.connect(bus);
   osc.start(at);
   osc.stop(at + duration + 0.02);
+}
+
+// A burst of noise through a band-pass that sweeps up and falls back — the
+// shape of air catching. Built from a buffer rather than an oscillator because
+// a flame has no pitch to give it.
+function whoosh(a, bus, { at, duration, peak, from, to }) {
+  const frames = Math.floor(a.sampleRate * duration);
+  const buffer = a.createBuffer(1, frames, a.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+
+  const source = a.createBufferSource();
+  source.buffer = buffer;
+  const band = a.createBiquadFilter();
+  band.type = 'bandpass';
+  band.Q.setValueAtTime(1.1, at);
+  band.frequency.setValueAtTime(from, at);
+  band.frequency.exponentialRampToValueAtTime(to, at + duration * 0.35);
+  band.frequency.exponentialRampToValueAtTime(from * 0.7, at + duration);
+
+  const gain = a.createGain();
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.exponentialRampToValueAtTime(peak, at + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+
+  source.connect(band);
+  band.connect(gain);
+  gain.connect(bus);
+  source.start(at);
+  source.stop(at + duration + 0.02);
+}
+
+// --- The sounds --------------------------------------------------------------
+
+// Every button in the game except the D-pad, which is the one control tapped
+// often enough that a sound on it would turn walking into a rattle. Short,
+// quiet and pitched down as it goes, so it reads as a tock under whatever the
+// button actually did.
+export function playTap() {
+  play('tap', (a, bus, now) =>
+    note(a, bus, { freq: 1046, glide: 740, at: now, duration: 0.05, peak: 0.03, cutoff: 2400 })
+  );
 }
 
 // Rising arpeggios, because everything you can pick up is good news. A coin is
@@ -65,14 +172,91 @@ const PICKUP = {
   light: [659, 988, 1318],
 };
 
+// The gem's own fanfare: the run up, a leading note, and a held chord over a
+// bass — the shape of a chest opening in a game that had an orchestra. A gem is
+// the only pickup that repaints the world, and the only one worth a second and
+// a half of everything else being quiet.
+const CHEST = [
+  { freq: 523, at: 0, duration: 0.12 },
+  { freq: 659, at: 0.11, duration: 0.12 },
+  { freq: 784, at: 0.22, duration: 0.12 },
+  { freq: 1046, at: 0.33, duration: 0.17 },
+  { freq: 988, at: 0.5, duration: 0.12 },
+  { freq: 1046, at: 0.61, duration: 0.95 },
+];
+
+function playChest() {
+  play('gem', (a, bus, now) => {
+    for (const step of CHEST) {
+      note(a, bus, { ...step, at: now + step.at, peak: 0.075, cutoff: 3600 });
+      // The same line an octave down, quietly: two square waves are what turns
+      // a blip into a fanfare without adding an instrument.
+      note(a, bus, {
+        freq: step.freq / 2,
+        at: now + step.at,
+        duration: step.duration,
+        peak: 0.035,
+        cutoff: 1600,
+      });
+    }
+    // The bass: the tonic under the run, then a fifth under the held note.
+    note(a, bus, { freq: 131, at: now, duration: 0.6, peak: 0.05, cutoff: 500 });
+    note(a, bus, { freq: 196, at: now + 0.61, duration: 1.05, peak: 0.05, cutoff: 500 });
+    // The third, so the last note lands as a chord rather than a long beep.
+    note(a, bus, { freq: 1318, at: now + 0.61, duration: 0.95, peak: 0.04, cutoff: 3600 });
+  });
+}
+
 export function playPickup(itemId) {
-  const a = audio();
-  if (!a || a.state !== 'running') return;
+  if (itemId && itemId.startsWith('gem-')) return playChest();
   const freqs = itemId === 'coin' ? PICKUP.coin : PICKUP.light;
-  try {
-    const now = a.currentTime;
-    freqs.forEach((freq, i) => note(a, freq, now + i * 0.055, 0.09, 0.06));
-  } catch (e) {
-    /* a blip is never worth taking the game down for */
-  }
+  play(itemId === 'coin' ? 'coin' : 'pickup', (a, bus, now) => {
+    freqs.forEach((freq, i) =>
+      note(a, bus, { freq, at: now + i * 0.055, duration: 0.09, peak: 0.06 })
+    );
+  });
+}
+
+// A light taking over: the catch of the flame, and the low thump of it settling
+// under it. Played whether the player chose the light or the dark chose it for
+// them — a torch burning out and the next one lighting is the same event from
+// the other side, and it is the moment the screen changes shape.
+export function playTorch() {
+  play('torch', (a, bus, now) => {
+    whoosh(a, bus, { at: now, duration: 0.55, peak: 0.09, from: 320, to: 1900 });
+    note(a, bus, { freq: 110, glide: 62, at: now, duration: 0.3, peak: 0.055, cutoff: 400 });
+    note(a, bus, { freq: 659, at: now + 0.06, duration: 0.22, peak: 0.03, cutoff: 1800 });
+  });
+}
+
+// Running dry: three notes falling, then the low one sagging as it goes. The
+// only sound in the game that descends, because it is the only thing that
+// happens to you rather than for you.
+const KNELL = [
+  { freq: 440, at: 0, duration: 0.3 },
+  { freq: 349, at: 0.24, duration: 0.3 },
+  { freq: 262, at: 0.48, duration: 0.36 },
+];
+
+export function playDeath() {
+  play('death', (a, bus, now) => {
+    for (const step of KNELL)
+      note(a, bus, { ...step, at: now + step.at, peak: 0.07, cutoff: 1600 });
+    note(a, bus, {
+      freq: 220,
+      glide: 196,
+      at: now + 0.8,
+      duration: 1.8,
+      peak: 0.07,
+      cutoff: 700,
+    });
+    note(a, bus, {
+      freq: 110,
+      glide: 98,
+      at: now + 0.8,
+      duration: 2,
+      peak: 0.06,
+      cutoff: 400,
+    });
+  });
 }

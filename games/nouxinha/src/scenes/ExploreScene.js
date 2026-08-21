@@ -8,6 +8,7 @@ import {
   createRun,
   equip,
   inventoryStacks,
+  isBlackout,
   refillWater,
   rememberGround,
   runSummary,
@@ -27,7 +28,7 @@ import { Shop } from '../ui/shop.js';
 import { WorldMap } from '../ui/worldMap.js';
 import { CompassBadge, BADGE_H, BADGE_W } from '../ui/compassBadge.js';
 import { makeDpad } from '../ui/dpad.js';
-import { playPickup, unlockAudio } from '../ui/sfx.js';
+import { playDeath, playPickup, playTap, playTorch, unlockAudio } from '../ui/sfx.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
 const DPAD_CX = 388;
@@ -81,12 +82,12 @@ export class ExploreScene extends Phaser.Scene {
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
 
-    // The music runs for as long as the expedition does, and no longer — the
-    // title screen and the menus are quiet. Started here so a run resumed with
-    // the audio already unlocked picks it straight up, and again on the first
-    // input for the run that opened the page (ui/music.js).
-    startMusic();
-    this.events.once('shutdown', () => stopMusic());
+    // The expedition's own loop, in place of the menus' (ui/music.js). Started
+    // here so a run entered with the audio already unlocked picks it straight
+    // up, and again on the first input for the run that opened the page. It is
+    // not stopped on the way out: whichever screen comes next asks for its own
+    // track, and the swap crossfades.
+    startMusic('explore');
 
     // A run can be handed a seed and a nonce (SlotScene reads them off the URL),
     // which is what makes an expedition reproducible; without them it takes the
@@ -150,7 +151,11 @@ export class ExploreScene extends Phaser.Scene {
       .zone(0, 0, BADGE_W, MAP_BUTTON_H)
       .setOrigin(0)
       .setInteractive({ useHandCursor: true });
-    zone.on('pointerdown', () => !this.modalOpen() && this.worldMap.show(this.run));
+    zone.on('pointerdown', () => {
+      if (this.modalOpen()) return;
+      playTap();
+      this.worldMap.show(this.run);
+    });
     this.mapButton.add([frame, label, zone]);
   }
 
@@ -175,7 +180,11 @@ export class ExploreScene extends Phaser.Scene {
       .zone(GAME_WIDTH - 62, 14, 48, 34)
       .setOrigin(0)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => !this.modalOpen() && this.leave());
+      .on('pointerdown', () => {
+        if (this.modalOpen()) return;
+        playTap();
+        this.leave();
+      });
   }
 
   // Leaving by the X abandons the expedition — nothing it was carrying is
@@ -203,7 +212,7 @@ export class ExploreScene extends Phaser.Scene {
       // The player has touched the page, which is what lets the pickup blip and
       // the music through the browser's autoplay policy.
       unlockAudio();
-      startMusic();
+      this.resumeMusic();
       // Only the map area swipes; the HUD is buttons, and an open overlay owns
       // every pointer on screen.
       this.swipeFrom = !this.modalOpen() && p.y < VIEW_H ? { x: p.x, y: p.y } : null;
@@ -241,10 +250,18 @@ export class ExploreScene extends Phaser.Scene {
     });
   }
 
+  // Every input starts the loop as well as unlocking the audio, because the
+  // first tap of a run is usually the one that opens the audio at all — except
+  // once the run has run dry, where the silence under the death screen is the
+  // point (showDeath).
+  resumeMusic() {
+    if (this.run && this.run.water > 0) startMusic('explore');
+  }
+
   tryStep(direction) {
     if (this.animating || this.modalOpen()) return;
     unlockAudio();
-    startMusic();
+    this.resumeMusic();
 
     const result = step(this.run, direction);
     if (!result.moved) {
@@ -266,6 +283,9 @@ export class ExploreScene extends Phaser.Scene {
     this.layOutRail();
     this.announce(result);
     if (result.picked) playPickup(result.picked);
+    // The dark equipping a light for you: the torch that took over is the same
+    // event as one you chose off the item card, and it sounds the same.
+    if (result.burnedOut && !result.blackout) playTorch();
 
     this.animating = true;
     this.map.slide(this, DIRECTIONS[direction], () => {
@@ -317,9 +337,13 @@ export class ExploreScene extends Phaser.Scene {
   }
 
   buyFromMerchant(id) {
+    const rescue = isBlackout(this.run) && itemDef(id).isLight;
     const bought = buy(this.run, id);
     if (!bought) return;
-    playPickup(bought);
+    // Buying a light out of blackout equips it on the spot (core/rules.js), so
+    // it is the torch catching that is worth hearing, not the purchase.
+    if (rescue) playTorch();
+    else playPickup(bought);
     this.map.refresh(this.run);
     this.hud.update(this.run);
     this.layOutRail();
@@ -373,6 +397,10 @@ export class ExploreScene extends Phaser.Scene {
   showDeath() {
     if (this.card.isOpen()) this.card.hide();
     if (this.inventory.isOpen()) this.inventory.hide();
+    // The one place the loop stops before the scene does: running dry is the
+    // run's only hard failure, and the tune that says so gets the silence.
+    stopMusic();
+    playDeath();
     const summary = runSummary(this.run);
     const atRisk = carriedAtRisk(summary);
     // Nothing this run was carrying is banked, but the ground it lit is kept —
@@ -439,7 +467,11 @@ export class ExploreScene extends Phaser.Scene {
   }
 
   equipSlot(index) {
+    const was = this.run.activeIndex;
     if (!equip(this.run, index)) return;
+    // Only when a different light actually took over: re-equipping the one
+    // already burning is a no-op, and it should sound like one.
+    if (this.run.activeIndex !== was) playTorch();
     this.map.refresh(this.run);
     this.hud.update(this.run);
   }

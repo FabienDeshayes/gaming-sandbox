@@ -2,6 +2,7 @@
 // label, which is as much chrome as a two-colour game gets.
 
 import { FONT, getPalette, hex } from '../config.js';
+import { playTap } from './sfx.js';
 
 export function makeButton(scene, x, y, label, onClick, opts = {}) {
   const pal = getPalette();
@@ -60,6 +61,9 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
     if (!enabled) return;
     pressed = true;
     draw(true);
+    // On the press rather than the release, so the sound is the feedback for
+    // the finger going down and the click is the feedback for what it did.
+    playTap();
   });
   container.on('pointerup', () => {
     if (!enabled) return;

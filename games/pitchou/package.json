@@ -2,14 +2,15 @@
   "name": "pitchou",
   "private": true,
   "type": "module",
-  "description": "Tests and tuning simulator for the Pitchou prototype — the game itself needs no build step.",
+  "description": "Tests and tuning simulator for the Pitchou prototype \u2014 the game itself needs no build step.",
   "scripts": {
     "test": "npm run test:rules && npm run test:ui",
     "test:rules": "node --test tests/rules.test.mjs",
     "test:ui": "node tests/game.test.js",
     "sim": "node sim/simulate.mjs",
     "sweep": "node sim/simulate.mjs --sweep",
-    "search": "node sim/simulate.mjs --search"
+    "search": "node sim/simulate.mjs --search",
+    "falls": "node sim/simulate.mjs --falls"
   },
   "devDependencies": {
     "phaser": "^3.90.0",

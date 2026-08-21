@@ -55,12 +55,32 @@ export function investPlan(priority, { buffer = 2 } = {}) {
   };
 }
 
-export const THROUGHPUT_FIRST = ['gaff', 'net', 'funnel', 'pole', 'wall', 'breakwater'];
-export const SAFETY_FIRST = ['wall', 'breakwater', 'gaff', 'net', 'funnel', 'pole'];
+// Twelve tools is more than a season can pay for, so a policy is as much a
+// shopping order as a stop rule. Throughput buys the cheap doublers first and
+// works up to the rolled and mixed tokens; safety spends tier 3 on taking falls
+// off the shore before it buys anything that adds to it.
+export const THROUGHPUT_FIRST = [
+  'gaff', 'net', 'funnel', 'line',
+  'pole', 'rake', 'winch', 'crate',
+  'barrel', 'raft', 'wall', 'breakwater',
+];
+export const SAFETY_FIRST = [
+  'gaff', 'net', 'funnel', 'line',
+  'wall', 'breakwater',
+  'pole', 'rake', 'winch', 'crate', 'barrel', 'raft',
+];
+
+// Only ever buys tokens that pay more than one resource at a time — the line
+// the expanded workshop exists to make possible.
+export const MIXED_FIRST = [
+  'line', 'crate', 'barrel', 'raft',
+  'pole', 'rake', 'winch',
+  'gaff', 'net', 'funnel', 'wall', 'breakwater',
+];
 
 // --- the policies the report covers ----------------------------------------
 
-export const WAVE_POLICIES = [
+export const FALL_POLICIES = [
   { name: 'no risk at all', shouldSearch: noRisk, plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
   { name: 'push at <=15%', shouldSearch: pushUntilOdds(0.15), plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
   { name: 'push at <=25%', shouldSearch: pushUntilOdds(0.25), plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
@@ -69,12 +89,14 @@ export const WAVE_POLICIES = [
 
 export const POLICIES = [
   { name: 'reckless (never stop)', shouldSearch: reckless, plan: pourEverything() },
-  { name: 'timid (home at 1 wave)', shouldSearch: stopWithBudget(2), plan: pourEverything() },
+  { name: 'timid (home at 1 fall)', shouldSearch: stopWithBudget(2), plan: pourEverything() },
   { name: 'safe, no tools', shouldSearch: stopWithBudget(1), plan: pourEverything() },
   { name: 'safe + tools (buf 1)', shouldSearch: stopWithBudget(1), plan: investPlan(THROUGHPUT_FIRST, { buffer: 1 }) },
   { name: 'safe + tools (buf 2)', shouldSearch: stopWithBudget(1), plan: investPlan(THROUGHPUT_FIRST, { buffer: 2 }) },
   { name: 'safe + tools (buf 3)', shouldSearch: stopWithBudget(1), plan: investPlan(THROUGHPUT_FIRST, { buffer: 3 }) },
   { name: 'safe + tools (safety 1st)', shouldSearch: stopWithBudget(1), plan: investPlan(SAFETY_FIRST, { buffer: 2 }) },
+  { name: 'safe + mixed tools', shouldSearch: stopWithBudget(1), plan: investPlan(MIXED_FIRST, { buffer: 3 }) },
+  { name: 'push 25% + mixed', shouldSearch: pushUntilOdds(0.25), plan: investPlan(MIXED_FIRST, { buffer: 2 }) },
   { name: 'push 25% + tools', shouldSearch: pushUntilOdds(0.25), plan: investPlan(THROUGHPUT_FIRST, { buffer: 2 }) },
   { name: 'push 40% + tools', shouldSearch: pushUntilOdds(0.4), plan: investPlan(THROUGHPUT_FIRST, { buffer: 2 }) },
   { name: 'push 60% + tools', shouldSearch: pushUntilOdds(0.6), plan: investPlan(THROUGHPUT_FIRST, { buffer: 2 }) },

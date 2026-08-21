@@ -20,39 +20,49 @@ export const SWIPE_THRESHOLD = 12;
 // One screen, no scrolling, thumb-reachable (DESIGN.md §5). Reading down:
 // where you are in the season, what is draining, how close the night is to
 // ending, what is left to find, what you are holding, and the two taps.
+//
+// The bands are tighter than they look because the type is deliberately large:
+// a playtest read the old 12-13px labels as unreadable on a phone, so nothing
+// in the game is smaller than FONT_SM now and the layout was rebuilt around
+// that rather than the other way round.
 
-export const HEADER_Y = 30;
-export const TRACK_Y = 62; // the twelve-night pip track
-export const TRACK_PIP_R = 5;
-export const TRACK_GAP = 26;
+export const HEADER_Y = 34;
+export const TRACK_Y = 72; // the twelve-night pip track
+export const TRACK_PIP_R = 6;
+export const TRACK_GAP = 27;
 
-export const METER_TOP = 92;
-export const METER_H = 150;
-export const METER_W = 56;
+export const METER_TOP = 98;
+export const METER_H = 168;
+export const METER_W = 62;
 export const METER_XS = { lamp: 92, hearth: 240, tower: 388 };
 
 // The strike pips and the sentence that reads them share one line: how close
 // the night is to ending is one thought, not two.
-export const RISK_Y = 348;
-export const RISK_PIP_X = 40;
-export const RISK_PIP_GAP = 34;
+export const RISK_Y = 362;
+export const RISK_PIP_X = 42;
+export const RISK_PIP_GAP = 38;
+export const RISK_PIP_R = 13;
 
-// The shore grid sits in a fixed band and centres however many rows it needs.
-// Seven columns because a season can push the shore to 25 tokens (18 to start,
-// three from the storm, four more if every add-a-token tool gets built) and all
-// of it has to stay on one screen — the contents are inspectable at all times
-// (DESIGN.md §5), which is only true if they all fit.
-export const SHORE_TOP = 382;
-export const SHORE_BAND_H = 200;
-export const SHORE_COLS = 7;
-export const SHORE_CELL = 50;
-export const SHORE_LEFT = (GAME_WIDTH - SHORE_COLS * SHORE_CELL) / 2;
+// The shore grid sits in a fixed band and sizes itself to whatever the shore
+// holds — see ShoreView. A season can push the shore from 15 tokens to 28 (12
+// resources and three falls to start, three more falls added, and up to ten
+// tools that each put a token out there), and all of it has to stay on one
+// screen: the contents are inspectable at all times (DESIGN.md §5), which is
+// only true if they all fit. Rather than fix a column count and let the tiles
+// shrink to postage stamps, the grid picks the fewest columns that still fit
+// the band, so a typical night is drawn with the biggest tiles it can have.
+export const SHORE_TOP = 388;
+export const SHORE_BAND_H = 212;
+export const SHORE_WIDTH = 460;
+export const SHORE_MAX_CELL = 66;
+export const SHORE_MIN_CELL = 48;
+export const SHORE_COL_CHOICES = [5, 6, 7, 8];
 
-export const BASKET_Y = 636;
+export const BASKET_Y = 654;
 export const BASKET_XS = { oil: 92, wood: 240, plank: 388 };
 
-export const SEARCH_Y = 742;
-export const HOME_Y = 812;
+export const SEARCH_Y = 744;
+export const HOME_Y = 808;
 
 // Depth bands. Transient effects sit above the board, the dawn panel above
 // everything — same banding idea as Bibou's PuzzleScene.
@@ -64,17 +74,17 @@ export const PANEL_CONTENT_DEPTH = 61;
 
 export const FLIP_MS = 180; // a token turning face-up
 export const DRAIN_MS = 420; // a meter bar falling at dusk
-export const KNOCK_MS = 260; // a unit a wave knocks out of the basket
-export const SHAKE_MS = 220; // the screen when a wave reaches you
-export const VIGNETTE_MS = 500; // the bust flash
+export const KNOCK_MS = 260; // a unit a fall spills out of the basket
+export const SHAKE_MS = 220; // the screen when the keeper goes down
+export const VIGNETTE_MS = 500; // the flash on the fall that ends the night
 
 // --- Palette ----------------------------------------------------------------
 //
 // A dark storm, and the lamp is the only warm colour on screen (DESIGN.md §10).
 // That rule is why Hearth and Tower are cool tones rather than fire colours:
 // three warm meters would make the lamp just another bar, and the lamp going
-// out is the whole stake. Waves are cold foam; the one red on the screen is the
-// bust vignette, and it only exists for half a second.
+// out is the whole stake. A fall is cold foam-blue; the one red on the screen is
+// the flash when a fall ends the night, and it only exists for half a second.
 //
 // CSS strings for text styles, `…Hex` numbers for Graphics fills and tints,
 // following Bibou's COLORS convention.
@@ -88,12 +98,14 @@ export const COLORS = {
 
   text: '#f2f6fa',
   textHex: 0xf2f6fa,
-  // Both raised well past WCAG AA (4.5:1) against `bg` — `dim` used to sit at
-  // ~2.6:1, which is what read as unreadable grey-on-dark.
-  muted: '#b7c5d3',
-  mutedHex: 0xb7c5d3,
-  dim: '#8496a8',
-  dimHex: 0x8496a8,
+  // Every one of these clears WCAG AAA (7:1) against `bg`. `dim` is the floor
+  // and it is a real reading colour now, not a whisper: a playtest read the
+  // secondary text on a phone as grey mush, and the fix was both larger type
+  // and a shorter distance between `text` and `dim`.
+  muted: '#d5e0ea',
+  mutedHex: 0xd5e0ea,
+  dim: '#a6b8c8',
+  dimHex: 0xa6b8c8,
 
   lamp: '#ffb547',
   lampHex: 0xffb547,
@@ -102,8 +114,10 @@ export const COLORS = {
   tower: '#7d8ba0',
   towerHex: 0x7d8ba0,
 
-  foam: '#9fd8ff',
-  foamHex: 0x9fd8ff,
+  // The colour of a fall — cold water, the one thing on the shore that isn't a
+  // find. Named for the hazard rather than for the sea it used to be.
+  fall: '#9fd8ff',
+  fallHex: 0x9fd8ff,
   bust: '#8c3a3a',
   bustHex: 0x8c3a3a,
   // A brighter red for text (doomed meter numeral, overflow warning) — `bust`
@@ -118,17 +132,34 @@ export const COLORS = {
   buttonEdgeHex: 0x35485c,
   disabled: '#131a21',
   disabledHex: 0x131a21,
-  disabledText: '#7f93a6',
+  disabledText: '#94a8ba',
 };
+
+// --- Type scale -------------------------------------------------------------
+//
+// One ladder, used everywhere, so "make it bigger" is a change in one place
+// instead of forty inline pixel values. FONT_SM is the floor: nothing in the
+// game is allowed to be smaller than this, which is what the tighter vertical
+// bands above are paying for.
+export const FONT_XL = 34; // a meter numeral, the title
+export const FONT_LG = 26; // a panel heading, the night
+export const FONT_MD = 22; // feedback, buttons
+export const FONT_RG = 19; // list rows, tool names
+export const FONT_SM = 16; // labels and captions — the floor
 
 export const METER_COLORS = { lamp: COLORS.lampHex, hearth: COLORS.hearthHex, tower: COLORS.towerHex };
 export const RESOURCE_COLORS = { oil: COLORS.lampHex, wood: COLORS.hearthHex, plank: COLORS.towerHex };
 
 // The keeper's names for things. The meters are not abstractions (DESIGN.md
 // §11), so they are labelled as the things they are.
+//
+// One name per thing, everywhere. Driftwood used to be DRIFTWOOD in the recap
+// and WOOD in the basket, and the hazard answered to squall, wave and storm on
+// three different lines of the same screen — a playtest found that reading as
+// three separate rules rather than one.
 export const METER_LABELS = { lamp: 'LAMP', hearth: 'HEARTH', tower: 'TOWER' };
-export const RESOURCE_LABELS = { oil: 'OIL', wood: 'DRIFTWOOD', plank: 'PLANK' };
-export const RESOURCE_SHORT = { oil: 'OIL', wood: 'WOOD', plank: 'PLANK' };
+export const RESOURCE_LABELS = { oil: 'OIL', wood: 'WOOD', plank: 'PLANK' };
+export const FALL_LABEL = 'FALL';
 
 export const FONT = 'Georgia, "Times New Roman", serif';
 

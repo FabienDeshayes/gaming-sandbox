@@ -1,6 +1,11 @@
 import {
   COLORS,
+  FALL_LABEL,
   FONT,
+  FONT_LG,
+  FONT_MD,
+  FONT_RG,
+  FONT_SM,
   GAME_WIDTH,
   METER_LABELS,
   RESOURCE_LABELS,
@@ -33,19 +38,19 @@ export class RecapScene extends Phaser.Scene {
     this.add
       .text(cx, 250, won ? 'THE LIGHT HELD' : 'THE LIGHT WENT OUT', {
         fontFamily: FONT,
-        fontSize: '29px',
+        fontSize: `${FONT_LG + 4}px`,
         color: won ? COLORS.lamp : COLORS.text,
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
     const line = won
-      ? `Twelve nights of storm, and every meter still burning.`
+      ? `Twelve nights, and every meter still burning.`
       : `Night ${data.night}: the ${METER_LABELS[data.lost.meter].toLowerCase()} ran dry at dusk.`;
     this.add
-      .text(cx, 288, line, {
+      .text(cx, 292, line, {
         fontFamily: FONT,
-        fontSize: '16px',
+        fontSize: `${FONT_RG}px`,
         color: COLORS.muted,
         resolution: TEXT_RESOLUTION,
       })
@@ -54,10 +59,10 @@ export class RecapScene extends Phaser.Scene {
     const rows = [
       ['Nights survived', `${won ? data.seasonNights : data.night - 1} of ${data.seasonNights}`],
       [
-        'Pulled from the shore',
+        'Found on the shore',
         RESOURCES.map((r) => `${data.gathered[r]} ${RESOURCE_LABELS[r].toLowerCase()}`).join(', '),
       ],
-      ['Swept off your feet', `${data.busts} ${data.busts === 1 ? 'time' : 'times'}`],
+      [`Bad ${FALL_LABEL.toLowerCase()}s`, `${data.busts}`],
       ['Built', data.toolsBuilt.length ? data.toolsBuilt.join(', ') : 'nothing'],
       [
         'Meters at the end',
@@ -65,21 +70,21 @@ export class RecapScene extends Phaser.Scene {
       ],
     ];
 
-    this.add.rectangle(cx, 440, 424, 200, COLORS.panelHex).setStrokeStyle(2, COLORS.panelEdgeHex);
+    this.add.rectangle(cx, 452, 432, 224, COLORS.panelHex).setStrokeStyle(2, COLORS.panelEdgeHex);
     rows.forEach(([label, value], i) => {
-      const y = 364 + i * 36;
+      const y = 366 + i * 41;
       this.add
-        .text(cx - 190, y, label, {
+        .text(cx - 196, y, label, {
           fontFamily: FONT,
-          fontSize: '13px',
+          fontSize: `${FONT_SM}px`,
           color: COLORS.dim,
           resolution: TEXT_RESOLUTION,
         })
         .setOrigin(0, 0.5);
       this.add
-        .text(cx + 190, y, value, {
+        .text(cx + 196, y, value, {
           fontFamily: FONT,
-          fontSize: '14px',
+          fontSize: `${FONT_SM}px`,
           color: COLORS.text,
           resolution: TEXT_RESOLUTION,
         })
@@ -89,9 +94,9 @@ export class RecapScene extends Phaser.Scene {
     // The seed is here so a season that felt unfair can be played again exactly
     // — the shore is shuffled, not rigged, and this is how you prove it.
     this.add
-      .text(cx, 568, `seed ${data.seed}${data.hard ? '  ·  hard bust' : ''}`, {
+      .text(cx, 596, `seed ${data.seed}${data.hard ? '  ·  hard falls' : ''}`, {
         fontFamily: FONT,
-        fontSize: '13px',
+        fontSize: `${FONT_SM}px`,
         color: COLORS.dim,
         resolution: TEXT_RESOLUTION,
       })
@@ -100,17 +105,17 @@ export class RecapScene extends Phaser.Scene {
     createButton(
       this,
       cx,
-      648,
+      660,
       'PLAY AGAIN',
       () => {
         const pinned = seedFromUrl();
         this.scene.start('NightScene', { seed: pinned === null ? randomSeed() : pinned });
       },
-      { width: 240 }
+      { width: 250, fontSize: FONT_MD }
     );
-    createButton(this, cx, 724, 'TITLE', () => this.scene.start('TitleScene'), {
-      width: 240,
-      fontSize: 23,
+    createButton(this, cx, 738, 'TITLE', () => this.scene.start('TitleScene'), {
+      width: 250,
+      fontSize: FONT_MD,
     });
   }
 }

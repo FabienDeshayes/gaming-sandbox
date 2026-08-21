@@ -2,6 +2,8 @@ import {
   COLORS,
   DRAIN_MS,
   FONT,
+  FONT_SM,
+  FONT_XL,
   METER_COLORS,
   METER_H,
   METER_LABELS,
@@ -20,21 +22,21 @@ import {
 // without doing the subtraction.
 export function createMeterBar(scene, x, meterId) {
   const colour = METER_COLORS[meterId];
-  const barTop = METER_TOP + 30;
-  const barH = METER_H - 30;
+  const barTop = METER_TOP + 36;
+  const barH = METER_H - 36;
 
   const icon = scene.add
-    .image(x, METER_TOP + 14, meterId)
-    .setScale(32 / SPRITE_PX)
+    .image(x, METER_TOP + 16, meterId)
+    .setScale(36 / SPRITE_PX)
     .setTint(colour);
 
   const frame = scene.add.graphics();
   const fill = scene.add.graphics();
 
   const level = scene.add
-    .text(x, barTop + barH + 16, '10', {
+    .text(x, barTop + barH + 14, '10', {
       fontFamily: FONT,
-      fontSize: '32px',
+      fontSize: `${FONT_XL}px`,
       color: COLORS.text,
       resolution: TEXT_RESOLUTION,
     })
@@ -43,7 +45,7 @@ export function createMeterBar(scene, x, meterId) {
   const label = scene.add
     .text(x, barTop + barH + 58, METER_LABELS[meterId], {
       fontFamily: FONT,
-      fontSize: '14px',
+      fontSize: `${FONT_SM}px`,
       color: COLORS.muted,
       resolution: TEXT_RESOLUTION,
     })

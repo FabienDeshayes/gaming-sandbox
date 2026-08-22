@@ -1,12 +1,18 @@
-// The full inventory panel: opened from the HUD's ITEMS button. Lists every
+// The full inventory panel: opened from the HUD's ITEMS slot. Lists every
 // light stack the run is carrying — icon, name, and count — in a scrollable
 // list, so a run isn't limited to what fits in the HUD strip's slots. Tapping
 // a stack opens its item card (itemCard.js) for full per-copy detail.
+//
+// It also carries the colour pips that used to live in the main HUD as a
+// standing "COLOURS" row: how much of the world's colour is back only matters
+// while looking at what you're carrying, not on every screen.
 //
 // Opening it costs no step, the same as the item card and the hut dialog.
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
+import { inventoryStacks } from '../core/rules.js';
+import { MAX_GEMS } from '../core/save.js';
 import { makeButton } from './button.js';
 import { playTap } from './sfx.js';
 import { makeScrollable } from './scroll.js';
@@ -15,6 +21,7 @@ const PANEL_W = 380;
 const PANEL_H = 460;
 const ROW_H = 64;
 const LIST_PAD = 20;
+const GEM_GAP = 30;
 
 export class InventoryPanel {
   constructor(scene, { onOpenStack }) {
@@ -29,10 +36,12 @@ export class InventoryPanel {
     return this.open;
   }
 
-  // `stacks` is `inventoryStacks(run)` — see core/rules.js.
-  show(stacks) {
+  // `run` is the live run — the panel derives its own stacks and gem count
+  // from it rather than being handed them piecemeal, since it draws both.
+  show(run) {
     const pal = getPalette();
     const scene = this.scene;
+    const stacks = inventoryStacks(run);
     this.container.removeAll(true);
     if (this.scrollHandle) {
       this.scrollHandle.destroy();
@@ -67,12 +76,28 @@ export class InventoryPanel {
       .text(cx, top + 26, 'INVENTORY', { fontFamily: FONT, fontSize: '20px', color: hex(pal.fg) })
       .setOrigin(0.5);
 
-    const parts = [backdrop, panel, panelZone, title];
+    // The gem pips: one per gem, each in the colour it gave back, the rest
+    // dimmed — the same read the HUD's old "COLOURS" row gave, just here
+    // instead of standing on screen throughout a run.
+    const gemY = top + 58;
+    const gems = [];
+    for (let i = 1; i <= MAX_GEMS; i++) {
+      const held = i <= run.gems;
+      gems.push(
+        scene.add
+          .image(cx + (i - (MAX_GEMS + 1) / 2) * GEM_GAP, gemY, 'gem')
+          .setScale(1.4)
+          .setTint(held ? gemColour(i) : pal.fg)
+          .setAlpha(held ? 1 : 0.25)
+      );
+    }
+
+    const parts = [backdrop, panel, panelZone, title, ...gems];
 
     const listX = left + LIST_PAD;
-    const listY = top + 56;
+    const listY = top + 90;
     const listW = PANEL_W - LIST_PAD * 2;
-    const listH = PANEL_H - 56 - 74;
+    const listH = PANEL_H - 90 - 74;
 
     if (stacks.length === 0) {
       parts.push(

@@ -310,9 +310,10 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 
 | Action | Input (touch — primary) | Input (keyboard/mouse) |
 |---|---|---|
-| Step | Swipe in a cardinal direction anywhere on the map area, or tap a D-pad arrow (bottom right of the HUD) | Arrow keys / WASD, or click a D-pad arrow |
+| Step | Swipe in a cardinal direction anywhere on the map area, or tap a D-pad arrow (right of the HUD) | Arrow keys / WASD, or click a D-pad arrow |
+| Walk | Hold a D-pad arrow down — steps repeat at the rate set in Settings until released | Hold the same arrow's click |
 | Inspect a stack | Tap its slot in the inventory strip (bottom left of the HUD) → opens the item card | Click the slot |
-| Browse the full inventory | Tap **ITEMS** next to the strip → opens the scrollable inventory panel | Click **ITEMS** |
+| Browse the full inventory | Tap **ITEMS**, the box after the strip's slots → opens the scrollable inventory panel | Click **ITEMS** |
 | Equip a light | Tap **Equip** on its item card (single copy), or tap a copy's row in a stack's instance list (multiple copies) | Click the same |
 | Close an overlay | Tap its close control, or tap outside it | Click, or press Esc |
 | Answer the hut | Tap **KEEP GOING** or **STOP HERE** on the dialog | Click |
@@ -323,6 +324,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Change palette | Settings, from the title screen | Same |
 | Turn the music off | Settings → **MUSIC** (§9), which silences both loops | Same |
 | Turn the tile border off | Settings → **TILE BORDER** (§9) | Same |
+| Set the walking speed | Settings → drag or tap the **MOVE SPEED** slider (2-10 steps/second) | Same |
 | Turn cheats on or off | Settings → **CHEATS** (§6.2) | Same |
 | Erase the slot you last played | Settings → **ERASE SLOT n**, then tap again | Same |
 | Leave the run | Tap **X** in the top right of the map | Click **X** |
@@ -331,7 +333,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 
 **The item card** is an overlay, opened from a slot in the strip or a row in the inventory panel, showing: the item's name, its sprite at large scale, and a one-line **effect** description ("Lights the 8 tiles around you"). A kind carried as a single copy shows that copy's **durability** as `current / max` with a bar and an **Equip** button (greyed out if it's already active). A kind carried as several copies shows a scrollable list instead — one row per copy, its own durability bar, and an `EQUIPPED` tag on whichever is active — since copies rarely share a durability and the choice of *which* one to equip has to be visible; tapping a row equips that exact copy and closes the card. Opening a card doesn't cost a step — the game is turn-based on movement only.
 
-**The inventory panel** is opened from the HUD's **ITEMS** button and lists every carried stack — icon, name, and count — in a scrollable list, so a run isn't limited to what fits in the strip's slots. Tapping a stack closes the panel and opens its item card.
+**The inventory panel** is opened from the HUD's **ITEMS** slot and lists every carried stack — icon, name, and count — in a scrollable list, so a run isn't limited to what fits in the strip's slots. Above the list sits the same gem-pip row the title screen shows a campaign's save with: one pip per gem, recovered ones in the colour they gave back and the rest dimmed, so the run's progress toward all three colours is visible without standing on screen throughout a walk. Tapping a stack closes the panel and opens its item card.
 
 **The merchant's counter** is a modal listing one row per line of stock — icon, name, price — over
 the purse it has to be paid from. A row the run can't act on is dimmed rather than hidden, so the
@@ -351,7 +353,7 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
   be bought mid-expedition, so the rail lays itself out again whenever ownership changes rather than
   being positioned once at the start.
 - Top 624px: the map viewport. 48px tiles, with the character's tile centred exactly on the viewport centre (240, 312). Because 480 and 624 are both whole multiples of 48, exact centring puts the grid on a half-tile offset: 9 full columns plus a half column bleeding off each edge, and 12 full rows plus a half row top and bottom. That partial outer ring is a feature — tiles cut by the screen edge read as "the world keeps going", which is the right message for this game.
-- Bottom ~230px (about a quarter): the HUD. Inventory strip, the **ITEMS** button, and the run counters (tiles explored, the coin purse, water) on the left; the four-direction D-pad on the right, thumb-reachable. Under the status line, the **COLOURS** row: one gem pip per gem, the recovered ones in the colour they gave back and the rest dimmed, so the row always says how many there are left to find.
+- Bottom ~230px (about a quarter): the HUD. Everything but the D-pad lives in a narrow left column: the run counters (tiles explored and the coin purse, each with an icon off the tile sheet; water on its own line under them with a bar the same way the active light gets one), the inventory strip with **ITEMS** as one more same-sized slot after it, then the active light's label and bar, then the status line for the things worth calling out the moment they happen. The four-direction D-pad fills the whole right side, sized for a thumb and with nothing else sharing its column.
 
 ## 8. Scope
 
@@ -451,7 +453,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | Path | Holds |
   |---|---|
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
-  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), the music, tile-border and cheat switches (§9, §6.2, persisted the same way), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in |
+  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), the music, tile-border and cheat switches (§9, §6.2, persisted the same way), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in |
   | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums and landmarks (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `canEnter`); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws (§9). `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw, snapped to the four the needle has sprites for. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
@@ -466,15 +468,15 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/data/sprites.js` | Everything the sheet can't give: the wizard's four colour bands, the floor's half-strength texture under its dotted border, and the frontier edges — all derived from a sheet tile rather than drawn a second time |
   | `src/ui/textures.js` | Loads the sheet, cuts the named tiles out of it as 1-bit masks, and bakes each into a greyscale texture at boot. Rejects a sheet of the wrong size, a mask that isn't 16×16, and a stray mask character |
   | `src/ui/MapView.js` | The tile pool, the three visibility states, per-tile tinting (gates and gem-tier items), the step slide and the blocked-step bump. Holds no game state |
-  | `src/ui/hud.js` | Run counters, the stacked inventory strip, the **ITEMS** button, the active light's durability, the status line, the **COLOURS** gem row |
+  | `src/ui/hud.js` | The grouped, icon-led run counters (explored, coins, water — water with its own bar), the stacked inventory strip with **ITEMS** as one more slot in it, the active light's durability, the status line |
   | `src/ui/scroll.js` | A drag/wheel-scrollable, mask-clipped list region shared by the item card's instance list and the inventory panel |
   | `src/ui/sfx.js` | Every sound but the music — the tap, the pickup blips, the gem fanfare, the torch and the death knell — plus the one `AudioContext` and the master gain everything audible goes through. No assets, and silently inert where audio is unavailable |
   | `src/ui/music.js` | The two loops: both scores as text, the square-wave voices, and the lookahead scheduler that writes them to the clock. The track follows the scene — `menu` for the title, slot picker and settings, `explore` for a run |
   | `src/ui/shop.js` | The merchant's counter: a row per line of stock, over the purse it's paid from |
   | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers |
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |
-  | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js` | The D-pad, the item card overlay (single-copy or scrollable instance list), the full scrollable inventory panel, the hut's title/rows/buttons dialog, the shared bordered button |
-  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker), `SettingsScene` (palettes, the music switch, the tile border switch, the cheat switch, erase), `ExploreScene` |
+  | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js`, `src/ui/slider.js` | The D-pad, held to repeat a step at the rate `getMoveSpeed` gives; the item card overlay (single-copy or scrollable instance list); the full scrollable inventory panel, with the gem-pip row above its list; the hut's title/rows/buttons dialog; the shared bordered button; the shared drag-or-tap slider, used once for the move-speed setting |
+  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker), `SettingsScene` (palettes, the music switch, the tile border switch, the move-speed slider, the cheat switch, erase), `ExploreScene` |
   | `tests/` | `harness.js` (local server + Playwright driver + runner) and `game.test.js` — see `TESTING.md` |
 
 - **Sprites are coordinates on one sheet.** `src/data/tiles.js` names a **(col, row)** of `assets/tiles.png` per sprite key; the tile is cut out as a 1-bit mask at boot, baked into a white texture and tinted at draw time. One image, no image editor to repoint a sprite, no build step — and one texture set serves all four palettes.

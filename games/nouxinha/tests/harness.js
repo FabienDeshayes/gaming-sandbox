@@ -19,7 +19,7 @@ const ROOT = path.resolve(HERE, '..');
 const VIEW_H = 624;
 const VIEW_CX = 240;
 const VIEW_CY = 312;
-const DPAD = { cx: 388, cy: 748, offset: 54 };
+const DPAD = { cx: 361, cy: 737, offset: 74 };
 
 // Mirrored from src/ui/itemCard.js and src/ui/inventoryPanel.js.
 const CARD_CX = 240;
@@ -38,7 +38,8 @@ function shopTop() {
   return (854 - panelH) / 2;
 }
 const INV_PANEL = { left: CARD_CX - 380 / 2, top: CARD_CY - 460 / 2 };
-const INV_LIST = { x: INV_PANEL.left + 20, y: INV_PANEL.top + 56, rowH: 64 };
+// The list starts below the title and the gem-pip row (DESIGN.md §7).
+const INV_LIST = { x: INV_PANEL.left + 20, y: INV_PANEL.top + 90, rowH: 64 };
 
 // --- Tiny test runner -------------------------------------------------------
 
@@ -378,15 +379,31 @@ export async function openGame(
       return clickAt(DPAD.cx + at[0], DPAD.cy + at[1]);
     },
 
-    // Taps an inventory slot (0-based, left to right).
-    tapSlot: (i) => clickAt(14 + i * 64 + 28, 660 + 28),
+    // Holds a D-pad arrow down for `ms`, the way a resting thumb would, so a
+    // test can check the step repeats instead of firing once (DESIGN.md §7).
+    holdDpad: async (dir, ms) => {
+      const R = await rect();
+      const o = DPAD.offset;
+      const at = { up: [0, -o], down: [0, o], left: [-o, 0], right: [o, 0] }[dir];
+      const x = R.left + (DPAD.cx + at[0]) * R.sx;
+      const y = R.top + (DPAD.cy + at[1]) * R.sy;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.waitForTimeout(ms);
+      await page.mouse.up();
+    },
 
-    tapCoins: () => clickAt(14 + 170 + 40, 636 + 8),
+    // Taps an inventory slot (0-based, left to right). Mirrored from
+    // src/ui/hud.js's SLOT/SLOT_GAP/SLOT_Y.
+    tapSlot: (i) => clickAt(14 + i * 54 + 24, 690 + 24),
 
-    tapWater: () => clickAt(14 + 260 + 40, 636 + 8),
+    tapCoins: () => clickAt(14 + 158 + 5, 624 + 14 + 7),
 
-    // Opens the full scrollable inventory panel via the HUD's ITEMS button.
-    tapInventory: () => clickAt(312, 660 + 28),
+    tapWater: () => clickAt(14 + 20 + 5, 624 + 40 + 7),
+
+    // Opens the full scrollable inventory panel via the HUD's ITEMS slot — the
+    // fourth box in the strip, same size as the item slots (src/ui/hud.js).
+    tapInventory: () => clickAt(14 + 3 * 54 + 24, 690 + 24),
 
     // A row of the merchant's counter, by its index in src/data/shop.js STOCK.
     tapShopRow: (i) =>

@@ -168,6 +168,39 @@ export function setCheats(on) {
   return cheatsOn;
 }
 
+// --- Move speed ----------------------------------------------------------
+//
+// Holding a D-pad arrow repeats the step instead of taking just the one
+// (DESIGN.md §7), at a rate the player tunes in Settings rather than one
+// fixed for everyone — a slider from a deliberate step to a fast walk.
+export const MIN_MOVE_SPEED = 2;
+export const MAX_MOVE_SPEED = 10;
+const DEFAULT_MOVE_SPEED = 5;
+const MOVE_SPEED_KEY = 'nouxinha.moveSpeed';
+
+let moveSpeed = DEFAULT_MOVE_SPEED;
+
+try {
+  const saved = parseInt(localStorage.getItem(MOVE_SPEED_KEY), 10);
+  if (saved >= MIN_MOVE_SPEED && saved <= MAX_MOVE_SPEED) moveSpeed = saved;
+} catch (e) {
+  /* keep the default */
+}
+
+export function getMoveSpeed() {
+  return moveSpeed;
+}
+
+export function setMoveSpeed(stepsPerSecond) {
+  moveSpeed = Math.max(MIN_MOVE_SPEED, Math.min(MAX_MOVE_SPEED, Math.round(stepsPerSecond)));
+  try {
+    localStorage.setItem(MOVE_SPEED_KEY, String(moveSpeed));
+  } catch (e) {
+    /* preference just won't persist */
+  }
+  return moveSpeed;
+}
+
 // The colour a gem gave back (DESIGN.md §9). Each of the three takes the
 // foreground of a palette you are *not* playing in, so restoring a colour
 // always adds one the world genuinely did not have — and the four CRT

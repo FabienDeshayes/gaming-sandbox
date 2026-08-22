@@ -7,7 +7,6 @@ import {
   buy,
   createRun,
   equip,
-  inventoryStacks,
   isBlackout,
   refillWater,
   rememberGround,
@@ -31,8 +30,8 @@ import { makeDpad } from '../ui/dpad.js';
 import { playDeath, playPickup, playTap, playTorch, unlockAudio } from '../ui/sfx.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
-const DPAD_CX = 388;
-const DPAD_CY = 748;
+const DPAD_CX = 361;
+const DPAD_CY = 737;
 
 // The right edge of the map viewport is the navigation rail: the way out at the
 // top, then whichever of the two tools this run owns, stacked under it. Both
@@ -110,7 +109,7 @@ export class ExploreScene extends Phaser.Scene {
       onSlot: (stack) => this.openStack(stack),
       onCoins: () => !this.modalOpen() && this.card.show({ def: itemDef('coin') }),
       onWater: () => !this.modalOpen() && this.card.show({ def: itemDef('water-drop') }),
-      onInventory: () => !this.modalOpen() && this.inventory.show(inventoryStacks(this.run)),
+      onInventory: () => !this.modalOpen() && this.inventory.show(this.run),
     });
     this.card = new ItemCard(this, { onEquip: (i) => this.equipSlot(i) });
     this.inventory = new InventoryPanel(this, { onOpenStack: (stack) => this.openStack(stack) });

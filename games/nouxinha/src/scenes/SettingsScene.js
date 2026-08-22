@@ -6,20 +6,25 @@
 import {
   FONT,
   GAME_WIDTH,
+  MAX_MOVE_SPEED,
+  MIN_MOVE_SPEED,
   PALETTES,
   getCheats,
   getFloorBorder,
+  getMoveSpeed,
   getMusic,
   getPalette,
   hex,
   setCheats,
   setFloorBorder,
+  setMoveSpeed,
   setMusic,
   setPalette,
 } from '../config.js';
 import { activeSlot, clearSave, loadSave } from '../core/save.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
+import { makeSlider } from '../ui/slider.js';
 import { playTap } from '../ui/sfx.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
@@ -112,7 +117,7 @@ export class SettingsScene extends Phaser.Scene {
     const music = makeButton(
       this,
       cx,
-      540,
+      530,
       musicLabel(getMusic()),
       () => {
         const on = setMusic(!getMusic());
@@ -130,7 +135,7 @@ export class SettingsScene extends Phaser.Scene {
     const border = makeButton(
       this,
       cx,
-      600,
+      584,
       borderLabel(getFloorBorder()),
       () => {
         const on = setFloorBorder(!getFloorBorder());
@@ -139,6 +144,18 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
 
+    // How fast holding a D-pad arrow walks (DESIGN.md §7, dpad.js) — a slider
+    // rather than a fixed rate, since "fast" is a matter of taste and thumb
+    // speed both.
+    makeSlider(this, cx, 636, {
+      width: 300,
+      min: MIN_MOVE_SPEED,
+      max: MAX_MOVE_SPEED,
+      value: getMoveSpeed(),
+      label: (v) => `MOVE SPEED: ${v}/s`,
+      onChange: (v) => setMoveSpeed(v),
+    });
+
     // The cheat switch (DESIGN.md §6.2): a run started with it on opens with the
     // map revealed and one of everything, which is how the late game gets looked
     // at without a campaign's worth of walking behind it. It says what it costs
@@ -146,7 +163,7 @@ export class SettingsScene extends Phaser.Scene {
     const cheats = makeButton(
       this,
       cx,
-      660,
+      690,
       cheatLabel(getCheats()),
       () => {
         const on = setCheats(!getCheats());
@@ -156,7 +173,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
     const note = this.add
-      .text(cx, 694, cheatNote(getCheats()), {
+      .text(cx, 722, cheatNote(getCheats()), {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -173,7 +190,7 @@ export class SettingsScene extends Phaser.Scene {
     const erase = makeButton(
       this,
       cx,
-      748,
+      764,
       save.started ? `ERASE SLOT ${slot}` : `SLOT ${slot} IS EMPTY`,
       () => {
         if (!save.started) return;
@@ -188,7 +205,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14, enabled: !!save.started }
     );
 
-    makeButton(this, cx, 812, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
+    makeButton(this, cx, 814, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
   }
 }
 

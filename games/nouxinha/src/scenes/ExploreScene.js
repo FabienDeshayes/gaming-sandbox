@@ -3,19 +3,23 @@
 import { FONT, GAME_WIDTH, VIEW_H, getCheats, getPalette, hex } from '../config.js';
 import {
   DIRECTIONS,
+  abandonRun,
   bankRun,
   buy,
   createRun,
   equip,
+  hasSuspendedRun,
   isBlackout,
   refillWater,
   rememberGround,
+  resumeRun,
   runSummary,
   spendable,
   step,
+  suspendRun,
 } from '../core/rules.js';
 import { DEFAULT_SEED } from '../core/world.js';
-import { MAX_GEMS } from '../core/save.js';
+import { activeSlot, loadSave, MAX_GEMS } from '../core/save.js';
 import { itemDef } from '../data/items.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { MapView } from '../ui/MapView.js';
@@ -33,7 +37,7 @@ import { startMusic, stopMusic } from '../ui/music.js';
 const DPAD_CX = 361;
 const DPAD_CY = 737;
 
-// The right edge of the map viewport is the navigation rail: the way out at the
+// The right edge of the map viewport is the navigation rail: the cogwheel at the
 // top, then whichever of the two tools this run owns, stacked under it. Both
 // tools can be bought mid-run, so the rail lays itself out again on every
 // change rather than being positioned once.
@@ -94,15 +98,31 @@ export class ExploreScene extends Phaser.Scene {
     const asked = data || {};
     // The cheat switch is a setting rather than run state (config.js), so the
     // scene reads it and hands it over — core/rules.js never asks.
-    this.run = createRun(
-      asked.seed !== undefined ? asked.seed : DEFAULT_SEED,
-      undefined,
-      asked.nonce,
-      { cheats: getCheats() }
-    );
+    const cheats = getCheats();
+    // Three ways a run reaches this scene, in order of precedence:
+    //
+    //   1. handed straight over, still walking — the scene was re-entered to
+    //      repaint it in a palette just picked in Settings, and the run object
+    //      is the same one, untouched;
+    //   2. resumed off the slot, because the cogwheel menu suspended an
+    //      expedition there and LOAD GAME came back for it (DESIGN.md §6.1);
+    //   3. a fresh expedition out of the hut.
+    //
+    // A cheat run only ever takes the third: it is a sandbox rather than a
+    // campaign, so it neither writes a slot nor reads one (DESIGN.md §6.2).
+    this.run =
+      asked.run ||
+      (cheats ? null : resumeRun(loadSave())) ||
+      createRun(asked.seed !== undefined ? asked.seed : DEFAULT_SEED, undefined, asked.nonce, {
+        cheats,
+      });
     // Blocks input while the world is sliding, so a fast tapper can't queue
     // steps the renderer hasn't caught up with.
     this.animating = false;
+    // Whether the dialog currently showing is the cogwheel menu. The hut's
+    // question and the death screen are decisions that have to be answered, so
+    // Esc closes this one and leaves those alone.
+    this.menuOpen = false;
 
     this.map = new MapView(this);
     this.hud = new Hud(this, {
@@ -168,13 +188,14 @@ export class ExploreScene extends Phaser.Scene {
     this.mapButton.setVisible(this.run.tools.has('map')).setPosition(RAIL_X, y);
   }
 
+  // The cogwheel, and everything that hangs off it (DESIGN.md §7). It is the
+  // only control in the corner: settings, saving and leaving are all one tap
+  // in rather than three buttons competing for the same 48 pixels.
   buildMenuButton(pal) {
     const g = this.add.graphics();
     g.lineStyle(2, pal.fg, 1);
     g.strokeRect(GAME_WIDTH - 62, 14, 48, 34);
-    this.add
-      .text(GAME_WIDTH - 38, 31, 'X', { fontFamily: FONT, fontSize: '16px', color: hex(pal.fg) })
-      .setOrigin(0.5);
+    this.add.image(GAME_WIDTH - 38, 31, 'cog').setScale(1.5).setTint(pal.fg);
     this.add
       .zone(GAME_WIDTH - 62, 14, 48, 34)
       .setOrigin(0)
@@ -182,13 +203,105 @@ export class ExploreScene extends Phaser.Scene {
       .on('pointerdown', () => {
         if (this.modalOpen()) return;
         playTap();
-        this.leave();
+        this.openMenu();
       });
   }
 
-  // Leaving by the X abandons the expedition — nothing it was carrying is
-  // banked (DESIGN.md §6.1) — but the ground it lit is kept, the same as when a
-  // run dies out there. Cartography is not progress.
+  // The menu itself. It rides on the scene's one dialog rather than a second
+  // overlay, because only one modal can ever be up: the cogwheel is deaf while
+  // anything else is open, and nothing else can open behind the menu.
+  openMenu() {
+    this.menuOpen = true;
+    this.dialog.show({
+      title: 'MENU',
+      lines: ['Saving keeps this expedition exactly as it stands. Leaving without it does not.'],
+      buttons: [
+        { label: 'SETTINGS', onClick: () => this.openSettings() },
+        { label: 'SAVE GAME', onClick: () => this.saveGame() },
+        { label: 'EXIT GAME', onClick: () => this.confirmExit() },
+        { label: 'KEEP PLAYING', onClick: () => this.closeMenu() },
+      ],
+    });
+  }
+
+  closeMenu() {
+    this.menuOpen = false;
+    this.dialog.hide();
+  }
+
+  // Settings mid-run. A palette is picked by tinting everything on screen at
+  // create time, so coming back re-enters this scene rather than resuming a
+  // paused one — and the live run object rides along in the scene data, which
+  // is what makes the round trip cost the expedition nothing.
+  openSettings() {
+    this.menuOpen = false;
+    this.dialog.hide();
+    this.scene.start('SettingsScene', { run: this.run });
+  }
+
+  // SAVE GAME: the expedition goes into the slot as it stands, still unbanked,
+  // and the player is asked the one question that follows from having just
+  // saved (DESIGN.md §6.1).
+  saveGame() {
+    this.menuOpen = false;
+    suspendRun(this.run);
+    const summary = runSummary(this.run);
+    this.dialog.show({
+      title: summary.cheats ? 'NOTHING SAVED' : 'EXPEDITION SAVED',
+      lines: summary.cheats
+        ? ['Cheats are on, so this run was never a campaign and nothing was written.']
+        : [
+            `Slot ${activeSlot()} is holding this walk exactly where you are standing.`,
+            'LOAD GAME picks it up from here.',
+          ],
+      rows: summary.cheats
+        ? []
+        : [
+            ['FURTHEST OUT', summary.furthest],
+            ['STEPS TAKEN', summary.steps],
+            ['COINS CARRIED', summary.coins],
+          ],
+      buttons: [
+        { label: 'KEEP PLAYING', onClick: () => this.dialog.hide() },
+        { label: 'EXIT GAME', onClick: () => this.leave() },
+      ],
+    });
+  }
+
+  // Leaving banks nothing and saves nothing, which can cost an hour's walk —
+  // so it asks, and says what it is about to cost.
+  confirmExit() {
+    this.menuOpen = false;
+    const summary = runSummary(this.run);
+    const atRisk = carriedAtRisk(summary);
+    this.dialog.show({
+      title: 'LEAVE THE DARK',
+      lines: [
+        // Precise about what leaving costs, which depends on whether there is
+        // anything in the slot to fall back to (DESIGN.md §6.1).
+        hasSuspendedRun()
+          ? 'Leaving does not save. This slot goes back to the walk you last saved.'
+          : 'Leaving now saves nothing of this expedition.',
+        atRisk.length
+          ? `${sentence(joinWords(atRisk))} you are carrying ${
+              atRisk.length > 1 ? 'go' : 'goes'
+            } back where you found ${atRisk.length > 1 ? 'them' : 'it'}.`
+          : 'The ground you lit stays on your map.',
+      ],
+      buttons: [
+        { label: 'KEEP PLAYING', onClick: () => this.closeMenu() },
+        { label: 'LEAVE', onClick: () => this.leave() },
+      ],
+    });
+  }
+
+  // Leaving abandons the expedition — nothing it was carrying is banked
+  // (DESIGN.md §6.1) — but the ground it lit is kept, the same as when a run
+  // dies out there. Cartography is not progress.
+  //
+  // A slot's suspended expedition is left exactly as it was, whether that is
+  // the save just made or one from an hour ago: not saving is not the same as
+  // unsaving (`rememberGround` in core/rules.js).
   leave() {
     rememberGround(this.run);
     this.scene.start('TitleScene');
@@ -242,10 +355,16 @@ export class ExploreScene extends Phaser.Scene {
     for (const [event, dir] of Object.entries(keys))
       this.input.keyboard.on(event, () => this.tryStep(dir));
     this.input.keyboard.on('keydown-ESC', () => {
+      if (this.menuOpen) {
+        this.closeMenu();
+        return;
+      }
       if (this.card.isOpen()) this.card.hide();
       if (this.inventory.isOpen()) this.inventory.hide();
       if (this.shop.isOpen()) this.shop.hide();
       if (this.worldMap.isOpen()) this.worldMap.hide();
+      // Nothing was open, so Esc is the keyboard's cogwheel.
+      if (!this.modalOpen()) this.openMenu();
     });
   }
 
@@ -404,8 +523,9 @@ export class ExploreScene extends Phaser.Scene {
     const atRisk = carriedAtRisk(summary);
     // Nothing this run was carrying is banked, but the ground it lit is kept —
     // written here rather than on the way out, so closing the tab on the death
-    // screen doesn't cost the walk (DESIGN.md §6.1).
-    rememberGround(this.run);
+    // screen doesn't cost the walk (DESIGN.md §6.1). Death also takes the slot's
+    // saved expedition with it: this was that walk, and it is over.
+    abandonRun(this.run);
     this.dialog.show({
       title: 'OUT OF WATER',
       lines: [

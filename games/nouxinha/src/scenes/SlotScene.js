@@ -5,6 +5,12 @@
 // answer, so the screen always says what is in all three either way — a picker
 // that hid the empty slots would make "how many have I got left" unanswerable.
 //
+// A slot can also be in the middle of an expedition, saved there by the
+// cogwheel menu (DESIGN.md §6.1). LOAD GAME picks that walk back up where it
+// was left, which is why the row says so: what a slot answers with is the
+// difference between setting out from the hut and carrying on from wherever
+// you stopped.
+//
 // Overwriting asks twice with the row itself, the way Settings' erase does: the
 // first tap on an occupied slot arms it, the second starts over it. That is the
 // only destructive thing on this screen, and it is the only place a campaign
@@ -168,9 +174,13 @@ function summaryOf(entry) {
 }
 
 // The ground a slot has drawn is the half of it that survives a bad walk home
-// (DESIGN.md §6.1), so the picker reports it next to the progress that doesn't.
+// (DESIGN.md §6.1), so the picker reports it next to the progress that doesn't
+// — unless the slot is holding a saved expedition, which is the more urgent
+// thing to say about it: this row is a walk to carry on, not a walk to start.
 function groundOf(entry) {
   if (!entry.used) return 'NOTHING WALKED YET';
+  const { run } = entry.save;
+  if (run) return `SAVED EXPEDITION  ${run.furthest} OUT  ${run.steps} STEPS`;
   return `FURTHEST OUT ${entry.save.furthest}`;
 }
 

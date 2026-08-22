@@ -2,9 +2,9 @@
 //
 // The item card (itemCard.js) is its own thing because it lays out a sprite and
 // a durability bar; this is the plain-text modal the run uses to ask a question
-// ("stop here?") and to sign a run off (the recap). Both of those block the
-// world the same way the card does — the scene checks `isOpen()` before it lets
-// a step through.
+// ("stop here?"), to sign a run off (the recap), and to hold the cogwheel menu.
+// All of those block the world the same way the card does — the scene checks
+// `isOpen()` before it lets a step through.
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, getPalette, hex } from '../config.js';
 import { makeButton } from './button.js';
@@ -16,6 +16,11 @@ const ROW_H = 28;
 const BUTTON_H = 44;
 const BUTTON_W = 158;
 const BUTTON_GAP = 16;
+// More than two choices can't sit side by side in a 380-wide panel, so they
+// stack instead — one full-width button per line, which is what the cogwheel
+// menu's four options need (scenes/ExploreScene.js).
+const STACKED_W = PANEL_W - PAD * 2;
+const STACKED_GAP = 12;
 
 export class Dialog {
   constructor(scene) {
@@ -31,9 +36,10 @@ export class Dialog {
 
   // Laid out top to bottom: `lines` and `footer` are centred sentences either
   // side of `rows`, which are [label, value] pairs in a two-column readout, and
-  // `buttons` are [{ label, onClick }] across the bottom. A dialog has no close
-  // control of its own: every way out is one of its buttons, because both of its
-  // uses are decisions rather than inspections.
+  // `buttons` are [{ label, onClick }] along the bottom — in a row, or stacked
+  // once there are too many to fit one. A dialog has no close control of its
+  // own: every way out is one of its buttons, because all of its uses are
+  // decisions rather than inspections.
   show({ title, lines = [], rows = [], footer = null, buttons = [] }) {
     const pal = getPalette();
     const scene = this.scene;
@@ -89,8 +95,16 @@ export class Dialog {
       y += t.height;
     }
 
+    // A row of buttons is allowed to run a little wider than the panel's padding
+    // — two of them always have — but past the panel itself they stack.
+    const rowSpan = buttons.length * BUTTON_W + (buttons.length - 1) * BUTTON_GAP;
+    const stacked = rowSpan > PANEL_W;
+    const buttonsH = stacked
+      ? buttons.length * BUTTON_H + (buttons.length - 1) * STACKED_GAP
+      : BUTTON_H;
+
     const bodyH = y;
-    const panelH = PAD + TITLE_H + bodyH + 24 + BUTTON_H + PAD;
+    const panelH = PAD + TITLE_H + bodyH + 24 + buttonsH + PAD;
     const top = cy - panelH / 2;
     const offsetY = top + PAD + TITLE_H;
     for (const part of body) part.y += offsetY;
@@ -122,13 +136,13 @@ export class Dialog {
 
     parts.push(...body);
 
-    const buttonY = top + panelH - PAD - BUTTON_H / 2;
-    const span = buttons.length * BUTTON_W + (buttons.length - 1) * BUTTON_GAP;
+    const firstY = top + panelH - PAD - buttonsH + BUTTON_H / 2;
     buttons.forEach((button, i) => {
-      const bx = cx - span / 2 + BUTTON_W / 2 + i * (BUTTON_W + BUTTON_GAP);
+      const bx = stacked ? cx : cx - rowSpan / 2 + BUTTON_W / 2 + i * (BUTTON_W + BUTTON_GAP);
+      const by = stacked ? firstY + i * (BUTTON_H + STACKED_GAP) : firstY;
       parts.push(
-        makeButton(scene, bx, buttonY, button.label, button.onClick, {
-          width: BUTTON_W,
+        makeButton(scene, bx, by, button.label, button.onClick, {
+          width: stacked ? STACKED_W : BUTTON_W,
           height: BUTTON_H,
           fontSize: 13,
         })

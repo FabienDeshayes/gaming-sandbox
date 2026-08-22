@@ -490,20 +490,26 @@ export function bankRun(state) {
     mapped: encodeExplored(state.explored),
     mappedSeed: state.seed,
     seen: [...state.seenUnique],
+    // The expedition is over, so whatever the menu had suspended of it goes:
+    // a saved run is a walk to carry on with, and this one has come home.
+    run: null,
   });
 }
 
 // Writes the ground this run lit back into the slot, and nothing else.
 //
-// This is what a run that ends badly still leaves behind (DESIGN.md §6.1): die
-// of thirst or walk out by the map's X and the gems, coins and tools in hand are
+// This is what a run that ends without banking still leaves behind (DESIGN.md
+// §6.1): leave by the menu's EXIT GAME and the gems, coins and tools in hand are
 // all gone, but the dark you lit stays lit, because starting the next
 // expedition by re-walking ground you have already crossed is not the tension
 // this game is about.
 //
 // It merges onto whatever is in the slot rather than onto `state.banked`, since
 // the run may have spent banked coins at the merchant on a walk it never
-// finished — money a run that never got home never actually spent.
+// finished — money a run that never got home never actually spent. That merge
+// is also what leaves a suspended expedition alone: quitting without saving
+// leaves the slot pointing at whatever SAVE GAME last wrote down, which is the
+// whole of what "without saving" means.
 export function rememberGround(state) {
   if (state.cheats) return loadSave();
   const stored = loadSave();
@@ -513,6 +519,118 @@ export function rememberGround(state) {
     mappedSeed: state.seed,
     seen: [...state.seenUnique],
   });
+}
+
+// Running dry: the ground is kept exactly as above, and the slot's suspended
+// expedition goes with the run it belonged to.
+//
+// This is the one place a save is destroyed by playing rather than by choosing
+// to (DESIGN.md §6.1). Death is the game's only hard failure, and a save file
+// you could reload out of it would make it a rewind instead — so what the
+// campaign keeps is what it had banked at the hut, and the walk that died is
+// gone the same way a walk abandoned mid-expedition always was.
+export function abandonRun(state) {
+  if (state.cheats) return loadSave();
+  return writeSave({ ...rememberGround(state), run: null });
+}
+
+// --- Suspending and resuming an expedition -----------------------------------
+//
+// The cogwheel menu's SAVE GAME (DESIGN.md §6.1). Unlike the hut, this banks
+// nothing: it writes the expedition down *as it is*, mid-walk, so the same run
+// can be picked up later with the gem still in its pocket and still unbanked.
+//
+// What goes into the slot is a description, not a copy. The world is a pure
+// function of `(x, y, seed)` and its scatter of `(seed, salt)`, so seed, nonce
+// and epoch put every coin, torch and water drop back exactly where the run
+// left them; `collected` says which of those tiles it has already emptied, and
+// the gems and tools it is carrying say which of the unique objects are gone.
+// Nothing about the world itself is ever stored.
+export function suspendRun(state) {
+  // A cheat run is a sandbox, not a campaign, and writes nothing at all —
+  // including this (DESIGN.md §6.2).
+  if (state.cheats) return loadSave();
+  const stored = loadSave();
+  return writeSave({
+    ...stored,
+    // The ground goes in whichever way a run pauses or ends, same as always.
+    mapped: encodeExplored(state.explored),
+    mappedSeed: state.seed,
+    seen: [...state.seenUnique],
+    run: {
+      seed: state.seed,
+      x: state.x,
+      y: state.y,
+      facing: state.facing,
+      steps: state.steps,
+      water: state.water,
+      coins: state.coins,
+      gems: state.gems,
+      furthest: state.furthest,
+      nonce: state.nonce,
+      epoch: state.epoch,
+      tools: [...state.tools],
+      inventory: state.inventory.map((light) => ({ ...light })),
+      activeIndex: state.activeIndex,
+      found: { ...state.found },
+      collected: encodeExplored(state.collected),
+      startExplored: state.startExplored,
+      banked: state.banked,
+    },
+  });
+}
+
+// Whether a slot has an expedition to carry on with, which is what LOAD GAME
+// picks between: resuming the walk, or setting out from the hut again.
+export function hasSuspendedRun(save = loadSave()) {
+  return !!normaliseSave(save).run;
+}
+
+// The other side of `suspendRun`: the run it wrote down, walking again. Returns
+// null for a slot that has nothing suspended, so the caller can fall back to
+// `createRun` — those two are the only two ways a run ever starts.
+//
+// Note what it doesn't do: no `pickSeed`, because the seed in the block was
+// already validated by the run that wrote it, and no fresh nonce, because a
+// resumed expedition has to walk out onto the same scatter it left.
+export function resumeRun(save = loadSave()) {
+  const slot = normaliseSave(save);
+  const suspended = slot.run;
+  if (!suspended) return null;
+  const banked = suspended.banked;
+  const carriesGround = slot.mappedSeed === suspended.seed;
+  const state = {
+    seed: suspended.seed,
+    x: suspended.x,
+    y: suspended.y,
+    facing: suspended.facing,
+    steps: suspended.steps,
+    coins: suspended.coins,
+    gems: suspended.gems,
+    banked,
+    tools: new Set(suspended.tools),
+    nonce: suspended.nonce,
+    epoch: suspended.epoch,
+    salt: saltOf(suspended.nonce, suspended.epoch),
+    // Capped rather than trusted: a save hand-edited to a tankful the gems it
+    // holds could never justify would otherwise walk further than the leash.
+    water: Math.min(maxWater(suspended.gems), suspended.water),
+    furthest: suspended.furthest,
+    found: suspended.found,
+    inventory: suspended.inventory,
+    activeIndex: suspended.activeIndex,
+    explored: carriesGround ? decodeExplored(slot.mapped) : new Set(),
+    seenUnique: new Set(carriesGround ? slot.seen : []),
+    // The item tiles this run had already emptied this epoch. Everything else
+    // on the ground comes back off the seed and the salt.
+    collected: decodeExplored(suspended.collected),
+    cheats: false,
+  };
+  // How much ground the campaign had drawn when the expedition set out, so the
+  // recap still reports what this walk added rather than what the slot holds.
+  state.startExplored = Math.min(suspended.startExplored, state.explored.size);
+  reveal(state);
+  return state;
 }
 
 // What the run is worth so far, in the terms the recap reports it.

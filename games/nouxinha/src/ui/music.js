@@ -251,6 +251,27 @@ export function isMusicPlaying() {
   return !!timer;
 }
 
+// A tab pushed to the background (or a phone screen switched away from) keeps
+// running WebAudio, so without this the loop would keep playing to nobody.
+// The track resumes where the loop pattern always resumes — the top of the
+// phrase — rather than trying to pick back up mid-note.
+let hiddenTrackId = null;
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (trackId) {
+        hiddenTrackId = trackId;
+        stopMusic();
+      }
+    } else if (hiddenTrackId) {
+      const id = hiddenTrackId;
+      hiddenTrackId = null;
+      startMusic(id);
+    }
+  });
+}
+
 // Which of the two loops is running, or null. The suite reads this: a headless
 // browser can't be asked to listen, but it can be asked what is playing.
 export function musicTrack() {

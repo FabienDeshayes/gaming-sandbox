@@ -1,5 +1,5 @@
-// Settings: the palette grid, the music, tile-border and cheat switches, and
-// the move-speed slider. Each palette swatch is drawn in its *own* palette
+// Settings: the palette grid, the music and cheat switches, and the
+// move-speed slider. Each palette swatch is drawn in its *own* palette
 // rather than the active one, so the grid shows you the four combinations
 // instead of describing them.
 
@@ -10,13 +10,11 @@ import {
   MIN_MOVE_SPEED,
   PALETTES,
   getCheats,
-  getFloorBorder,
   getMoveSpeed,
   getMusic,
   getPalette,
   hex,
   setCheats,
-  setFloorBorder,
   setMoveSpeed,
   setMusic,
   setPalette,
@@ -72,7 +70,11 @@ export class SettingsScene extends Phaser.Scene {
       const swatch = this.add.graphics();
       swatch.fillStyle(option.bg, 1);
       swatch.fillRect(x, y, CELL_W, CELL_H);
-      swatch.lineStyle(active ? 3 : 1, option.fg, 1);
+      // Same 2px outline the other buttons draw (ui/button.js) — the palette
+      // cells used a 1px line that only rounded to a whole pixel on some of
+      // the four swatches, so it rendered crisp on some and all but vanished
+      // on others depending on where the grid happened to land it.
+      swatch.lineStyle(2, option.fg, 1);
       swatch.strokeRect(x, y, CELL_W, CELL_H);
 
       this.add.image(x + 30, y + CELL_H / 2, 'wizard-down').setScale(1.8).setTint(option.fg);
@@ -131,26 +133,10 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
 
-    // The floor border switch (DESIGN.md §9): the dotted line that used to be
-    // the only thing marking a lit tile now sits on top of ground texture, so
-    // turning it off costs the game nothing it doesn't already draw. Takes
-    // effect on the next repaint, same as the palette does for a running map.
-    const border = makeButton(
-      this,
-      cx,
-      476,
-      borderLabel(getFloorBorder()),
-      () => {
-        const on = setFloorBorder(!getFloorBorder());
-        border.setLabel(borderLabel(on));
-      },
-      { width: 300, fontSize: 14 }
-    );
-
     // How fast holding a D-pad arrow walks (DESIGN.md §7, dpad.js) — a slider
     // rather than a fixed rate, since "fast" is a matter of taste and thumb
     // speed both.
-    makeSlider(this, cx, 556, {
+    makeSlider(this, cx, 476, {
       width: 300,
       min: MIN_MOVE_SPEED,
       max: MAX_MOVE_SPEED,
@@ -166,7 +152,7 @@ export class SettingsScene extends Phaser.Scene {
     const cheats = makeButton(
       this,
       cx,
-      646,
+      566,
       cheatLabel(getCheats()),
       () => {
         const on = setCheats(!getCheats());
@@ -176,7 +162,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
     const note = this.add
-      .text(cx, 686, cheatNote(getCheats()), {
+      .text(cx, 606, cheatNote(getCheats()), {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -184,7 +170,7 @@ export class SettingsScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(getCheats() ? 0.8 : 0.5);
 
-    makeButton(this, cx, 776, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
+    makeButton(this, cx, 696, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
   }
 }
 
@@ -194,10 +180,6 @@ function musicLabel(on) {
 
 function cheatLabel(on) {
   return `CHEATS: ${on ? 'ON' : 'OFF'}`;
-}
-
-function borderLabel(on) {
-  return `TILE BORDER: ${on ? 'ON' : 'OFF'}`;
 }
 
 function cheatNote(on) {

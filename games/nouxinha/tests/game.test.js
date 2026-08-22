@@ -60,7 +60,7 @@ import { PRICES } from '../src/data/shop.js';
 import { BLACKOUT_MEMORY_RADIUS, gemColour, getMoveSpeed, setMoveSpeed } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
 import { zoneColours } from '../src/ui/wizard.js';
-import { DIM, LIT, buildSprites, WIZARD_ZONES } from '../src/data/sprites.js';
+import { DIM, buildSprites, WIZARD_ZONES } from '../src/data/sprites.js';
 import {
   SHEET_COLS,
   SHEET_ROWS,
@@ -1250,46 +1250,16 @@ unit('each wizard facing is split into colour bands that rebuild the whole sprit
   }
 });
 
-unit('a floor tile draws its top and left edges, and closes the frontier', () => {
-  const blank = () => Array.from({ length: 16 }, () => '.'.repeat(16));
-  const sprites = buildSprites(blank);
-  const dots = '#.#.#.#.#.#.#.#.';
-
-  assertEqual(sprites.floor[0], dots, 'the top edge is always drawn');
-  assert(
-    sprites.floor.every((row, y) => (y % 2 === 0 ? row[0] === LIT : row[0] === '.')),
-    'and so is the left one'
-  );
-  assertEqual(sprites.floor[15], '.'.repeat(16), 'the bottom is left to the neighbour below');
-  assert(
-    sprites.floor.every((row) => row[15] === '.'),
-    'and the right to the neighbour beside'
-  );
-
-  // The frontier variants close the edges the plain tile leaves open.
-  assert(
-    sprites['floor-r'].every((row, y) => (y % 2 === 0 ? row[15] === LIT : row[15] === '.')),
-    'floor-r closes the right edge'
-  );
-  assertEqual(sprites['floor-b'][15], dots, 'floor-b closes the bottom edge');
-  assertEqual(sprites['floor-rb'][15], dots, 'floor-rb closes both');
-  assertEqual(sprites['floor-rb'][0], dots.slice(0, 15) + '#', 'including the corner they share');
-});
-
-unit('floor texture is drawn at half strength, its border at full', () => {
+unit('floor texture is drawn at half strength, with no border on top', () => {
   const solid = () => Array.from({ length: 16 }, () => '#'.repeat(16));
   const sprites = buildSprites(solid);
 
-  // Row 1 is interior: all ground, none of it border.
-  assertEqual(sprites.floor[1], DIM.repeat(16), 'the ground the tile stands on is dimmed');
-  // Row 2 is interior with the left edge on it.
-  assertEqual(sprites.floor[2], LIT + DIM.repeat(15), 'and the border over it is not');
-  assertEqual(sprites.floor[0], '#.#.#.#.#.#.#.#.', 'the top edge replaces the texture under it');
+  assertEqual(sprites.floor, Array.from({ length: 16 }, () => DIM.repeat(16)), 'the whole tile is dimmed ground');
 
   // Nothing else on the sheet is dimmed — a dim pixel anywhere but the floor
   // would be a second weight on an object, which the palette rule doesn't have.
   for (const [key, mask] of Object.entries(sprites)) {
-    if (key.startsWith('floor')) continue;
+    if (key === 'floor') continue;
     assert(!mask.join('').includes(DIM), `${key} is drawn at one strength`);
   }
 });
@@ -1553,43 +1523,20 @@ test('the music switch turns the loop off and keeps it off', async (game) => {
   assertEqual(await game.music(), false, 'a run started with it off stays silent');
 });
 
-test('the tile border switch turns the dotted line off, and back on', async (game) => {
+test('floor tiles draw as plain ground, with no border and no setting for one', async (game) => {
   await game.startRun();
   await game.tapDpad('right');
   await game.settle();
 
-  const bordered = (await game.visibleTiles()).filter((t) => t.ground.startsWith('floor'));
-  assert(bordered.length > 0, 'floor tiles are on screen');
-  assert(
-    bordered.every((t) => t.ground === 'floor' || /^floor-[rb]+$/.test(t.ground)),
-    'and drawn with the border by default'
-  );
+  const floors = (await game.visibleTiles()).filter((t) => t.ground.startsWith('floor'));
+  assert(floors.length > 0, 'floor tiles are on screen');
+  assert(floors.every((t) => t.ground === 'floor'), 'and all draw the same, undecorated texture');
 
   await game.clickAt(456, 31);
   await game.waitForScene('TitleScene');
   await game.clickText('SETTINGS');
   await game.waitForScene('SettingsScene');
-  assert(await game.hasText('TILE BORDER: ON'), 'on by default');
-  await game.clickText('TILE BORDER: ON');
-  assert(await game.hasText('TILE BORDER: OFF'), 'and the button says so once tapped');
-  await game.clickText('BACK');
-  await game.waitForScene('TitleScene');
-
-  await game.startRun();
-  await game.tapDpad('right');
-  await game.settle();
-  const plain = (await game.visibleTiles()).filter((t) => t.ground.startsWith('floor'));
-  assert(plain.length > 0, 'floor tiles are still on screen');
-  assert(plain.every((t) => t.ground === 'floor-plain'), 'and none of them draw the border');
-
-  // Leaves the switch as it found it, so it doesn't change what every other
-  // test sees.
-  await game.clickAt(456, 31);
-  await game.waitForScene('TitleScene');
-  await game.clickText('SETTINGS');
-  await game.waitForScene('SettingsScene');
-  await game.clickText('TILE BORDER: OFF');
-  assert(await game.hasText('TILE BORDER: ON'), 'restored');
+  assert(!(await game.hasText('TILE BORDER: ON')), 'no tile border switch remains');
   await game.clickText('BACK');
 });
 
@@ -1844,6 +1791,46 @@ test('stopping at the hut recaps the run before going home', async (game) => {
   await game.waitForScene('TitleScene');
   assertEqual(await game.activeScene(), 'TitleScene', 'back to the title screen');
 });
+
+test('a long carried list wraps the recap footer without it running into the buttons', async (game) => {
+  const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
+
+  await game.startRun();
+  await walkPath(game, TORCH_ROUTE.path);
+  await walkPath(game, [...TORCH_ROUTE.path].reverse().map((dir) => OPPOSITE[dir]));
+  await game.clickText('STOP HERE');
+
+  const texts = await game.texts();
+  const footer = texts.find((t) => t.startsWith('CARRYING'));
+  assert(footer, 'the carried-items footer is on screen');
+  // Long enough to wrap inside the panel's fixed width — the small torch
+  // carried from the start, the medium one just found, and the two tools.
+  assert(footer.length > 45, `footer is long enough to wrap (was ${JSON.stringify(footer)})`);
+
+  const bounds = await game.page.evaluate((footerText) => {
+    // Phaser.Geom.Rectangle's top/bottom are getters, which the structured
+    // clone back to the test runner drops — so pull the plain numbers out
+    // here rather than returning the Rectangle itself.
+    const plain = (b) => ({ top: b.top, bottom: b.bottom });
+    const found = { footer: null, home: null };
+    const walk = (list) => {
+      for (const c of list) {
+        if (!c.visible) continue;
+        if (c.text === footerText) found.footer = plain(c.getBounds());
+        if (c.text === 'HOME') found.home = plain(c.getBounds());
+        if (c.list) walk(c.list);
+      }
+    };
+    walk(window.__game.scene.getScenes(true).slice(-1)[0].children.list);
+    return found;
+  }, footer);
+
+  assert(bounds.footer && bounds.home, 'both the footer and the HOME button were found');
+  assert(
+    bounds.footer.bottom <= bounds.home.top,
+    `the wrapped footer (bottom ${bounds.footer.bottom}) overlaps the HOME button (top ${bounds.home.top})`
+  );
+}, { query: WORLD, save: { ...emptySave(), compass: true, map: true } });
 
 test('walking into the first sanctum restores a colour to the world', async (game) => {
   await game.startRun();
@@ -2103,7 +2090,7 @@ test('the tile sheet is loaded and cut into every sprite the game draws', async 
     );
 
   // The keys the renderer names have to be among them, or a tile draws blank.
-  for (const key of ['floor', 'floor-rb', 'rock-2', 'tree-7', 'wall-tl', 'base', 'wizard-down-0'])
+  for (const key of ['floor', 'rock-2', 'tree-7', 'wall-tl', 'base', 'wizard-down-0'])
     assert(cut.sprites.some((s) => s.key === key), `${key} was cut`);
 });
 

@@ -46,9 +46,8 @@ export const TILES = {
 
   // --- Terrain -------------------------------------------------------------
   // Floor's tile is ground texture, drawn at half strength (FLOOR_TEXTURE_LEVEL
-  // in src/config.js) so it reads as a surface without competing with the
-  // things standing on it. The dotted border on top of it is derived, not drawn
-  // (src/data/sprites.js).
+  // in src/config.js, derived in src/data/sprites.js) so it reads as a surface
+  // without competing with the things standing on it.
   floor: [5, 0],
   // Rock and trees each alternate between several tiles, picked per world tile
   // from the seed. Rock's three are one terrain and one formation rule — a

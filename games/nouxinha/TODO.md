@@ -3,7 +3,6 @@
 Agents, do not use this file as a list of things to implement, ignore it unless explicitly asked to add or remove something from it.
 
 to add/adjust to the game soon:
-* save system
 * improve map generation
 
 Later:

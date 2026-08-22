@@ -395,15 +395,17 @@ export async function openGame(
 
     // Taps an inventory slot (0-based, left to right). Mirrored from
     // src/ui/hud.js's SLOT/SLOT_GAP/SLOT_Y.
-    tapSlot: (i) => clickAt(14 + i * 54 + 24, 690 + 24),
+    tapSlot: (i) => clickAt(14 + i * 54 + 24, 664 + 24),
 
     tapCoins: () => clickAt(14 + 158 + 5, 624 + 14 + 7),
 
-    tapWater: () => clickAt(14 + 20 + 5, 624 + 40 + 7),
+    // Water now sits under the active light's bar, same size, rather than in
+    // the top counters row — mirrored from src/ui/hud.js's SLOT_Y math.
+    tapWater: () => clickAt(14 + 5, 624 + 40 + 48 + 12 + 44 + 7),
 
     // Opens the full scrollable inventory panel via the HUD's ITEMS slot — the
     // fourth box in the strip, same size as the item slots (src/ui/hud.js).
-    tapInventory: () => clickAt(14 + 3 * 54 + 24, 690 + 24),
+    tapInventory: () => clickAt(14 + 3 * 54 + 24, 664 + 24),
 
     // A row of the merchant's counter, by its index in src/data/shop.js STOCK.
     tapShopRow: (i) =>

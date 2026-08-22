@@ -10,7 +10,7 @@ import { playTap } from './sfx.js';
 const PAD = 14;
 const SLOT = 48;
 const SLOT_GAP = 6;
-const SLOT_Y = HUD_Y + 66;
+const SLOT_Y = HUD_Y + 40;
 // The strip shows this many carried-light stacks, plus one more same-sized
 // box for ITEMS — anything past that lives in the full panel it opens
 // (DESIGN.md §7).
@@ -25,14 +25,11 @@ const EXPLORED_TEXT_X = PAD + 20;
 const COINS_ICON_X = PAD + 138;
 const COINS_TEXT_X = PAD + 158;
 
-// Water sits on its own line right under that row, because unlike the other
-// two it also gets a bar — the same treatment the active light gets below.
-const WATER_Y = HUD_Y + 40;
-const WATER_ICON_X = PAD;
-const WATER_TEXT_X = PAD + 20;
-const WATER_BAR_X = PAD + 128;
-const WATER_BAR_W = 96;
-const WATER_BAR_H = 8;
+// Both bars — the active light's and water's — share this width, so water
+// reads as the same kind of thing as light: a resource with a bar, not a
+// bare number.
+const BAR_W = 220;
+const BAR_H = 12;
 
 export class Hud {
   constructor(scene, { onSlot, onCoins, onWater, onInventory }) {
@@ -70,45 +67,37 @@ export class Hud {
         this.onCoins();
       });
 
-    // Water is the run's one hard failure state (DESIGN.md §6), so besides the
-    // grouped counters it also gets a bar, the same visual language the active
-    // light gets below.
-    this.waterIcon = scene.add
-      .image(WATER_ICON_X, WATER_Y + 6, 'water-drop')
-      .setOrigin(0, 0.5)
-      .setScale(1.1)
-      .setInteractive({ useHandCursor: true });
-    this.water = text(WATER_TEXT_X, WATER_Y, 13).setInteractive({ useHandCursor: true });
-    this.waterBar = scene.add.graphics();
-    for (const obj of [this.waterIcon, this.water])
-      obj.on('pointerdown', () => {
-        playTap();
-        this.onWater();
-      });
-
     this.slots = scene.add.container(0, 0);
     this.lightLabel = text(PAD, SLOT_Y + SLOT + 12, 13);
     this.lightBar = scene.add.graphics();
-    this.status = text(PAD, SLOT_Y + SLOT + 54, 12);
+
+    // Water is the run's one hard failure state (DESIGN.md §6), so it gets
+    // the same label-then-bar treatment as the active light, directly under
+    // it and at the same size — the two resources read as the same kind of
+    // thing.
+    this.waterLabel = text(PAD, SLOT_Y + SLOT + 12 + 44, 13).setInteractive({ useHandCursor: true });
+    this.waterLabel.on('pointerdown', () => {
+      playTap();
+      this.onWater();
+    });
+    this.waterBar = scene.add.graphics();
+
+    this.status = text(PAD, SLOT_Y + SLOT + 12 + 88, 12);
   }
 
   update(run) {
     const pal = getPalette();
     this.explored.setText(`EXPLORED ${run.explored.size}`);
     this.coins.setText(`COINS ${spendable(run)}`);
-    this.water.setText(`WATER ${run.water}/${maxWater(run.gems)}`);
 
+    this.waterLabel.setText(`WATER ${run.water}/${maxWater(run.gems)}`);
     this.waterBar.clear();
-    this.waterBar.lineStyle(1, pal.fg, 1);
-    this.waterBar.strokeRect(WATER_BAR_X, WATER_Y - WATER_BAR_H / 2, WATER_BAR_W, WATER_BAR_H);
+    const waterY = SLOT_Y + SLOT + 32 + 44;
+    this.waterBar.lineStyle(2, pal.fg, 1);
+    this.waterBar.strokeRect(PAD, waterY, BAR_W, BAR_H);
     this.waterBar.fillStyle(pal.fg, 1);
     const waterFilled = Math.max(0, run.water / maxWater(run.gems));
-    this.waterBar.fillRect(
-      WATER_BAR_X + 1,
-      WATER_Y - WATER_BAR_H / 2 + 1,
-      (WATER_BAR_W - 2) * waterFilled,
-      WATER_BAR_H - 2
-    );
+    this.waterBar.fillRect(PAD + 2, waterY + 2, (BAR_W - 4) * waterFilled, BAR_H - 4);
 
     this.slots.removeAll(true);
     const stacks = inventoryStacks(run).slice(0, MAX_SLOTS);
@@ -224,12 +213,11 @@ export class Hud {
     const def = itemDef(light.id);
     this.lightLabel.setText(`${def.name}  ${light.durability}/${def.maxDurability}`);
 
-    const barW = 220;
     const barY = SLOT_Y + SLOT + 32;
     this.lightBar.lineStyle(2, pal.fg, 1);
-    this.lightBar.strokeRect(PAD, barY, barW, 12);
+    this.lightBar.strokeRect(PAD, barY, BAR_W, BAR_H);
     this.lightBar.fillStyle(pal.fg, 1);
-    this.lightBar.fillRect(PAD + 2, barY + 2, (barW - 4) * (light.durability / def.maxDurability), 8);
+    this.lightBar.fillRect(PAD + 2, barY + 2, (BAR_W - 4) * (light.durability / def.maxDurability), BAR_H - 4);
   }
 
   // Transient line for the things worth calling out the moment they happen —

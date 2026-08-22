@@ -1,24 +1,35 @@
-// The bottom quarter of the screen: run counters, the inventory strip, the
-// active light's durability, and (built by the scene) the D-pad on the right.
+// The bottom quarter of the screen: the grouped run counters, the inventory
+// strip, the active light's durability, and (built by the scene) the D-pad on
+// the right.
 
 import { FONT, GAME_WIDTH, HUD_Y, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
 import { activeLight, inventoryStacks, maxWater, spendable } from '../core/rules.js';
-import { MAX_GEMS } from '../core/save.js';
-import { makeButton } from './button.js';
 import { playTap } from './sfx.js';
 
 const PAD = 14;
-const SLOT = 56;
-const SLOT_GAP = 8;
-const SLOT_Y = HUD_Y + 36;
-const MAX_SLOTS = 4;
-const INV_BUTTON_X = PAD + MAX_SLOTS * (SLOT + SLOT_GAP) + 42;
+const SLOT = 48;
+const SLOT_GAP = 6;
+const SLOT_Y = HUD_Y + 40;
+// The strip shows this many carried-light stacks, plus one more same-sized
+// box for ITEMS — anything past that lives in the full panel it opens
+// (DESIGN.md §7).
+const MAX_SLOTS = 3;
+const ITEMS_INDEX = MAX_SLOTS;
 
-// The gem row sits under the status line, on the left where the D-pad isn't.
-const GEM_Y = HUD_Y + 178;
-const GEM_X = PAD + 84;
-const GEM_GAP = 30;
+// The grouped counters row: explored ground and the coin purse, each with an
+// icon off the sheet rather than a bare number.
+const COUNTER_Y = HUD_Y + 14;
+const EXPLORED_ICON_X = PAD;
+const EXPLORED_TEXT_X = PAD + 20;
+const COINS_ICON_X = PAD + 138;
+const COINS_TEXT_X = PAD + 158;
+
+// Both bars — the active light's and water's — share this width, so water
+// reads as the same kind of thing as light: a resource with a bar, not a
+// bare number.
+const BAR_W = 220;
+const BAR_H = 12;
 
 export class Hud {
   constructor(scene, { onSlot, onCoins, onWater, onInventory }) {
@@ -26,6 +37,7 @@ export class Hud {
     this.onSlot = onSlot;
     this.onCoins = onCoins;
     this.onWater = onWater;
+    this.onInventory = onInventory;
 
     const pal = getPalette();
     const text = (x, y, size) =>
@@ -36,122 +48,156 @@ export class Hud {
     divider.lineStyle(2, pal.fg, 1);
     divider.lineBetween(0, HUD_Y, GAME_WIDTH, HUD_Y);
 
-    this.explored = text(PAD, HUD_Y + 12, 14);
+    this.exploredIcon = scene.add.image(EXPLORED_ICON_X, COUNTER_Y + 6, 'map').setOrigin(0, 0.5).setScale(1.1);
+    this.explored = text(EXPLORED_TEXT_X, COUNTER_Y, 13);
+
     // The purse, not this run's haul: it is the number that decides whether the
     // merchant will sell you something, and it is what the counter shows you
     // (DESIGN.md §4.5). What this expedition found on its own is a separate line
     // in the recap.
-    this.coins = text(PAD + 170, HUD_Y + 12, 14).setInteractive({ useHandCursor: true });
-    this.coins.on('pointerdown', () => {
-      playTap();
-      this.onCoins();
-    });
-    // Water is the run's one hard failure state (DESIGN.md §6), so it gets its
-    // own counter in the same row rather than living only in the item card.
-    this.water = text(PAD + 260, HUD_Y + 12, 14).setInteractive({ useHandCursor: true });
-    this.water.on('pointerdown', () => {
+    this.coinsIcon = scene.add
+      .image(COINS_ICON_X, COUNTER_Y + 6, 'coin')
+      .setOrigin(0, 0.5)
+      .setScale(1.1)
+      .setInteractive({ useHandCursor: true });
+    this.coins = text(COINS_TEXT_X, COUNTER_Y, 13).setInteractive({ useHandCursor: true });
+    for (const obj of [this.coinsIcon, this.coins])
+      obj.on('pointerdown', () => {
+        playTap();
+        this.onCoins();
+      });
+
+    this.slots = scene.add.container(0, 0);
+    this.lightLabel = text(PAD, SLOT_Y + SLOT + 12, 13);
+    this.lightBar = scene.add.graphics();
+
+    // Water is the run's one hard failure state (DESIGN.md §6), so it gets
+    // the same label-then-bar treatment as the active light, directly under
+    // it and at the same size — the two resources read as the same kind of
+    // thing.
+    this.waterLabel = text(PAD, SLOT_Y + SLOT + 12 + 44, 13).setInteractive({ useHandCursor: true });
+    this.waterLabel.on('pointerdown', () => {
       playTap();
       this.onWater();
     });
+    this.waterBar = scene.add.graphics();
 
-    this.slots = scene.add.container(0, 0);
-    // Opens the full scrollable list (inventoryPanel.js) — the strip only ever
-    // shows MAX_SLOTS stacks, so this is the only way to browse everything once
-    // a run has picked up more kinds of light than that.
-    makeButton(scene, INV_BUTTON_X, SLOT_Y + SLOT / 2, 'ITEMS', onInventory, {
-      width: 76,
-      height: SLOT,
-      fontSize: 12,
-    });
-    this.lightLabel = text(PAD, SLOT_Y + SLOT + 12, 13);
-    this.lightBar = scene.add.graphics();
-    this.status = text(PAD, SLOT_Y + SLOT + 52, 12);
-
-    // How much colour is back: one pip per gem, each in the colour it gave.
-    // The ones still out there are drawn dim rather than left out, so the row
-    // always says how many there are to find.
-    text(PAD, GEM_Y - 7, 12).setText('COLOURS');
-    this.gems = scene.add.container(0, 0);
+    this.status = text(PAD, SLOT_Y + SLOT + 12 + 88, 12);
   }
 
   update(run) {
     const pal = getPalette();
     this.explored.setText(`EXPLORED ${run.explored.size}`);
     this.coins.setText(`COINS ${spendable(run)}`);
-    this.water.setText(`WATER ${run.water}/${maxWater(run.gems)}`);
 
-    this.gems.removeAll(true);
-    for (let i = 1; i <= MAX_GEMS; i++) {
-      const held = i <= run.gems;
-      this.gems.add(
-        this.scene.add
-          .image(GEM_X + (i - 1) * GEM_GAP, GEM_Y, 'gem')
-          .setScale(1.4)
-          .setTint(held ? gemColour(i) : pal.fg)
-          .setAlpha(held ? 1 : 0.25)
-      );
-    }
+    this.waterLabel.setText(`WATER ${run.water}/${maxWater(run.gems)}`);
+    this.waterBar.clear();
+    const waterY = SLOT_Y + SLOT + 32 + 44;
+    this.waterBar.lineStyle(2, pal.fg, 1);
+    this.waterBar.strokeRect(PAD, waterY, BAR_W, BAR_H);
+    this.waterBar.fillStyle(pal.fg, 1);
+    const waterFilled = Math.max(0, run.water / maxWater(run.gems));
+    this.waterBar.fillRect(PAD + 2, waterY + 2, (BAR_W - 4) * waterFilled, BAR_H - 4);
 
     this.slots.removeAll(true);
     const stacks = inventoryStacks(run).slice(0, MAX_SLOTS);
-    stacks.forEach((stack, i) => {
-      const def = itemDef(stack.id);
-      const x = PAD + i * (SLOT + SLOT_GAP);
-      const active = stack.instances.find((inst) => inst.isActive);
-      // The bar reflects the equipped copy when this stack is active, since
-      // that's the durability actually burning; otherwise the freshest copy,
-      // which is the one equipping next would pick by default.
-      const shown = active || stack.instances.reduce((a, b) => (b.durability > a.durability ? b : a));
-
-      const g = this.scene.add.graphics();
-      g.lineStyle(2, pal.fg, 1);
-      g.strokeRect(x, SLOT_Y, SLOT, SLOT);
-      // The equipped light is the one burning down, so it gets the filled slot.
-      if (active) {
-        g.fillStyle(pal.fg, 0.18);
-        g.fillRect(x, SLOT_Y, SLOT, SLOT);
-      }
-      // A pip of remaining durability along the bottom edge of the slot.
-      const left = Math.max(0, shown.durability / def.maxDurability);
-      g.fillStyle(pal.fg, 1);
-      g.fillRect(x + 4, SLOT_Y + SLOT - 8, (SLOT - 8) * left, 4);
-
-      const icon = this.scene.add
-        .image(x + SLOT / 2, SLOT_Y + SLOT / 2 - 4, def.sprite)
-        .setScale(2.5)
-        .setTint(gemColour(def.hue || 0));
-
-      const parts = [g, icon];
-
-      // Several copies of the same light stack into one slot, badged with the
-      // count — the durability of each copy still only shows in the item card,
-      // since they're rarely identical.
-      if (stack.instances.length > 1) {
-        parts.push(
-          this.scene.add
-            .text(x + SLOT - 4, SLOT_Y + SLOT - 8, `x${stack.instances.length}`, {
-              fontFamily: FONT,
-              fontSize: '12px',
-              color: hex(pal.fg),
-            })
-            .setOrigin(1, 1)
-        );
-      }
-
-      const zone = this.scene.add
-        .zone(x, SLOT_Y, SLOT, SLOT)
-        .setOrigin(0)
-        .setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => {
-        playTap();
-        this.onSlot(stack);
-      });
-      parts.push(zone);
-
-      this.slots.add(parts);
-    });
+    stacks.forEach((stack, i) => this.slots.add(this.buildStackSlot(stack, i, pal)));
+    this.slots.add(this.buildItemsSlot(pal));
 
     this.drawLight(run, pal);
+  }
+
+  // One bordered SLOT×SLOT box per carried-light stack — icon, a durability
+  // pip along the bottom edge, and a ×N badge for more than one copy.
+  buildStackSlot(stack, i, pal) {
+    const def = itemDef(stack.id);
+    const x = PAD + i * (SLOT + SLOT_GAP);
+    const active = stack.instances.find((inst) => inst.isActive);
+    // The bar reflects the equipped copy when this stack is active, since
+    // that's the durability actually burning; otherwise the freshest copy,
+    // which is the one equipping next would pick by default.
+    const shown = active || stack.instances.reduce((a, b) => (b.durability > a.durability ? b : a));
+
+    const g = this.scene.add.graphics();
+    g.lineStyle(2, pal.fg, 1);
+    g.strokeRect(x, SLOT_Y, SLOT, SLOT);
+    // The equipped light is the one burning down, so it gets the filled slot.
+    if (active) {
+      g.fillStyle(pal.fg, 0.18);
+      g.fillRect(x, SLOT_Y, SLOT, SLOT);
+    }
+    // A pip of remaining durability along the bottom edge of the slot.
+    const left = Math.max(0, shown.durability / def.maxDurability);
+    g.fillStyle(pal.fg, 1);
+    g.fillRect(x + 4, SLOT_Y + SLOT - 7, (SLOT - 8) * left, 3);
+
+    const icon = this.scene.add
+      .image(x + SLOT / 2, SLOT_Y + SLOT / 2 - 3, def.sprite)
+      .setScale(2.1)
+      .setTint(gemColour(def.hue || 0));
+
+    const parts = [g, icon];
+
+    // Several copies of the same light stack into one slot, badged with the
+    // count — the durability of each copy still only shows in the item card,
+    // since they're rarely identical.
+    if (stack.instances.length > 1) {
+      parts.push(
+        this.scene.add
+          .text(x + SLOT - 3, SLOT_Y + SLOT - 7, `x${stack.instances.length}`, {
+            fontFamily: FONT,
+            fontSize: '11px',
+            color: hex(pal.fg),
+          })
+          .setOrigin(1, 1)
+      );
+    }
+
+    const zone = this.scene.add
+      .zone(x, SLOT_Y, SLOT, SLOT)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerdown', () => {
+      playTap();
+      this.onSlot(stack);
+    });
+    parts.push(zone);
+
+    return parts;
+  }
+
+  // ITEMS opens the full scrollable list (inventoryPanel.js) — the strip only
+  // ever shows MAX_SLOTS stacks, so this is the only way to browse everything
+  // once a run has picked up more kinds of light than that. Drawn as the same
+  // bordered box as every other slot, listed right after them, rather than as
+  // a button of its own off to one side.
+  buildItemsSlot(pal) {
+    const x = PAD + ITEMS_INDEX * (SLOT + SLOT_GAP);
+
+    const g = this.scene.add.graphics();
+    g.lineStyle(2, pal.fg, 1);
+    g.strokeRect(x, SLOT_Y, SLOT, SLOT);
+
+    const label = this.scene.add
+      .text(x + SLOT / 2, SLOT_Y + SLOT / 2, 'ITEMS', {
+        fontFamily: FONT,
+        fontSize: '11px',
+        color: hex(pal.fg),
+        align: 'center',
+        wordWrap: { width: SLOT - 8 },
+      })
+      .setOrigin(0.5);
+
+    const zone = this.scene.add
+      .zone(x, SLOT_Y, SLOT, SLOT)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerdown', () => {
+      playTap();
+      this.onInventory();
+    });
+
+    return [g, label, zone];
   }
 
   drawLight(run, pal) {
@@ -166,17 +212,17 @@ export class Hud {
 
     const def = itemDef(light.id);
     this.lightLabel.setText(`${def.name}  ${light.durability}/${def.maxDurability}`);
-    this.status.setText('TAP AN ITEM FOR DETAILS.');
 
-    const barW = 240;
     const barY = SLOT_Y + SLOT + 32;
     this.lightBar.lineStyle(2, pal.fg, 1);
-    this.lightBar.strokeRect(PAD, barY, barW, 12);
+    this.lightBar.strokeRect(PAD, barY, BAR_W, BAR_H);
     this.lightBar.fillStyle(pal.fg, 1);
-    this.lightBar.fillRect(PAD + 2, barY + 2, (barW - 4) * (light.durability / def.maxDurability), 8);
+    this.lightBar.fillRect(PAD + 2, barY + 2, (BAR_W - 4) * (light.durability / def.maxDurability), BAR_H - 4);
   }
 
-  // Transient line for the things worth calling out the moment they happen.
+  // Transient line for the things worth calling out the moment they happen —
+  // there is no default message under it any more, so it stays blank between
+  // them.
   flash(message) {
     this.status.setText(message);
   }

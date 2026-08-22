@@ -57,7 +57,7 @@ import { compassTarget } from '../src/core/compass.js';
 import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
 import { clampSlot, emptySave, MAX_GEMS, normaliseSave, SLOT_COUNT } from '../src/core/save.js';
 import { PRICES } from '../src/data/shop.js';
-import { BLACKOUT_MEMORY_RADIUS, gemColour } from '../src/config.js';
+import { BLACKOUT_MEMORY_RADIUS, gemColour, getMoveSpeed, setMoveSpeed } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
 import { zoneColours } from '../src/ui/wizard.js';
 import { DIM, LIT, buildSprites, WIZARD_ZONES } from '../src/data/sprites.js';
@@ -206,6 +206,14 @@ const MERCHANT_ROUTE = bfs(SEED, (x, y) => isMerchant(x, y, SEED), 60);
 
 // The nearest tile from which a step walks into a gate that is still shut.
 const SHUT_GATE = SANCTUMS.find((s) => s.requires === 1);
+
+unit('the move-speed setting clamps to its slider range', () => {
+  const before = getMoveSpeed();
+  assertEqual(setMoveSpeed(0), 2, 'clamped up to the minimum');
+  assertEqual(setMoveSpeed(99), 10, 'clamped down to the maximum');
+  assertEqual(setMoveSpeed(6.4), 6, 'rounded to a whole step');
+  setMoveSpeed(before);
+});
 
 // --- Pure rules -------------------------------------------------------------
 
@@ -1356,6 +1364,24 @@ test('the d-pad walks and burns the torch', async (game) => {
   assertEqual(state.facing, 'right', 'facing');
   assertEqual(state.inventory[0].durability, 99, 'one durability spent');
   assertEqual(await game.wizardTexture(), 'wizard-right', 'the wizard turned');
+});
+
+test('holding a D-pad arrow keeps stepping until released', async (game) => {
+  await game.startRun();
+  const before = await game.state();
+
+  // West of the base is clear for several tiles on the default seed, so a
+  // held press can take more than one step without hitting rock.
+  await game.holdDpad('left', 900);
+  await game.settle();
+
+  const after = await game.state();
+  assert(after.steps - before.steps >= 2, `a held press took more than one step (took ${after.steps - before.steps})`);
+  assert(after.x < before.x, 'and actually walked west');
+
+  const justAfter = after.steps;
+  await game.page.waitForTimeout(500);
+  assertEqual((await game.state()).steps, justAfter, 'and stops the moment the arrow is released');
 });
 
 test('swiping the map walks', async (game) => {

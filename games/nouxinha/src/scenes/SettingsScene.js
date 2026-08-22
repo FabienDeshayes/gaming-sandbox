@@ -1,31 +1,41 @@
-// Palette picker, the music and cheat switches, and the one destructive control
-// in the game. Each palette row is drawn in its *own* palette rather than the
-// active one, so the list shows you the four combinations instead of describing
-// them.
+// Settings: the palette grid, the music, tile-border and cheat switches, and
+// the move-speed slider. Each palette swatch is drawn in its *own* palette
+// rather than the active one, so the grid shows you the four combinations
+// instead of describing them.
 
 import {
   FONT,
   GAME_WIDTH,
+  MAX_MOVE_SPEED,
+  MIN_MOVE_SPEED,
   PALETTES,
   getCheats,
   getFloorBorder,
+  getMoveSpeed,
   getMusic,
   getPalette,
   hex,
   setCheats,
   setFloorBorder,
+  setMoveSpeed,
   setMusic,
   setPalette,
 } from '../config.js';
-import { activeSlot, clearSave, loadSave } from '../core/save.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
+import { makeSlider } from '../ui/slider.js';
 import { playTap } from '../ui/sfx.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
-const ROW_H = 68;
-const ROW_W = 380;
-const FIRST_ROW_Y = 176;
+// The four palettes sit two to a row rather than stacked, so picking one
+// doesn't eat most of the screen's height on its own.
+const COLS = 2;
+const CELL_W = 182;
+const CELL_H = 68;
+const CELL_GAP_X = 16;
+const CELL_GAP_Y = 14;
+const GRID_W = COLS * CELL_W + (COLS - 1) * CELL_GAP_X;
+const FIRST_ROW_Y = 168;
 
 export class SettingsScene extends Phaser.Scene {
   constructor() {
@@ -48,47 +58,45 @@ export class SettingsScene extends Phaser.Scene {
     startMusic('menu');
 
     this.add
-      .text(cx, 110, 'PALETTE', { fontFamily: FONT, fontSize: '28px', color: hex(pal.fg) })
+      .text(cx, 100, 'SETTINGS', { fontFamily: FONT, fontSize: '28px', color: hex(pal.fg) })
       .setOrigin(0.5);
 
+    const gridLeft = cx - GRID_W / 2;
     PALETTES.forEach((option, i) => {
-      const y = FIRST_ROW_Y + i * (ROW_H + 14);
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      const x = gridLeft + col * (CELL_W + CELL_GAP_X);
+      const y = FIRST_ROW_Y + row * (CELL_H + CELL_GAP_Y);
       const active = option.id === pal.id;
 
       const swatch = this.add.graphics();
       swatch.fillStyle(option.bg, 1);
-      swatch.fillRect(cx - ROW_W / 2, y, ROW_W, ROW_H);
+      swatch.fillRect(x, y, CELL_W, CELL_H);
       swatch.lineStyle(active ? 3 : 1, option.fg, 1);
-      swatch.strokeRect(cx - ROW_W / 2, y, ROW_W, ROW_H);
+      swatch.strokeRect(x, y, CELL_W, CELL_H);
+
+      this.add.image(x + 30, y + CELL_H / 2, 'wizard-down').setScale(1.8).setTint(option.fg);
 
       this.add
-        .text(cx - ROW_W / 2 + 76, y + ROW_H / 2, option.name, {
+        .text(x + 52, y + CELL_H / 2, option.name, {
           fontFamily: FONT,
-          fontSize: '18px',
+          fontSize: '14px',
           color: hex(option.fg),
         })
         .setOrigin(0, 0.5);
 
-      // A wizard and a rock in the row's own colours — the two things you spend
-      // the most time looking at.
-      this.add.image(cx - ROW_W / 2 + 38, y + ROW_H / 2, 'wizard-down').setScale(2.5).setTint(option.fg);
-      this.add.image(cx + ROW_W / 2 - 44, y + ROW_H / 2, 'rock').setScale(2.5).setTint(option.fg);
-
       if (active)
         this.add
-          .text(cx + ROW_W / 2 - 96, y + ROW_H / 2, 'ON', {
+          .text(x + CELL_W - 10, y + 10, 'ON', {
             fontFamily: FONT,
-            fontSize: '14px',
+            fontSize: '11px',
             color: hex(option.fg),
           })
-          .setOrigin(0.5);
+          .setOrigin(1, 0.5);
 
-      const zone = this.add
-        .zone(cx - ROW_W / 2, y, ROW_W, ROW_H)
-        .setOrigin(0)
-        .setInteractive({ useHandCursor: true });
+      const zone = this.add.zone(x, y, CELL_W, CELL_H).setOrigin(0).setInteractive({ useHandCursor: true });
       // Fire on release, not on touch-down (see ui/button.js) — pointerdown
-      // here is what made a row sometimes eat a tap and need a second one.
+      // here is what made a cell sometimes eat a tap and need a second one.
       let pressed = false;
       zone.on('pointerdown', () => {
         pressed = true;
@@ -112,7 +120,7 @@ export class SettingsScene extends Phaser.Scene {
     const music = makeButton(
       this,
       cx,
-      540,
+      396,
       musicLabel(getMusic()),
       () => {
         const on = setMusic(!getMusic());
@@ -130,7 +138,7 @@ export class SettingsScene extends Phaser.Scene {
     const border = makeButton(
       this,
       cx,
-      600,
+      476,
       borderLabel(getFloorBorder()),
       () => {
         const on = setFloorBorder(!getFloorBorder());
@@ -139,6 +147,18 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
 
+    // How fast holding a D-pad arrow walks (DESIGN.md §7, dpad.js) — a slider
+    // rather than a fixed rate, since "fast" is a matter of taste and thumb
+    // speed both.
+    makeSlider(this, cx, 556, {
+      width: 300,
+      min: MIN_MOVE_SPEED,
+      max: MAX_MOVE_SPEED,
+      value: getMoveSpeed(),
+      label: (v) => `MOVE SPEED: ${v}/s`,
+      onChange: (v) => setMoveSpeed(v),
+    });
+
     // The cheat switch (DESIGN.md §6.2): a run started with it on opens with the
     // map revealed and one of everything, which is how the late game gets looked
     // at without a campaign's worth of walking behind it. It says what it costs
@@ -146,7 +166,7 @@ export class SettingsScene extends Phaser.Scene {
     const cheats = makeButton(
       this,
       cx,
-      660,
+      646,
       cheatLabel(getCheats()),
       () => {
         const on = setCheats(!getCheats());
@@ -156,7 +176,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
     const note = this.add
-      .text(cx, 694, cheatNote(getCheats()), {
+      .text(cx, 686, cheatNote(getCheats()), {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -164,31 +184,7 @@ export class SettingsScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(getCheats() ? 0.8 : 0.5);
 
-    // Erasing is the one destructive control here and it always means the slot
-    // you last played, so it says which. Like the slot picker's overwrite, it
-    // asks with itself: the first tap arms it, the second does it.
-    const slot = activeSlot();
-    const save = loadSave(slot);
-    let armed = false;
-    const erase = makeButton(
-      this,
-      cx,
-      748,
-      save.started ? `ERASE SLOT ${slot}` : `SLOT ${slot} IS EMPTY`,
-      () => {
-        if (!save.started) return;
-        if (!armed) {
-          armed = true;
-          erase.setLabel('TAP AGAIN TO ERASE');
-          return;
-        }
-        clearSave(slot);
-        this.scene.restart();
-      },
-      { width: 300, fontSize: 14, enabled: !!save.started }
-    );
-
-    makeButton(this, cx, 812, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
+    makeButton(this, cx, 776, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
   }
 }
 

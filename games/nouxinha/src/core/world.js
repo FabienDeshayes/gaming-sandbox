@@ -619,6 +619,28 @@ const BAND_FAR = 20;
 // weights below only decide what the offered tile turns out to be.
 const SPAWN = { near: 0.9, mid: 0.95, far: 1 };
 
+// ...and how much of that dial each gem leaves standing. The world gets
+// *sparser* as the campaign gets richer, and this is the one place the gems
+// change how much there is rather than what it is.
+//
+// It reads backwards until you look at what a pickup is worth. A gem does not
+// add a tier on top of what is lying about, it upgrades it (see SCATTER below),
+// and the upgrades are steep: a water drop refills 20 and a spring vial refills
+// everything; a medium torch burns 50 steps and a beacon burns 140. At a flat
+// density the three-gem world hands out eight times the water and nearly twice
+// the light per tile walked that the opening one does, which is what turns the
+// late game into stopping every few steps for something you did not need. So
+// the count comes down as the value goes up: at three gems the ground holds
+// about three fifths of what it opened with, each piece of it worth several
+// times more, and picking something up stays a thing that happens rather than a
+// thing that keeps happening.
+//
+// Nothing here touches the opening world — a run with no gems walks the density
+// the game was tuned at — and the taper only ever bites after a gem has been
+// banked, by which point max water has gone up by 50 with it (rules.js
+// `maxWater`). It cannot strand a run.
+const GEM_DENSITY = [1, 0.85, 0.72, 0.6];
+
 // Relative weight of each kind within a band, and the two fields that tie a kind
 // to the gems: `tier` is the gem that brings it into the world, `until` the gem
 // that retires it.
@@ -643,14 +665,23 @@ const SPAWN = { near: 0.9, mid: 0.95, far: 1 };
 // Item quality still scales with distance from the base — coins and water near
 // home, the bigger torches only further out — which is what makes walking away
 // worth the durability (DESIGN.md §4.3).
+// The weights are set by what a kind is *worth per step*, not by how often it
+// wants to be seen. A step costs 1 water and 1 durability off the active light,
+// so the honest way to read a column is: how much water, and how many
+// lit steps, does a walk of a thousand tiles across this band hand back? At the
+// opening weights the far band gave back 170 water and 983 lit steps — light
+// very nearly paying for itself while water paid for a sixth of itself, which
+// made the leash the game is actually about invisible behind a torch supply
+// that never ran out. Water is the pressure; light is meant to be the thing you
+// ration. So water outweighs light in every band before the first gem.
 const SCATTER = [
   { id: 'coin', near: 5, mid: 4, far: 3 },
-  { id: 'water-drop', near: 5, mid: 4, far: 2.5, until: 1 },
-  { id: 'torch-small', near: 2, mid: 1, far: 0.5 },
-  { id: 'torch-medium', near: 0, mid: 3, far: 2, until: 2 },
-  { id: 'torch-lamp', near: 0, mid: 0, far: 1.5 },
+  { id: 'water-drop', near: 7, mid: 6, far: 4.5, until: 1 },
+  { id: 'torch-small', near: 1.2, mid: 0.8, far: 0.4 },
+  { id: 'torch-medium', near: 0, mid: 1.6, far: 1.2, until: 2 },
+  { id: 'torch-lamp', near: 0, mid: 0, far: 0.8 },
   { id: 'water-flask', near: 5, mid: 4, far: 2.5, tier: 1, until: 3 },
-  { id: 'torch-beacon', near: 0, mid: 3, far: 2.5, tier: 2 },
+  { id: 'torch-beacon', near: 0, mid: 2.5, far: 2, tier: 2 },
   { id: 'spring-vial', near: 5, mid: 4, far: 2.5, tier: 3 },
 ];
 
@@ -703,7 +734,8 @@ function candidateIn(cx, cy, seed, salt) {
 function kindOf(candidate, seed, gems) {
   const d = chebyshev(candidate.x, candidate.y);
   const band = bandOf(d);
-  if (candidate.roll >= SPAWN[band]) return null;
+  if (candidate.roll >= SPAWN[band] * GEM_DENSITY[Math.min(gems, GEM_DENSITY.length - 1)])
+    return null;
   if (!spawnable(candidate.x, candidate.y, seed)) return null;
 
   const pool = SCATTER.filter((kind) => kind[band] > 0 && available(kind, gems));

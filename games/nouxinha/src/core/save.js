@@ -27,7 +27,7 @@
 // here defaults to that one, which is what lets a run bank itself without ever
 // knowing which slot it belongs to.
 
-import { SANCTUM_PLAN } from './world.js';
+import { SANCTUM_PLAN, pickSeed } from './world.js';
 import { ITEMS, TOOLS } from '../data/items.js';
 
 const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;
@@ -48,6 +48,12 @@ export function emptySave() {
     // in use from that moment, before it has a single run in it — otherwise
     // "which slot am I playing" would have no answer until the first walk home.
     started: false,
+    // The world this campaign walks. Drawn when NEW GAME claims the slot, so
+    // the three slots are three different worlds — see `startSlot`. Zero means
+    // "not drawn": every save written before slots had seeds, which is why it
+    // falls back to DEFAULT_SEED in `createRun` rather than to a fresh draw. A
+    // campaign already under way keeps the world it has been mapping.
+    seed: 0,
     gems: 0,
     coins: 0,
     runs: 0,
@@ -90,6 +96,7 @@ const whole = (value) => (Number.isFinite(value) ? Math.trunc(value) : 0);
 export function normaliseSave(raw, keepRun = true) {
   const save = emptySave();
   if (!raw || typeof raw !== 'object') return save;
+  save.seed = Number.isFinite(raw.seed) ? raw.seed | 0 : 0;
   save.gems = int(raw.gems, 0, MAX_GEMS);
   save.coins = int(raw.coins, 0, Number.MAX_SAFE_INTEGER);
   save.runs = int(raw.runs, 0, Number.MAX_SAFE_INTEGER);
@@ -276,14 +283,28 @@ export function anySlotUsed() {
   return slots().some((entry) => entry.used);
 }
 
-// NEW GAME: the slot is emptied, claimed, and made the active one, so a campaign
-// started here banks here. Overwriting an occupied slot is the picker's
-// decision, not this function's — by the time it is called the player has
-// already been asked twice.
+// A campaign's world, drawn once when the slot is claimed. Every run out of
+// this slot walks it, so the three slots are three different worlds and
+// starting over gives a fourth — which is the whole point of a world that is a
+// pure function of a seed (core/world.js).
+//
+// Validated here rather than at every run start: `pickSeed` is what promises
+// the spawn isn't sealed into a pocket and that every gate and landmark can be
+// reached, and the seed it hands back is the one worth writing down. `createRun`
+// still runs it, but on an already-valid seed it is a no-op that returns the
+// same number.
+function drawSeed() {
+  return pickSeed((Math.random() * 0x100000000) | 0);
+}
+
+// NEW GAME: the slot is emptied, given a world of its own, claimed, and made
+// the active one, so a campaign started here banks here. Overwriting an occupied
+// slot is the picker's decision, not this function's — by the time it is called
+// the player has already been asked twice.
 export function startSlot(slot) {
   const picked = setActiveSlot(slot);
   clearSave(picked);
-  return writeSave(emptySave(), picked);
+  return writeSave({ ...emptySave(), seed: drawSeed() }, picked);
 }
 
 // LOAD GAME: nothing is written, the slot simply becomes the one the next run

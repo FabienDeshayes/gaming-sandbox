@@ -84,8 +84,8 @@ The compass and the map are **tools** rather than items: one of each exists, nei
 | Item | Gems needed | Effect |
 |---|---|---|
 | Coins | — | What the merchant takes (§4.5). A pickup is a small pile worth 1-5, because the separation rule (§4.3) caps how many piles the world can hold. The HUD's counter shows the whole **purse** — banked plus carried — because that is the number the merchant spends; what this expedition found on its own is a separate line in the recap. |
-| Water drop | — | Refills water by 20 (§4). Running dry is the run's one death condition — this is the thing worth detouring for. |
-| Water flask | 1 | Refills water by 60. Three drops in one. |
+| Water drop | — | Refills water by 30 (§4), a seventh of a full tank. Running dry is the run's one death condition — this is the thing worth detouring for. |
+| Water flask | 1 | Refills water by 60. Two drops in one. |
 | Spring vial | 3 | Refills water to the ceiling, wherever you are. |
 | Gem | — | One per sanctum, three in all. Gives a colour back to the world and opens the gate that wants it (§4.4). |
 | Compass | — | Points at the next unique object worth walking to (§4.6). Bought for 50 or found. |
@@ -103,6 +103,11 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
 | **Unique objects** | `(x, y, seed)` | The three gems, the merchant, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
 | **Consumables** | `(x, y, seed, salt)` | Coins, water and lights. The salt changes every run and every respawn, so these are never twice in the same places. |
 
+- **Each campaign gets a world of its own.** The seed is drawn when NEW GAME claims a save slot and
+  lives in that slot from then on, so the three slots are three different cave systems and starting
+  over in one gives it a fourth. Every expedition out of a slot walks the same world — that is what
+  makes the ground a campaign has lit worth carrying between runs (§6.1), and what makes the gems
+  stay where the compass said they were.
 - The **base** sits at `(0, 0)` and is where every run starts. Its 3×3 neighbourhood is forced to
   floor so you can never be walled in at spawn. It renders as a hut with a flag so it's recognisable
   from the edge of your light, and it's the one tile that's always on the map. The hut isn't drawn
@@ -156,15 +161,29 @@ as a good patch of ground rather than a clump. Two consequences fall out:
 - **Sanctum clearings are the exception.** A clearing is a hoard somebody left there, so it keeps its
   dense cache — capped at two of any one kind, so it reads as a cache and not a pile (§4.4).
 
+**Water outweighs light on the ground, before any gem.** A step costs one water and one point of
+durability off the burning light, so the honest way to read the scatter is what a walk gets back per
+tile crossed. The opening weights had light very nearly paying for itself out at range while water
+paid for about a sixth of itself, which made the leash the game is actually about invisible behind a
+torch supply that never ran out. Water is the pressure; light is the thing meant to be rationed —
+so before the first gem, every band offers more water than light.
+
 **A gem upgrades the world rather than adding to it.** Item quality still scales with distance from
 the base — coins and water near home, the bigger torches only further out — and on top of that each
 gem swaps one kind out for one kind in: the first retires the water drop for the flask, the second
-the medium torch for the beacon, the third the flask for the spring vial. The lattice offers up the
-same tiles either way, so **the map holds the same number of items after a gem as before**; what
-changed is what they are. The swaps are one-for-one on purpose — retire two kinds for one and the
-survivors crowd each other against the separation rule, and the world ends up emptier the further you
-get, which is backwards. Walking ground you have already walked is worth it again because everything
-on it is better, not because there is more of it.
+the medium torch for the beacon, the third the flask for the spring vial. The swaps are one-for-one
+on purpose: what a gem changes is what is lying about, never how many kinds are in play. Walking
+ground you have already walked is worth it again because everything on it is better.
+
+**And it thins the ground as it upgrades it.** The upgrades are steep — a drop refills 30 and a
+spring vial refills everything, a medium torch burns 50 steps and a beacon burns 140 — so a world
+that kept the same number of pickups would hand out several times the water and nearly twice the
+light per tile walked by the end of the campaign, which is what turned the late game into stopping
+every few steps for something you did not need. So the count comes down as the value goes up: at
+three gems the ground holds about three fifths of what it opened with. Fewer things, each worth
+several times more, and picking something up stays a thing that happens rather than a thing that
+keeps happening. The taper never touches the opening world, and never bites until a gem has been
+banked — by which point the water ceiling has gone up by 50 with it.
 
 **Everything on the ground comes back, somewhere new.** Two things respawn the consumable layer:
 picking up a **gem**, and walking back onto the **hut**. Both relay the whole scatter — anything this

@@ -18,7 +18,6 @@ import {
   step,
   suspendRun,
 } from '../core/rules.js';
-import { DEFAULT_SEED } from '../core/world.js';
 import { activeSlot, loadSave, MAX_GEMS } from '../core/save.js';
 import { itemDef } from '../data/items.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
@@ -93,8 +92,8 @@ export class ExploreScene extends Phaser.Scene {
     startMusic('explore');
 
     // A run can be handed a seed and a nonce (SlotScene reads them off the URL),
-    // which is what makes an expedition reproducible; without them it takes the
-    // one world and draws its own nonce.
+    // which is what makes an expedition reproducible; without them it walks the
+    // world its slot was given at NEW GAME and draws its own nonce.
     const asked = data || {};
     // The cheat switch is a setting rather than run state (config.js), so the
     // scene reads it and hands it over — core/rules.js never asks.
@@ -113,9 +112,7 @@ export class ExploreScene extends Phaser.Scene {
     this.run =
       asked.run ||
       (cheats ? null : resumeRun(loadSave())) ||
-      createRun(asked.seed !== undefined ? asked.seed : DEFAULT_SEED, undefined, asked.nonce, {
-        cheats,
-      });
+      createRun(asked.seed, undefined, asked.nonce, { cheats });
     // Blocks input while the world is sliding, so a fast tapper can't queue
     // steps the renderer hasn't caught up with.
     this.animating = false;

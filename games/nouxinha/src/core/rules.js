@@ -63,14 +63,19 @@ function drawNonce() {
   return (Math.random() * 0x7fffffff) | 0;
 }
 
-export function createRun(seed = DEFAULT_SEED, save = loadSave(), nonce, options = {}) {
+// `seed` is what the URL asked for, and is almost always absent: a campaign
+// walks the world its slot was given when NEW GAME claimed it (`startSlot` in
+// core/save.js), which is what makes three slots three worlds rather than three
+// walks across the same one. A slot with no seed of its own is a campaign
+// started before slots had worlds, and keeps the one world it has been mapping.
+export function createRun(seed, save = loadSave(), nonce, options = {}) {
   // Normalised here rather than trusted: a save arrives off disk, from a test,
   // or from the run that banked it, and a hand-edited one must cost the player
   // their progress at worst — never the run's arithmetic.
   const banked = normaliseSave(save);
   const gems = banked.gems;
   const salted = nonce === undefined ? drawNonce() : nonce | 0;
-  const picked = pickSeed(seed);
+  const picked = pickSeed(seed === undefined ? banked.seed || DEFAULT_SEED : seed);
   // Ground is the one thing every run inherits, map or no map: what you have
   // already lit stays lit, so a new expedition starts from the edge of the last
   // one instead of from scratch (DESIGN.md §6.1). It is tied to the world that
@@ -476,6 +481,11 @@ export function bankRun(state) {
   if (state.cheats) return loadSave();
   return writeSave({
     v: 1,
+    // The campaign's world. Rebuilt from scratch here rather than merged onto
+    // what is in the slot, so this has to be carried over by hand — a walk home
+    // that dropped it would move the campaign to a different world, and take its
+    // cartography with it (`mappedSeed` below).
+    seed: state.seed,
     gems: Math.max(state.gems, state.banked.gems),
     // `state.coins` is what this run picked up and `state.banked.coins` what was
     // already banked less anything the merchant took, so this one sum settles
@@ -515,6 +525,7 @@ export function rememberGround(state) {
   const stored = loadSave();
   return writeSave({
     ...stored,
+    seed: state.seed,
     mapped: encodeExplored(state.explored),
     mappedSeed: state.seed,
     seen: [...state.seenUnique],
@@ -553,6 +564,7 @@ export function suspendRun(state) {
   const stored = loadSave();
   return writeSave({
     ...stored,
+    seed: state.seed,
     // The ground goes in whichever way a run pauses or ends, same as always.
     mapped: encodeExplored(state.explored),
     mappedSeed: state.seed,

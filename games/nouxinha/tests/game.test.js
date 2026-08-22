@@ -3,7 +3,7 @@
 //
 // See TESTING.md for how to run these and how to add one.
 
-import { assert, assertEqual, run, test, unit } from './harness.js';
+import { assert, assertEqual, run, test as browserTest, unit } from './harness.js';
 import { visibleTiles, tileKey } from '../src/core/light.js';
 import {
   canEnter,
@@ -192,6 +192,13 @@ const MEDIUM_TORCH_CHAIN = bfsChain(SEED, 'torch-medium', MEDIUM_TORCH_COPIES, 6
 // (TitleScene reads both off the URL), which is how a browser test can know
 // where the coins are before the page has drawn any.
 const WORLD = `seed=${DEFAULT_SEED}&nonce=${NONCE}`;
+
+// Every browser test opens on that world unless it names another. NEW GAME
+// draws a world of its own for each slot (core/save.js `startSlot`), so a page
+// opened on no seed at all is a page in a world nothing in this file has
+// BFSed — and since there are no authored levels, every route here is derived
+// against DEFAULT_SEED and has to be walked in DEFAULT_SEED's world.
+const test = (name, fn, opts = {}) => browserTest(name, fn, { query: WORLD, ...opts });
 
 async function walkPath(game, path) {
   for (const dir of path) {
@@ -554,7 +561,7 @@ unit('a gate stays shut until you hold the gem it wants', () => {
   assertEqual(step(armed, dir).moved, true, 'and it can be walked through');
 });
 
-unit('a gem upgrades what the world spawns without spawning more of it', () => {
+unit('a gem upgrades what the world spawns, and thins it', () => {
   // Sanctum clearings are skipped: a sanctum's cache is a hoard fixed at what
   // it was built holding, and doesn't follow the open world's swaps.
   const count = (gems) => {
@@ -574,19 +581,28 @@ unit('a gem upgrades what the world spawns without spawning more of it', () => {
   const none = count(0);
   assert(none.total > 50, 'the sample window should hold plenty to compare');
 
-  // One kind out, one kind in, at every gem — so the map never fills up and
-  // never empties out. Not exactly equal, because thinning is per kind and the
-  // swap moves which kind is crowding itself, but within a few percent.
+  // One kind out, one kind in, at every gem — the swaps never change how many
+  // kinds are in play, only which. What does change is how many tiles hold
+  // anything: each gem leaves the ground sparser than the last (GEM_DENSITY in
+  // core/world.js), because what it does hold is worth several times more.
+  let previous = none.total;
   for (const gems of [1, 2, 3]) {
     const after = count(gems);
-    const drift = Math.abs(after.total - none.total) / none.total;
-    assert(drift < 0.12, `gem ${gems} leaves the map about as full (drifted ${drift})`);
+    assert(
+      after.total < previous,
+      `gem ${gems} thins the ground (${after.total} against ${previous})`
+    );
+    previous = after.total;
     assertEqual(
       Object.keys(after.tally).length,
       Object.keys(none.tally).length,
       `gem ${gems} keeps the same number of kinds in play`
     );
   }
+
+  // Thinner, not empty: three gems still leave over half of what the opening
+  // world held, so the late game is quieter rather than barren.
+  assert(previous > none.total * 0.45, `three gems leave the ground worth walking (${previous})`);
 
   assert(none.tally['water-drop'] > 0, 'water drops before the first gem');
   assertEqual(none.tally['water-flask'], undefined, 'and no flasks');
@@ -601,6 +617,33 @@ unit('a gem upgrades what the world spawns without spawning more of it', () => {
   const three = count(3);
   assert(three.tally['spring-vial'] > 0, 'spring vials after the third gem');
   assertEqual(three.tally['water-flask'], undefined, 'the flask it replaced is retired');
+});
+
+unit('a run walks the world its slot names', () => {
+  // A campaign's world is drawn once, when NEW GAME claims the slot, and lives
+  // in the save from then on (core/save.js `startSlot`). Everything else about
+  // the world falls out of it, so a run that ignored it would be a run in
+  // somebody else's cave system.
+  const mine = pickSeed(4242);
+  assertEqual(createRun(undefined, { ...emptySave(), seed: mine }).seed, mine, 'the slot decides');
+
+  // A slot with no world of its own is a campaign started before slots had
+  // them. It keeps the one world it has been mapping rather than being moved to
+  // a fresh one, which would strand its cartography.
+  assertEqual(createRun(undefined, emptySave()).seed, pickSeed(DEFAULT_SEED), 'and a legacy slot keeps the old one');
+
+  // A seed named outright still wins — that is what `?seed=` on the URL is for.
+  assertEqual(createRun(SEED, { ...emptySave(), seed: mine }).seed, pickSeed(SEED), 'and the URL overrides both');
+});
+
+unit('banking keeps the world the campaign has been walking', () => {
+  // `bankRun` rebuilds the save rather than merging onto it, so the world is
+  // the one field a walk home could silently drop — and dropping it would take
+  // the campaign's mapped ground with it (`mappedSeed`).
+  const mine = pickSeed(31337);
+  const banked = bankRun(createRun(undefined, { ...emptySave(), seed: mine }, NONCE));
+  assertEqual(banked.seed, mine, 'walking home leaves the world alone');
+  assertEqual(banked.mappedSeed, mine, 'and the ground it drew belongs to it');
 });
 
 unit('each gem carried raises the water ceiling', () => {
@@ -2188,6 +2231,48 @@ test('new game picks a slot, and load game brings that campaign back', async (ga
   assertEqual(state.banked.runs, 1, 'and loading it carries on where it left off');
   assert(state.explored > 9, 'on the ground that campaign had already lit');
 });
+
+// Deliberately opened on no seed: this is the one test that wants whatever world
+// NEW GAME draws, because what it is checking is that it draws one at all.
+test(
+  'two new games are two different worlds',
+  async (game) => {
+    const worldOf = async (slot) => {
+      await game.clickText('NEW GAME');
+      await game.waitForScene('SlotScene');
+      await game.clickText(slot);
+      await game.waitForScene('ExploreScene');
+      const seed = (await game.state()).seed;
+      // Out and back, and stop at the hut, so the campaign is banked and the
+      // walk ends on the title screen ready for the next one.
+      await game.tapDpad('right');
+      await game.settle();
+      await game.tapDpad('left');
+      await game.settle();
+      await game.clickText('STOP HERE');
+      await game.clickText('HOME');
+      await game.waitForScene('TitleScene');
+      return seed;
+    };
+
+    const first = await worldOf('SLOT 1');
+    const second = await worldOf('SLOT 2');
+    assert(first !== second, `two campaigns, two worlds (both got ${first})`);
+
+    // And a campaign keeps its own: banking rebuilds the save from scratch
+    // (`bankRun` in core/rules.js), so this is where a slot would quietly lose
+    // the world it has been mapping.
+    assertEqual((await game.save(1)).seed, first, 'slot 1 kept the world it walked');
+    assertEqual((await game.save(2)).seed, second, 'and slot 2 kept its own');
+
+    await game.clickText('LOAD GAME');
+    await game.waitForScene('SlotScene');
+    await game.clickText('SLOT 1');
+    await game.waitForScene('ExploreScene');
+    assertEqual((await game.state()).seed, first, 'and walks it again next expedition');
+  },
+  { query: '' }
+);
 
 // A suspended expedition with one mouthful of water left, planted straight into
 // the slot. It is prior state, not live state — the browser's version of handing

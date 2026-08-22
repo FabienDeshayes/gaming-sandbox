@@ -29,6 +29,9 @@ const CARD_MULTI_LIST = { x: CARD_CX - (380 - 64) / 2, y: CARD_CY + 88, h: 120, 
 // Mirrored from src/ui/shop.js and src/scenes/ExploreScene.js's navigation rail.
 const SHOP = { left: 240 - 420 / 2, rowH: 52, pad: 22, titleH: 40, purseH: 30 };
 const RAIL = { x: 480 - 62, top: 58, w: 48, badgeH: 78, gap: 10, mapH: 34 };
+// The cogwheel above the rail, which is the only way out of a run and the way
+// into Settings and SAVE GAME (src/scenes/ExploreScene.js `buildMenuButton`).
+const COG = { x: 480 - 62, y: 14, w: 48, h: 34 };
 const SHOP_STOCK = 6; // src/data/shop.js STOCK.length
 
 // The shop panel is centred vertically and sized by its row count, same as the
@@ -411,6 +414,10 @@ export async function openGame(
     tapShopRow: (i) =>
       clickAt(240, shopTop() + SHOP.pad + SHOP.titleH + SHOP.purseH + i * SHOP.rowH + SHOP.rowH / 2),
 
+    // The cogwheel in the top right corner: opens the in-run menu (SETTINGS,
+    // SAVE GAME, EXIT GAME, KEEP PLAYING).
+    tapMenuButton: () => clickAt(COG.x + COG.w / 2, COG.y + COG.h / 2),
+
     // The navigation rail down the right edge of the map viewport: the map
     // button sits under the compass badge when the run owns both.
     tapMapButton: async () => {
@@ -497,6 +504,9 @@ export async function openGame(
           cardOpen: s.card.isOpen(),
           inventoryOpen: s.inventory.isOpen(),
           dialogOpen: s.dialog.isOpen(),
+          // Whether the dialog on screen is the cogwheel menu rather than the
+          // hut's question or the death screen.
+          menuOpen: s.menuOpen,
           shopOpen: s.shop.isOpen(),
           mapOpen: s.worldMap.isOpen(),
           compassShown: s.compass.container.visible,

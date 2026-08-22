@@ -2,6 +2,12 @@
 // move-speed slider. Each palette swatch is drawn in its *own* palette
 // rather than the active one, so the grid shows you the four combinations
 // instead of describing them.
+//
+// Reached from the title screen, and from the cogwheel menu mid-expedition
+// (scenes/ExploreScene.js). In the second case the live run rides along in the
+// scene data and goes straight back where it came from, so a palette picked
+// here costs the walk nothing — which is also why picking one re-enters *this*
+// scene with the same data rather than just restarting it.
 
 import {
   FONT,
@@ -44,11 +50,15 @@ export class SettingsScene extends Phaser.Scene {
     preloadTiles(this);
   }
 
-  create() {
+  create(data) {
     ensureTextures(this);
     const pal = getPalette();
     this.cameras.main.setBackgroundColor(pal.bg);
     const cx = GAME_WIDTH / 2;
+    // The expedition that opened Settings, if one did. Carried through every
+    // restart this scene does, so a player can try all four palettes and still
+    // land back on the tile they were standing on.
+    this.opened = data || {};
 
     // The menu loop, the same one the title screen and the slot picker play —
     // asking for the track already playing doesn't restart it (ui/music.js), so
@@ -110,8 +120,9 @@ export class SettingsScene extends Phaser.Scene {
         pressed = false;
         setPalette(option.id);
         // Everything on screen was tinted at create time, so re-enter the scene
-        // to repaint it in the palette just chosen.
-        this.scene.restart();
+        // to repaint it in the palette just chosen — carrying the run, if there
+        // is one, so it survives the repaint.
+        this.scene.restart(this.opened);
       });
     });
 
@@ -170,7 +181,20 @@ export class SettingsScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(getCheats() ? 0.8 : 0.5);
 
-    makeButton(this, cx, 696, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
+    // Back where it came from: the expedition it was opened from, or the title
+    // screen. Restarting ExploreScene with the live run repaints the whole
+    // screen in whatever palette was just picked without costing a step.
+    makeButton(
+      this,
+      cx,
+      696,
+      'BACK',
+      () =>
+        this.opened.run
+          ? this.scene.start('ExploreScene', { run: this.opened.run })
+          : this.scene.start('TitleScene'),
+      { width: 240 }
+    );
   }
 }
 

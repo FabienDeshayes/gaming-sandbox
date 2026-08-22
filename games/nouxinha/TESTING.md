@@ -52,10 +52,11 @@ reaches in to *set* game state.
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
-| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, hut dialog, merchant's counter or map |
+| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter or map |
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground texture, alpha, **tint**, overlay, item and item tint. This is the render, not the model — it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its four colour-zone layers — the wizard wears one colour per gem carried, plus the base colour |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
+| `tapMenuButton()` | Taps the **cogwheel** in the top right, which opens the in-run menu (SETTINGS, SAVE GAME, EXIT GAME, KEEP PLAYING) |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
 | `music()` / `musicTrack()` | Whether the music loop's scheduler is running, and which of the two loops it is playing (`'menu'`, `'explore'`, or `null`) — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
 | `sounds()` | Every sound played so far, in order — `'tap'`, `'coin'`, `'pickup'`, `'gem'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` the same way, and the only way to assert that a button makes a noise and the D-pad doesn't |
@@ -141,6 +142,23 @@ A gem changes three things and each is asserted where it actually lives:
   `save()`. Every browser test gets its own page and so its own empty `localStorage`; no test
   inherits another's save. What a run keeps *however* it ends is the ground it lit, so the tests that
   pin that read `mapped` back out of the slot rather than the run (DESIGN.md §6.1).
+
+## Testing a saved expedition
+
+A slot can hold a walk in progress as well as a campaign (DESIGN.md §6.1), and the two are tested
+from opposite ends:
+
+- **The round trip is pure.** `suspendRun(state)` hands back the save it would have stored — Node has
+  no `localStorage`, which is exactly what makes it readable — and `resumeRun(save)` builds the run
+  back out of it. The assertion that matters is not that the fields survived but that *the world
+  did*: the pure test walks a window of `itemOnTile` over both runs and expects zero differences,
+  because the save stores no world at all, only the seed, the salt's two halves and the tiles the run
+  had already emptied. Respawn the world before suspending, or the epoch half of that goes untested.
+- **What a save costs and clears is a browser test**, since it needs a real slot to write into: save
+  from the cogwheel, leave, and `save()` still holds the walk; die, and it doesn't. Getting to the
+  death screen by playing would be 200 taps, so that test plants a suspended run with one mouthful of
+  water in it through the `save` page option and lets **LOAD GAME** resume it — prior state, not live
+  state, the same as any other planted save.
 
 ## Starting from a player who already has something
 

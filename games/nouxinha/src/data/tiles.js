@@ -107,6 +107,8 @@ export const TILES = {
   map: [46, 5],
 
   // --- HUD -----------------------------------------------------------------
+  // The cogwheel the in-run menu hangs off (DESIGN.md §7).
+  cog: [45, 16],
   // The compass needle, one tile per direction. Four for now: the sheet's
   // arrows are drawn pointing, so a heading is a texture swap rather than a
   // rotation, and `compassHeading` snaps to the four these can draw.

@@ -29,6 +29,7 @@ import {
   variantAt,
 } from '../src/core/world.js';
 import {
+  abandonRun,
   activeLight,
   activeShape,
   bankRun,
@@ -37,6 +38,7 @@ import {
   createRun,
   equip,
   gateOnTile,
+  hasSuspendedRun,
   inventoryStacks,
   isBlackout,
   itemOnTile,
@@ -45,9 +47,11 @@ import {
   refillWater,
   rememberGround,
   respawn,
+  resumeRun,
   runSummary,
   spendable,
   step,
+  suspendRun,
   CHEAT_COINS,
   CHEAT_REVEAL_RADIUS,
   STARTING_WATER,
@@ -57,7 +61,13 @@ import { compassTarget } from '../src/core/compass.js';
 import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
 import { clampSlot, emptySave, MAX_GEMS, normaliseSave, SLOT_COUNT } from '../src/core/save.js';
 import { PRICES } from '../src/data/shop.js';
-import { BLACKOUT_MEMORY_RADIUS, gemColour, getMoveSpeed, setMoveSpeed } from '../src/config.js';
+import {
+  BLACKOUT_MEMORY_RADIUS,
+  gemColour,
+  getMoveSpeed,
+  PALETTES,
+  setMoveSpeed,
+} from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
 import { zoneColours } from '../src/ui/wizard.js';
 import { DIM, buildSprites, WIZARD_ZONES } from '../src/data/sprites.js';
@@ -1116,6 +1126,124 @@ unit('a run that never gets home keeps its ground and nothing else', () => {
   assertEqual(kept.runs, 0, 'and a run that never got home is not a run completed');
 });
 
+unit('saving mid-walk writes the expedition down without banking any of it', () => {
+  // `suspendRun` merges onto the active slot, which is localStorage — absent in
+  // Node, so what it hands back is the save it would have stored.
+  const state = createRun(SEED, { ...emptySave(), coins: 40, runs: 3 }, NONCE);
+  for (const dir of TORCH_ROUTE.path) step(state, dir);
+  state.tools.add('compass');
+
+  const saved = suspendRun(state);
+  assert(hasSuspendedRun(saved), 'the slot is holding an expedition');
+  // Saving is not banking (DESIGN.md §6.1): nothing the run is carrying moves
+  // into the campaign's own numbers, the way stopping at the hut would.
+  assertEqual(saved.coins, 0, 'the coins picked up are still only carried');
+  assertEqual(saved.compass, false, 'and a tool found on the way is still at risk');
+  assertEqual(saved.runs, 0, 'a suspended walk is not a run completed');
+  assert(saved.mapped.length > 0, 'but the ground it lit is written, as always');
+
+  const back = resumeRun(saved);
+  assertEqual(back.x, state.x, 'it resumes on the tile it stopped on');
+  assertEqual(back.y, state.y, 'both ways');
+  assertEqual(back.facing, state.facing, 'facing the way it was');
+  assertEqual(back.steps, state.steps, 'with the steps it had taken');
+  assertEqual(back.water, state.water, 'the water it had left');
+  assertEqual(back.coins, state.coins, 'the coins in its pocket');
+  assertEqual(back.inventory, state.inventory, 'and every light at the durability it was at');
+  assertEqual(back.activeIndex, state.activeIndex, 'still burning the same one');
+  assertEqual([...back.tools].sort(), [...state.tools].sort(), 'holding the same tools');
+  assertEqual(back.explored.size, state.explored.size, 'on the ground it had drawn');
+  // The campaign underneath is what the run would bank into if it ever got
+  // home, so it has to survive the round trip too.
+  assertEqual(back.banked.coins, 40, 'the campaign it walked out of is still there');
+  assertEqual(back.banked.runs, 3, 'runs and all');
+});
+
+unit('a resumed expedition walks out onto the world it left', () => {
+  // The world is never stored (DESIGN.md §4.3), so this is the whole test of the
+  // save format: seed, nonce and epoch have to put the same scatter back, and
+  // `collected` has to keep what the run had already taken off it.
+  const state = createRun(SEED, emptySave(), NONCE);
+  for (const dir of TORCH_ROUTE.path) step(state, dir);
+  assert(state.collected.size > 0, 'the walk picked something up');
+  // A respawn moves the salt on, which is the half of it a stored nonce alone
+  // would get wrong.
+  respawn(state);
+  step(state, TORCH_ROUTE.path[0] === 'left' ? 'right' : 'left');
+
+  const back = resumeRun(suspendRun(state));
+  assertEqual(back.salt, state.salt, 'the same salt, so the same scatter');
+  assertEqual(back.epoch, state.epoch, 'however many times the world has been relaid');
+  assertEqual([...back.collected].sort(), [...state.collected].sort(), 'and the tiles it emptied');
+
+  let differed = 0;
+  let items = 0;
+  for (let y = -20; y <= 20; y++)
+    for (let x = -20; x <= 20; x++) {
+      const was = itemOnTile(state, x, y);
+      if (was) items += 1;
+      if (was !== itemOnTile(back, x, y)) differed += 1;
+    }
+  assert(items > 0, 'there is something out there to get wrong');
+  assertEqual(differed, 0, 'every item is exactly where the run left it');
+});
+
+unit('ending an expedition takes the saved one with it, whichever way it ends', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  for (const dir of ['right', 'right']) step(state, dir);
+
+  // The hut: the walk is over because it came home (DESIGN.md §6.1).
+  assertEqual(bankRun(state).run, null, 'banking at the hut clears the saved walk');
+  // Thirst: the walk is over because it died. A save you could reload out of
+  // would make the game's one hard failure a rewind.
+  assertEqual(abandonRun(state).run, null, 'and so does running dry');
+  // Leaving is the one that clears nothing — not saving is not unsaving — but
+  // that needs a real slot to leave a save in, so it is asserted in the browser.
+  // What is checkable here is the other end of the same rule: a slot with
+  // nothing suspended simply has nothing to carry on with.
+  assertEqual(hasSuspendedRun(emptySave()), false, 'an untouched slot has nothing to resume');
+  assertEqual(resumeRun(emptySave()), null, 'and nothing to resume it from');
+});
+
+unit('a corrupt suspended run costs the walk, not the campaign', () => {
+  const campaign = { ...emptySave(), coins: 30, gems: 1, runs: 2 };
+  for (const bad of [undefined, null, 'nonsense', 42, {}, { x: 4, y: 2 }]) {
+    const save = normaliseSave({ ...campaign, run: bad });
+    assertEqual(save.run, null, `a run block of ${JSON.stringify(bad)} is simply not a run`);
+    assertEqual(save.coins, 30, 'and the campaign around it is untouched');
+  }
+
+  // A run block that is *nearly* right is clamped rather than dropped, the same
+  // way the campaign's own numbers are.
+  const messy = normaliseSave({
+    ...campaign,
+    run: {
+      seed: SEED,
+      x: 3.7,
+      y: -2,
+      facing: 'sideways',
+      water: -50,
+      gems: 99,
+      activeIndex: 9,
+      tools: ['compass', 'jetpack'],
+      inventory: [{ id: 'coin', durability: 3 }, { id: 'torch-small', durability: 9999 }],
+      banked: { coins: 30, run: { seed: SEED } },
+    },
+  }).run;
+  assertEqual(messy.x, 3, 'a fractional coordinate is a whole one');
+  assertEqual(messy.facing, 'up', 'and a facing that is not one of the four is the default');
+  assertEqual(messy.water, 1, 'water never resumes at zero — that run could not move');
+  assertEqual(messy.gems, MAX_GEMS, 'gems clamp to the ones the game has');
+  assertEqual(messy.tools, ['compass'], 'only tools that exist');
+  assertEqual(
+    messy.inventory,
+    [{ id: 'torch-small', durability: ITEMS['torch-small'].maxDurability }],
+    'only lights, and only as much burn as a light can hold'
+  );
+  assertEqual(messy.activeIndex, 0, 'lighting one it is actually carrying');
+  assertEqual(messy.banked.run, null, 'and a save nested inside a save stops there');
+});
+
 unit('the map only marks unique objects the run has actually seen', () => {
   const state = createRun(SEED, { ...emptySave(), map: true }, NONCE);
   assertEqual(state.seenUnique.size, 0, 'nothing seen from the doorway');
@@ -1476,8 +1604,10 @@ test('the music follows the scene: the menus get one loop, the dark another', as
   await game.settle();
   assertEqual(await game.musicTrack(), 'explore', 'the dark gets the longer loop');
 
-  // The X in the corner of the map, which is the way out of a run.
-  await game.clickAt(456, 31);
+  // Out through the cogwheel, which is the only way out of a run.
+  await game.tapMenuButton();
+  await game.clickText('EXIT GAME');
+  await game.clickText('LEAVE');
   await game.waitForScene('TitleScene');
   assertEqual(await game.musicTrack(), 'menu', 'and the menus take theirs back');
 });
@@ -1532,12 +1662,13 @@ test('floor tiles draw as plain ground, with no border and no setting for one', 
   assert(floors.length > 0, 'floor tiles are on screen');
   assert(floors.every((t) => t.ground === 'floor'), 'and all draw the same, undecorated texture');
 
-  await game.clickAt(456, 31);
-  await game.waitForScene('TitleScene');
+  // Settings is reachable from inside a run now, which is the shorter way to it.
+  await game.tapMenuButton();
   await game.clickText('SETTINGS');
   await game.waitForScene('SettingsScene');
   assert(!(await game.hasText('TILE BORDER: ON')), 'no tile border switch remains');
   await game.clickText('BACK');
+  await game.waitForScene('ExploreScene');
 });
 
 test('walking into rock bumps instead of moving', async (game) => {
@@ -1711,11 +1842,32 @@ test('a multi-copy item card lists every instance and equips exactly the one tap
   assertEqual(state.inventory[last].id, 'torch-medium', 'sanity: that slot really is a medium torch');
 }, { query: WORLD });
 
-test('the menu button returns to the title screen', async (game) => {
+test('the cogwheel menu closes without touching the run, and Esc opens it', async (game) => {
   await game.startRun();
-  await game.clickAt(456, 31);
-  await game.waitForScene('TitleScene');
-  assertEqual(await game.activeScene(), 'TitleScene', 'scene');
+  await game.tapDpad('right');
+  await game.settle();
+  const walking = await game.state();
+
+  await game.tapMenuButton();
+  assertEqual((await game.state()).menuOpen, true, 'the menu is up');
+  await game.clickText('KEEP PLAYING');
+  const closed = await game.state();
+  assertEqual(closed.menuOpen, false, 'and closes again');
+  assertEqual(closed.steps, walking.steps, 'having cost the run nothing');
+  // NEW GAME claimed the slot, so there is a save — but nothing suspended in it:
+  // opening the menu and closing it again is not saving (DESIGN.md §6.1).
+  assertEqual((await game.save()).run, null, 'and suspended no expedition into the slot');
+
+  // Esc is the keyboard's cogwheel, both ways.
+  await game.press('Escape');
+  assertEqual((await game.state()).menuOpen, true, 'Esc opens it');
+  await game.press('Escape');
+  assertEqual((await game.state()).menuOpen, false, 'and Esc closes it');
+
+  // A step still has to go through the world, not the menu.
+  await game.tapDpad('up');
+  await game.settle();
+  assert((await game.state()).steps > walking.steps, 'and the run walks on afterwards');
 });
 
 test('walking back to the hut asks whether to stop', async (game) => {
@@ -1873,7 +2025,7 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   assert(await game.hasText(`WATER ${state.water}/${maxWater(1)}`), 'the water ceiling rose');
 });
 
-test('stopping at the hut writes the save, leaving by the X keeps only the ground', async (game) => {
+test('stopping at the hut writes the save, leaving by the menu keeps only the ground', async (game) => {
   await game.startRun();
   // NEW GAME claims the slot, so there is a save — an empty one, with nothing
   // banked into it yet.
@@ -1896,8 +2048,9 @@ test('stopping at the hut writes the save, leaving by the X keeps only the groun
   await game.waitForScene('TitleScene');
   assert(await game.hasText('0/3 COLOURS  0 COINS  1 RUNS'), 'and the title screen reads it back');
 
-  // Abandoning by the map's X banks nothing — only the hut does (DESIGN.md §6)
-  // — but the dark this run lit stays lit for the next one (§6.1).
+  // Leaving by the cogwheel banks nothing — only the hut does (DESIGN.md §6) —
+  // but the dark this run lit stays lit for the next one (§6.1). It asks first,
+  // because an abandoned expedition cannot be got back.
   await game.startRun();
   const opened = await game.state();
   assert(opened.explored > 9, 'the next run opens on the ground already drawn');
@@ -1906,13 +2059,101 @@ test('stopping at the hut writes the save, leaving by the X keeps only the groun
   await game.tapDpad('up');
   await game.settle();
   const abandoned = await game.state();
-  await game.clickAt(456, 31);
+  await game.tapMenuButton();
+  await game.clickText('EXIT GAME');
+  assert(await game.hasText('LEAVE THE DARK'), 'leaving asks before it costs the walk');
+  await game.clickText('LEAVE');
   await game.waitForScene('TitleScene');
 
   const after = await game.save();
   assertEqual(after.runs, 1, 'the abandoned run was not counted');
   assertEqual(decodeExplored(after.mapped).size, abandoned.explored, 'but its walk was kept');
 });
+
+test('the cogwheel saves the walk, and load game carries it on', async (game) => {
+  await game.startRun();
+  // Out a few tiles, so there is a walk worth saving rather than a hut to
+  // stand on — arriving back at (0, 0) would open the hut's question instead.
+  await walkPath(game, TORCH_ROUTE.path);
+  const walked = await game.state();
+
+  await game.tapMenuButton();
+  assert(await game.hasText('MENU'), 'the cogwheel opens the menu');
+  for (const label of ['SETTINGS', 'SAVE GAME', 'EXIT GAME', 'KEEP PLAYING'])
+    assert(await game.hasText(label), `${label} is on it`);
+  assertEqual((await game.state()).menuOpen, true, 'and it owns the screen while it is up');
+
+  await game.clickText('SAVE GAME');
+  assert(await game.hasText('EXPEDITION SAVED'), 'saving says so');
+  const saved = await game.save();
+  assertEqual(saved.run.x, walked.x, 'and the slot is holding the tile it was standing on');
+  assertEqual(saved.run.y, walked.y, 'both ways');
+  assertEqual(saved.run.steps, walked.steps, 'with the steps it had taken');
+  assertEqual(saved.runs, 0, 'but nothing is banked by saving — only the hut does that');
+
+  // The question saving asks: carry on, or stop here for now.
+  await game.clickText('KEEP PLAYING');
+  assertEqual((await game.state()).dialogOpen, false, 'keeping playing hands the world back');
+  await game.tapDpad('up');
+  await game.settle();
+  const later = await game.state();
+  assert(later.steps > walked.steps, 'and the run walks on from where it was');
+
+  // Leaving without saving again leaves the save alone: the walk since the last
+  // SAVE GAME is what is lost, not the save itself (DESIGN.md §6.1).
+  await game.tapMenuButton();
+  await game.clickText('EXIT GAME');
+  await game.clickText('LEAVE');
+  await game.waitForScene('TitleScene');
+  const afterLeaving = await game.save();
+  assertEqual(afterLeaving.run.steps, walked.steps, 'the saved walk is still the saved one');
+
+  // And LOAD GAME picks that expedition up rather than setting out again.
+  await game.clickText('LOAD GAME');
+  await game.waitForScene('SlotScene');
+  assert(await game.hasText(`SAVED EXPEDITION  ${walked.furthest} OUT  ${walked.steps} STEPS`),
+    'the picker says the slot is mid-walk');
+  await game.clickText('SLOT 1');
+  await game.waitForScene('ExploreScene');
+
+  const resumed = await game.state();
+  assertEqual(resumed.x, walked.x, 'the run resumes on the tile it saved on');
+  assertEqual(resumed.y, walked.y, 'both ways');
+  assertEqual(resumed.steps, walked.steps, 'with its steps');
+  assertEqual(resumed.water, walked.water, 'its water');
+  assertEqual(resumed.inventory, walked.inventory, 'and every light burned down as far as it was');
+  assertEqual(resumed.epoch, walked.epoch, 'onto the same scatter it left');
+  assertEqual(resumed.nonce, walked.nonce, 'salt and all');
+}, { query: WORLD });
+
+test('settings mid-run comes back to the same tile, in the new palette', async (game) => {
+  await game.startRun();
+  await game.tapDpad('right');
+  await game.settle();
+  const walking = await game.state();
+
+  await game.tapMenuButton();
+  await game.clickText('SETTINGS');
+  await game.waitForScene('SettingsScene');
+  // Picking a palette re-enters Settings to repaint it, which is the step that
+  // has to carry the run along with it.
+  await game.clickText('AMBER');
+  await game.waitForScene('SettingsScene');
+  assert(await game.hasText('SETTINGS'), 'still on the settings screen, repainted');
+
+  await game.clickText('BACK');
+  await game.waitForScene('ExploreScene');
+  const back = await game.state();
+  assertEqual(back.x, walking.x, 'the same tile');
+  assertEqual(back.y, walking.y, 'both ways');
+  assertEqual(back.steps, walking.steps, 'and not a step was spent on the round trip');
+  assertEqual(back.water, walking.water, 'nor a drop of water');
+  // Ground is drawn in the palette's own foreground (src/ui/MapView.js), so the
+  // tint on a tile is how a test sees which palette the page is actually in.
+  const amber = PALETTES.find((option) => option.name === 'AMBER');
+  const drawn = await game.visibleTiles();
+  assertEqual(drawn[0].tint, amber.fg, 'and the world is drawn in the palette just picked');
+}, { query: WORLD });
 
 test('new game picks a slot, and load game brings that campaign back', async (game) => {
   // Three campaigns, and the picker says what is in all three (DESIGN.md §6.1).
@@ -1947,6 +2188,56 @@ test('new game picks a slot, and load game brings that campaign back', async (ga
   assertEqual(state.banked.runs, 1, 'and loading it carries on where it left off');
   assert(state.explored > 9, 'on the ground that campaign had already lit');
 });
+
+// A suspended expedition with one mouthful of water left, planted straight into
+// the slot. It is prior state, not live state — the browser's version of handing
+// `resumeRun` a save — and it is the only practical way to get a browser test to
+// the death screen, since a full tank is 200 taps away from empty.
+const THIRSTY_RUN = {
+  ...emptySave(),
+  run: {
+    seed: SEED,
+    x: 0,
+    y: 0,
+    facing: 'up',
+    steps: 40,
+    water: 1,
+    coins: 0,
+    gems: 0,
+    furthest: 4,
+    nonce: NONCE,
+    epoch: 0,
+    tools: [],
+    inventory: [{ id: 'torch-small', durability: 60 }],
+    activeIndex: 0,
+    found: {},
+    collected: '',
+    startExplored: 0,
+    banked: emptySave(),
+  },
+};
+
+test('running dry takes the saved expedition with it', async (game) => {
+  // LOAD GAME resumes the planted walk, which has one step of water in it.
+  await game.startRun();
+  assertEqual((await game.state()).water, 1, 'resumed on its last mouthful');
+
+  await game.tapDpad('right');
+  await game.settle();
+  assert(await game.hasText('OUT OF WATER'), 'the step that empties the flask ends the run');
+
+  // Death is the game's one hard failure (DESIGN.md §6.1), so the save it was
+  // walking on goes with it — the campaign keeps only what it had banked, and
+  // the ground.
+  const after = await game.save();
+  assertEqual(after.run, null, 'the saved expedition is gone');
+  assert(after.mapped.length > 0, 'but the ground it lit is not');
+  await game.clickText('HOME');
+  await game.waitForScene('TitleScene');
+  await game.clickText('LOAD GAME');
+  await game.waitForScene('SlotScene');
+  assert(await game.hasText('FURTHEST OUT 0'), 'and the slot is a campaign to walk out from again');
+}, { query: WORLD, save: THIRSTY_RUN });
 
 test('cheats reveal the map, hand you everything, and save nothing', async (game) => {
   // The switch is in Settings, and the title screen says it is on, because a

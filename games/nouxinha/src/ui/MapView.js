@@ -18,7 +18,6 @@ import {
   VIEW_H,
   VIEW_ROWS,
   gemColour,
-  getFloorBorder,
   getPalette,
 } from '../config.js';
 import { isBase, isMerchant, sanctumAt, terrainAt, variantAt } from '../core/world.js';
@@ -140,7 +139,7 @@ export class MapView {
           ? variantKey(terrain, variantAt(wx, wy, run.seed))
           : terrain === 'wall'
             ? wallPiece(wx, wy, run.seed)
-            : this.floorVariant(run, wx, wy);
+            : 'floor';
 
       cell.ground
         .setTexture(ground)
@@ -186,24 +185,6 @@ export class MapView {
     // The wizard wears one colour per gem carried, on top of the base colour
     // they start with (DESIGN.md §9).
     paintWizard(this.wizard, run.facing, run.gems);
-  }
-
-
-  // A floor tile draws its top and left edges always, and closes off its right
-  // or bottom edge only where the neighbour there is still unknown — so the
-  // shared edge between two known tiles is drawn once, and the frontier of
-  // explored ground still reads as an edge rather than trailing off. Turning
-  // the border off in Settings (DESIGN.md §9) skips all of that and always
-  // draws the plain texture — there is no frontier left to mark once nothing
-  // is drawing a boundary.
-  floorVariant(run, x, y) {
-    if (!getFloorBorder()) return 'floor-plain';
-    const openRight = !run.explored.has(tileKey(x + 1, y));
-    const openBottom = !run.explored.has(tileKey(x, y + 1));
-    if (openRight && openBottom) return 'floor-rb';
-    if (openRight) return 'floor-r';
-    if (openBottom) return 'floor-b';
-    return 'floor';
   }
 
   // Starts the world one tile off-centre in the direction just walked and

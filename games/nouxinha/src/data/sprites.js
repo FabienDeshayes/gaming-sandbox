@@ -8,9 +8,9 @@
 // rather than something each asset has to be re-authored for.
 //
 // What lives here is everything the sheet cannot give: the wizard's colour
-// bands, the floor's dotted border, and a terrain's alternate tiles. All of it
-// is *derived* from a sheet tile, so repointing a sprite (src/data/tiles.js)
-// carries it along.
+// bands, the floor's half-strength ground texture, and a terrain's alternate
+// tiles. All of it is *derived* from a sheet tile, so repointing a sprite
+// (src/data/tiles.js) carries it along.
 
 import { TILES, variantCount } from './tiles.js';
 
@@ -47,32 +47,6 @@ function wizardZones(mask, key) {
   return out;
 }
 
-// Floor's dotted border, which is drawn rather than taken from the sheet — it
-// is a property of what has been explored, not of the ground itself, and it is
-// drawn at full strength over ground texture that isn't.
-//
-// A tile always closes its top and left edges, so the edge shared by two known
-// tiles is drawn once rather than doubled, and closes its right or bottom edge
-// only where the neighbour there is still unknown. The frontier of explored
-// ground then reads as a boundary instead of an unfinished grid (DESIGN.md §9).
-const EDGE_DOTS = '#.#.#.#.#.#.#.#.';
-
-function withTopEdge(mask) {
-  return mask.map((row, y) => (y === 0 ? EDGE_DOTS : row));
-}
-
-function withLeftEdge(mask) {
-  return mask.map((row, y) => (y % 2 === 0 ? '#' + row.slice(1) : row));
-}
-
-function withRightEdge(mask) {
-  return mask.map((row, y) => (y % 2 === 0 ? row.slice(0, -1) + '#' : row));
-}
-
-function withBottomEdge(mask) {
-  return mask.map((row, y) => (y === mask.length - 1 ? EDGE_DOTS : row));
-}
-
 // Builds the whole sprite table from a `readTile(col, row) -> mask` cut out of
 // the sheet. Takes the reader rather than the image so the derivation above
 // stays pure and testable, and so nothing in `src/data/` has to know how a PNG
@@ -99,17 +73,9 @@ export function buildSprites(readTile) {
   for (const facing of ['down', 'up', 'right', 'left'])
     Object.assign(sprites, wizardZones(sprites[`wizard-${facing}`], `wizard-${facing}`));
 
-  // Floor: ground texture at half strength, with and without the dotted
-  // border on top. `floor-plain` is the border switched off in Settings
-  // (DESIGN.md §9) — just the texture, since there is no frontier to mark
-  // once nothing is drawing a boundary at all.
-  const texture = dimmed(sprites.floor);
-  sprites['floor-plain'] = texture;
-  const floor = withTopEdge(withLeftEdge(texture));
-  sprites.floor = floor;
-  sprites['floor-r'] = withRightEdge(floor);
-  sprites['floor-b'] = withBottomEdge(floor);
-  sprites['floor-rb'] = withBottomEdge(withRightEdge(floor));
+  // Floor: ground texture at half strength, and nothing else drawn on top of
+  // it (DESIGN.md §9).
+  sprites.floor = dimmed(sprites.floor);
 
   return sprites;
 }

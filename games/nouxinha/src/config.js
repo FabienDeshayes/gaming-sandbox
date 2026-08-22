@@ -107,36 +107,6 @@ export function setMusic(on) {
   return musicOn;
 }
 
-// --- Floor border --------------------------------------------------------------
-//
-// The dotted border that separates explored ground from the dark (DESIGN.md
-// §9). On by default; a player can turn it off in Settings now that floor
-// carries its own ground texture and the border is no longer the only thing
-// telling a lit tile apart from bare background.
-const FLOOR_BORDER_KEY = 'nouxinha.floorBorder';
-
-let floorBorderOn = true;
-
-try {
-  floorBorderOn = localStorage.getItem(FLOOR_BORDER_KEY) !== '0';
-} catch (e) {
-  /* on by default */
-}
-
-export function getFloorBorder() {
-  return floorBorderOn;
-}
-
-export function setFloorBorder(on) {
-  floorBorderOn = !!on;
-  try {
-    localStorage.setItem(FLOOR_BORDER_KEY, floorBorderOn ? '1' : '0');
-  } catch (e) {
-    /* preference just won't persist */
-  }
-  return floorBorderOn;
-}
-
 // --- Cheats ------------------------------------------------------------------
 //
 // A developer switch, in Settings next to the palettes and persisted the same

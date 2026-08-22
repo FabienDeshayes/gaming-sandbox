@@ -8,6 +8,11 @@ import { getMoveSpeed, getPalette } from '../config.js';
 export const SIZE = 70;
 export const OFFSET = 74;
 
+// A finger landing on the pad shouldn't commit to holding it: the tap that
+// takes the one step it meant to take needs a beat to lift again before the
+// repeat kicks in, or every plain tap turns into two steps.
+const HOLD_DELAY_MS = 300;
+
 const BUTTONS = [
   { dir: 'up', dx: 0, dy: -OFFSET },
   { dir: 'down', dx: 0, dy: OFFSET },
@@ -51,7 +56,9 @@ export function makeDpad(scene, cx, cy, onStep) {
 
     // Held down, the button keeps stepping on its own — cleared on release or
     // on the pointer sliding off, the same two events that already reset the
-    // pressed-look of the button.
+    // pressed-look of the button. The repeat itself doesn't start right away:
+    // it waits out HOLD_DELAY_MS first, so a finger that's only tapping never
+    // feels the pad lurch into continuous movement before it's lifted.
     let repeatTimer = null;
     const stopRepeat = () => {
       if (repeatTimer) {
@@ -68,10 +75,12 @@ export function makeDpad(scene, cx, cy, onStep) {
       draw(true);
       onStep(dir);
       stopRepeat();
-      repeatTimer = scene.time.addEvent({
-        delay: 1000 / getMoveSpeed(),
-        loop: true,
-        callback: () => onStep(dir),
+      repeatTimer = scene.time.delayedCall(HOLD_DELAY_MS, () => {
+        repeatTimer = scene.time.addEvent({
+          delay: 1000 / getMoveSpeed(),
+          loop: true,
+          callback: () => onStep(dir),
+        });
       });
     });
     zone.on('pointerup', () => {

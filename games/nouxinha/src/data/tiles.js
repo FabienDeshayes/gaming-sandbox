@@ -88,23 +88,23 @@ export const TILES = {
 
   // --- Structures ----------------------------------------------------------
   base: [1, 20],
-  merchant: [5, 20],
+  merchant: [19, 10],
 
   // --- Items ---------------------------------------------------------------
   // The four lights climb a silhouette: candle, lantern, candelabra, and a
   // radiating burst for the beacon, which is the only one that has to read as
   // "this lights everything".
   'torch-small': [3, 15],
-  'torch-medium': [4, 15],
+  'torch-medium': [43, 3],
   'torch-lamp': [5, 15],
-  'torch-beacon': [2, 15],
-  'water-drop': [15, 10],
+  'torch-beacon': [44, 4],
+  'water-drop': [47, 3],
   'water-flask': [41, 11],
   'spring-vial': [33, 13],
   coin: [41, 3],
   gem: [23, 4],
-  compass: [22, 14],
-  map: [46, 5],
+  compass: [24, 14],
+  map: [47, 6],
 
   // --- HUD -----------------------------------------------------------------
   // The cogwheel the in-run menu hangs off (DESIGN.md §7).

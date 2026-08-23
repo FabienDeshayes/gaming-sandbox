@@ -1,0 +1,266 @@
+// The ground: what the noise grows, where the world stops, and the promise that
+// every bit of it can be walked to. Pure — no browser.
+
+import { assert, assertEqual, runIfMain, unit } from './harness.js';
+import {
+  DEFAULT_SEED,
+  beyondEdge,
+  chokeAt,
+  entryCost,
+  isWalkable,
+  itemAt,
+  landmarkAt,
+  landmarks,
+  landmarksReachable,
+  pickSeed,
+  reachableFraction,
+  sanctumAt,
+  sanctums,
+  terrainAt,
+} from '../src/core/world.js';
+import { activeShape, createRun, litTiles, reveal, step, EDGE_SEEN } from '../src/core/rules.js';
+import { emptySave, normaliseSave } from '../src/core/save.js';
+import { EDGE_RADIUS, SEED_MIN_FRACTION } from '../src/balance.js';
+import { NONCE, ORTHOGONAL, SEED } from './world.js';
+
+// One window, walked once, for the three distribution tests below — the whole
+// cost of them is `terrainAt`, and asking it 20,000 times per test is the only
+// slow thing in this file.
+const SPAN = 70;
+const survey = (() => {
+  const counts = { floor: 0, rock: 0, tree: 0, wall: 0, gate: 0, dark: 0 };
+  let open = 0;
+  let looseRock = 0;
+  let treesInAStand = 0;
+  for (let y = -SPAN; y <= SPAN; y++)
+    for (let x = -SPAN; x <= SPAN; x++) {
+      if (sanctumAt(x, y, SEED) || landmarkAt(x, y, SEED)) continue;
+      open += 1;
+      const at = terrainAt(x, y, SEED);
+      counts[at] += 1;
+      if (at === 'rock' && ORTHOGONAL.every(([dx, dy]) => terrainAt(x + dx, y + dy, SEED) !== 'rock'))
+        looseRock += 1;
+      if (at === 'tree' && ORTHOGONAL.some(([dx, dy]) => terrainAt(x + dx, y + dy, SEED) === 'tree'))
+        treesInAStand += 1;
+    }
+  return { counts, open, looseRock, treesInAStand };
+})();
+
+unit('the world is derived, so walking through it never changes it', () => {
+  // Terrain and items are pure functions of (x, y, seed), but they are read
+  // through caches (the structures per seed, the accepted scatter per salt) and
+  // a run moves the salt on. So the honest check is to read the world, play
+  // through it, and read it again.
+  const window = [];
+  for (let y = -12; y <= 12; y++)
+    for (let x = -12; x <= 12; x++) window.push([x, y, terrainAt(x, y, SEED), itemAt(x, y, SEED)]);
+
+  const state = createRun(SEED, emptySave(), NONCE);
+  for (let i = 0; i < 40; i++) step(state, i % 2 === 0 ? 'right' : 'left');
+
+  for (const [x, y, was, had] of window) {
+    assertEqual(terrainAt(x, y, SEED), was, `terrain at (${x},${y})`);
+    assertEqual(itemAt(x, y, SEED), had, `pristine item at (${x},${y})`);
+  }
+
+  // And a different seed is a different world.
+  let differences = 0;
+  for (let i = 0; i < 200; i++)
+    if (terrainAt(i, 3, SEED) !== terrainAt(i, 3, SEED + 1)) differences++;
+  assert(differences > 20, `seeds should differ, got ${differences} differing tiles`);
+});
+
+unit('the base clearing is always walkable', () => {
+  for (let y = -1; y <= 1; y++)
+    for (let x = -1; x <= 1; x++)
+      for (const seed of [SEED, 5, 8, 999]) assert(isWalkable(x, y, seed), `(${x},${y}) seed ${seed}`);
+});
+
+unit('rock covers about a fifth of the world, in masses and loose boulders', () => {
+  const share = survey.counts.rock / survey.open;
+  // Enough to grow caves worth navigating, few enough that the world reads as
+  // floor with rock in it rather than the other way round.
+  assert(share > 0.15 && share < 0.26, `rock covers ${(share * 100).toFixed(1)}% of the world`);
+
+  // Two formations, same terrain and so the same sprite: masses grown on a
+  // lattice, and boulders thrown as white noise into the open ground between
+  // them. The second is what keeps a wide stretch of floor from being an empty
+  // screen.
+  assert(survey.looseRock > 150, `only ${survey.looseRock} boulders stand on their own`);
+  assert(
+    survey.counts.rock - survey.looseRock > survey.looseRock * 5,
+    'the masses should still be most of the rock in the world'
+  );
+});
+
+unit('trees grow in groves and stop a step the way rock does', () => {
+  const trees = survey.counts.tree;
+  const share = trees / survey.open;
+  // Enough that a walk meets one, few enough that the world is still mostly
+  // ground: trees block, so every one of them is floor the player lost.
+  assert(share > 0.04 && share < 0.1, `trees cover ${(share * 100).toFixed(1)}% of the world`);
+  // Groves, not scattered trunks — that is what the coarse lattice buys.
+  assert(survey.treesInAStand / trees > 0.9, 'nearly every tree should have another beside it');
+
+  // Blocking, and blocking absolutely: no number of gems opens a tree.
+  const tree = (() => {
+    for (let y = -SPAN; y <= SPAN; y++)
+      for (let x = -SPAN; x <= SPAN; x++) if (terrainAt(x, y, SEED) === 'tree') return [x, y];
+    throw new Error('the survey found trees but the sweep did not');
+  })();
+  assert(!isWalkable(tree[0], tree[1], SEED), 'a tree blocks');
+  assertEqual(entryCost(tree[0], tree[1], SEED), null, 'and no gem count opens it');
+});
+
+unit('the world ends at a fixed radius, and the dark there is solid', () => {
+  // Bounded, and bounded as a circle rather than as a box: the edge is a shape
+  // the player sees on the map, and a square one reads as an authored wall
+  // (DESIGN.md §4.7).
+  assert(!beyondEdge(EDGE_RADIUS, 0), 'the rim itself is inside');
+  assert(beyondEdge(EDGE_RADIUS + 1, 0), 'and one tile further out is not');
+  // On the diagonal too, which a Chebyshev bound would get wrong.
+  const diag = Math.ceil(EDGE_RADIUS / Math.SQRT2) + 2;
+  assert(beyondEdge(diag, diag), `the diagonal is bounded at the same radius (${diag})`);
+
+  assertEqual(terrainAt(EDGE_RADIUS + 5, 0, SEED), 'dark', 'outside is its own terrain');
+  assert(!isWalkable(EDGE_RADIUS + 5, 0, SEED), 'and nothing walks on it');
+  assertEqual(entryCost(EDGE_RADIUS + 5, 0, SEED), null, 'no number of gems opens it');
+
+  // Everything the campaign is currently about is comfortably inside, with room
+  // left over — the outermost sanctum wall against the rim.
+  for (const sanctum of sanctums(SEED)) {
+    const out = Math.hypot(sanctum.centre.x, sanctum.centre.y) + sanctum.radius;
+    assert(out < EDGE_RADIUS * 0.75, `sanctum ${sanctum.index} sits well inside (${out.toFixed(0)})`);
+  }
+});
+
+unit('the dark eats into the light as you approach the edge', () => {
+  // A tile of reach for every ten walked, and never all the way to nothing:
+  // the boundary is read by seeing the ground stop, which needs a lit tile to
+  // see it from (DESIGN.md §4.7).
+  assert(chokeAt(0, 0) > 3, 'nothing is eating your light at home');
+  assertEqual(chokeAt(EDGE_RADIUS, 0), 1, 'and a single tile is left at the rim');
+  assert(chokeAt(EDGE_RADIUS - 40, 0) > chokeAt(EDGE_RADIUS - 10, 0), 'closer in is brighter');
+
+  // The choke is where you stand, not what you carry: it costs the light
+  // nothing, so walking back in restores it.
+  const state = createRun(SEED, emptySave(), NONCE);
+  const home = activeShape(state).radius;
+  state.x = EDGE_RADIUS - 2;
+  assertEqual(activeShape(state).radius, 1, 'guttering at the rim');
+  state.x = 0;
+  assertEqual(activeShape(state).radius, home, 'and as wide as ever back home');
+});
+
+unit('light never reveals what is outside the world', () => {
+  // Otherwise the explored set would carry tiles that are not there, and both
+  // maps draw off that set.
+  const state = createRun(SEED, emptySave(), NONCE);
+  state.x = EDGE_RADIUS;
+  state.y = 0;
+  reveal(state);
+  for (const { x, y } of litTiles(state)) assert(!beyondEdge(x, y), `lit (${x},${y}) is inside`);
+  for (const key of state.explored) {
+    const [x, y] = key.split(',').map(Number);
+    assert(!beyondEdge(x, y), `explored (${x},${y}) is inside`);
+  }
+});
+
+unit('walking into the end of the world says so, once', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+
+  // Derived, not hardcoded: find a tile you can stand on whose next step
+  // outward is off the end of the world. Most of the rim is rock, so this walks
+  // the boundary looking for open ground against it.
+  let spot = null;
+  for (let y = -EDGE_RADIUS; y <= EDGE_RADIUS && !spot; y++) {
+    const x = Math.floor(Math.sqrt(EDGE_RADIUS * EDGE_RADIUS - y * y));
+    if (isWalkable(x, y, state.seed) && beyondEdge(x + 1, y)) spot = { x, y };
+  }
+  assert(spot, 'there is open ground standing against the rim somewhere');
+  state.x = spot.x;
+  state.y = spot.y;
+
+  const result = step(state, 'right');
+  assertEqual(result.moved, false, 'the world stops the walk');
+  assertEqual(result.reason, 'edge', 'and says it was the edge, not a rock');
+  assertEqual(result.firstTime, true, 'the first bump earns the explanation');
+  assertEqual(step(state, 'right').firstTime, false, 'the second one does not');
+
+  // Filed with the things the campaign has laid eyes on, so it is written down
+  // whichever way the expedition ends and not offered again next time out.
+  assert(state.seenUnique.has(EDGE_SEEN), 'the campaign remembers reaching it');
+});
+
+unit('a saved walk from outside the world comes home instead of stranding', () => {
+  // Not reachable by playing — you cannot walk out there — but a hand-edited or
+  // corrupted slot could name such a tile, and every neighbour of one is also
+  // outside it. Restoring that position would leave a character who can neither
+  // step nor die (DESIGN.md §5).
+  const outside = normaliseSave({
+    ...emptySave(),
+    run: { seed: SEED, x: EDGE_RADIUS + 40, y: 0, water: 50, nonce: NONCE },
+  });
+  assertEqual({ x: outside.run.x, y: outside.run.y }, { x: 0, y: 0 }, 'put back at the hut');
+
+  const inside = normaliseSave({
+    ...emptySave(),
+    run: { seed: SEED, x: 12, y: -7, water: 50, nonce: NONCE },
+  });
+  assertEqual({ x: inside.run.x, y: inside.run.y }, { x: 12, y: -7 }, 'a real one is untouched');
+});
+
+unit('the whole world is one place, out to the rim', () => {
+  // The point of an edge you can walk to is that you can walk to it. If the
+  // noise sealed the outer band off, the rim would be a promise the world never
+  // keeps — so this floods the entire thing from the hut with every gate shut.
+  const limit = EDGE_RADIUS + 2;
+  const seen = new Set(['0,0']);
+  const stack = [[0, 0]];
+  let furthest = 0;
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    furthest = Math.max(furthest, Math.hypot(x, y));
+    for (const [dx, dy] of ORTHOGONAL) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (Math.abs(nx) > limit || Math.abs(ny) > limit) continue;
+      const key = `${nx},${ny}`;
+      if (seen.has(key) || !isWalkable(nx, ny, SEED)) continue;
+      seen.add(key);
+      stack.push([nx, ny]);
+    }
+  }
+  let walkable = 0;
+  for (let y = -limit; y <= limit; y++)
+    for (let x = -limit; x <= limit; x++) if (isWalkable(x, y, SEED)) walkable++;
+
+  assert(walkable > 50000, `the world is a large place (${walkable} tiles)`);
+  assert(seen.size / walkable > 0.95, `and nearly all of it connects (${seen.size}/${walkable})`);
+  assert(furthest >= EDGE_RADIUS - 1, `including the rim itself (reached ${furthest.toFixed(1)})`);
+});
+
+unit('pickSeed rejects a world nobody could explore', () => {
+  // Two bars, and a seed has to clear both: the spawn must not be sealed into a
+  // pocket, and every sanctum door and landmark must be walkable-to with
+  // nothing in hand (DESIGN.md §5). Seed 5 fails the first outright.
+  assert(reachableFraction(5) < SEED_MIN_FRACTION, 'seed 5 should be a stranding seed');
+  const replacement = pickSeed(5);
+  assert(replacement !== 5, 'a stranding seed should be rejected');
+
+  for (const preferred of [5, 1, 77, 12345, DEFAULT_SEED, (DEFAULT_SEED + 7919) | 0]) {
+    const picked = pickSeed(preferred);
+    assert(reachableFraction(picked) >= SEED_MIN_FRACTION, `seed picked from ${preferred} is a pocket`);
+    assert(landmarksReachable(picked), `seed picked from ${preferred} seals a door or a landmark off`);
+    // And every landmark sits on ground, with a clearing around it.
+    for (const landmark of landmarks(picked))
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          assert(
+            isWalkable(landmark.x + dx, landmark.y + dy, picked),
+            `${landmark.id}'s apron is walkable on the seed picked from ${preferred}`
+          );
+  }
+});
+
+runIfMain(import.meta.url);

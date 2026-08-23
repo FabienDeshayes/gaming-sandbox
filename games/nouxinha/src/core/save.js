@@ -27,7 +27,8 @@
 // here defaults to that one, which is what lets a run bank itself without ever
 // knowing which slot it belongs to.
 
-import { BASE_X, BASE_Y, SANCTUM_PLAN, beyondEdge, pickSeed } from './world.js';
+import { SANCTUM_PLAN } from '../balance.js';
+import { BASE_X, BASE_Y, beyondEdge, pickSeed } from './world.js';
 import { ITEMS, TOOLS } from '../data/items.js';
 
 const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;

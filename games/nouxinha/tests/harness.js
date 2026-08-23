@@ -8,7 +8,7 @@
 import fs from 'fs';
 import http from 'http';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { chromium } from 'playwright-core';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -45,6 +45,12 @@ const INV_PANEL = { left: CARD_CX - 380 / 2, top: CARD_CY - 460 / 2 };
 const INV_LIST = { x: INV_PANEL.left + 20, y: INV_PANEL.top + 90, rowH: 64 };
 
 // --- Tiny test runner -------------------------------------------------------
+//
+// The suite is module state, so every `*.test.js` file that imports this
+// registers into the same list: `tests/all.test.js` imports them all and runs
+// one pass, while running a single file runs only what that file registered
+// (`runIfMain` at the bottom of each). One server and, if anything asks for it,
+// one browser serve the whole run.
 
 const suite = [];
 
@@ -71,11 +77,17 @@ export function assertEqual(actual, expected, msg) {
 
 export async function run() {
   const { server, port } = await startServer();
-  const browser = await launchBrowser();
+  // Only paid for if something asks: a pure suite run on its own never starts
+  // a browser, which is what makes `npm run test:rules` instant.
+  let browser = null;
+  const browserFor = async (opts) => {
+    if (!browser) browser = await launchBrowser();
+    return openGame(browser, port, opts);
+  };
   let failed = 0;
 
   for (const { name, fn, browser: needsBrowser, opts } of suite) {
-    const game = needsBrowser ? await openGame(browser, port, opts) : null;
+    const game = needsBrowser ? await browserFor(opts) : null;
     try {
       await fn(game);
       const stray = game ? game.pageErrors() : [];
@@ -90,7 +102,7 @@ export async function run() {
     }
   }
 
-  await browser.close();
+  if (browser) await browser.close();
   server.close();
 
   const total = suite.length;
@@ -100,6 +112,13 @@ export async function run() {
       : `\n${total - failed}/${total} passed, ${failed} failed`
   );
   process.exit(failed === 0 ? 0 : 1);
+}
+
+// Runs the suite only when this file is the one `node` was pointed at, so every
+// `*.test.js` file is both a suite `tests/all.test.js` can import and a suite
+// that can be run on its own.
+export function runIfMain(url) {
+  if (process.argv[1] && url === pathToFileURL(process.argv[1]).href) return run();
 }
 
 // --- Local server -----------------------------------------------------------

@@ -14,6 +14,34 @@
 //
 // Nothing but the set of *seen* tiles ever needs remembering. No Phaser, no
 // scene state — importable straight into Node for tests.
+//
+// Every number this file is tuned on lives in `src/balance.js`; what is here is
+// the machinery that reads them.
+
+import {
+  BAND_FAR,
+  BAND_MID,
+  BASE_CLEARING,
+  BOULDER_CHANCE,
+  CHOKE_STEP,
+  COIN_VALUE_MAX,
+  COIN_VALUE_MIN,
+  CONSUMABLE_CELL,
+  EDGE_RADIUS,
+  GEM_DENSITY,
+  GROVE_THRESHOLD,
+  HOARD_PER_KIND,
+  LANDMARK_PLAN,
+  MIN_SEPARATION,
+  POCKET_PROBE,
+  ROCK_THRESHOLD,
+  SANCTUM_PLAN,
+  SCATTER,
+  SEED_MAX_ATTEMPTS,
+  SEED_MIN_FRACTION,
+  SEED_WINDOW,
+  SPAWN_CHANCE,
+} from '../balance.js';
 
 export const DEFAULT_SEED = 0x6e6f7578; // "noux"
 
@@ -31,57 +59,16 @@ const CH_VARIANT = 9;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
-// ~20% rock coverage. Density alone can't guarantee the base isn't walled in —
-// at *any* threshold that still looks like a cave system, a slice of seeds seals
-// the spawn into a pocket — so connectivity is enforced by validating the seed
-// at run start instead (`pickSeed`).
-const ROCK_THRESHOLD = 0.64;
-
-// Rock comes in two formations that are the same terrain and draw the same
-// sprite: the masses the threshold above grows, and loose boulders standing on
-// their own out in the open. A wall you walk around and a boulder you step past
-// are different things to meet even though they are the same stone, and the
-// second is what keeps a wide stretch of floor from being an empty screen.
-const BOULDER_CHANCE = 0.03;
-
-// Groves: the one thing in the world that isn't stone and isn't floor. Blocking
-// like rock, on a lattice coarser than the rock masses so a grove arrives as a
-// stand you skirt rather than as scattered trunks, and drawn as foliage so it
-// is never mistaken for a wall.
-const GROVE_THRESHOLD = 0.72;
-
-// The base's 3x3 neighbourhood is forced to floor so spawn can never be walled in.
+// The hut: the one tile every campaign starts and ends on. Its 3x3
+// neighbourhood is forced to floor so spawn can never be walled in.
 export const BASE_X = 0;
 export const BASE_Y = 0;
-const BASE_CLEARING = 1;
 
 // --- The edge of the world ----------------------------------------------------
 //
-// The world is bounded, and what bounds it is the dark itself. Far enough out
-// the dark stops being something a light pushes back and becomes something that
-// pushes back: it eats into what you are carrying, a tile of reach at a time,
-// and at `EDGE_RADIUS` it has eaten everything and is simply solid. That is the
-// `'dark'` terrain below — impassable, and drawn as nothing at all, so what the
-// player sees is the ground running out.
-//
-// Measured as a true radius rather than the Chebyshev distance the rest of the
-// game counts in, because this one is a shape the player will see on the map: a
-// square edge would read as an authored box, and a circle reads as how far the
-// light ever got. (The HUD's furthest-out counter stays Chebyshev — that is a
-// different question, how far out you walked, not how close to the edge.)
-//
-// 200 puts the edge well past everything the campaign is currently about: the
-// outermost sanctum wall stands at 117, so the last third of the world is
-// unspoken for, which is where a late-game area would go.
-export const EDGE_RADIUS = 200;
-
-// One tile of light lost for every ten tiles closer to the edge — so the bigger
-// the light, the sooner the dark starts eating it, and everything converges on
-// the same guttering ring by the end. Never all the way to nothing: a tile of
-// reach is left however far out you stand, because the way the boundary is read
-// is by seeing the floor stop, and a player who cannot see at all has only
-// bumped into something invisible.
-const CHOKE_STEP = 10;
+// Past `EDGE_RADIUS` the terrain is `'dark'` — impassable, and drawn as nothing
+// at all, so what the player sees is the ground running out. Approaching it,
+// `chokeAt` narrows whatever light is burning (balance.js `CHOKE_STEP`).
 
 export function edgeDistance(x, y) {
   return Math.hypot(x, y);
@@ -188,12 +175,9 @@ function ringPoint(distance, angle) {
   return { x: Math.round((distance * c) / m), y: Math.round((distance * s) / m) };
 }
 
-// A spot opens onto the cave system, or onto a pocket the noise happened to seal
-// against its own wall. The two are never close: a sealed spot measures a
-// handful of tiles, a real one runs past this limit long before it runs out, so
-// a bounded probe separates them for a few hundred lookups.
-const POCKET_PROBE = 80;
-
+// Whether a spot opens onto the cave system, or onto a pocket the noise happened
+// to seal against its own wall — a bounded probe (balance.js `POCKET_PROBE`)
+// separates the two for a few hundred lookups.
 function opensOntoCaves(start, isOpen) {
   const seen = new Set([`${start.x},${start.y}`]);
   const stack = [[start.x, start.y]];
@@ -222,51 +206,8 @@ const HEADING_SEARCH = (() => {
 // The one built structure in an otherwise noise-grown world: a ring of built
 // wall around a forced-floor clearing with a gem at its centre and a single gate
 // in the wall. Everything about a sanctum is derived from the seed like the rest
-// of the world — nothing is stored, and a new seed relays all four.
-//
-// The chain is what turns three gems into a reason to keep walking: sanctum 1's
-// arch stands open (gem 1 has to be reachable carrying nothing), and each gate
-// after it wants the gem from the sanctum before it. `requires` is both the
-// count of gems needed and the index of the gem whose colour the open gate
-// takes — see config.js `gemColour`.
-//
-// `cache` is what the clearing holds besides the centrepiece, two of each
-// (HOARD_PER_KIND) — a hoard, not a pile.
-
-export const SANCTUM_PLAN = [
-  {
-    gem: 'gem-1',
-    distance: 20,
-    radius: 4,
-    requires: 0,
-    cache: ['coin', 'water-drop', 'water-flask', 'torch-medium'],
-  },
-  {
-    gem: 'gem-2',
-    distance: 45,
-    radius: 5,
-    requires: 1,
-    cache: ['coin', 'water-drop', 'water-flask', 'torch-beacon'],
-  },
-  {
-    gem: 'gem-3',
-    distance: 80,
-    radius: 6,
-    requires: 2,
-    cache: ['coin', 'water-drop', 'spring-vial', 'torch-beacon'],
-  },
-  // The last one holds no gem: it is what gem 3 is *for*, and the richest cache
-  // in the game (DESIGN.md §4.4).
-  {
-    gem: null,
-    distance: 110,
-    radius: 7,
-    requires: 3,
-    cache: ['coin', 'water-flask', 'spring-vial', 'torch-beacon', 'torch-lamp'],
-  },
-];
-
-export const HOARD_PER_KIND = 2;
+// of the world — nothing is stored, and a new seed relays all four. What the
+// four are is balance.js `SANCTUM_PLAN`.
 
 // Puts the gate on the wall face pointing back at the hut, never on a corner —
 // a corner tile could only be entered diagonally, and there are no diagonal
@@ -340,23 +281,13 @@ function buildSanctums(seed) {
 // --- Landmarks ---------------------------------------------------------------
 //
 // The three things in the world that aren't behind a gate and aren't rerolled:
-// the merchant, and the one compass and one map lying out in the dark. Each is
-// a single tile with a forced-floor apron around it, so however the noise fell
-// there is always ground to stand on next to it.
+// the merchant, and the one compass and one map lying out in the dark
+// (balance.js `LANDMARK_PLAN`). Each is a single tile with a forced-floor apron
+// around it, so however the noise fell there is always ground to stand on next
+// to it.
 //
 // A landmark carrying an `item` is a pickup; the merchant carries none, because
 // what you do at the merchant's tile is trade, not collect.
-
-export const LANDMARK_PLAN = [
-  // Close enough that a first expedition can reach it and walk home, and on the
-  // far side of the hut from the first sanctum, so an early run has two
-  // directions worth walking rather than one.
-  { id: 'merchant', item: null, near: 20, span: 6, opposite: 0 },
-  // Past the second sanctum: the compass is either 50 coins or a long walk.
-  { id: 'compass', item: 'compass', near: 55, span: 16, opposite: null },
-  // Past the third: the map is the longest walk in the game that isn't a gem.
-  { id: 'map', item: 'map', near: 90, span: 16, opposite: null },
-];
 
 // `built` is the sanctums, passed in rather than looked up: this runs *during*
 // `structures`, before the cache exists, so asking `sanctumAt` or `terrainAt`
@@ -535,7 +466,7 @@ function floodFromBase(seed, radius, stopAt = null) {
 // How much of the floor within `radius` of the base you can actually walk to.
 // The world is infinite, so this only ever samples a window — but a spawn that
 // can reach most of a 40-tile window is a spawn that isn't in a pocket.
-export function reachableFraction(seed, radius = 40) {
+export function reachableFraction(seed, radius = SEED_WINDOW) {
   const seen = floodFromBase(seed, radius);
   let floor = 0;
   for (let y = -radius; y <= radius; y++)
@@ -570,7 +501,11 @@ export function landmarksReachable(seed) {
 // into the noise, which would leave a visible lattice and point straight at
 // each gem. It converges immediately in practice: the terrain is well connected
 // at range, so the landmark check almost never bites.
-export function pickSeed(preferred = DEFAULT_SEED, minFraction = 0.6, maxAttempts = 20) {
+export function pickSeed(
+  preferred = DEFAULT_SEED,
+  minFraction = SEED_MIN_FRACTION,
+  maxAttempts = SEED_MAX_ATTEMPTS
+) {
   let seed = preferred | 0;
   for (let i = 0; i < maxAttempts; i++) {
     if (reachableFraction(seed) >= minFraction && landmarksReachable(seed)) return seed;
@@ -613,123 +548,16 @@ export function uniqueAt(x, y, seed = DEFAULT_SEED) {
 // --- Consumables ---------------------------------------------------------------
 //
 // Coins, water and lights: the layer that moves. Candidates are thrown on a
-// lattice and thinned so that no two of the *same* kind ever land closer than
-// MIN_SEPARATION, which is what keeps items from arriving in clumps.
+// lattice CONSUMABLE_CELL tiles wide and thinned so that no two of the *same*
+// kind ever land closer than MIN_SEPARATION, which is what keeps items from
+// arriving in clumps. Both numbers, the per-band spawn chance, the gem taper and
+// the kind weights are balance.js's; this is the machinery that reads them.
 //
-// MIN_SEPARATION is that rule, and it is the one number that decides how much
-// there is to find. Measured over a 141x141 window; unthinned, the same lattice
-// puts something under 6.2% of its floor tiles:
-//
-//   D    items per floor tile   closest two of a kind ever land
-//   15   1.4%                   15
-//   12   1.8%                   12
-//   10   2.3%                   10
-//    8   2.9%                    8
-//    6   3.7%                    6
-//
-// Spreading items out costs items: a kind can never be denser than one per DxD,
-// so the world holds a fraction of what an unthinned scatter would, evenly,
-// instead of several times as much in clumps. That is the trade the rule asks
-// for, and this constant is where to change your mind about it.
-//
-// 8 is where the trade currently sits, and playtesting is what moved it there
-// from 10. A light shows nine tiles and the viewport holds 165, so one item per
-// 44 floor tiles meant a walk could cross several screenfuls of lit ground with
-// nothing on any of them, and pushing one ring further out stopped reading as a
-// decision. 8 puts something under one floor tile in 35 — about a quarter more —
-// which keeps a walk paying without turning the ground into a shop. It is still
-// wider than any light in the game, so a lit ring can never show the same kind
-// twice. What it gives up is the outright guarantee that a screenful holds one
-// of anything: at D = 8 the 11x15 viewport can hold up to four of a kind, which
-// reads as a good patch of ground rather than a clump.
-//
-// The lattice is much finer than the separation on purpose. One candidate per
-// separation-sized cell would place its points far too politely — neighbouring
-// cells conflict about half the time and the loser is simply dropped, which
-// throws away most of the world's items. Throwing many more darts at the same
-// exclusion radius packs what survives much closer to the ceiling the rule
-// allows, and still lands irregularly, because the survivors are the ones that
-// won a hash rather than the ones sitting on a grid.
-//
-// The cost is the neighbourhood a candidate has to check: a conflict can come
-// from CELL_REACH cells away rather than one.
+// The cost of a lattice finer than the separation is the neighbourhood a
+// candidate has to check: a conflict can come from CELL_REACH cells away rather
+// than one.
 
-const CONSUMABLE_CELL = 4;
-export const MIN_SEPARATION = 8;
 const CELL_REACH = Math.ceil(MIN_SEPARATION / CONSUMABLE_CELL);
-
-const BAND_MID = 8;
-const BAND_FAR = 20;
-
-// How often a cell offers up a tile at all. This is the density dial; the
-// weights below only decide what the offered tile turns out to be.
-const SPAWN = { near: 0.9, mid: 0.95, far: 1 };
-
-// ...and how much of that dial each gem leaves standing. The world gets
-// *sparser* as the campaign gets richer, and this is the one place the gems
-// change how much there is rather than what it is.
-//
-// It reads backwards until you look at what a pickup is worth. A gem does not
-// add a tier on top of what is lying about, it upgrades it (see SCATTER below),
-// and the upgrades are steep: a water drop refills 20 and a spring vial refills
-// everything; a medium torch burns 50 steps and a beacon burns 140. At a flat
-// density the three-gem world hands out eight times the water and nearly twice
-// the light per tile walked that the opening one does, which is what turns the
-// late game into stopping every few steps for something you did not need. So
-// the count comes down as the value goes up: at three gems the ground holds
-// about three fifths of what it opened with, each piece of it worth several
-// times more, and picking something up stays a thing that happens rather than a
-// thing that keeps happening.
-//
-// Nothing here touches the opening world — a run with no gems walks the density
-// the game was tuned at — and the taper only ever bites after a gem has been
-// banked, by which point max water has gone up by 50 with it (rules.js
-// `maxWater`). It cannot strand a run.
-const GEM_DENSITY = [1, 0.85, 0.72, 0.6];
-
-// Relative weight of each kind within a band, and the two fields that tie a kind
-// to the gems: `tier` is the gem that brings it into the world, `until` the gem
-// that retires it.
-//
-// That pair is how a gem changes the world without crowding it. It does not
-// sprinkle a new tier on top of everything already lying about — it *upgrades*
-// what is out there, one kind out for one kind in: the first gem retires the
-// water drop for the flask, the second the medium torch for the beacon, the
-// third the flask for the spring vial. The swaps are one-for-one on purpose,
-// because the lattice thins a kind that gets too dense — retire two kinds for
-// one and the survivors crowd each other, and the map ends up emptier the
-// further you get, which is backwards.
-//
-// The lattice offers up the same tiles either way, so the map holds the same
-// number of items after a gem as before; what changed is what they are. Walking
-// ground you already walked is worth it again because everything on it is
-// better, not because there is more of it.
-//
-// A sanctum's clearing is the exception: its cache is a hoard somebody left
-// there, fixed at what the sanctum was built holding, and it doesn't upgrade.
-//
-// Item quality still scales with distance from the base — coins and water near
-// home, the bigger torches only further out — which is what makes walking away
-// worth the durability (DESIGN.md §4.3).
-// The weights are set by what a kind is *worth per step*, not by how often it
-// wants to be seen. A step costs 1 water and 1 durability off the active light,
-// so the honest way to read a column is: how much water, and how many
-// lit steps, does a walk of a thousand tiles across this band hand back? At the
-// opening weights the far band gave back 170 water and 983 lit steps — light
-// very nearly paying for itself while water paid for a sixth of itself, which
-// made the leash the game is actually about invisible behind a torch supply
-// that never ran out. Water is the pressure; light is meant to be the thing you
-// ration. So water outweighs light in every band before the first gem.
-const SCATTER = [
-  { id: 'coin', near: 5, mid: 4, far: 3 },
-  { id: 'water-drop', near: 7, mid: 6, far: 4.5, until: 1 },
-  { id: 'torch-small', near: 1.2, mid: 0.8, far: 0.4 },
-  { id: 'torch-medium', near: 0, mid: 1.6, far: 1.2, until: 2 },
-  { id: 'torch-lamp', near: 0, mid: 0, far: 0.8 },
-  { id: 'water-flask', near: 5, mid: 4, far: 2.5, tier: 1, until: 3 },
-  { id: 'torch-beacon', near: 0, mid: 2.5, far: 2, tier: 2 },
-  { id: 'spring-vial', near: 5, mid: 4, far: 2.5, tier: 3 },
-];
 
 // Whether a kind is part of the world for a run holding this many gems.
 function available(kind, gems) {
@@ -738,13 +566,7 @@ function available(kind, gems) {
   return true;
 }
 
-// A coin is a small pile, not a penny: the separation rule caps any one kind at
-// a single instance per MIN_SEPARATION square, and an economy with a 100-coin
-// map in it needs the pickups to be worth stopping for. Set both to 1 for
-// literal one-coin coins.
-export const COIN_VALUE_MIN = 1;
-export const COIN_VALUE_MAX = 5;
-
+// How much the pile under a coin tile is worth (balance.js COIN_VALUE_MIN/MAX).
 export function coinValue(x, y, seed = DEFAULT_SEED, salt = 0) {
   const span = COIN_VALUE_MAX - COIN_VALUE_MIN + 1;
   return COIN_VALUE_MIN + Math.floor(hash(x, y, saltedSeed(seed, salt), CH_COIN) * span);
@@ -780,7 +602,7 @@ function candidateIn(cx, cy, seed, salt) {
 function kindOf(candidate, seed, gems) {
   const d = chebyshev(candidate.x, candidate.y);
   const band = bandOf(d);
-  if (candidate.roll >= SPAWN[band] * GEM_DENSITY[Math.min(gems, GEM_DENSITY.length - 1)])
+  if (candidate.roll >= SPAWN_CHANCE[band] * GEM_DENSITY[Math.min(gems, GEM_DENSITY.length - 1)])
     return null;
   if (!spawnable(candidate.x, candidate.y, seed)) return null;
 

@@ -5,8 +5,8 @@
 // sprites are created once and repointed at whatever tile now sits at their
 // screen position. Holds no game state; everything it draws it reads from a run.
 
+import { BLACKOUT_MEMORY_RADIUS } from '../balance.js';
 import {
-  BLACKOUT_MEMORY_RADIUS,
   GAME_WIDTH,
   LIT_ALPHA,
   REMEMBERED_ALPHA,

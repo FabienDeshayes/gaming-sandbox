@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Test scaffolding for the Nouxinha prototype — the game itself needs no build step.",
   "scripts": {
-    "test": "node tests/game.test.js"
+    "test": "node tests/all.test.js",
+    "test:pure": "node tests/light.test.js && node tests/rules.test.js && node tests/terrain.test.js && node tests/scatter.test.js && node tests/campaign.test.js && node tests/save.test.js && node tests/sprites.test.js"
   },
   "devDependencies": {
     "phaser": "^3.90.0",

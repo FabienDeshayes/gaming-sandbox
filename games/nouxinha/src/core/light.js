@@ -29,11 +29,6 @@ export function tileKey(x, y) {
   return `${x},${y}`;
 }
 
-export function parseKey(key) {
-  const [x, y] = key.split(',').map(Number);
-  return { x, y };
-}
-
 // Returns the list of {x, y} a light illuminates from (x, y) while facing `facing`.
 export function visibleTiles(shape, x, y, facing = 'up') {
   const s = shape || BLACKOUT_SHAPE;

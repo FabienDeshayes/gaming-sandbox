@@ -7,10 +7,14 @@ Later:
 * chests
 * keys for opening the gates
 * intro to explain the story
+* sell stuff to merchant / home
 
 ideas to explore:
 * biomes 
 * signpost for biomes
+* ambient sources of light
+* landmarks 
+* carry caps on lights
 * meta loops: when going home, what to do?
 * once a run is finished, why play again?
 * ennemies to fight / loot

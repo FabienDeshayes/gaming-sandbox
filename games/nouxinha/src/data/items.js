@@ -63,13 +63,18 @@ export const ITEMS = {
     isLight: false,
     effect: 'What the merchant takes. The counter shows everything you have banked plus what you are carrying.',
   },
+  // 30 against a 200 tank, so a drop is a seventh of a walk rather than a tenth.
+  // The separation rule caps how *many* of a kind the ground can hold
+  // (MIN_SEPARATION in core/world.js), so past a point the only way to put more
+  // water in the world is to make a drop worth more — which is also what keeps
+  // the flask from being the moment water stops being a problem at all.
   'water-drop': {
     id: 'water-drop',
     name: 'WATER DROP',
     sprite: 'water-drop',
     isLight: false,
-    water: 20,
-    effect: 'Refills 20 water. Run dry and the run is over.',
+    water: 30,
+    effect: 'Refills 30 water. Run dry and the run is over.',
   },
   'water-flask': {
     id: 'water-flask',
@@ -79,7 +84,7 @@ export const ITEMS = {
     water: 60,
     tier: 1,
     hue: 1,
-    effect: 'Refills 60 water. Three drops in one, and it carries you further out.',
+    effect: 'Refills 60 water. Two drops in one, and it carries you further out.',
   },
   'spring-vial': {
     id: 'spring-vial',

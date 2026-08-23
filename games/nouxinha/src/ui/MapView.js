@@ -118,6 +118,18 @@ export class MapView {
 
       const alpha = lit.has(key) ? LIT_ALPHA : REMEMBERED_ALPHA;
       const terrain = terrainAt(wx, wy, run.seed);
+
+      // Outside the world. Nothing is drawn there — the boundary is read by
+      // seeing the ground stop, not by seeing a wall (DESIGN.md §4.7). Lit
+      // tiles never include one of these, so this only catches ground an older
+      // save remembers walking before the world had an edge.
+      if (terrain === 'dark') {
+        cell.ground.setVisible(false);
+        cell.overlay.setVisible(false);
+        cell.item.setVisible(false);
+        continue;
+      }
+
       const underCharacter = cell.dx === 0 && cell.dy === 0;
       const gate = terrain === 'gate' ? gateOnTile(run, wx, wy) : null;
       // Standing in an open gateway, the arch gives way to plain floor. The

@@ -14,6 +14,17 @@ export const DIRECTIONS = {
 // Blackout: no light left, so you see the tile you're standing on and nothing else.
 export const BLACKOUT_SHAPE = { kind: 'self' };
 
+// The same light, with the dark at the edge of the world eating into it
+// (`chokeAt` in core/world.js says by how much). A shape rather than the light
+// itself, so nothing is spent by walking out here and nothing is recovered by
+// walking back: a beacon choked to one tile is still a beacon.
+export function chokeShape(shape, allowance) {
+  if (!shape) return shape;
+  if (shape.kind === 'radius' && shape.radius > allowance) return { ...shape, radius: allowance };
+  if (shape.kind === 'cone' && shape.depth > allowance) return { ...shape, depth: allowance };
+  return shape;
+}
+
 export function tileKey(x, y) {
   return `${x},${y}`;
 }

@@ -3,13 +3,16 @@
 //
 // See TESTING.md for how to run these and how to add one.
 
-import { assert, assertEqual, run, test, unit } from './harness.js';
-import { visibleTiles, tileKey } from '../src/core/light.js';
+import { assert, assertEqual, run, test as browserTest, unit } from './harness.js';
+import { chokeShape, visibleTiles, tileKey } from '../src/core/light.js';
 import {
   canEnter,
   chebyshev,
   consumableAt,
   DEFAULT_SEED,
+  EDGE_RADIUS,
+  beyondEdge,
+  chokeAt,
   entryCost,
   isMerchant,
   isWalkable,
@@ -36,6 +39,7 @@ import {
   buy,
   canBuy,
   createRun,
+  EDGE_SEEN,
   equip,
   gateOnTile,
   hasSuspendedRun,
@@ -43,6 +47,7 @@ import {
   isBlackout,
   itemOnTile,
   litTiles,
+  reveal,
   maxWater,
   refillWater,
   rememberGround,
@@ -192,6 +197,13 @@ const MEDIUM_TORCH_CHAIN = bfsChain(SEED, 'torch-medium', MEDIUM_TORCH_COPIES, 6
 // (TitleScene reads both off the URL), which is how a browser test can know
 // where the coins are before the page has drawn any.
 const WORLD = `seed=${DEFAULT_SEED}&nonce=${NONCE}`;
+
+// Every browser test opens on that world unless it names another. NEW GAME
+// draws a world of its own for each slot (core/save.js `startSlot`), so a page
+// opened on no seed at all is a page in a world nothing in this file has
+// BFSed — and since there are no authored levels, every route here is derived
+// against DEFAULT_SEED and has to be walked in DEFAULT_SEED's world.
+const test = (name, fn, opts = {}) => browserTest(name, fn, { query: WORLD, ...opts });
 
 async function walkPath(game, path) {
   for (const dir of path) {
@@ -409,6 +421,141 @@ unit('the base clearing is always walkable', () => {
       for (const seed of [SEED, 5, 8, 999]) assert(isWalkable(x, y, seed), `(${x},${y}) seed ${seed}`);
 });
 
+unit('the world ends at a fixed radius, and the dark there is solid', () => {
+  // Bounded, and bounded as a circle rather than as a box: the edge is a shape
+  // the player sees on the map, and a square one reads as an authored wall
+  // (DESIGN.md §4.7).
+  assert(!beyondEdge(EDGE_RADIUS, 0), 'the rim itself is inside');
+  assert(beyondEdge(EDGE_RADIUS + 1, 0), 'and one tile further out is not');
+  // On the diagonal too, which a Chebyshev bound would get wrong.
+  const diag = Math.ceil(EDGE_RADIUS / Math.SQRT2) + 2;
+  assert(beyondEdge(diag, diag), `the diagonal is bounded at the same radius (${diag})`);
+
+  assertEqual(terrainAt(EDGE_RADIUS + 5, 0, SEED), 'dark', 'outside is its own terrain');
+  assert(!isWalkable(EDGE_RADIUS + 5, 0, SEED), 'and nothing walks on it');
+  assertEqual(entryCost(EDGE_RADIUS + 5, 0, SEED), null, 'no number of gems opens it');
+
+  // Everything the campaign is currently about is comfortably inside, with room
+  // left over — the outermost sanctum wall against the rim.
+  for (const sanctum of sanctums(SEED)) {
+    const out = Math.hypot(sanctum.centre.x, sanctum.centre.y) + sanctum.radius;
+    assert(out < EDGE_RADIUS * 0.75, `sanctum ${sanctum.index} sits well inside (${out.toFixed(0)})`);
+  }
+});
+
+unit('the dark eats into the light as you approach the edge', () => {
+  // A tile of reach for every ten walked, and never all the way to nothing:
+  // the boundary is read by seeing the ground stop, which needs a lit tile to
+  // see it from (DESIGN.md §4.7).
+  assert(chokeAt(0, 0) > 3, 'nothing is eating your light at home');
+  assertEqual(chokeAt(EDGE_RADIUS, 0), 1, 'and a single tile is left at the rim');
+  assert(chokeAt(EDGE_RADIUS - 40, 0) > chokeAt(EDGE_RADIUS - 10, 0), 'closer in is brighter');
+
+  const beacon = { kind: 'radius', radius: 3 };
+  assertEqual(chokeShape(beacon, 5), beacon, 'a light well inside is untouched');
+  assertEqual(chokeShape(beacon, 1).radius, 1, 'and choked down at the edge');
+  assertEqual(chokeShape({ kind: 'cone', depth: 4 }, 2).depth, 2, 'cones narrow the same way');
+
+  // The choke is where you stand, not what you carry: it costs the light
+  // nothing, so walking back in restores it.
+  const state = createRun(SEED, emptySave(), NONCE);
+  const home = activeShape(state).radius;
+  state.x = EDGE_RADIUS - 2;
+  assertEqual(activeShape(state).radius, 1, 'guttering at the rim');
+  state.x = 0;
+  assertEqual(activeShape(state).radius, home, 'and as wide as ever back home');
+});
+
+unit('light never reveals what is outside the world', () => {
+  // Otherwise the explored set would carry tiles that are not there, and both
+  // maps draw off that set.
+  const state = createRun(SEED, emptySave(), NONCE);
+  state.x = EDGE_RADIUS;
+  state.y = 0;
+  reveal(state);
+  for (const { x, y } of litTiles(state)) assert(!beyondEdge(x, y), `lit (${x},${y}) is inside`);
+  for (const key of state.explored) {
+    const [x, y] = key.split(',').map(Number);
+    assert(!beyondEdge(x, y), `explored (${x},${y}) is inside`);
+  }
+});
+
+unit('walking into the end of the world says so, once', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+
+  // Derived, not hardcoded: find a tile you can stand on whose next step
+  // outward is off the end of the world. Most of the rim is rock, so this walks
+  // the boundary looking for open ground against it.
+  let spot = null;
+  for (let y = -EDGE_RADIUS; y <= EDGE_RADIUS && !spot; y++) {
+    const x = Math.floor(Math.sqrt(EDGE_RADIUS * EDGE_RADIUS - y * y));
+    if (isWalkable(x, y, state.seed) && beyondEdge(x + 1, y)) spot = { x, y };
+  }
+  assert(spot, 'there is open ground standing against the rim somewhere');
+  state.x = spot.x;
+  state.y = spot.y;
+
+  const result = step(state, 'right');
+  assertEqual(result.moved, false, 'the world stops the walk');
+  assertEqual(result.reason, 'edge', 'and says it was the edge, not a rock');
+  assertEqual(result.firstTime, true, 'the first bump earns the explanation');
+  assertEqual(step(state, 'right').firstTime, false, 'the second one does not');
+
+  // Filed with the things the campaign has laid eyes on, so it is written down
+  // whichever way the expedition ends and not offered again next time out.
+  assert(state.seenUnique.has(EDGE_SEEN), 'the campaign remembers reaching it');
+});
+
+unit('a saved walk from outside the world comes home instead of stranding', () => {
+  // Not reachable by playing — you cannot walk out there — but a hand-edited or
+  // corrupted slot could name such a tile, and every neighbour of one is also
+  // outside it. Restoring that position would leave a character who can neither
+  // step nor die (DESIGN.md §5).
+  const outside = normaliseSave({
+    ...emptySave(),
+    run: { seed: SEED, x: EDGE_RADIUS + 40, y: 0, water: 50, nonce: NONCE },
+  });
+  assertEqual({ x: outside.run.x, y: outside.run.y }, { x: 0, y: 0 }, 'put back at the hut');
+
+  // And a position inside it is left exactly where it was.
+  const inside = normaliseSave({
+    ...emptySave(),
+    run: { seed: SEED, x: 12, y: -7, water: 50, nonce: NONCE },
+  });
+  assertEqual({ x: inside.run.x, y: inside.run.y }, { x: 12, y: -7 }, 'a real one is untouched');
+});
+
+unit('the whole world is one place, out to the rim', () => {
+  // The point of an edge you can walk to is that you can walk to it. If the
+  // noise sealed the outer band off, the rim would be a promise the world never
+  // keeps — so this floods the entire thing from the hut with every gate shut.
+  const seed = pickSeed(SEED);
+  const limit = EDGE_RADIUS + 2;
+  const seen = new Set(['0,0']);
+  const stack = [[0, 0]];
+  let furthest = 0;
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    furthest = Math.max(furthest, Math.hypot(x, y));
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (Math.abs(nx) > limit || Math.abs(ny) > limit) continue;
+      const key = `${nx},${ny}`;
+      if (seen.has(key) || !isWalkable(nx, ny, seed)) continue;
+      seen.add(key);
+      stack.push([nx, ny]);
+    }
+  }
+  let walkable = 0;
+  for (let y = -limit; y <= limit; y++)
+    for (let x = -limit; x <= limit; x++) if (isWalkable(x, y, seed)) walkable++;
+
+  assert(walkable > 50000, `the world is a large place (${walkable} tiles)`);
+  assert(seen.size / walkable > 0.95, `and nearly all of it connects (${seen.size}/${walkable})`);
+  assert(furthest >= EDGE_RADIUS - 1, `including the rim itself (reached ${furthest.toFixed(1)})`);
+});
+
 unit('pickSeed rejects a seed that walls the base in', () => {
   // Seed 5 seals the spawn into a pocket of a couple of tiles.
   assert(reachableFraction(5) < 0.6, 'seed 5 should be a stranding seed');
@@ -554,7 +701,7 @@ unit('a gate stays shut until you hold the gem it wants', () => {
   assertEqual(step(armed, dir).moved, true, 'and it can be walked through');
 });
 
-unit('a gem upgrades what the world spawns without spawning more of it', () => {
+unit('a gem upgrades what the world spawns, and thins it', () => {
   // Sanctum clearings are skipped: a sanctum's cache is a hoard fixed at what
   // it was built holding, and doesn't follow the open world's swaps.
   const count = (gems) => {
@@ -574,19 +721,28 @@ unit('a gem upgrades what the world spawns without spawning more of it', () => {
   const none = count(0);
   assert(none.total > 50, 'the sample window should hold plenty to compare');
 
-  // One kind out, one kind in, at every gem — so the map never fills up and
-  // never empties out. Not exactly equal, because thinning is per kind and the
-  // swap moves which kind is crowding itself, but within a few percent.
+  // One kind out, one kind in, at every gem — the swaps never change how many
+  // kinds are in play, only which. What does change is how many tiles hold
+  // anything: each gem leaves the ground sparser than the last (GEM_DENSITY in
+  // core/world.js), because what it does hold is worth several times more.
+  let previous = none.total;
   for (const gems of [1, 2, 3]) {
     const after = count(gems);
-    const drift = Math.abs(after.total - none.total) / none.total;
-    assert(drift < 0.12, `gem ${gems} leaves the map about as full (drifted ${drift})`);
+    assert(
+      after.total < previous,
+      `gem ${gems} thins the ground (${after.total} against ${previous})`
+    );
+    previous = after.total;
     assertEqual(
       Object.keys(after.tally).length,
       Object.keys(none.tally).length,
       `gem ${gems} keeps the same number of kinds in play`
     );
   }
+
+  // Thinner, not empty: three gems still leave over half of what the opening
+  // world held, so the late game is quieter rather than barren.
+  assert(previous > none.total * 0.45, `three gems leave the ground worth walking (${previous})`);
 
   assert(none.tally['water-drop'] > 0, 'water drops before the first gem');
   assertEqual(none.tally['water-flask'], undefined, 'and no flasks');
@@ -601,6 +757,33 @@ unit('a gem upgrades what the world spawns without spawning more of it', () => {
   const three = count(3);
   assert(three.tally['spring-vial'] > 0, 'spring vials after the third gem');
   assertEqual(three.tally['water-flask'], undefined, 'the flask it replaced is retired');
+});
+
+unit('a run walks the world its slot names', () => {
+  // A campaign's world is drawn once, when NEW GAME claims the slot, and lives
+  // in the save from then on (core/save.js `startSlot`). Everything else about
+  // the world falls out of it, so a run that ignored it would be a run in
+  // somebody else's cave system.
+  const mine = pickSeed(4242);
+  assertEqual(createRun(undefined, { ...emptySave(), seed: mine }).seed, mine, 'the slot decides');
+
+  // A slot with no world of its own is a campaign started before slots had
+  // them. It keeps the one world it has been mapping rather than being moved to
+  // a fresh one, which would strand its cartography.
+  assertEqual(createRun(undefined, emptySave()).seed, pickSeed(DEFAULT_SEED), 'and a legacy slot keeps the old one');
+
+  // A seed named outright still wins — that is what `?seed=` on the URL is for.
+  assertEqual(createRun(SEED, { ...emptySave(), seed: mine }).seed, pickSeed(SEED), 'and the URL overrides both');
+});
+
+unit('banking keeps the world the campaign has been walking', () => {
+  // `bankRun` rebuilds the save rather than merging onto it, so the world is
+  // the one field a walk home could silently drop — and dropping it would take
+  // the campaign's mapped ground with it (`mappedSeed`).
+  const mine = pickSeed(31337);
+  const banked = bankRun(createRun(undefined, { ...emptySave(), seed: mine }, NONCE));
+  assertEqual(banked.seed, mine, 'walking home leaves the world alone');
+  assertEqual(banked.mappedSeed, mine, 'and the ground it drew belongs to it');
 });
 
 unit('each gem carried raises the water ceiling', () => {
@@ -2188,6 +2371,48 @@ test('new game picks a slot, and load game brings that campaign back', async (ga
   assertEqual(state.banked.runs, 1, 'and loading it carries on where it left off');
   assert(state.explored > 9, 'on the ground that campaign had already lit');
 });
+
+// Deliberately opened on no seed: this is the one test that wants whatever world
+// NEW GAME draws, because what it is checking is that it draws one at all.
+test(
+  'two new games are two different worlds',
+  async (game) => {
+    const worldOf = async (slot) => {
+      await game.clickText('NEW GAME');
+      await game.waitForScene('SlotScene');
+      await game.clickText(slot);
+      await game.waitForScene('ExploreScene');
+      const seed = (await game.state()).seed;
+      // Out and back, and stop at the hut, so the campaign is banked and the
+      // walk ends on the title screen ready for the next one.
+      await game.tapDpad('right');
+      await game.settle();
+      await game.tapDpad('left');
+      await game.settle();
+      await game.clickText('STOP HERE');
+      await game.clickText('HOME');
+      await game.waitForScene('TitleScene');
+      return seed;
+    };
+
+    const first = await worldOf('SLOT 1');
+    const second = await worldOf('SLOT 2');
+    assert(first !== second, `two campaigns, two worlds (both got ${first})`);
+
+    // And a campaign keeps its own: banking rebuilds the save from scratch
+    // (`bankRun` in core/rules.js), so this is where a slot would quietly lose
+    // the world it has been mapping.
+    assertEqual((await game.save(1)).seed, first, 'slot 1 kept the world it walked');
+    assertEqual((await game.save(2)).seed, second, 'and slot 2 kept its own');
+
+    await game.clickText('LOAD GAME');
+    await game.waitForScene('SlotScene');
+    await game.clickText('SLOT 1');
+    await game.waitForScene('ExploreScene');
+    assertEqual((await game.state()).seed, first, 'and walks it again next expedition');
+  },
+  { query: '' }
+);
 
 // A suspended expedition with one mouthful of water left, planted straight into
 // the slot. It is prior state, not live state — the browser's version of handing

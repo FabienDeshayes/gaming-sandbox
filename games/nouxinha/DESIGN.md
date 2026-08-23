@@ -2,8 +2,8 @@
 
 > Grid exploration game about walking into the dark on a limited supply of light.
 
-> See [`TESTING.md`](./TESTING.md) for how to run the suite and how to write a test against an
-> infinite procedural world.
+> See [`TESTING.md`](./TESTING.md) for how to run the suite and how to write a test against a
+> procedural world with no authored levels in it.
 
 > **Doc convention:** this doc describes the game *as it is now*. When something changes, edit the
 > relevant sections in place — don't leave "superseded"/"previously"/"was X, now Y" notes. Git history
@@ -15,7 +15,7 @@ A tile-by-tile exploration game where the only thing you can really spend is lig
 
 ## 2. Pitch
 
-You step out of your base onto an endless dark grid with a small torch that shows one tile in every direction and lasts 100 steps. Everything you find — brighter torches, stranger torches, coins — is out there in the dark, and the further you push the better it gets. The tension is that light is fuel: a torch that shows you more burns out faster, so every upgrade is also a shorter leash.
+You step out of your base onto a vast dark grid with a small torch that shows one tile in every direction and lasts 100 steps. Everything you find — brighter torches, stranger torches, coins — is out there in the dark, and the further you push the better it gets. The tension is that light is fuel: a torch that shows you more burns out faster, so every upgrade is also a shorter leash.
 
 Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Twenty tiles out there is also a merchant, who will sell you a compass for fifty coins and a map for a hundred, on the same terms as everything else: only yours once you've walked it back.
 
@@ -84,8 +84,8 @@ The compass and the map are **tools** rather than items: one of each exists, nei
 | Item | Gems needed | Effect |
 |---|---|---|
 | Coins | — | What the merchant takes (§4.5). A pickup is a small pile worth 1-5, because the separation rule (§4.3) caps how many piles the world can hold. The HUD's counter shows the whole **purse** — banked plus carried — because that is the number the merchant spends; what this expedition found on its own is a separate line in the recap. |
-| Water drop | — | Refills water by 20 (§4). Running dry is the run's one death condition — this is the thing worth detouring for. |
-| Water flask | 1 | Refills water by 60. Three drops in one. |
+| Water drop | — | Refills water by 30 (§4), a seventh of a full tank. Running dry is the run's one death condition — this is the thing worth detouring for. |
+| Water flask | 1 | Refills water by 60. Two drops in one. |
 | Spring vial | 3 | Refills water to the ceiling, wherever you are. |
 | Gem | — | One per sanctum, three in all. Gives a colour back to the world and opens the gate that wants it (§4.4). |
 | Compass | — | Points at the next unique object worth walking to (§4.6). Bought for 50 or found. |
@@ -93,9 +93,9 @@ The compass and the map are **tools** rather than items: one of each exists, nei
 
 ### 4.3 The world
 
-Effectively infinite and **procedurally generated from a seed**, in three layers that differ in what
+Very large and **procedurally generated from a seed**, in three layers that differ in what
 they depend on. Nothing about the world is ever stored — a run remembers only which tiles it has
-*seen*. There is no world edge.
+*seen*. It is bounded, a long way out, by the dark itself (§4.7).
 
 | Layer | Depends on | Holds |
 |---|---|---|
@@ -103,6 +103,11 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
 | **Unique objects** | `(x, y, seed)` | The three gems, the merchant, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
 | **Consumables** | `(x, y, seed, salt)` | Coins, water and lights. The salt changes every run and every respawn, so these are never twice in the same places. |
 
+- **Each campaign gets a world of its own.** The seed is drawn when NEW GAME claims a save slot and
+  lives in that slot from then on, so the three slots are three different cave systems and starting
+  over in one gives it a fourth. Every expedition out of a slot walks the same world — that is what
+  makes the ground a campaign has lit worth carrying between runs (§6.1), and what makes the gems
+  stay where the compass said they were.
 - The **base** sits at `(0, 0)` and is where every run starts. Its 3×3 neighbourhood is forced to
   floor so you can never be walled in at spawn. It renders as a hut with a flag so it's recognisable
   from the edge of your light, and it's the one tile that's always on the map. The hut isn't drawn
@@ -156,15 +161,29 @@ as a good patch of ground rather than a clump. Two consequences fall out:
 - **Sanctum clearings are the exception.** A clearing is a hoard somebody left there, so it keeps its
   dense cache — capped at two of any one kind, so it reads as a cache and not a pile (§4.4).
 
+**Water outweighs light on the ground, before any gem.** A step costs one water and one point of
+durability off the burning light, so the honest way to read the scatter is what a walk gets back per
+tile crossed. The opening weights had light very nearly paying for itself out at range while water
+paid for about a sixth of itself, which made the leash the game is actually about invisible behind a
+torch supply that never ran out. Water is the pressure; light is the thing meant to be rationed —
+so before the first gem, every band offers more water than light.
+
 **A gem upgrades the world rather than adding to it.** Item quality still scales with distance from
 the base — coins and water near home, the bigger torches only further out — and on top of that each
 gem swaps one kind out for one kind in: the first retires the water drop for the flask, the second
-the medium torch for the beacon, the third the flask for the spring vial. The lattice offers up the
-same tiles either way, so **the map holds the same number of items after a gem as before**; what
-changed is what they are. The swaps are one-for-one on purpose — retire two kinds for one and the
-survivors crowd each other against the separation rule, and the world ends up emptier the further you
-get, which is backwards. Walking ground you have already walked is worth it again because everything
-on it is better, not because there is more of it.
+the medium torch for the beacon, the third the flask for the spring vial. The swaps are one-for-one
+on purpose: what a gem changes is what is lying about, never how many kinds are in play. Walking
+ground you have already walked is worth it again because everything on it is better.
+
+**And it thins the ground as it upgrades it.** The upgrades are steep — a drop refills 30 and a
+spring vial refills everything, a medium torch burns 50 steps and a beacon burns 140 — so a world
+that kept the same number of pickups would hand out several times the water and nearly twice the
+light per tile walked by the end of the campaign, which is what turned the late game into stopping
+every few steps for something you did not need. So the count comes down as the value goes up: at
+three gems the ground holds about three fifths of what it opened with. Fewer things, each worth
+several times more, and picking something up stays a thing that happens rather than a thing that
+keeps happening. The taper never touches the opening world, and never bites until a gem has been
+banked — by which point the water ceiling has gone up by 50 with it.
 
 **Everything on the ground comes back, somewhere new.** Two things respawn the consumable layer:
 picking up a **gem**, and walking back onto the **hut**. Both relay the whole scatter — anything this
@@ -265,12 +284,56 @@ cartography, not progress — where the ground is, never where you were standing
 had, or what you were carrying. It is tied to the seed that drew it, so a world that ever changed
 underneath it discards the drawing rather than showing one from somewhere else.
 
+### 4.7 The edge of the world
+
+The world is **bounded at a radius of 200 tiles** from the hut, and what bounds it is the dark
+itself. It is very large — about 88,000 walkable tiles, over 500 screenfuls, and 99% of it connects
+back to the hut on foot — but it does end, so the design has an outside to work against rather than
+an infinity to fill.
+
+**The dark eats light.** Everywhere inside 170 or so, a torch is a torch. Past that the dark stops
+being something a light pushes back and becomes something that pushes back: it takes **one tile of
+reach for every ten tiles closer to the edge**, applied to whatever light is burning. A beacon shows
+49 tiles at home, 25 at 178 out, and 9 at the rim; a lamp's cone narrows the same way. Two things
+fall out of the rule, both wanted:
+
+- **The bigger the light, the sooner the dark starts eating it** — so the last stretch is walked at
+  the same guttering ring whatever you set out carrying, and the beacon's advantage is a reason to
+  get *there*, not a way to see once you have arrived.
+- **It costs the light nothing.** The choke is a property of where you are standing, not of what you
+  are holding: a beacon choked to one tile is still a beacon, and is as wide as ever on the walk back
+  in. Nothing is spent by going to look.
+
+**A tile of reach is always left.** The dark never takes the last one, because the boundary is read
+by *seeing the floor stop* — the tiles outside the world are drawn as nothing at all, so what the
+player meets is ground running out rather than a wall standing up. A player who could see nothing
+would only have bumped into something invisible, which is the failure mode this whole design is
+arranged to avoid.
+
+**And it says so, once.** The first time a campaign walks into the edge, the dark explains itself in
+a panel: it has been eating your light for a while now, and this is where it has eaten all of it.
+After that it is a line in the HUD, because by then the player knows. The fact is filed with the
+things the campaign has laid eyes on, so it is written down whichever way the expedition ends and
+never offered twice.
+
+**It is a circle, not a box.** Measured as a true radius, unlike the Chebyshev distance the rest of
+the game counts in, because this is the one boundary the player will see the shape of — on the map,
+where the drawing's own outline becomes the shape of the world. A square edge would read as an
+authored wall around a level. The HUD's furthest-out counter stays Chebyshev: how far out you walked
+is a different question from how close to the edge you got.
+
+**There is room past the content.** The outermost sanctum wall stands at 117, so the last third of
+the world is unspoken for — that is where a late-game area goes, and the edge is far enough out that
+reaching it is a 400-step round trip and therefore a late-campaign expedition in its own right,
+rather than something stumbled into.
+
 ## 5. Constraints
 
 - One light active at a time. Light and water are the two consumables — no food yet (§12), no timer.
 - The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
 - **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is a 1-bit tile baked white, so what a gem changes is a tint at draw time, never an asset.
+- **The world ends at radius 200, and the dark is what ends it** (§4.7). Nothing is walled off by it: the rim is reachable on foot from the hut, and the last third of the world sits past the outermost content.
 - Every gem is optional. Nothing in the game requires finding one; the sanctums gate their own contents and nothing else. The compass and the map are optional too — they make the walk legible, never possible.
 - **No two of the same consumable within 8 tiles.** The world spreads items rather than scattering them, which caps how much there is to find (§4.3). One constant decides the trade.
 - Portrait, mobile-first, touch as the primary input. 480×854 fixed canvas.
@@ -366,7 +429,7 @@ scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
 ## 8. Scope
 
 **Built — the MVP, and what "is the walk interesting" gets judged on:**
-- Procedural infinite grid (floor/rock) from a seed, with the base at `(0, 0)`
+- Procedural grid (floor/rock) from a seed, bounded by the dark at radius 200, with the base at `(0, 0)`
 - Tile stepping via swipe and D-pad, with facing tracked from the last step
 - Three visibility states with persistent memory of explored tiles
 - Small torch (radius 1) equipped at start; durability ticking per step; auto-swap on burnout; blackout when nothing is left

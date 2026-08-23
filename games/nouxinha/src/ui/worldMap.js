@@ -108,6 +108,9 @@ export class WorldMap {
       const y = Number(key.slice(comma + 1)) - bounds.minY;
       if (x < 0 || y < 0 || x >= w || y >= h) continue;
       const terrain = terrainAt(x + bounds.minX, y + bounds.minY, run.seed);
+      // Outside the world: left unpainted, so the drawing's own outline is the
+      // shape of the world rather than a box around it (DESIGN.md §4.7).
+      if (terrain === 'dark') continue;
       const at = (y * w + x) * 4;
       image.data[at] = r;
       image.data[at + 1] = g;

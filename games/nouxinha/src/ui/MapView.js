@@ -24,6 +24,7 @@ import { isBase, isMerchant, sanctumAt, terrainAt, variantAt } from '../core/wor
 import { gateOnTile, isBlackout, itemOnTile, litTiles, tileKey } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
 import { variantKey, wallSprite } from '../data/tiles.js';
+import { makePainted, paintTile } from './painted.js';
 import { makeWizard, paintWizard } from './wizard.js';
 
 // Which piece of the wall nine-slice a sanctum's ring tile draws. The ring is a
@@ -31,17 +32,23 @@ import { makeWizard, paintWizard } from './wizard.js';
 // at what its neighbours are, which would not tell a top run from a bottom one
 // anyway (both have wall to the left and right and open ground above and
 // below).
-function wallPiece(x, y, seed) {
-  const site = sanctumAt(x, y, seed);
+function wallPiece(site, x, y) {
   if (!site) return 'wall';
   const { centre, radius } = site.sanctum;
   return wallSprite(x - centre.x, y - centre.y, radius);
 }
 
+// The gem a sanctum is the colour of (DESIGN.md §9): the one it keeps, or — for
+// the last one, which keeps none — the one its gate wanted, so that the walk
+// gem three pays for still arrives somewhere wearing a colour.
+function sanctumHue(sanctum) {
+  const gem = itemDef(sanctum.gem);
+  return gem ? gem.hue : sanctum.requires;
+}
+
 export class MapView {
   constructor(scene) {
     this.scene = scene;
-    const pal = getPalette();
 
     // Tiles live in their own container so a step can slide the whole world at
     // once while the character stays pinned to the centre of the screen.
@@ -60,12 +67,7 @@ export class MapView {
       for (let col = 0; col < VIEW_COLS; col++) {
         const px = VIEW_CX + (col - midCol) * TILE;
         const py = VIEW_CY + (row - midRow) * TILE;
-        const make = () =>
-          scene.add
-            .image(px, py, 'floor')
-            .setScale(SPRITE_SCALE)
-            .setTint(pal.fg)
-            .setVisible(false);
+        const make = () => makePainted(scene, px, py, SPRITE_SCALE).setVisible(false);
         // Three layers per tile: ground, then the base hut where there is one,
         // then whatever is lying on it.
         const cell = {
@@ -88,9 +90,10 @@ export class MapView {
   // the lit shape draws at full brightness.
   //
   // Tints are reassigned here rather than once at construction, because what
-  // colour a tile is drawn in now depends on the run: a gate takes the colour
-  // of the gem that opened it, and an item takes the colour of the gem that
-  // made it visible (DESIGN.md §9).
+  // colour a tile is drawn in depends on the run: a sanctum wears the colour of
+  // the gem it keeps, a gate the colour of the gem that opened it, an item the
+  // colour of the gem that made it visible — and every painted tile only wears
+  // a colour once that gem has actually been picked up (DESIGN.md §9).
   refresh(run) {
     const lit = new Set(litTiles(run).map((t) => tileKey(t.x, t.y)));
     const fg = getPalette().fg;
@@ -131,6 +134,10 @@ export class MapView {
       }
 
       const underCharacter = cell.dx === 0 && cell.dy === 0;
+      // Masonry: which sanctum this tile belongs to decides both which piece of
+      // the nine-slice it draws and which gem's colour it wears.
+      const site =
+        terrain === 'wall' || terrain === 'gate' ? sanctumAt(wx, wy, run.seed) : null;
       const gate = terrain === 'gate' ? gateOnTile(run, wx, wy) : null;
       // Standing in an open gateway, the arch gives way to plain floor. The
       // wizard and a gate are both dense sprites and one on top of the other
@@ -140,9 +147,7 @@ export class MapView {
       const showGate = gate && !underCharacter;
 
       // A gate fills its tile the way rock and wall do — it *is* the ring it
-      // stands in, not something lying on the floor. Shut, it's drawn in the
-      // palette's own foreground, because a gate you can't open yet is just
-      // more wall; open, it's the colour of the gem that opened it.
+      // stands in, not something lying on the floor.
       const ground = showGate
         ? gate.open
           ? 'gate-open'
@@ -150,14 +155,20 @@ export class MapView {
         : terrain === 'rock' || terrain === 'tree'
           ? variantKey(terrain, variantAt(wx, wy, run.seed))
           : terrain === 'wall'
-            ? wallPiece(wx, wy, run.seed)
+            ? wallPiece(site, wx, wy)
             : 'floor';
 
-      cell.ground
-        .setTexture(ground)
-        .setTint(showGate && gate.open ? gemColour(gate.requires) : fg)
-        .setVisible(true)
-        .setAlpha(alpha);
+      // The two hues a tile can only get from where it stands: the gem the
+      // sanctum around it keeps, and the gem whose colour opened its gate. Both
+      // resolve to the plain foreground until that gem is in hand, so a gate
+      // you can't open yet is just more wall and an unclaimed sanctum is just
+      // more masonry.
+      const roles = site
+        ? { gem: sanctumHue(site.sanctum), opened: gate ? gate.requires : 0 }
+        : {};
+
+      cell.ground.setVisible(true).setAlpha(alpha);
+      paintTile(cell.ground, ground, { gems: run.gems, base: fg, roles });
 
       // Nothing lies on rock, on trees, on wall, or in a gateway.
       if (terrain !== 'floor') {
@@ -175,20 +186,22 @@ export class MapView {
         : isMerchant(wx, wy, run.seed)
           ? 'merchant'
           : null;
-      cell.overlay
-        .setTexture(structure || 'base')
-        .setTint(fg)
-        .setVisible(!!structure && !underCharacter)
-        .setAlpha(alpha);
+      cell.overlay.setVisible(!!structure && !underCharacter).setAlpha(alpha);
+      paintTile(cell.overlay, structure || 'base', { gems: run.gems, base: fg });
 
       const item = itemOnTile(run, wx, wy);
       if (item) {
         const def = itemDef(item);
-        cell.item
-          .setTexture(def.sprite)
-          .setTint(gemColour(def.hue || 0))
-          .setVisible(true)
-          .setAlpha(alpha);
+        const hue = def.hue || 0;
+        cell.item.setVisible(true).setAlpha(alpha);
+        // An item of a gem's tier is drawn in that gem's colour outright — it
+        // is only in the world at all because that gem is (DESIGN.md §4.3) —
+        // and anything its own paint adds sits on top of that.
+        paintTile(cell.item, def.sprite, {
+          gems: run.gems,
+          base: gemColour(hue),
+          roles: { gem: hue },
+        });
       } else {
         cell.item.setVisible(false);
       }

@@ -4,9 +4,10 @@
 // here. Pure — no browser.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
-import { DIM, buildSprites, WIZARD_ZONES } from '../src/data/sprites.js';
+import { DIM, buildSprites } from '../src/data/sprites.js';
 import { SHEET_COLS, SHEET_ROWS, TILES, variantCount, variantKey, wallSprite } from '../src/data/tiles.js';
-import { zoneColours } from '../src/ui/wizard.js';
+import { PAINT, PAINT_ZONES, ZONE_INK, paintOf, zoneAt, zoneKey } from '../src/data/paint.js';
+import { zoneTints } from '../src/ui/painted.js';
 import { MAX_MOVE_SPEED, MIN_MOVE_SPEED, gemColour, getMoveSpeed, setMoveSpeed } from '../src/config.js';
 
 // A stand-in for the sheet: every tile is its own coordinate written into the
@@ -107,16 +108,47 @@ unit('a sanctum ring draws corners on its corners and runs down its sides', () =
   for (const piece of [...seen.keys(), 'wall']) assert(sprites[piece], `${piece} was cut`);
 });
 
-unit('each wizard facing is split into colour bands that rebuild the whole sprite', () => {
-  for (const facing of ['down', 'up', 'right', 'left']) {
-    const whole = sprites[`wizard-${facing}`];
-    const bands = Array.from({ length: WIZARD_ZONES }, (_, z) => sprites[`wizard-${facing}-${z}`]);
-    // Stacking the bands back up has to give exactly the silhouette they were
-    // cut from — a band that drops a row loses pixels off the character.
-    const stacked = whole.map((_, y) =>
-      Array.from(whole[y], (_, x) => (bands.some((b) => b[y][x] !== '.') ? whole[y][x] : '.')).join('')
+unit('a painted tile is cut into zones that rebuild the whole sprite', () => {
+  for (const key of Object.keys(PAINT)) {
+    const entry = paintOf(key);
+    assert(entry && Array.isArray(entry.hues), `${key} resolves to a paint entry`);
+    assert(entry.hues.length >= 1, `${key} paints at least one zone`);
+    assert(entry.hues.length < PAINT_ZONES, `${key} paints at most ${PAINT_ZONES - 1} zones`);
+    assertEqual(entry.map.length, 16, `${key}: the zone map is 16 rows`);
+    for (const row of entry.map) assertEqual(row.length, 16, `${key}: the zone map is 16 px wide`);
+
+    const whole = sprites[key];
+    const zones = Array.from({ length: entry.hues.length + 1 }, (_, z) => sprites[zoneKey(key, z)]);
+    for (const zone of zones) assert(zone, `${key}: every zone was cut`);
+
+    // Stacking the zones back up has to give exactly the silhouette they were
+    // cut from, with no pixel in two of them: a zone that drops a pixel puts a
+    // hole in the tile, and one that keeps a pixel twice draws it in two
+    // colours at once.
+    whole.forEach((row, y) =>
+      Array.from(row).forEach((ink, x) => {
+        const drawn = zones.filter((zone) => zone[y][x] !== '.');
+        assertEqual(drawn.length, ink === '.' ? 0 : 1, `${key} (${x}, ${y}) is drawn once`);
+        if (ink !== '.') assertEqual(drawn[0][y][x], ink, `${key} (${x}, ${y}) keeps its weight`);
+      })
     );
-    assertEqual(stacked, whole, `${facing}: the bands are the whole wizard`);
+
+    // And a pixel lands in the zone its map put it in.
+    whole.forEach((row, y) =>
+      Array.from(row).forEach((ink, x) => {
+        if (ink === '.') return;
+        const zone = zoneAt(entry.map, x, y);
+        assert(zones[zone][y][x] === ink, `${key} (${x}, ${y}) is in zone ${zone}`);
+      })
+    );
+  }
+
+  // A map is written in the zone characters and nothing else, so a typo in one
+  // is a failure here rather than a pixel quietly falling back to zone 0.
+  for (const entry of Object.values(PAINT)) {
+    if (typeof entry === 'string') continue;
+    const stray = entry.map.join('').match(new RegExp(`[^${ZONE_INK.join('')}]`));
+    assert(!stray, `"${stray && stray[0]}" is not a zone character`);
   }
 });
 
@@ -127,19 +159,48 @@ unit('floor texture is drawn at half strength, and nothing else is', () => {
   assertEqual(fromSolid.floor, Array.from({ length: 16 }, () => DIM.repeat(16)), 'the whole tile is dimmed ground');
 
   // A dim pixel anywhere but the floor would be a second weight on an object,
-  // which the two-colour rule doesn't have.
+  // which the two-colour rule doesn't have. The floor's own colour zones are
+  // cut out of the dimmed tile, so they carry the same weight it does.
   for (const [key, mask] of Object.entries(fromSolid)) {
-    if (key === 'floor') continue;
+    if (key === 'floor' || key.startsWith('floor-z')) continue;
     assert(!mask.join('').includes(DIM), `${key} is drawn at one strength`);
   }
 });
 
-unit('the wizard accumulates one colour per gem, keeping the base band', () => {
+unit('the wizard accumulates one colour per gem, keeping the base silhouette', () => {
   const fg = gemColour(0);
-  assertEqual(zoneColours(0), [fg, fg, fg, fg], 'no gems: every band is the palette foreground');
-  assertEqual(zoneColours(1), [fg, gemColour(1), fg, fg], 'one gem lights only its own band');
-  assertEqual(zoneColours(2), [fg, gemColour(1), gemColour(2), fg], 'a second gem adds a band, keeping the first');
-  assertEqual(zoneColours(3), [fg, gemColour(1), gemColour(2), gemColour(3)], 'a third gem lights every band');
+  const tints = (gems) => zoneTints('wizard-down', { gems });
+  assertEqual(tints(0), [fg, fg, fg, fg], 'no gems: the whole character is the palette foreground');
+  assertEqual(tints(1), [fg, gemColour(1), fg, fg], 'one gem lights only its own zone');
+  assertEqual(tints(2), [fg, gemColour(1), gemColour(2), fg], 'a second gem adds a zone, keeping the first');
+  assertEqual(tints(3), [fg, gemColour(1), gemColour(2), gemColour(3)], 'a third gem lights every zone');
+
+  // Every facing is the same tile and shares the one map, so they all wear it.
+  for (const facing of ['up', 'right', 'left'])
+    assertEqual(zoneTints(`wizard-${facing}`, { gems: 3 }), tints(3), `${facing} is painted too`);
+});
+
+unit('a place-dependent hue waits for the gem it names', () => {
+  const fg = gemColour(0);
+  // A sanctum's masonry is the colour of the gem it keeps — but only once that
+  // gem has been picked up, so no colour is ever on screen before the run that
+  // brought it back.
+  const wall = (gems, gem) => zoneTints('wall-t', { gems, roles: { gem } })[1];
+  assertEqual(wall(0, 2), fg, 'an unclaimed sanctum is drawn as plain masonry');
+  assertEqual(wall(1, 2), fg, "and stays plain while you hold somebody else's gem");
+  assertEqual(wall(2, 2), gemColour(2), 'taking its gem is what lights it');
+
+  // A gate carries both at once: the sanctum behind it and whoever opened it.
+  const gate = (gems, roles) => zoneTints('gate-open', { gems, roles });
+  assertEqual(gate(1, { gem: 1, opened: 0 }), [fg, gemColour(1), fg, fg], 'the first arch never wanted a gem');
+  assertEqual(
+    gate(2, { gem: 2, opened: 1 }),
+    [fg, gemColour(2), gemColour(1), fg],
+    'the second wears its own gem on the arch and the gem that opened it on the leaves'
+  );
+
+  // An unpainted tile is one colour, whatever it is handed.
+  assertEqual(zoneTints('base', { gems: 3, roles: { gem: 1 } }), [fg, fg, fg, fg], 'the hut is one colour');
 });
 
 unit('the move-speed setting clamps to its slider range', () => {

@@ -189,12 +189,23 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   assertEqual(zoneTints[0], gemColour(0), 'the base band stays the palette foreground');
   assertEqual(zoneTints[1], gemColour(1), 'the first gem band wears the colour it gave back');
   const tiles = await game.visibleTiles();
-  assert(tiles.some((t) => t.ground.startsWith('wall')), 'the sanctum is drawn as masonry, not as rock');
-  // The arch they walked in through is drawn open, in the palette's own colour
-  // — this first sanctum is the one that never wanted a gem.
+  const walls = tiles.filter((t) => t.ground.startsWith('wall'));
+  assert(walls.length > 0, 'the sanctum is drawn as masonry, not as rock');
+  // And the masonry has taken the colour of the gem this sanctum kept: the
+  // stonework stays the palette's own foreground, the crown of the ring over it
+  // wears the colour that was just brought back (DESIGN.md §9).
+  assert(walls.every((t) => t.tint === gemColour(0)), 'the stonework is still the foreground');
+  assert(
+    walls.some((t) => t.paint.includes(gemColour(1))),
+    "the ring wears the colour of the gem it kept"
+  );
+  // The arch they walked in through is drawn open. Its leaves are in the colour
+  // of whatever opened it — this first sanctum is the one that never wanted a
+  // gem, so they stay plain, while the arch over them belongs to the sanctum.
   const arch = tiles.find((t) => t.x === FIRST_GEM.gate.x && t.y === FIRST_GEM.gate.y);
   assertEqual(arch.ground, 'gate-open', 'the gateway is drawn as an open arch');
-  assertEqual(arch.tint, gemColour(FIRST_GEM.requires), 'in the colour of whatever opened it');
+  assertEqual(arch.paint[1], gemColour(FIRST_GEM.requires), 'its leaves are the colour of whatever opened it');
+  assertEqual(arch.paint[0], gemColour(1), "and its arch the colour of the sanctum's own gem");
   // Water rises with the gem, so the HUD's ceiling moves too.
   assert(await game.hasText(`WATER ${state.water}/${maxWater(1)}`), 'the water ceiling rose');
 });

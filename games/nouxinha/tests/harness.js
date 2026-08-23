@@ -536,23 +536,30 @@ export async function openGame(
       }),
 
     // What the player can actually see: for each drawn tile, its world
-    // coordinate, texture, alpha, and tint. This is the render, not the model —
+    // coordinate, sprite, alpha, and tints. This is the render, not the model —
     // and since a gem's whole effect is a colour change, the tints are the only
     // way to assert that restoring one actually reached the screen.
+    //
+    // Every tile on screen is a stack of colour zones (src/ui/painted.js), so
+    // `tint` is the colour the bulk of the tile is drawn in and `paint` the
+    // colours of the zones over it — which is where a sanctum wearing its own
+    // gem's colour shows up.
     visibleTiles: () =>
       page.evaluate(() => {
         const s = window.__game.scene.getScene('ExploreScene');
+        const painted = (tile) => tile.layers.slice(1).filter((l) => l.visible);
         return s.map.cells
           .filter((c) => c.ground.visible)
           .map((c) => ({
             x: s.run.x + c.dx,
             y: s.run.y + c.dy,
-            ground: c.ground.texture.key,
+            ground: c.ground.key,
             alpha: Math.round(c.ground.alpha * 100) / 100,
-            tint: c.ground.tintTopLeft,
-            overlay: c.overlay.visible ? c.overlay.texture.key : null,
-            item: c.item.visible ? c.item.texture.key : null,
-            itemTint: c.item.visible ? c.item.tintTopLeft : null,
+            tint: c.ground.layers[0].tintTopLeft,
+            paint: painted(c.ground).map((l) => l.tintTopLeft),
+            overlay: c.overlay.visible ? c.overlay.key : null,
+            item: c.item.visible ? c.item.key : null,
+            itemTint: c.item.visible ? c.item.layers[0].tintTopLeft : null,
           }));
       }),
 
@@ -585,9 +592,10 @@ export async function openGame(
         () => `wizard-${window.__game.scene.getScene('ExploreScene').map.wizard.facing}`
       ),
 
-    // The wizard is a stack of colour-zone layers (src/ui/wizard.js), one per
-    // gem plus the base band — this is how a test sees that a gem's colour
-    // actually reached one of them.
+    // The wizard is a stack of colour-zone layers (src/ui/painted.js): the
+    // silhouette they set out in, plus the hood, robe and staff that turn the
+    // colour of gems one, two and three — this is how a test sees that a gem's
+    // colour actually reached one of them.
     wizardZoneTints: () =>
       page.evaluate(() =>
         window.__game.scene.getScene('ExploreScene').map.wizard.layers.map((l) => l.tintTopLeft)

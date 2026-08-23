@@ -81,8 +81,8 @@ reaches in to *set* game state.
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
 | `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter or map |
-| `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground texture, alpha, **tint**, overlay, item and item tint. This is the render, not the model — it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
-| `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its four colour-zone layers — the wizard wears one colour per gem carried, plus the base colour |
+| `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground sprite, alpha, **tint**, **paint**, overlay, item and item tint. Every tile on screen is a stack of colour zones (`src/ui/painted.js`), so `tint` is the colour the bulk of the tile is in and `paint` the colours of the zones over it — a sanctum wearing its own gem's colour shows up there, not in `tint`. This is the render, not the model: it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
+| `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its colour-zone layers — the silhouette the character set out in, plus the hood, robe and staff that turn the colours of gems one, two and three |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
 | `tapMenuButton()` | Taps the **cogwheel** in the top right, which opens the in-run menu (SETTINGS, SAVE GAME, EXIT GAME, KEEP PLAYING) |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
@@ -171,8 +171,14 @@ A gem changes three things and each is asserted where it actually lives:
   tests that build runs with `createRun(SEED, { ...emptySave(), gems: n })`. Passing a save is the
   public way to set a run's starting gems; nothing reaches into a live run to change it.
 - **The render** — that the colour reached the screen — needs the browser, and is asserted from
-  `wizardZoneTints()` and the `tint` fields of `visibleTiles()` against `gemColour(n)` from `src/config.js`
-  rather than a hardcoded hex, so the assertions track the palette rule instead of restating it.
+  `wizardZoneTints()` and the `tint` and `paint` fields of `visibleTiles()` against `gemColour(n)` from
+  `src/config.js` rather than a hardcoded hex, so the assertions track the palette rule instead of
+  restating it. Which zone a colour lands in is part of the claim: a sanctum's stonework staying the
+  foreground while its crown turns its gem's colour is two assertions, not one.
+- **The paint itself** — that a zone map is cut into masks that stack back into the whole tile, and
+  that a hue waits for the gem it names — is pure, and lives in `tests/sprites.test.js` alongside the
+  rest of the art. A new entry in `src/data/paint.js` is checked by that suite without being named in
+  it: it walks the whole table.
 - **The save** — that a gem is only kept if the run banked it at the hut — is read back with
   `save()`. Every browser test gets its own page and so its own empty `localStorage`; no test
   inherits another's save. What a run keeps *however* it ends is the ground it lit, so the tests that

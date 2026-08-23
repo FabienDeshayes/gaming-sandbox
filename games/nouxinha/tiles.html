@@ -19,6 +19,7 @@
       color: var(--fg);
       font: 13px/1.5 monospace;
       -webkit-font-smoothing: none;
+      -webkit-tap-highlight-color: transparent;
     }
     header {
       position: sticky; top: 0; z-index: 2;
@@ -34,12 +35,13 @@
     select, button, input[type=range] {
       font: inherit; color: var(--fg); background: transparent;
       border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
-      padding: 2px 6px; cursor: pointer;
+      padding: 6px 10px; cursor: pointer;
+      min-height: 34px;
     }
     button:hover, select:hover { background: color-mix(in srgb, var(--fg) 14%, transparent); }
     button[disabled] { opacity: 0.35; cursor: default; }
     /* The readout: what is under the cursor, and what the last click picked. */
-    .readout { display: flex; gap: 22px; align-items: center; margin-top: 10px; min-height: 76px; }
+    .readout { display: flex; gap: 22px; align-items: center; margin-top: 10px; min-height: 76px; flex-wrap: wrap; }
     .swatch canvas { image-rendering: pixelated; display: block; }
     .swatch { display: flex; gap: 10px; align-items: center; }
     .swatch b { font-size: 20px; letter-spacing: 1px; }
@@ -51,15 +53,16 @@
       display: flex; gap: 26px; flex-wrap: wrap;
       padding: 16px;
       border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+      overflow-x: auto;
     }
     /* Never stretched by the column it sits in: a grid scaled to a fraction of
        a pixel is a grid you can't line a zone up on. */
     #grid { image-rendering: pixelated; display: block; cursor: crosshair; touch-action: none; align-self: flex-start; }
     .pane { display: flex; flex-direction: column; gap: 10px; }
-    .pane.wide { flex: 1 1 340px; min-width: 320px; }
+    .pane.wide { flex: 1 1 340px; min-width: 0; }
     .zone {
       display: flex; gap: 10px; align-items: center;
-      padding: 3px 6px; cursor: pointer;
+      padding: 8px 6px; cursor: pointer;
       border: 1px solid transparent;
     }
     .zone.on { border-color: var(--fg); }
@@ -67,7 +70,7 @@
     .zone b { font-style: normal; width: 5.5em; }
     .zone .count { opacity: 0.5; margin-left: auto; }
     .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-    .steps { display: flex; gap: 14px; align-items: flex-end; }
+    .steps { display: flex; gap: 14px; align-items: flex-end; overflow-x: auto; max-width: 100%; }
     .step { text-align: center; opacity: 0.85; }
     .step canvas { image-rendering: pixelated; display: block; }
     .step span { font-size: 11px; opacity: 0.6; }
@@ -93,13 +96,6 @@
 <body>
   <header>
     <h1>NOUXINHA TILE SHEET</h1>
-    <p>
-      <code>assets/tiles.png</code> — 49&times;22 tiles of 16px, 1px apart. A tile is named
-      <b>(col, row)</b>, zero-based from the top-left. Hover to read a coordinate, click to pick it:
-      the coordinate goes on the clipboard for <code>src/data/tiles.js</code>, and the sprite opens
-      in the painter below. Tiles the game already claims are boxed; ones with colour zones on them
-      are boxed in their own colour. The palette picker sets the game's palette too.
-    </p>
     <div class="controls">
       <label>palette <select id="palette"></select></label>
       <label>zoom <select id="zoom"></select></label>

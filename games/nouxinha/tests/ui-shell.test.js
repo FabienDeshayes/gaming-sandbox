@@ -138,8 +138,10 @@ test('the tile sheet is loaded and cut into every sprite the game draws', async 
       `${sprite.key} is one tile`
     );
 
-  // The keys the renderer names have to be among them, or a tile draws blank.
-  for (const key of ['floor', 'rock-2', 'tree-7', 'wall-tl', 'base', 'wizard-down-0'])
+  // The keys the renderer names have to be among them, or a tile draws blank —
+  // including the colour zones a painted tile is stacked back up from
+  // (src/data/paint.js).
+  for (const key of ['floor', 'rock-2', 'tree-7', 'wall-tl', 'base', 'wizard-down-z1', 'wall-tl-z1'])
     assert(cut.sprites.some((s) => s.key === key), `${key} was cut`);
 });
 

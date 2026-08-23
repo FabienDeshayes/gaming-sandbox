@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nouxinha — tile painter</title>
+  <style>
+    /* A development page, not part of the game. It paints a tile's colour
+       zones, so which part of a tile turns which gem's colour can be drawn
+       rather than typed (src/data/paint.js). Browsing the whole tile sheet to
+       find a sprite to point at is a separate tool: tiles.html. */
+    :root { --bg: #0b1a0b; --fg: #33ff66; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 monospace;
+      -webkit-font-smoothing: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+    }
+    .title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    h1 { font-size: 15px; margin: 0; letter-spacing: 2px; }
+    h2 { font-size: 13px; margin: 0 0 8px; letter-spacing: 2px; }
+    a { color: var(--fg); }
+    .navlink { opacity: 0.65; text-decoration: none; }
+    .navlink:hover { opacity: 1; text-decoration: underline; }
+    p { margin: 0; opacity: 0.65; max-width: 70ch; }
+    .controls { display: flex; gap: 18px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    label { opacity: 0.65; }
+    select, button, input[type=range] {
+      font: inherit; color: var(--fg); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+      padding: 6px 10px; cursor: pointer;
+      min-height: 34px;
+    }
+    button:hover, select:hover { background: color-mix(in srgb, var(--fg) 14%, transparent); }
+    button[disabled] { opacity: 0.35; cursor: default; }
+    .dim { opacity: 0.4; }
+
+    #painter {
+      display: flex; gap: 26px; flex-wrap: wrap;
+      padding: 16px;
+      overflow-x: auto;
+    }
+    /* Never stretched by the column it sits in: a grid scaled to a fraction of
+       a pixel is a grid you can't line a zone up on. */
+    #grid { image-rendering: pixelated; display: block; cursor: crosshair; touch-action: none; align-self: flex-start; }
+    .pane { display: flex; flex-direction: column; gap: 10px; }
+    .pane.wide { flex: 1 1 340px; min-width: 0; }
+    .zone {
+      display: flex; gap: 10px; align-items: center;
+      padding: 8px 6px; cursor: pointer;
+      border: 1px solid transparent;
+    }
+    .zone.on { border-color: var(--fg); }
+    .zone i { width: 16px; height: 16px; display: block; border: 1px solid color-mix(in srgb, var(--fg) 40%, transparent); }
+    .zone b { font-style: normal; width: 5.5em; }
+    .zone .count { opacity: 0.5; margin-left: auto; }
+    .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .steps { display: flex; gap: 14px; align-items: flex-end; overflow-x: auto; max-width: 100%; }
+    .step { text-align: center; opacity: 0.85; }
+    .step canvas { image-rendering: pixelated; display: block; }
+    .step span { font-size: 11px; opacity: 0.6; }
+    pre {
+      margin: 0; padding: 8px; max-height: 210px; overflow: auto;
+      border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+      background: color-mix(in srgb, var(--fg) 6%, transparent);
+      font: 11px/1.45 monospace; white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>NOUXINHA TILE PAINTER</h1>
+      <a class="navlink" href="tiles.html">← browse tile sheet</a>
+    </div>
+    <div class="controls">
+      <label>palette <select id="palette"></select></label>
+      <span id="coord" class="dim"></span>
+    </div>
+  </header>
+
+  <section id="painter">
+    <div class="pane">
+      <h2>ZONES</h2>
+      <canvas id="grid"></canvas>
+      <p>drag to paint &middot; right-drag to clear back to the base</p>
+    </div>
+    <div class="pane wide">
+      <h2 id="painting">—</h2>
+      <div class="row">
+        <label>sprite <select id="sprite"></select></label>
+        <span id="alias" class="dim"></span>
+      </div>
+      <div id="zones"></div>
+      <div class="row">
+        <label>this place's gem <select id="placeGem"></select></label>
+        <label>opened by <select id="openedBy"></select></label>
+      </div>
+      <div class="steps" id="steps"></div>
+      <div class="row">
+        <button id="clear">CLEAR</button>
+        <button id="revert">REVERT</button>
+        <button id="copyEntry">COPY ENTRY</button>
+        <button id="copyEdits">COPY EDITS</button>
+        <span id="status" class="dim"></span>
+      </div>
+      <pre id="out"></pre>
+    </div>
+  </section>
+
+<script type="module">
+import { TILES, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import { HUES, PAINT, PAINT_ZONES, ZONE_INK, paintOf } from './src/data/paint.js';
+import { buildSprites } from './src/data/sprites.js';
+import { hueColour } from './src/ui/painted.js';
+import { FLOOR_TEXTURE_LEVEL, PALETTES, gemColour, getPalette, setPalette } from './src/config.js';
+
+const TILE = 16;
+const STRIDE = TILE + SHEET_GAP;
+const PX = 22; // one sprite pixel, in the painter's grid
+const STEP_PX = 4; // ...and in the previews of the tile as the game draws it
+
+// The table flattened to one row per tile, since a key can name several — the
+// terrains that alternate between tiles list each one as `key #n`. Only used
+// here to show which sheet coordinate the selected sprite comes from.
+const coordOf = new Map();
+for (const [key, tile] of Object.entries(TILES)) {
+  if (Array.isArray(tile[0])) tile.forEach(([col, row], n) => coordOf.set(`${key}-${n}`, [col, row]));
+  else coordOf.set(key, tile);
+}
+
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+const el = (id) => document.getElementById(id);
+
+const paletteSel = el('palette');
+PALETTES.forEach((p) => paletteSel.add(new Option(p.name, p.id)));
+
+let palette = getPalette();
+paletteSel.value = palette.id;
+let sprites = {}; // every sprite the game cuts out of the sheet, as masks
+
+// The same `readTile(col, row) -> mask` the game builds its sprites from
+// (src/ui/textures.js), over a plain canvas rather than a Phaser texture: the
+// sheet is transparent everywhere it isn't drawn on, so alpha *is* the mask.
+function sheetReader(image) {
+  const off = document.createElement('canvas');
+  off.width = image.width;
+  off.height = image.height;
+  const c = off.getContext('2d', { willReadFrequently: true });
+  c.drawImage(image, 0, 0);
+  const { data } = c.getImageData(0, 0, off.width, off.height);
+  return (col, row) => {
+    const ox = col * STRIDE;
+    const oy = row * STRIDE;
+    return Array.from({ length: TILE }, (_, y) => {
+      let line = '';
+      for (let x = 0; x < TILE; x++)
+        line += data[((oy + y) * off.width + ox + x) * 4 + 3] > 127 ? '#' : '.';
+      return line;
+    });
+  };
+}
+
+// A working copy of one sprite's zone map, plus every sprite edited since the
+// page was opened — so a session of painting comes off the page as one block of
+// entries to paste into src/data/paint.js rather than one tile at a time.
+const edits = new Map();
+let work = null; // { key, hues: [3], map: number[16][16] }
+let brush = 1;
+
+const zoneAt = (map, x, y) => (map[y] && map[y][x]) || 0;
+const blankMap = () => Array.from({ length: TILE }, () => Array(TILE).fill(0));
+const zonesUsed = (map) => Math.max(0, ...map.flat());
+
+// Editable keys: everything the game cut, minus the zone textures cut *from*
+// them — painting a zone of a zone is not a thing.
+const spriteKeys = () => Object.keys(sprites).filter((k) => !/-z\d+$/.test(k));
+
+// The colour a zone is *drawn* in, which is the game's own rule: a hue naming a
+// gem you don't hold yet falls back to the base colour.
+function zoneColour(zone, gems) {
+  if (zone === 0) return palette.fg;
+  const hue = work.hues[zone - 1];
+  return hueColour(hue, {
+    gems,
+    base: palette.fg,
+    roles: { gem: Number(el('placeGem').value), opened: Number(el('openedBy').value) },
+  });
+}
+
+// ...and the colour it is *labelled* in while painting, which is a fixed one
+// per zone: two zones can easily be drawn in the same colour on screen (before
+// their gems are held), and telling them apart is the whole job here.
+const zoneInk = (zone) => (zone === 0 ? palette.fg : gemColour(zone));
+
+// Reads a table entry's zone map back into the grid the painter works on.
+function readMap(map) {
+  return Array.from({ length: TILE }, (_, y) =>
+    Array.from({ length: TILE }, (_, x) => Math.max(0, ZONE_INK.indexOf((map[y] || '')[x])))
+  );
+}
+
+function loadSprite(key, { keepEdit = true } = {}) {
+  // An alias shares another key's paint, so painting it means painting that one.
+  const aliasOf = typeof PAINT[key] === 'string' ? PAINT[key] : null;
+  const real = aliasOf || key;
+  const saved = keepEdit ? edits.get(real) : null;
+  const entry = paintOf(real);
+  const hueOf = (zone) => {
+    if (saved) return saved.hues[zone];
+    if (entry && entry.hues[zone] !== undefined) return entry.hues[zone];
+    return zone + 1;
+  };
+  work = {
+    key: real,
+    hues: Array.from({ length: PAINT_ZONES - 1 }, (_, zone) => hueOf(zone)),
+    map: saved ? saved.map.map((r) => r.slice()) : entry ? readMap(entry.map) : blankMap(),
+  };
+  el('sprite').value = real;
+  el('alias').textContent = aliasOf ? `${key} shares ${aliasOf}'s paint` : '';
+  const co = coordOf.get(real);
+  el('coord').textContent = co ? `at (${co[0]}, ${co[1]}) on the sheet` : '';
+  history.replaceState(null, '', `?key=${encodeURIComponent(real)}`);
+  paintUI();
+}
+
+// The working copy, remembered under its key, so switching tiles doesn't lose
+// it and COPY EDITS can hand back the whole session at once.
+function remember() {
+  if (!work) return;
+  if (zonesUsed(work.map) === 0 && !paintOf(work.key)) edits.delete(work.key);
+  else edits.set(work.key, { hues: work.hues.slice(), map: work.map.map((r) => r.slice()) });
+}
+
+function drawGrid() {
+  const canvas = el('grid');
+  canvas.width = canvas.height = TILE * PX + 1;
+  const c = canvas.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  c.fillStyle = hex(palette.bg);
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  const mask = (work && sprites[work.key]) || [];
+
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const ink = (mask[y] || '')[x] || '.';
+      if (ink !== '.') {
+        c.globalAlpha = ink === '+' ? FLOOR_TEXTURE_LEVEL : 1;
+        c.fillStyle = hex(zoneInk(zoneAt(work.map, x, y)));
+        c.fillRect(x * PX, y * PX, PX, PX);
+        c.globalAlpha = 1;
+      }
+      c.strokeStyle = hex(palette.fg);
+      c.globalAlpha = ink === '.' ? 0.12 : 0.25;
+      c.strokeRect(x * PX + 0.5, y * PX + 0.5, PX, PX);
+      c.globalAlpha = 1;
+    }
+  }
+}
+
+// The tile as the game will actually draw it, once for every number of gems a
+// player can be carrying — which is the thing being designed: how much colour
+// each gem brings back. Everything left of the gem a zone names is drawn in the
+// base colour, so a tile should read as itself in the first of these and gain
+// colour across the rest.
+function drawSteps() {
+  const host = el('steps');
+  host.replaceChildren();
+  const mask = (work && sprites[work.key]) || [];
+  for (let gems = 0; gems < PAINT_ZONES; gems++) {
+    const box = document.createElement('div');
+    box.className = 'step';
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = TILE * STEP_PX;
+    const c = canvas.getContext('2d');
+    c.fillStyle = hex(palette.bg);
+    c.fillRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        const ink = (mask[y] || '')[x] || '.';
+        if (ink === '.') continue;
+        c.globalAlpha = ink === '+' ? FLOOR_TEXTURE_LEVEL : 1;
+        c.fillStyle = hex(zoneColour(zoneAt(work.map, x, y), gems));
+        c.fillRect(x * STEP_PX, y * STEP_PX, STEP_PX, STEP_PX);
+        c.globalAlpha = 1;
+      }
+    const caption = document.createElement('span');
+    caption.textContent = gems === 0 ? 'no gems' : `${gems} gem${gems > 1 ? 's' : ''}`;
+    box.append(canvas, caption);
+    host.append(box);
+  }
+}
+
+function drawZoneList() {
+  const host = el('zones');
+  host.replaceChildren();
+  const counts = Array(PAINT_ZONES).fill(0);
+  const mask = (work && sprites[work.key]) || [];
+  for (let y = 0; y < TILE; y++)
+    for (let x = 0; x < TILE; x++)
+      if (((mask[y] || '')[x] || '.') !== '.') counts[zoneAt(work.map, x, y)]++;
+
+  for (let zone = 0; zone < PAINT_ZONES; zone++) {
+    const row = document.createElement('div');
+    row.className = 'zone' + (zone === brush ? ' on' : '');
+    const swatch = document.createElement('i');
+    swatch.style.background = hex(zoneInk(zone));
+    const name = document.createElement('b');
+    name.textContent = zone === 0 ? 'BASE' : `ZONE ${zone}`;
+    row.append(swatch, name);
+
+    if (zone === 0) {
+      const note = document.createElement('span');
+      note.className = 'dim';
+      note.textContent = 'whatever the tile would be anyway';
+      row.append(note);
+    } else {
+      const select = document.createElement('select');
+      for (const { hue, label } of HUES) select.add(new Option(label, String(hue)));
+      select.value = String(work.hues[zone - 1]);
+      select.addEventListener('change', () => {
+        const raw = select.value;
+        work.hues[zone - 1] = /^\d+$/.test(raw) ? Number(raw) : raw;
+        remember();
+        paintUI();
+      });
+      select.addEventListener('click', (e) => e.stopPropagation());
+      row.append(select);
+    }
+
+    const count = document.createElement('span');
+    count.className = 'count';
+    count.textContent = `${counts[zone]} px`;
+    row.append(count);
+    row.addEventListener('click', () => {
+      brush = zone;
+      paintUI();
+    });
+    host.append(row);
+  }
+}
+
+// The entry as it goes into src/data/paint.js — the whole point of the page.
+function entryText(key, { hues, map }) {
+  const zones = zonesUsed(map);
+  if (zones === 0) return `  // "${key}" paints no zones — leave it out of the table.`;
+  const hueList = hues
+    .slice(0, zones)
+    .map((h) => (typeof h === 'string' ? `'${h}'` : String(h)))
+    .join(', ');
+  const rows = map
+    .map((row) => `      '${row.map((zone) => ZONE_INK[zone]).join('')}',`)
+    .join('\n');
+  return `  '${key}': {\n    hues: [${hueList}],\n    map: [\n${rows}\n    ],\n  },`;
+}
+
+function paintUI() {
+  el('painting').textContent = work ? work.key.toUpperCase() : '—';
+  drawGrid();
+  drawZoneList();
+  drawSteps();
+  el('out').textContent = work ? entryText(work.key, work) : '';
+  el('copyEdits').disabled = edits.size === 0;
+  el('copyEdits').textContent = `COPY EDITS (${edits.size})`;
+  el('revert').disabled = !work || !edits.has(work.key);
+}
+
+function copy(text, said) {
+  navigator.clipboard?.writeText(text).catch(() => {});
+  el('status').textContent = said;
+  setTimeout(() => (el('status').textContent = ''), 2000);
+}
+
+// Painting: a drag lays down the brush, a right-drag clears back to the base.
+// Only pixels the sheet actually draws can be painted — a zone over nothing is
+// nothing, and the map stays readable as art.
+let stroke = null;
+const gridPixel = (e) => {
+  const r = el('grid').getBoundingClientRect();
+  const x = Math.floor(((e.clientX - r.left) / r.width) * TILE);
+  const y = Math.floor(((e.clientY - r.top) / r.height) * TILE);
+  return x >= 0 && y >= 0 && x < TILE && y < TILE ? [x, y] : null;
+};
+const lay = (e) => {
+  const at = gridPixel(e);
+  if (!at || !work) return;
+  const mask = sprites[work.key] || [];
+  if (((mask[at[1]] || '')[at[0]] || '.') === '.') return;
+  if (work.map[at[1]][at[0]] === stroke) return;
+  work.map[at[1]][at[0]] = stroke;
+  remember();
+  paintUI();
+};
+el('grid').addEventListener('contextmenu', (e) => e.preventDefault());
+el('grid').addEventListener('pointerdown', (e) => {
+  stroke = e.button === 2 || e.shiftKey ? 0 : brush;
+  el('grid').setPointerCapture(e.pointerId);
+  lay(e);
+});
+el('grid').addEventListener('pointermove', (e) => stroke !== null && lay(e));
+el('grid').addEventListener('pointerup', () => (stroke = null));
+el('grid').addEventListener('pointercancel', () => (stroke = null));
+
+el('clear').addEventListener('click', () => {
+  work.map = blankMap();
+  remember();
+  paintUI();
+});
+el('revert').addEventListener('click', () => {
+  edits.delete(work.key);
+  loadSprite(work.key, { keepEdit: false });
+});
+el('copyEntry').addEventListener('click', () => copy(entryText(work.key, work), 'entry copied'));
+el('copyEdits').addEventListener('click', () =>
+  copy(
+    [...edits.entries()].map(([key, entry]) => entryText(key, entry)).join('\n'),
+    `${edits.size} entr${edits.size === 1 ? 'y' : 'ies'} copied`
+  )
+);
+el('sprite').addEventListener('change', () => loadSprite(el('sprite').value));
+for (const id of ['placeGem', 'openedBy']) {
+  const select = el(id);
+  for (let gem = 0; gem < PAINT_ZONES; gem++)
+    select.add(new Option(gem === 0 ? 'no gem' : `gem ${gem}`, String(gem)));
+  select.value = '1';
+  select.addEventListener('change', paintUI);
+}
+
+paletteSel.addEventListener('change', () => {
+  // The game reads its palette from the same place, so picking one here is
+  // picking one there — which is the point: a zone has to read against the
+  // background of whichever palette the player is in.
+  setPalette(paletteSel.value);
+  palette = getPalette();
+  paintUI();
+});
+
+const source = new Image();
+source.src = SHEET_PATH;
+await source.decode();
+sprites = buildSprites(sheetReader(source));
+const spriteSel = el('sprite');
+for (const key of spriteKeys()) spriteSel.add(new Option(key, key));
+
+const wantedKey = new URLSearchParams(location.search).get('key');
+loadSprite(wantedKey && spriteKeys().includes(wantedKey) ? wantedKey : 'wizard-down');
+</script>
+</body>
+</html>

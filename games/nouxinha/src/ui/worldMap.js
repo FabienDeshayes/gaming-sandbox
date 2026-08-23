@@ -15,7 +15,8 @@ import { itemDef } from '../data/items.js';
 import { makeButton } from './button.js';
 
 const TEXTURE = 'worldmap-canvas';
-const DRAW_W = 420;
+const DRAW_MARGIN = 12;
+const DRAW_W = GAME_WIDTH - DRAW_MARGIN * 2;
 const DRAW_H = 560;
 const MAX_PIXEL = 6;
 
@@ -152,11 +153,34 @@ export class WorldMap {
       if (run.seenUnique.has(landmark.id))
         mark(landmark.x, landmark.y, landmark.item ? itemDef(landmark.item).sprite : 'merchant', 0);
 
+    // Current position: a solid dot that holds still, plus a ring that
+    // continually pulses outward from it. Every other marker on this map is a
+    // static sprite, so motion is what tells "you are here" apart from a
+    // landmark at a glance rather than relying on a colour the two-colour
+    // rule doesn't have to spend (DESIGN.md §9).
     const you = screen(run.x, run.y);
-    const here = scene.add.graphics();
-    here.lineStyle(2, pal.fg, 1);
-    here.strokeCircle(you.x, you.y, Math.max(5, pixel * 2));
-    parts.push(here);
+    const dotRadius = Math.max(3, pixel * 0.8);
+    const ringRadius = Math.max(5, pixel * 2);
+
+    const dot = scene.add.graphics().setPosition(you.x, you.y);
+    dot.fillStyle(pal.fg, 1);
+    dot.fillCircle(0, 0, dotRadius);
+    parts.push(dot);
+
+    const ring = scene.add.graphics().setPosition(you.x, you.y);
+    ring.lineStyle(2, pal.fg, 1);
+    ring.strokeCircle(0, 0, ringRadius);
+    parts.push(ring);
+
+    if (this.hereTween) this.hereTween.stop();
+    this.hereTween = scene.tweens.add({
+      targets: ring,
+      scale: { from: 1, to: 2.4 },
+      alpha: { from: 0.9, to: 0 },
+      duration: 1100,
+      repeat: -1,
+      ease: 'Sine.easeOut',
+    });
 
     parts.push(
       scene.add
@@ -171,6 +195,10 @@ export class WorldMap {
   }
 
   hide() {
+    if (this.hereTween) {
+      this.hereTween.stop();
+      this.hereTween = null;
+    }
     this.container.setVisible(false);
     this.container.removeAll(true);
     this.open = false;

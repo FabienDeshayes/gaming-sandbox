@@ -8,7 +8,7 @@
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
-import { PRICES, STOCK, isOneOff } from '../data/shop.js';
+import { STOCK, isOneOff, priceOf } from '../data/shop.js';
 import { canBuy, spendable } from '../core/rules.js';
 import { makeButton } from './button.js';
 import { playTap } from './sfx.js';
@@ -94,7 +94,7 @@ export class Shop {
       const price = label(
         left + PANEL_W - PAD - 12,
         y + ROW_H / 2,
-        owned ? 'OWNED' : `${PRICES[id]}`,
+        owned ? 'OWNED' : `${priceOf(id)}`,
         13,
         1
       ).setAlpha(alpha);

@@ -1,19 +1,16 @@
-// Every item in the game. Lights carry a shape (src/core/light.js) and a
-// durability; water carries a refill; coins carry neither.
+// Every item in the game: what it is called, what it is drawn as, and what it
+// says about itself on its card.
 //
-// The tension the numbers encode: a light that shows you more burns out faster,
-// so every upgrade is also a shorter leash (DESIGN.md §4.1).
+// The numbers are not here — a light's durability and shape and a water's
+// refill are balance, so they live in `src/balance.js` and are spread in below.
+// So does the question of which gem brings an item into the world: that gating
+// happens in balance.js's SCATTER table, and nothing reads it off an item.
 //
-// Two fields tie an item to the gems (DESIGN.md §4.4):
-//
-//   `tier`   — the gem that brings this item into the world. Below that many
-//              gems the world simply doesn't spawn it; see the SCATTER table in
-//              core/world.js, which is where the gating actually happens.
-//   `hue`    — which gem's colour it is drawn in. 0 is the palette's own
-//              foreground, 1-3 the colour that gem gave back.
-//
-// The tiers are deliberately about *range*: each one carries water further than
-// the last, so the gem you just found is what makes the next sanctum survivable.
+// The one gem field an item does carry is `hue`: which gem's colour it is drawn
+// in (DESIGN.md §4.4). 0 is the palette's own foreground, 1-3 the colour that
+// gem gave back.
+
+import { LIGHTS, WATER_VALUE } from '../balance.js';
 
 export const ITEMS = {
   'torch-small': {
@@ -21,8 +18,7 @@ export const ITEMS = {
     name: 'SMALL TORCH',
     sprite: 'torch-small',
     isLight: true,
-    maxDurability: 100,
-    shape: { kind: 'radius', radius: 1 },
+    ...LIGHTS['torch-small'],
     effect: 'Lights the 8 tiles around you.',
   },
   'torch-medium': {
@@ -30,8 +26,7 @@ export const ITEMS = {
     name: 'MEDIUM TORCH',
     sprite: 'torch-medium',
     isLight: true,
-    maxDurability: 50,
-    shape: { kind: 'radius', radius: 2 },
+    ...LIGHTS['torch-medium'],
     effect: 'Lights 2 tiles in every direction. Twice the reach, half the leash.',
   },
   'torch-lamp': {
@@ -39,20 +34,15 @@ export const ITEMS = {
     name: 'LAMP TORCH',
     sprite: 'torch-lamp',
     isLight: true,
-    maxDurability: 60,
-    shape: { kind: 'cone', depth: 4 },
+    ...LIGHTS['torch-lamp'],
     effect: 'Lights a widening cone 4 tiles ahead. Sees nothing behind you.',
   },
-  // The one light that breaks the "more reach, shorter leash" trade, because it
-  // is the second gem's reward for a walk nothing else would survive.
   'torch-beacon': {
     id: 'torch-beacon',
     name: 'BEACON',
     sprite: 'torch-beacon',
     isLight: true,
-    maxDurability: 140,
-    shape: { kind: 'radius', radius: 3 },
-    tier: 2,
+    ...LIGHTS['torch-beacon'],
     hue: 2,
     effect: 'Lights 3 tiles in every direction, and burns longer than anything.',
   },
@@ -63,36 +53,31 @@ export const ITEMS = {
     isLight: false,
     effect: 'What the merchant takes. The counter shows everything you have banked plus what you are carrying.',
   },
-  // 30 against a 200 tank, so a drop is a seventh of a walk rather than a tenth.
-  // The separation rule caps how *many* of a kind the ground can hold
-  // (MIN_SEPARATION in core/world.js), so past a point the only way to put more
-  // water in the world is to make a drop worth more — which is also what keeps
-  // the flask from being the moment water stops being a problem at all.
+  // The refill numbers come out of balance.js, and so does the copy that quotes
+  // them — a retuned drop should never be a drop whose card lies about it.
   'water-drop': {
     id: 'water-drop',
     name: 'WATER DROP',
     sprite: 'water-drop',
     isLight: false,
-    water: 30,
-    effect: 'Refills 30 water. Run dry and the run is over.',
+    water: WATER_VALUE['water-drop'],
+    effect: `Refills ${WATER_VALUE['water-drop']} water. Run dry and the run is over.`,
   },
   'water-flask': {
     id: 'water-flask',
     name: 'WATER FLASK',
     sprite: 'water-flask',
     isLight: false,
-    water: 60,
-    tier: 1,
+    water: WATER_VALUE['water-flask'],
     hue: 1,
-    effect: 'Refills 60 water. Two drops in one, and it carries you further out.',
+    effect: `Refills ${WATER_VALUE['water-flask']} water. Two drops in one, and it carries you further out.`,
   },
   'spring-vial': {
     id: 'spring-vial',
     name: 'SPRING VIAL',
     sprite: 'spring-vial',
     isLight: false,
-    water: Infinity,
-    tier: 3,
+    water: WATER_VALUE['spring-vial'],
     hue: 3,
     effect: 'Fills your water right back up, however far from home you are.',
   },
@@ -148,15 +133,8 @@ export const ITEMS = {
   },
 };
 
-export const STARTING_LIGHT = 'torch-small';
-
 // The tools, in the order they are offered and shown.
 export const TOOLS = ['compass', 'map'];
-
-export function isTool(id) {
-  const def = itemDef(id);
-  return !!def && !!def.tool;
-}
 
 export function itemDef(id) {
   return ITEMS[id] || null;

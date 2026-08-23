@@ -25,24 +25,21 @@ import {
   uniqueAt,
 } from './world.js';
 import { decodeExplored, encodeExplored } from './cartography.js';
+import {
+  CHEAT_COINS,
+  CHEAT_REVEAL_RADIUS,
+  STARTING_LIGHT,
+  STARTING_WATER,
+  WATER_PER_GEM,
+  WATER_PER_STEP,
+} from '../balance.js';
 import { loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
-import { ITEMS, itemDef, STARTING_LIGHT, TOOLS } from '../data/items.js';
+import { ITEMS, itemDef, TOOLS } from '../data/items.js';
 import { isOneOff, priceOf } from '../data/shop.js';
 
 export { DIRECTIONS, tileKey };
 
-// Water balance — tune here. Every successful step costs one; a water pickup
-// refills it by whatever that item carries, capped at the run's maximum.
-// Hitting zero is the run's one hard failure state (DESIGN.md §6).
-export const STARTING_WATER = 200;
-export const WATER_PER_STEP = 1;
-
-// Each gem you hold widens the leash. The sanctums sit at 20, 45, 80 and 110
-// tiles out, which is further than 200 water can carry anyone home — so the
-// gem that opens the next gate is also what makes the walk to it survivable
-// (DESIGN.md §4.4). Without this the chain simply dead-ends at the second gate.
-export const WATER_PER_GEM = 50;
-
+// The leash: a full tank, widened by every gem carried (balance.js).
 export function maxWater(gems) {
   return STARTING_WATER + gems * WATER_PER_GEM;
 }
@@ -159,11 +156,6 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
 // It reveals rather than lights: the world is drawn from memory, the same
 // dimmed ground a real expedition leaves behind, so what a cheat run looks at
 // is what a long campaign would have looked at.
-
-// Past the fourth sanctum's ring (110 + 7) and every landmark, with room to
-// spare — the whole of the world the game actually has anything in.
-export const CHEAT_REVEAL_RADIUS = 130;
-export const CHEAT_COINS = 9999;
 
 function applyCheats(state) {
   state.gems = MAX_GEMS;
@@ -489,10 +481,6 @@ export function gateOnTile(state, x, y) {
   const site = sanctumAt(x, y, state.seed);
   if (!site || site.part !== 'gate') return null;
   return { requires: site.sanctum.requires, open: site.sanctum.requires <= state.gems };
-}
-
-export function tilesExplored(state) {
-  return state.explored.size;
 }
 
 // Banks the run into the active save slot. Only the hut calls this (DESIGN.md

@@ -1,4 +1,8 @@
-// Layout constants and the duo-chromatic palette table.
+// Layout, type, palette and the settings a player can change: everything about
+// how the game *looks* and how the shell around it behaves.
+//
+// The numbers the game is balanced on are not here — item frequency, distances,
+// durability, water and prices all live in `src/balance.js`.
 //
 // Exactly two colours are on screen at once (DESIGN.md §9): a background and a
 // foreground. Every sprite is a white 1-bit mask that gets tinted with the
@@ -10,7 +14,6 @@ export const GAME_HEIGHT = 854;
 // The map viewport occupies everything above the HUD.
 export const VIEW_H = 624;
 export const HUD_Y = VIEW_H;
-export const HUD_H = GAME_HEIGHT - VIEW_H; // 230
 
 export const TILE = 48;
 export const SPRITE_PX = 16;
@@ -37,11 +40,6 @@ export const REMEMBERED_ALPHA = 0.3;
 // items and the frontier standing on it (DESIGN.md §9). Still one colour: the
 // tile is baked with a dimmed grey that the same tint multiplies through.
 export const FLOOR_TEXTURE_LEVEL = 0.5;
-
-// In blackout, remembered ground beyond this Chebyshev distance is hidden
-// too — memory shrinks to a fog of war around the character instead of
-// staying legible over the whole run (DESIGN.md §4).
-export const BLACKOUT_MEMORY_RADIUS = 1;
 
 export const PALETTES = [
   { id: 'phosphor', name: 'PHOSPHOR', bg: 0x0b1a0b, fg: 0x33ff66 },

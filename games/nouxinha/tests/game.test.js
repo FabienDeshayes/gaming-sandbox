@@ -10,7 +10,6 @@ import {
   chebyshev,
   consumableAt,
   DEFAULT_SEED,
-  EDGE_RADIUS,
   beyondEdge,
   chokeAt,
   entryCost,
@@ -21,7 +20,6 @@ import {
   landmarkNamed,
   landmarks,
   landmarksReachable,
-  MIN_SEPARATION,
   pickSeed,
   reachableFraction,
   saltOf,
@@ -57,17 +55,21 @@ import {
   spendable,
   step,
   suspendRun,
+} from '../src/core/rules.js';
+import {
+  BLACKOUT_MEMORY_RADIUS,
   CHEAT_COINS,
   CHEAT_REVEAL_RADIUS,
+  EDGE_RADIUS,
+  MIN_SEPARATION,
+  PRICES,
   STARTING_WATER,
   WATER_PER_GEM,
-} from '../src/core/rules.js';
+} from '../src/balance.js';
 import { compassTarget } from '../src/core/compass.js';
 import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
 import { clampSlot, emptySave, MAX_GEMS, normaliseSave, SLOT_COUNT } from '../src/core/save.js';
-import { PRICES } from '../src/data/shop.js';
 import {
-  BLACKOUT_MEMORY_RADIUS,
   gemColour,
   getMoveSpeed,
   PALETTES,

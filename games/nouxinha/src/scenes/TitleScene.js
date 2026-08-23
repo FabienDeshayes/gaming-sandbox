@@ -46,10 +46,13 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(0.6);
 
-    // The wizard, lit by the torch they're about to spend — and wearing
-    // however much colour has already been carried home, so the title screen
-    // itself is the progress bar.
-    paintWizard(makeWizard(this, cx, 380, 'down', 7), 'down', save.gems);
+    // The wizard, lit by the torch they're about to spend. The title screen
+    // always dresses them in a colour — picked fresh from the palette on every
+    // visit — rather than the plain foreground a fresh campaign would draw
+    // them in; the gem pips below are what actually report how much colour
+    // has been carried home.
+    const flair = gemColour(1 + Math.floor(Math.random() * 3));
+    paintWizard(makeWizard(this, cx, 380, 'down', 7), 'down', 0, flair);
 
     // One pip per gem, the found ones in the colour they gave back.
     const gap = 44;

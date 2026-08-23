@@ -12,8 +12,10 @@ export function makeWizard(scene, x, y, facing, scale) {
   return paintWizard(makePainted(scene, x, y, scale), facing, 0);
 }
 
-// Repaints the character for the given facing and gem count.
-export function paintWizard(wizard, facing, gems) {
+// Repaints the character for the given facing and gem count. `base` overrides
+// the silhouette's own colour (default the palette foreground) — the title
+// screen's decorative flair is the only caller that passes one.
+export function paintWizard(wizard, facing, gems, base) {
   wizard.facing = facing;
-  return paintTile(wizard, `wizard-${facing}`, { gems });
+  return paintTile(wizard, `wizard-${facing}`, { gems, base });
 }

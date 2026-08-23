@@ -8,12 +8,14 @@ import {
   abandonRun,
   bankRun,
   createRun,
+  depositRun,
   hasSuspendedRun,
   itemOnTile,
   maxWater,
   rememberGround,
   respawn,
   resumeRun,
+  runSummary,
   step,
   suspendRun,
 } from '../src/core/rules.js';
@@ -122,6 +124,67 @@ unit('the map only marks unique objects the run has actually seen', () => {
   for (const dir of GEM_ROUTE.path) step(state, dir);
   assert(state.seenUnique.has('gem-1'), 'the gem it walked onto is on the map');
   assert(!state.seenUnique.has('map'), 'and the map lying 90 tiles out is not');
+});
+
+// --- Arriving at the hut ------------------------------------------------------
+
+unit('reaching the hut writes the walk down without ending it', () => {
+  const state = createRun(SEED, { ...emptySave(), coins: 40, runs: 3 }, NONCE);
+  for (const dir of ['right', 'right', 'up']) step(state, dir);
+  state.coins = 25;
+  state.gems = 1;
+  state.tools.add('compass');
+  assertEqual(runSummary(state).gemsCarried, 1, 'a colour is riding on the walk home');
+
+  const written = depositRun(state);
+  assertEqual(written.gems, 1, 'the colour is in the slot');
+  assertEqual(written.coins, 65, 'the pocket went into the bank on top of what was there');
+  assertEqual(written.compass, true, 'and so did the tool');
+  assertEqual(written.runs, 3, 'but the expedition is not over, so it is not a run completed');
+  assert(written.mapped.length > 0, 'the ground goes in as it always did');
+
+  // The run's own books have to move with the slot, or it would still think it
+  // was carrying what it has just put down.
+  assertEqual(state.coins, 0, 'nothing left in the pocket');
+  assertEqual(state.banked.coins, 65, 'because it is all in the bank');
+  const after = runSummary(state);
+  assertEqual(after.gemsCarried, 0, 'nothing a death could still cost');
+  assertEqual(after.toolsCarried, [], 'not the tool either');
+  assertEqual(after.coins, 0, 'the walk found no coins of its own — 40 and 25 were both handed to it');
+});
+
+unit('a walk that crosses the hut twice banks twice and still counts as one run', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  state.coins = 10;
+  depositRun(state);
+  state.coins = 7;
+  const twice = depositRun(state);
+  assertEqual(twice.coins, 17, 'both halves are in the bank');
+  assertEqual(twice.runs, 0, 'and neither visit finished an expedition');
+
+  const ended = bankRun(state);
+  assertEqual(ended.coins, 17, 'ending it banks nothing twice over');
+  assertEqual(ended.runs, 1, 'and counts the one walk it was');
+});
+
+unit('what the recap reports is what the walk found, not what is in the pocket', () => {
+  // The pocket empties every time the hut is crossed, so the two numbers came
+  // apart the moment arriving started banking.
+  const state = createRun(SEED, emptySave(), NONCE);
+  state.coins = 30;
+  state.coinsFound = 30;
+  depositRun(state);
+  assertEqual(runSummary(state).coins, 30, 'the walk still found thirty');
+  assertEqual(runSummary(state).coinsCarried, 0, 'with none of it still at risk');
+});
+
+unit('a cheat run is not written down by arriving either', () => {
+  const state = createRun(SEED, emptySave(), NONCE, { cheats: true });
+  const coins = state.coins;
+  const written = depositRun(state);
+  assertEqual(written.gems, 0, 'the slot is untouched by a sandbox');
+  assertEqual(written.coins, 0, 'including its bottomless purse');
+  assertEqual(state.coins, coins, 'and the run keeps everything it was handed');
 });
 
 // --- A suspended expedition --------------------------------------------------

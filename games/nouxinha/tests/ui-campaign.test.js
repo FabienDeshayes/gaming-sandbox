@@ -24,7 +24,7 @@ import {
 // is the only tile that offers to end a run.
 const OUT_AND_BACK = ['right', 'left'];
 
-test('the hut asks whether to stop, and keeping going refills the tank', async (game) => {
+test('reaching the hut banks the walk and fills the tank, and the run goes on', async (game) => {
   await game.startRun();
 
   // A loop through the base's guaranteed-floor neighbourhood that only lands
@@ -33,19 +33,27 @@ test('the hut asks whether to stop, and keeping going refills the tank', async (
   await walkPath(game, ['right', 'up', 'left', 'down']);
   const before = await game.state();
   assertEqual({ x: before.x, y: before.y }, { x: 0, y: 0 }, 'back at the hut');
-  assert(before.water < 200, 'water spent walking the loop');
-  assertEqual(before.dialogOpen, true, 'the hut asks on arrival');
+  assertEqual(before.water, 200, 'the tank is filled by arriving, not by answering');
+  assertEqual(before.dialogOpen, true, 'and the hut says so on arrival');
   assert(await game.hasText('BACK AT THE HUT'), 'the prompt');
+
+  // The ground is in the slot before either button has been touched — arriving
+  // is what banks a walk now, so neither answer can cost it (DESIGN.md §6.1).
+  assert((await game.save()).mapped.length > 0, 'the walk is already written down');
+  assertEqual((await game.save()).runs, 0, 'without the expedition being over');
+
+  // Both buttons are named, and what they mean is on the panel rather than left
+  // to be guessed at — the whole point of the change.
+  assert(await game.hasText('Nothing new to write down. Water topped up.'), 'what just happened');
+  assert(await game.hasText('Both ways keep it. HEAD BACK OUT carries the expedition on;'), 'and what each button means');
 
   // The world is frozen behind the question.
   await game.tapDpad('right');
   assertEqual((await game.state()).x, 0, 'no stepping out from under the dialog');
 
-  await game.clickText('KEEP GOING');
+  await game.clickText('HEAD BACK OUT');
   assertEqual((await game.state()).dialogOpen, false, 'dismissed');
-  assert(await game.hasText('WATER REFILLED AT THE HUT.'), 'the status line says so');
-  const after = await game.state();
-  assertEqual(after.water, 200, 'topped back up to the ceiling');
+  assert(await game.hasText('SAVED AT THE HUT. WATER FULL.'), 'the status line says so');
   assert((await game.texts()).includes('WATER 200/200'), 'the HUD counter agrees');
 
   await game.tapDpad('right');
@@ -88,11 +96,11 @@ test('stopping at the hut recaps the run and writes the slot; leaving keeps only
   assertEqual((await game.save()).runs, 0, 'a first run starts with nothing banked');
 
   await walkPath(game, OUT_AND_BACK);
-  await game.clickText('STOP HERE');
+  await game.clickText('END HERE');
 
   assert(await game.hasText('EXPEDITION OVER'), 'the recap');
   const texts = await game.texts();
-  for (const label of ['TILES EXPLORED', 'COINS', 'LIGHTS FOUND', 'FURTHEST OUT', 'STEPS TAKEN'])
+  for (const label of ['TILES EXPLORED', 'COINS FOUND', 'LIGHTS FOUND', 'FURTHEST OUT', 'STEPS TAKEN'])
     assert(texts.includes(label), `the recap reports ${label}`);
   // One tile out and back: the 3x3 around the base plus the three tiles the
   // step east added, in two steps.
@@ -134,7 +142,7 @@ test('a long carried list wraps the recap footer without it running into the but
   await game.startRun();
   await walkPath(game, TORCH_ROUTE.path);
   await walkPath(game, [...TORCH_ROUTE.path].reverse().map((dir) => OPPOSITE[dir]));
-  await game.clickText('STOP HERE');
+  await game.clickText('END HERE');
 
   const texts = await game.texts();
   const footer = texts.find((t) => t.startsWith('CARRYING'));
@@ -308,7 +316,7 @@ browserTest('each slot is a campaign of its own, in a world of its own', async (
     await game.waitForScene('ExploreScene');
     const seed = (await game.state()).seed;
     await walkPath(game, OUT_AND_BACK);
-    await game.clickText('STOP HERE');
+    await game.clickText('END HERE');
     await game.clickText('HOME');
     await game.waitForScene('TitleScene');
     return seed;
@@ -366,6 +374,102 @@ const THIRSTY_RUN = {
   },
 };
 
+// A walk standing one tile off the hut with a colour, a tool and a pocketful of
+// coins on it, and nothing banked behind it. The whole point of banking on
+// arrival is what this run is one step away from, so it is planted rather than
+// walked: the route to a real gem is ninety steps.
+const LOADED_RUN = {
+  ...emptySave(),
+  run: {
+    seed: SEED,
+    x: 1,
+    y: 0,
+    facing: 'right',
+    steps: 30,
+    water: 120,
+    coins: 30,
+    coinsFound: 30,
+    gems: 1,
+    furthest: 20,
+    nonce: NONCE,
+    epoch: 0,
+    tools: ['compass'],
+    inventory: [{ id: 'torch-small', durability: 60 }],
+    activeIndex: 0,
+    found: {},
+    collected: '',
+    startExplored: 0,
+    banked: emptySave(),
+  },
+};
+
+test('what the hut writes down cannot be lost by walking back out', async (game) => {
+  await game.startRun();
+  const carrying = await game.state();
+  assertEqual(carrying.gems, 1, 'resumed carrying a colour');
+  assertEqual((await game.save()).gems, 0, 'that the campaign has not got yet');
+
+  // One step west, onto the hut.
+  await game.tapDpad('left');
+  await game.settle();
+  assert(await game.hasText('BACK AT THE HUT'), 'the hut speaks up');
+  assert(
+    await game.hasText('The colour, the compass and 30 coins written down. Water topped up.'),
+    'naming exactly what it just wrote'
+  );
+
+  // The saved list wraps at this length, and the panel sizes itself around its
+  // body — so this is where the hut's dialog would run its text into its own
+  // buttons (the recap has the same guard, above).
+  const bounds = await game.page.evaluate(() => {
+    const plain = (b) => ({ top: b.top, bottom: b.bottom });
+    const found = { line: null, button: null };
+    const walk = (list) => {
+      for (const c of list) {
+        if (!c.visible) continue;
+        if (c.text === 'END HERE closes it and totals it up.') found.line = plain(c.getBounds());
+        if (c.text === 'HEAD BACK OUT') found.button = plain(c.getBounds());
+        if (c.list) walk(c.list);
+      }
+    };
+    walk(window.__game.scene.getScenes(true).slice(-1)[0].children.list);
+    return found;
+  });
+  assert(bounds.line && bounds.button, 'the last body line and the buttons were both found');
+  assert(
+    bounds.line.bottom <= bounds.button.top,
+    `the body (bottom ${bounds.line && bounds.line.bottom}) runs into the buttons (top ${bounds.button && bounds.button.top})`
+  );
+
+  const banked = await game.save();
+  assertEqual(banked.gems, 1, 'the colour is in the slot before either button is touched');
+  assertEqual(banked.coins, 30, 'and so are the coins');
+  assertEqual(banked.compass, true, 'and the tool');
+  assertEqual(banked.runs, 0, 'without the expedition being over');
+
+  // Back out, and then throw the walk away — the thing that used to cost you a
+  // gem you had already carried home (DESIGN.md §6.1).
+  await game.clickText('HEAD BACK OUT');
+  await game.tapDpad('right');
+  await game.settle();
+  const out = await game.state();
+  assertEqual(out.gems - out.banked.gems, 0, 'nothing a bad walk could still cost');
+  assertEqual(out.coins, 0, 'and an empty pocket, because the bank has it all');
+
+  await game.tapMenuButton();
+  await game.clickText('EXIT GAME');
+  await game.clickText('LEAVE');
+  await game.waitForScene('TitleScene');
+
+  const after = await game.save();
+  assertEqual(after.gems, 1, 'abandoning the walk did not take the colour with it');
+  assertEqual(after.coins, 30, 'nor the coins');
+  assertEqual(after.compass, true, 'nor the compass');
+  await game.clickText('LOAD GAME');
+  await game.waitForScene('SlotScene');
+  assert(await game.hasText('1/3 COLOURS  30 COINS  0 RUNS'), 'and the slot picker reads it back');
+}, { save: LOADED_RUN });
+
 test('running dry takes the saved expedition with it', async (game) => {
   // LOAD GAME resumes the planted walk, which has one step of water in it.
   await game.startRun();
@@ -417,7 +521,7 @@ test('cheats reveal the map, hand you everything, and save nothing', async (game
 
   // Straight back onto the hut, which is the one place a run can write itself.
   await walkPath(game, OUT_AND_BACK);
-  await game.clickText('STOP HERE');
+  await game.clickText('END HERE');
   assert(await game.hasText('CHEATS ON — NOTHING WAS WRITTEN TO THE SLOT'), 'the recap says so');
   assertEqual((await game.save()).runs, 0, 'and the slot is untouched');
 });

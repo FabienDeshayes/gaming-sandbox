@@ -3,7 +3,7 @@
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import { tileKey } from '../src/core/light.js';
-import { sanctums } from '../src/core/world.js';
+import { isWalkable, sanctums } from '../src/core/world.js';
 import {
   activeLight,
   activeShape,
@@ -26,12 +26,22 @@ import { ITEMS } from '../src/data/items.js';
 import { NONCE, ROCK_ROUTE, SEED, SHADOW_ROUTE, TORCH_ROUTE, WATER_ROUTE, scatter } from './world.js';
 
 // Rock is impassable, so tests that need to burn a lot of steps pace back and
-// forth on two tiles the route already proved walkable.
-const OUT = ROCK_ROUTE.path[0] || 'up';
-const BACK = { up: 'down', down: 'up', left: 'right', right: 'left' }[OUT];
+// forth on two tiles proved walkable first — and on two tiles *off* the hut,
+// since standing on it fills the tank (DESIGN.md §4), which a test counting
+// water down to zero would wait for forever.
+const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
+const OUT = (() => {
+  const found = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
+    ([, dx, dy]) => isWalkable(dx, dy, SEED) && isWalkable(dx * 2, dy * 2, SEED)
+  );
+  if (!found) throw new Error('nowhere two steps clear of the hut to pace on');
+  return found[0];
+})();
+const BACK = OPPOSITE[OUT];
+// Out to the second tile, then back and forth between the first and the second.
 const pace = (state, steps) => {
   const results = [];
-  for (let i = 0; i < steps; i++) results.push(step(state, i % 2 === 0 ? OUT : BACK));
+  for (let i = 0; i < steps; i++) results.push(step(state, i < 2 || i % 2 === 1 ? OUT : BACK));
   return results;
 };
 
@@ -98,6 +108,20 @@ unit('running out of water ends the run, and nothing else can move it again', ()
   const result = step(state, OUT);
   assertEqual(result.moved, false, 'a dead run cannot move');
   assertEqual(result.reason, 'dead', 'reason');
+});
+
+unit('reaching the hut fills the tank, and getting home on the last drop is getting home', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  const out = step(state, OUT);
+  assert(out.moved && !out.atBase, 'one step off the doorstep');
+  assert(state.water < maxWater(state.gems), 'and a step out here costs water like any other');
+
+  // The walk home on fumes: water set to exactly the one step it takes.
+  state.water = 1;
+  const home = step(state, BACK);
+  assert(home.atBase, 'back on the hut');
+  assertEqual(home.died, false, 'reaching your own doorstep is not dying in it');
+  assertEqual(state.water, maxWater(state.gems), 'because the hut fills the tank on arrival');
 });
 
 unit('walking into rock is rejected and costs nothing', () => {

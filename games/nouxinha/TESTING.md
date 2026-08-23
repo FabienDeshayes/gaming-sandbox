@@ -88,7 +88,7 @@ reaches in to *set* game state.
 | `wheelAt(x, y, dy)` | A wheel notch over a point, which is how a mouse zooms the map |
 | `pinch(x, y, from, to)` | Two fingers centred on a point, going from `from` to `to` pixels apart. Multi-touch is the one input Playwright's mouse can't send, so this goes down to CDP's raw touch events — which is what a phone sends anyway. Needs the page opened with `{ hasTouch: true }` |
 | `tapMenuButton()` | Taps the **cogwheel** in the top right, which opens the in-run menu (SETTINGS, SAVE GAME, EXIT GAME, KEEP PLAYING) |
-| `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
+| `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run carried it back to the hut, so asserting that has to read the save rather than the run that found it — and since arriving is what banks, the slot is worth reading *before* the hut's dialog is answered as well as after |
 | `music()` / `musicTrack()` | Whether the music loop's scheduler is running, and which of the two loops it is playing (`'menu'`, `'explore'`, or `null`) — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
 | `sounds()` | Every sound played so far, in order — `'tap'`, `'coin'`, `'pickup'`, `'gem'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` the same way, and the only way to assert that a button makes a noise and the D-pad doesn't |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
@@ -182,7 +182,7 @@ A gem changes three things and each is asserted where it actually lives:
   that a hue waits for the gem it names — is pure, and lives in `tests/sprites.test.js` alongside the
   rest of the art. A new entry in `src/data/paint.js` is checked by that suite without being named in
   it: it walks the whole table.
-- **The save** — that a gem is only kept if the run banked it at the hut — is read back with
+- **The save** — that a gem is only kept if the run carried it back to the hut — is read back with
   `save()`. Every browser test gets its own page and so its own empty `localStorage`; no test
   inherits another's save. What a run keeps *however* it ends is the ground it lit, so the tests that
   pin that read `mapped` back out of the slot rather than the run (DESIGN.md §6.1).

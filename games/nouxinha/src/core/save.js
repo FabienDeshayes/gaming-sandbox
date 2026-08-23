@@ -167,6 +167,10 @@ function normaliseRun(raw) {
     // left would be a run that can't take a step and can't be ended either.
     water: int(raw.water, 1, Number.MAX_SAFE_INTEGER),
     coins: int(raw.coins, 0, Number.MAX_SAFE_INTEGER),
+    // Everything the walk has found, banked or still in the pocket — what the
+    // recap reports, and so the one coin number a suspended run has to carry
+    // separately (`runSummary` in core/rules.js).
+    coinsFound: int(raw.coinsFound, 0, Number.MAX_SAFE_INTEGER),
     gems: int(raw.gems, 0, MAX_GEMS),
     furthest: int(raw.furthest, 0, Number.MAX_SAFE_INTEGER),
     // The two halves of the consumable salt (DESIGN.md §4.3) — with the seed,

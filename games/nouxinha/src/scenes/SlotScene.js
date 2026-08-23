@@ -112,9 +112,13 @@ export class SlotScene extends Phaser.Scene {
       .setAlpha(usable ? 0.5 : 0.25);
 
     // The same gem pips the title screen shows, so a slot is recognisable by
-    // how much colour it has brought home rather than by its number.
+    // how much colour it has brought home rather than by its number. A
+    // suspended expedition hasn't banked what it's carrying yet, but it isn't
+    // lost either — LOAD GAME hands it straight back — so the row counts
+    // whichever is higher rather than only what the hut has written down.
+    const gems = gemsOf(entry);
     for (let i = 1; i <= MAX_GEMS; i++) {
-      const held = i <= entry.save.gems;
+      const held = i <= gems;
       this.add
         .image(left + ROW_W - 34 - (MAX_GEMS - i) * 34, y + ROW_H / 2, 'gem')
         .setScale(1.6)
@@ -170,7 +174,15 @@ export class SlotScene extends Phaser.Scene {
 function summaryOf(entry) {
   if (!entry.used) return 'EMPTY';
   const { save } = entry;
-  return `${save.gems}/${MAX_GEMS} COLOURS  ${save.coins} COINS  ${save.runs} RUNS`;
+  return `${gemsOf(entry)}/${MAX_GEMS} COLOURS  ${save.coins} COINS  ${save.runs} RUNS`;
+}
+
+// What a slot has to show for gems: the banked count, or the run's own if a
+// suspended expedition is carrying more — it hasn't been written down at the
+// hut, but resuming hands it straight back, so it isn't missing either.
+function gemsOf(entry) {
+  const { save } = entry;
+  return save.run ? Math.max(save.gems, save.run.gems) : save.gems;
 }
 
 // The ground a slot has drawn is the half of it that survives a bad walk home

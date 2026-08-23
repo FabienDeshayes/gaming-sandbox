@@ -64,7 +64,36 @@ The world has three things in it: **terrain** (floor, two formations of rock, gr
 
 ### 4.1 Light sources
 
-A light shape is defined relative to the character's tile, and — for the lamp — relative to their facing. Rock does **not** occlude light in the MVP: the shape is applied literally, so you can light the far side of a wall. Line-of-sight occlusion is a nice-to-have (§8).
+A light shape is defined relative to the character's tile, and — for the lamp — relative to their
+facing. What the shape says is how far the light *reaches*; what it shows is that minus whatever it
+cannot see round.
+
+**Rock, trees and masonry cast shadow.** A tile inside the shape is lit only if a straight line
+reaches it from the character's tile without crossing something solid, so a rock mass has ground
+behind it that stays dark until you walk round — which is what makes routing past one a decision
+rather than bookkeeping, and what separates the two rock formations (§4.3) in play as well as on
+screen: a mass is a wall to see round, a lone boulder throws a wedge you can step past. Light spills
+through a gap in a wall and widens as it goes.
+
+Three rules hold it together:
+
+- **The thing in the way is always lit.** You see the rock; you just don't see past it. A wall that
+  hid itself would be a wall the player only finds by walking into it, which is the failure mode this
+  game's whole visibility design is arranged to avoid.
+- **Nothing a step away can ever be hidden**, because there is no tile in between for anything to
+  stand on. A player can always see the ground they could step onto, whatever they are walled in by —
+  which is what keeps §5's promise intact, and why a radius-1 torch is unaffected by shadow entirely.
+- **A shut gate stops a light; the gem that opens it opens a window.** Sight and passage are the same
+  question everywhere else in the terrain, and the gate is the one tile where they come apart — the
+  gem lights the inside of the sanctum in the same moment it unbars the door.
+
+The line is traced two ways rather than one, because a line between tile centres passes exactly
+through a lattice corner whenever the run and the rise divide evenly, and which side it comes down on
+is arbitrary; trying both is what stops a lone boulder throwing a wedge it has no business throwing.
+The bias is deliberately permissive — a light this small has little enough to show without being
+stingy about corners. Measured against the real world, shadow costs the small torch nothing at all,
+the medium torch about 1%, the beacon about 5% and the lamp about 7% of what its shape reaches, so it
+sharpens the walk without needing the scatter (§4.3) retuned around it.
 
 | Light | Shape | Durability | Notes |
 |---|---|---|---|
@@ -337,6 +366,7 @@ rather than something stumbled into.
 
 - One light active at a time. Light and water are the two consumables — no food yet (§12), no timer.
 - The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off.
+- **Nothing a step away is ever hidden.** Shadow (§4.1) can darken any tile a light reaches except the ones the character could walk onto next, so no arrangement of rock can leave a player unable to see where to go.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
 - **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is a 1-bit tile baked white, so what a gem changes is a tint at draw time, never an asset.
 - **The world ends at radius 200, and the dark is what ends it** (§4.7). Nothing is walled off by it: the rim is reachable on foot from the hut, and the last third of the world sits past the outermost content.
@@ -442,6 +472,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 - Procedural grid (floor/rock) from a seed, bounded by the dark at radius 200, with the base at `(0, 0)`
 - Tile stepping via swipe and D-pad, with facing tracked from the last step
 - Three visibility states with persistent memory of explored tiles
+- Line-of-sight occlusion: rock, trees and shut gates cast shadow, and the thing in the way is always lit (§4.1)
 - Small torch (radius 1) equipped at start; durability ticking per step; auto-swap on burnout; blackout when nothing is left
 - Medium torch and lamp torch as findable items, with distance-scaled spawning
 - Coins and a coin counter
@@ -463,7 +494,6 @@ dragging the drawing itself; **CLOSE** is the way out.
 - `?seed=&nonce=` on the URL, to walk a named world twice
 
 **Nice to have (only after MVP works):**
-- Line-of-sight occlusion so rock actually casts shadow
 - Light falloff — an outer ring at partial brightness instead of a hard edge
 - More light sources (something that lights a fixed radius around a *dropped* point, a one-shot flare that reveals a wide area for one step)
 - More landmarks in the terrain generator: the sanctums and the merchant's stall are the only built things, and the ground between them is still pure noise
@@ -551,10 +581,10 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
   | `src/balance.js` | **Every number the game is balanced on, and nothing else**: terrain thresholds, the edge of the world and its choke, seed validation, the sanctum and landmark plans, the scatter lattice (`MIN_SEPARATION`, `SCATTER`, the per-band spawn chance and the gem density taper), coin values, water and the leash, light durability and shapes, the merchant's prices and the cheat switch's reach. Imports nothing — it is a table, not code |
   | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), the music and cheat switches (§9, §6.2, persisted the same way), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
-  | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums and landmarks (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `canEnter`); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws (§9). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
+  | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums and landmarks (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `canEnter`, and `blocksSight` — what stops a light rather than a step); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws (§9). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw, snapped to the four the needle has sprites for. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
-  | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles. Pure |
+  | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles — and, handed a predicate saying what is opaque, the same set with its shadows cut out of it (§4.1). Knows what a shadow is and nothing at all about rock, which is what keeps it pure |
   | `src/core/rules.js` | The run: step legality (including gates), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, reveal, `inventoryStacks` for grouping same-id copies for display, `bankRun` for the hut's save, `rememberGround` for the ground a run keeps however it ends, `abandonRun` for the death that takes the slot's saved walk with it, `suspendRun`/`resumeRun` for the menu's SAVE GAME and the LOAD GAME that carries it on (§6.1), the cheat setup (§6.2), and `runSummary` for the recap. Pure |
   | `src/core/save.js` | The three save slots and which one is active: load, write, erase, start, the slot listing the picker draws, the shape of a suspended expedition (§6.1), and the normaliser every save — and every run block inside one — passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
   | `src/data/items.js` | Item definitions — name, sprite key, effect text, `hue` (the gem colour it's drawn in) and the two tools. The numbers (durability, light shape, water refill) are spread in from `src/balance.js`; which gem brings an item into the world is the `SCATTER` table's, not an item's |

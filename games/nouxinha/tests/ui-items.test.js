@@ -3,8 +3,19 @@
 // real canvas.
 
 import { assert, assertEqual, runIfMain } from './harness.js';
+import { visibleTiles } from '../src/core/light.js';
+import { blocksSight } from '../src/core/world.js';
 import { ITEMS } from '../src/data/items.js';
-import { MEDIUM_TORCH_COPIES, TORCH_ROUTE, mediumTorchChain, test, walkPath } from './world.js';
+import { MEDIUM_TORCH_COPIES, SEED, TORCH_ROUTE, mediumTorchChain, test, walkPath } from './world.js';
+
+// What a light shows where the route ends, worked out against the real world
+// rather than written down: a shape is only its own tile count where nothing
+// stands in the way of it (DESIGN.md §4.1).
+const showsAt = (id, { x, y }, facing) =>
+  visibleTiles(ITEMS[id].shape, x, y, facing, (px, py) => blocksSight(px, py, SEED, 0)).length;
+// The way the walk left the character looking — only a cone cares, but the
+// shape is asked the same question the run asks it.
+const lastStep = TORCH_ROUTE.path[TORCH_ROUTE.path.length - 1];
 
 test('every counter and slot opens the card that explains it', async (game) => {
   await game.startRun();
@@ -47,7 +58,11 @@ test('finding a torch and equipping it widens the light', async (game) => {
   assertEqual(state.inventory.length, 2, 'the torch was picked up');
   assertEqual(state.inventory[1].id, 'torch-medium', 'which torch');
   assertEqual(state.activeIndex, 0, 'a found light arrives unequipped');
-  assertEqual((await game.visibleTiles()).filter((t) => t.alpha === 1).length, 9, 'still radius 1');
+  assertEqual(
+    (await game.visibleTiles()).filter((t) => t.alpha === 1).length,
+    showsAt('torch-small', TORCH_ROUTE, lastStep),
+    'still radius 1'
+  );
   assert((await game.sounds()).includes('pickup'), 'picking the torch up blipped');
 
   await game.tapSlot(1);
@@ -58,7 +73,7 @@ test('finding a torch and equipping it widens the light', async (game) => {
   assertEqual((await game.sounds()).slice(-1)[0], 'torch', 'and it is heard catching');
   assertEqual(
     (await game.visibleTiles()).filter((t) => t.alpha === 1).length,
-    25,
+    showsAt('torch-medium', TORCH_ROUTE, lastStep),
     'the lit shape grew to radius 2'
   );
 });

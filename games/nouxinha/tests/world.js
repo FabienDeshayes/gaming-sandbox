@@ -11,6 +11,7 @@
 import { test as browserTest } from './harness.js';
 import { tileKey } from '../src/core/light.js';
 import {
+  blocksSight,
   canEnter,
   DEFAULT_SEED,
   isMerchant,
@@ -111,6 +112,20 @@ export const ROCK_ROUTE = bfs(SEED, (x, y) => {
   );
   return into ? into[0] : null;
 });
+// The nearest spot to stand where something casts a shadow worth measuring: a
+// blocker one step away, with open floor two and three steps along the same
+// line behind it. `hit` is the direction it stands in, so a test can name the
+// tiles either side of it without writing a coordinate down.
+export const SHADOW_ROUTE = bfs(SEED, (x, y) => {
+  const found = ORTHOGONAL.find(
+    ([dx, dy]) =>
+      blocksSight(x + dx, y + dy, SEED) &&
+      isWalkable(x + dx * 2, y + dy * 2, SEED) &&
+      isWalkable(x + dx * 3, y + dy * 3, SEED)
+  );
+  return found ? { dx: found[0], dy: found[1] } : null;
+});
+
 // The nearest spot with a tree next to it, for the test that a grove is drawn as
 // foliage rather than as more rock.
 export const TREE_ROUTE = bfs(SEED, (x, y) =>

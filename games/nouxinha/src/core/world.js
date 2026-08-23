@@ -423,6 +423,19 @@ export function isWalkable(x, y, seed = DEFAULT_SEED) {
   return terrainAt(x, y, seed) === 'floor';
 }
 
+// What stops a light rather than a step (DESIGN.md §4.1). Rock, trees and
+// masonry all stop one dead; a gate stops it only while it is shut, so the gem
+// that opens a sanctum opens a window into it in the same moment it opens the
+// door. Everything outside the world counts as opaque too, which costs nothing:
+// the world is a disc, and a straight line between two points inside a disc
+// never leaves it, so the edge can never shadow ground that is still in play.
+export function blocksSight(x, y, seed = DEFAULT_SEED, gems = 0) {
+  const terrain = terrainAt(x, y, seed);
+  if (terrain === 'floor') return false;
+  if (terrain === 'gate') return !canEnter(x, y, seed, gems);
+  return true;
+}
+
 // How many gems a tile demands before it can be stepped on: 0 for open ground,
 // and for a gate the number of gems its sanctum wants. Null where the tile is
 // impassable however much you're carrying.

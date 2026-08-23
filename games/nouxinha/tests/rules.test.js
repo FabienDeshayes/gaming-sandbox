@@ -23,7 +23,7 @@ import {
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
 import { CHEAT_COINS, CHEAT_REVEAL_RADIUS, STARTING_WATER } from '../src/balance.js';
 import { ITEMS } from '../src/data/items.js';
-import { NONCE, ROCK_ROUTE, SEED, TORCH_ROUTE, WATER_ROUTE, scatter } from './world.js';
+import { NONCE, ROCK_ROUTE, SEED, SHADOW_ROUTE, TORCH_ROUTE, WATER_ROUTE, scatter } from './world.js';
 
 // Rock is impassable, so tests that need to burn a lot of steps pace back and
 // forth on two tiles the route already proved walkable.
@@ -46,6 +46,32 @@ unit('a step costs one durability, one water and one step, and sets facing', () 
   assertEqual(state.water, water - 1, 'water, the same rate as durability');
   assertEqual(state.steps, 1, 'steps');
   assertEqual(state.facing, OUT, 'and the character turns the way they walked');
+});
+
+unit('a light shows the rock and not the ground behind it', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  for (const dir of SHADOW_ROUTE.path) step(state, dir);
+  const { dx, dy } = SHADOW_ROUTE.hit;
+  const blocker = tileKey(state.x + dx, state.y + dy);
+  const behind = tileKey(state.x + dx * 2, state.y + dy * 2);
+
+  // A beacon, because with a radius-1 torch there is never a tile between you
+  // and anything you can see — tests/light.test.js pins that separately.
+  const knewBefore = state.explored.has(behind);
+  state.inventory.push({ id: 'torch-beacon', durability: ITEMS['torch-beacon'].maxDurability });
+  equip(state, state.inventory.length - 1);
+
+  const lit = new Set(litTiles(state).map((t) => tileKey(t.x, t.y)));
+  assert(lit.has(blocker), 'the blocker itself is lit — a wall you cannot see is one you walk into');
+  assert(!lit.has(behind), 'the floor directly behind it is not');
+  assertEqual(state.explored.has(behind), knewBefore, 'and lighting up never wrote it into the map');
+
+  // A beacon reaches 49 tiles and is showing fewer, which is the whole point:
+  // what a light reaches and what it shows are two different numbers now.
+  assert(lit.size < 49, `the beacon is showing ${lit.size} of the 49 it reaches`);
+  // But never so few that the walk stops working — the shape's own tile and
+  // everything a step away survive any amount of rock (tests/light.test.js).
+  assert(lit.size >= 9, `and still showing ${lit.size}, which is enough to walk by`);
 });
 
 unit('refillWater tops the tank back up to the ceiling, once', () => {

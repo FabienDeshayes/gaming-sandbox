@@ -9,6 +9,7 @@ import { DIRECTIONS, chokeShape, visibleTiles, tileKey } from './light.js';
 import {
   DEFAULT_SEED,
   beyondEdge,
+  blocksSight,
   canEnter,
   chebyshev,
   chokeAt,
@@ -291,14 +292,19 @@ function noteSeen(state, lit) {
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
 }
 
-// What the light actually shows. Tiles outside the world are dropped rather
-// than lit: the dark out there is what the light is losing against, so it can
-// never be what the light reveals — which is also what keeps them out of the
-// explored set, and so off both maps.
+// What the light actually shows: the shape it reaches, narrowed by the dark at
+// the edge (`activeShape`), then cut back to what it can actually see round
+// (`blocksSight` — DESIGN.md §4.1). The three compose in that order and only
+// here, which is what keeps every renderer and the explored set agreeing on one
+// answer.
+//
+// Tiles outside the world are dropped rather than lit: the dark out there is
+// what the light is losing against, so it can never be what the light reveals —
+// which is also what keeps them out of the explored set, and so off both maps.
 export function litTiles(state) {
-  return visibleTiles(activeShape(state), state.x, state.y, state.facing).filter(
-    ({ x, y }) => !beyondEdge(x, y)
-  );
+  return visibleTiles(activeShape(state), state.x, state.y, state.facing, (x, y) =>
+    blocksSight(x, y, state.seed, state.gems)
+  ).filter(({ x, y }) => !beyondEdge(x, y));
 }
 
 // Burns one durability off the active light. When it hits zero the light is

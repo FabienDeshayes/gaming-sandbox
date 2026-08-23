@@ -33,7 +33,7 @@
 // draws the tile, which is what lets one sanctum's masonry be amber and the
 // next one's cyan off a single entry here.
 //
-// Nothing is authored by hand: open `tiles.html` through a server, pick a tile,
+// Nothing is authored by hand: open `paint.html` through a server, pick a tile,
 // paint its zones, and copy the entry it writes into the table below.
 
 // Zone 0 plus the three a map can name.

@@ -199,14 +199,23 @@ export function launchBrowser() {
 // then takes that slot up through LOAD GAME instead of NEW GAME.
 //
 // `cheats` turns the Settings switch on before the page loads, the same way.
+//
+// `hasTouch` makes the page a touchscreen, which is what `pinch` needs: two
+// fingers is the one input Playwright's mouse can't send.
 export async function openGame(
   browser,
   port,
-  { viewport = { width: 480, height: 854 }, query = '', save = null, cheats = false } = {}
+  {
+    viewport = { width: 480, height: 854 },
+    query = '',
+    save = null,
+    cheats = false,
+    hasTouch = false,
+  } = {}
 ) {
   const errors = [];
   const spawned = [];
-  const page = await browser.newPage({ viewport });
+  const page = await browser.newPage({ viewport, hasTouch });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   // The browser asks for /favicon.ico on its own and this server has none —
   // that 404 comes from the browser, not the game.
@@ -466,6 +475,43 @@ export async function openGame(
       await page.waitForTimeout(140);
     },
 
+    // A wheel notch over a point, which is how a mouse zooms the map.
+    wheelAt: async (x, y, dy) => {
+      const R = await rect();
+      await page.mouse.move(R.left + x * R.sx, R.top + y * R.sy);
+      await page.mouse.wheel(0, dy);
+      await page.waitForTimeout(140);
+    },
+
+    // A two-finger pinch centred on (x, y), the fingers going from `from` to
+    // `to` pixels apart along the horizontal. Multi-touch is the one thing
+    // Playwright's mouse can't send, so this goes down to CDP's raw touch
+    // events — which is what a phone sends anyway. Needs `hasTouch`.
+    pinch: async (x, y, from, to) => {
+      const R = await rect();
+      const cdp = await page.context().newCDPSession(page);
+      const points = (gap) =>
+        [-gap / 2, gap / 2].map((dx, i) => ({
+          x: R.left + (x + dx) * R.sx,
+          y: R.top + y * R.sy,
+          id: i + 1,
+          radiusX: 4,
+          radiusY: 4,
+          force: 1,
+        }));
+      const send = (type, gap) =>
+        cdp.send('Input.dispatchTouchEvent', {
+          type,
+          touchPoints: type === 'touchEnd' ? [] : points(gap),
+        });
+      await send('touchStart', from);
+      const steps = 6;
+      for (let i = 1; i <= steps; i++) await send('touchMove', from + ((to - from) * i) / steps);
+      await send('touchEnd', to);
+      await cdp.detach();
+      await page.waitForTimeout(140);
+    },
+
     // Drags inside an open multi-copy item card's instance list by `dy`
     // pixels (negative scrolls down through the list).
     dragCardList: (dy) => {
@@ -528,6 +574,9 @@ export async function openGame(
           menuOpen: s.menuOpen,
           shopOpen: s.shop.isOpen(),
           mapOpen: s.worldMap.isOpen(),
+          // Where the map overlay's drawing currently sits and how far it can
+          // be zoomed — null while the overlay is closed (src/ui/worldMap.js).
+          mapView: s.worldMap.viewState(),
           compassShown: s.compass.container.visible,
           compassTarget: s.compass.container.visible
             ? { sprite: s.compass.icon.texture.key, arrow: s.compass.arrow.texture.key }

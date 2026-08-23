@@ -407,6 +407,14 @@ test('cheats reveal the map, hand you everything, and save nothing', async (game
   assertEqual(state.compassShown, true, 'the needle is there to read');
   assert(state.explored > 10000, 'and the world is drawn out past the last sanctum');
 
+  // The biggest drawing the game can make of itself, and it still gets the
+  // whole width of the screen rather than a stamp in the middle (DESIGN.md §7).
+  await game.tapMapButton();
+  const view = (await game.state()).mapView;
+  assertEqual(Math.round(view.width), view.viewport.width, 'the map is as wide as the screen');
+  assert(view.height <= view.viewport.height + 1, 'and no taller than the window it sits in');
+  await game.clickText('CLOSE');
+
   // Straight back onto the hut, which is the one place a run can write itself.
   await walkPath(game, OUT_AND_BACK);
   await game.clickText('STOP HERE');
@@ -468,5 +476,54 @@ test('the map draws the ground this run has walked', async (game) => {
   await game.clickText('CLOSE');
   assertEqual((await game.state()).mapOpen, false, 'and closes again');
 }, { save: { ...emptySave(), map: true } });
+
+// A campaign's walk outgrows the screen long before it ends, so the whole walk
+// is where the map opens and not the only thing it can show (DESIGN.md §4.6).
+// A cheat run is the largest drawing the game makes, which is the one worth
+// being able to get into.
+test('the map opens on the whole walk and zooms and drags into it', async (game) => {
+  await game.startRun();
+  await game.tapMapButton();
+
+  const fit = (await game.state()).mapView;
+  assertEqual(fit.scale, fit.minScale, 'it opens zoomed all the way out');
+  assertEqual(Math.round(fit.width), fit.viewport.width, 'which is the width of the screen');
+
+  const cx = fit.viewport.x + fit.viewport.width / 2;
+  const cy = fit.viewport.y + fit.viewport.height / 2;
+
+  // Two fingers moving apart: the ground grows around the point between them.
+  await game.pinch(cx, cy, 80, 240);
+  let view = (await game.state()).mapView;
+  assert(view.scale > fit.scale * 2, 'a pinch outwards zooms in');
+  assert(view.width > view.viewport.width, 'past the point where the drawing fills the window');
+
+  // Which is what makes a drag mean anything — a drawing that already fits has
+  // nowhere to go, so it stays centred however hard it is pulled.
+  const before = view.x;
+  await game.dragAt(cx, cy, cx - 120, cy);
+  view = (await game.state()).mapView;
+  assertEqual(Math.round(view.x), Math.round(before - 120), 'and the drawing follows the finger');
+
+  for (let i = 0; i < 6; i++) await game.dragAt(cx, cy, cx + 400, cy);
+  view = (await game.state()).mapView;
+  assertEqual(view.x, view.viewport.x, 'dragging stops at the edge of the drawing');
+
+  await game.clickText('FIT');
+  assertEqual((await game.state()).mapView.scale, fit.scale, 'FIT puts the whole walk back');
+
+  // The same zoom without the second finger: the buttons, and a mouse wheel.
+  await game.clickText('+');
+  const stepped = (await game.state()).mapView;
+  assert(stepped.scale > fit.scale, 'the + button zooms in');
+  await game.clickText('-');
+  assertEqual((await game.state()).mapView.scale, fit.scale, 'and the - button back out');
+
+  await game.wheelAt(cx, cy, -400);
+  assert((await game.state()).mapView.scale > fit.scale, 'a wheel over the map zooms it too');
+
+  await game.clickText('CLOSE');
+  assertEqual((await game.state()).mapOpen, false, 'and it still closes');
+}, { cheats: true, hasTouch: true });
 
 runIfMain(import.meta.url);

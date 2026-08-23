@@ -80,10 +80,13 @@ reaches in to *set* game state.
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
-| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter or map |
+| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter or map. `mapView` is the open map overlay's drawing: its scale, the fit/min/max it is allowed, where it sits, how big it is drawn and the window it is drawn in — `null` while the map is closed |
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground sprite, alpha, **tint**, **paint**, overlay, item and item tint. Every tile on screen is a stack of colour zones (`src/ui/painted.js`), so `tint` is the colour the bulk of the tile is in and `paint` the colours of the zones over it — a sanctum wearing its own gem's colour shows up there, not in `tint`. This is the render, not the model: it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its colour-zone layers — the silhouette the character set out in, plus the hood, robe and staff that turn the colours of gems one, two and three |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
+| `dragAt(x0, y0, x1, y1)` | A press-move-release drag in design coordinates, for a scrollable list or for panning the map — unlike `swipe`, it holds at the destination instead of releasing with momentum |
+| `wheelAt(x, y, dy)` | A wheel notch over a point, which is how a mouse zooms the map |
+| `pinch(x, y, from, to)` | Two fingers centred on a point, going from `from` to `to` pixels apart. Multi-touch is the one input Playwright's mouse can't send, so this goes down to CDP's raw touch events — which is what a phone sends anyway. Needs the page opened with `{ hasTouch: true }` |
 | `tapMenuButton()` | Taps the **cogwheel** in the top right, which opens the in-run menu (SETTINGS, SAVE GAME, EXIT GAME, KEEP PLAYING) |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run banked it at the hut, so asserting that has to read the save rather than the run that found it |
 | `music()` / `musicTrack()` | Whether the music loop's scheduler is running, and which of the two loops it is playing (`'menu'`, `'explore'`, or `null`) — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
@@ -218,7 +221,12 @@ the harness ever reaches into a running scene to change it, which is still the r
 
 The `cheats` page option is the same idea for the Settings switch (DESIGN.md §6.2): it turns cheats on
 before the page loads, so a test can open straight onto a run holding everything. The test that pins
-the switch itself does it the player's way instead, through Settings.
+the switch itself does it the player's way instead, through Settings. It is also how the map's zoom
+and pan are tested: a cheat run's revealed world is the biggest drawing the game makes, and a map
+that already fits the window has nothing to zoom out of and nowhere to pan to.
+
+`hasTouch` makes the page a touchscreen, which is what `pinch` needs — the only test that asks for
+one, since everything else a finger does is a tap or a drag the mouse can stand in for.
 
 ## Testing the world's three layers
 

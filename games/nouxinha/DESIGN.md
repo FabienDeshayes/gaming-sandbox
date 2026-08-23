@@ -269,12 +269,18 @@ the merchant while there is still a one-off on the shelf. It deliberately points
 has *not* found — that is the whole value of it. When nothing qualifies it points at the hut, which
 is also what it is for at three in the morning with no light left.
 
-**The map** draws every tile this run has lit, at once, at one pixel a tile. It shows terrain and
-nothing else: the ground you crossed, the rock and walls you skirted, markers for the hut and for the
+**The map** draws every tile this run has lit, at once, a pixel a tile scaled up to fill the width of
+the screen. It shows terrain and nothing else: the ground you crossed, the rock and walls you skirted, markers for the hut and for the
 unique objects you have actually laid eyes on, and a ring around where you are standing. Ground you
 have never lit is not on it, because a map you didn't draw isn't a map. Items are absent on purpose —
 they move every time the world respawns (§4.3), so a map of them would be out of date before it was
 read.
+
+A campaign's walk outgrows a phone screen long before the campaign ends, so the whole walk is where
+the map *opens* rather than all it can show: from there it pinches, drags, wheels and buttons into,
+down to a tile the size of a viewport tile. The markers and the you-are-here dot hold their size on
+screen while the ground under them grows — they are chrome, not cartography — and the drawing can
+never be dragged out of its own window, so there is always a map under the finger.
 
 **Walking persists whether or not you own the map** (§6.1). The explored set is saved with the slot
 and handed back to the next run, so an expedition opens with every tile the campaign has ever lit
@@ -385,6 +391,8 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Answer the hut | Tap **KEEP GOING** or **STOP HERE** on the dialog | Click |
 | Buy something | Tap a row on the merchant's counter, then **LEAVE** | Click the same |
 | Open the map | Tap **MAP** in the top right of the viewport (only there if you own one) | Click **MAP** |
+| Zoom the map | Pinch the drawing, or tap **-** / **+** under it; **FIT** puts the whole walk back on screen | Wheel over the drawing, or click the same buttons |
+| Pan the map | Drag the drawing (or move both fingers of a pinch together) | Drag it |
 | Start a run | **NEW GAME** or **LOAD GAME** on the title screen, then a slot on the picker | Click the same |
 | Overwrite a campaign | Tap an occupied slot under **NEW GAME**, then tap it again | Click the same |
 | Change palette | Settings, from the title screen | Same |
@@ -409,7 +417,9 @@ shop always says what it has and a player can see what they are saving towards; 
 moves the purse, which moves what every other row can do.
 
 **The map overlay** owns the whole screen and draws the run's explored ground at one pixel a tile,
-scaled to fit, with markers over the top (§4.6). Its only control is **CLOSE**.
+scaled up to fill the width of the screen, with markers over the top (§4.6). It opens on the whole
+walk and is zoomed by pinch, by wheel, or by the **-** / **FIT** / **+** row under it, and panned by
+dragging the drawing itself; **CLOSE** is the way out.
 
 **The dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons — stacked one per line once there are more than two of them. It has no close control of its own: every way out is one of its buttons, because all of its uses (the hut's stop/continue question, the recap, the death screen, and the cogwheel menu) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key.
 
@@ -561,7 +571,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/sfx.js` | Every sound but the music — the tap, the pickup blips, the gem fanfare, the torch and the death knell — plus the one `AudioContext` and the master gain everything audible goes through. No assets, and silently inert where audio is unavailable |
   | `src/ui/music.js` | The two loops: both scores as text, the square-wave voices, and the lookahead scheduler that writes them to the clock. The track follows the scene — `menu` for the title, slot picker and settings, `explore` for a run |
   | `src/ui/shop.js` | The merchant's counter: a row per line of stock, over the purse it's paid from |
-  | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers |
+  | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers — and the pinch/drag/wheel/button zoom and pan over the top of it, which are one container's scale and position |
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |
   | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js`, `src/ui/slider.js` | The D-pad, held to repeat a step at the rate `getMoveSpeed` gives; the item card overlay (single-copy or scrollable instance list); the full scrollable inventory panel, with the gem-pip row above its list; the title/rows/buttons dialog the hut, the recap and the cogwheel menu all use, its buttons in a row or stacked one per line once there are more than two; the shared bordered button; the shared drag-or-tap slider, used once for the move-speed setting |
   | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker, which says which slots are mid-expedition), `SettingsScene` (the palette grid, the music switch, the move-speed slider, the cheat switch — and, opened from a run, the way back into it), `ExploreScene` (the run, and the cogwheel menu hanging off it) |

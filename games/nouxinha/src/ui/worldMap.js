@@ -9,7 +9,7 @@
 // map of them would be a lie by the time it was drawn; what doesn't move is the
 // ground, the hut, the merchant and the sanctums.
 
-import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
+import { FONT, GAME_HEIGHT, GAME_WIDTH, TILE, gemColour, getPalette, hex } from '../config.js';
 import { landmarks, sanctums, terrainAt } from '../core/world.js';
 import { itemDef } from '../data/items.js';
 import { makeButton } from './button.js';
@@ -18,7 +18,13 @@ const TEXTURE = 'worldmap-canvas';
 const DRAW_MARGIN = 12;
 const DRAW_W = GAME_WIDTH - DRAW_MARGIN * 2;
 const DRAW_H = 560;
-const MAX_PIXEL = 6;
+// A fresh campaign has barely anything explored, so the tightest-fit pixel
+// size below would otherwise blow each tile up arbitrarily large. Capping it
+// at the live viewport's own tile size means a young map never zooms in
+// closer than the game itself does — it just doesn't yet fill DRAW_W, the way
+// a mostly-dark map is supposed to look. Past that, DRAW_W is what wins and
+// the drawing grows to fill the screen's width as the walk grows into it.
+const MAX_PIXEL = TILE;
 
 // Rock and sanctum wall are the shape of the world; floor is the ground you
 // crossed. Same two-colour discipline as the viewport, done with alpha.

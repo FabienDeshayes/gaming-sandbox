@@ -514,9 +514,9 @@ dragging the drawing itself; **CLOSE** is the way out.
     beside it takes the colour of whatever it points at, so a gem target reads in that gem's colour.
   - **One gem sprite, three tints.** The gems differ by the colour they gave back and nothing else, so pointing them at three tiles would be three ways of saying the same thing.
 
-- **The character** is a hooded, bearded wizard with a staff, seen face-on. The hood and the staff line are the whole identity at 16×16 — which is why they are also the two things a gem colours, along with the robe between them. The face stays the colour they set out in.
+- **The character** is a hooded, bearded wizard with a staff. The hood and the staff line are the whole identity at 16×16 — which is why they are also the two things a gem colours, along with the robe between them. Facing down, the face stays the colour they set out in.
 
-  **All four facings currently draw the same tile.** The sheet is face-on throughout and holds no side or back view of a figure, and a turn that looks wrong is worse than no turn at all — so the four keys are there, pointed at one tile, waiting for side and back views to be drawn. Facing is still tracked and still mechanically load-bearing, because the lamp torch's cone points wherever the character does; meanwhile the *shape of the lit ground* is what shows which way they are looking, which is what makes the missing turn affordable rather than broken.
+  **Each facing is its own tile.** Down is the sheet's own face-on figure; up turns it around, the same hood and robe mirrored so the staff swaps hands, with the face closed over — no brow or eyes, just hood, since there is nothing to show from behind. Left and right are a profile silhouette drawn for this game (the sheet holds none), mirrored off each other. Facing is mechanically load-bearing regardless — the lamp torch's cone points wherever the character does — but until these existed, only the *shape of the lit ground* showed which way they were looking; a wrong-looking turn would have been worse than no turn at all, which is why the sheet's face-on tile stood in for all four for as long as it did.
 - **Palettes:** four combinations, chosen in Settings, persisted in `localStorage`, all CRT-flavoured:
 
   | Name | Background | Foreground |

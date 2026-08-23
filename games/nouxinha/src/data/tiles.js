@@ -35,14 +35,14 @@ export const SHEET_GAP = 1;
 // place that knows the sheet exists.
 export const TILES = {
   // --- The character -------------------------------------------------------
-  // One tile for all four facings until side and back views are drawn. The
-  // sheet is face-on throughout and holds no figure seen from behind, and a
-  // wrong-looking turn is worse than no turn at all — the direction the
-  // character is facing is carried by the shape of the lit ground meanwhile.
+  // Four tiles, one per facing: down is the face-on figure the sheet already
+  // had, up is that same figure turned around (the hood closed over where the
+  // face was), and left and right are a profile silhouette drawn for this
+  // game, mirrored off each other.
   'wizard-down': [24, 1],
-  'wizard-up': [24, 1],
-  'wizard-right': [24, 1],
-  'wizard-left': [24, 1],
+  'wizard-up': [25, 1],
+  'wizard-right': [26, 1],
+  'wizard-left': [27, 1],
 
   // --- Terrain -------------------------------------------------------------
   // Floor's tile is ground texture, drawn at half strength (FLOOR_TEXTURE_LEVEL

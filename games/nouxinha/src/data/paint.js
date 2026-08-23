@@ -58,8 +58,9 @@ export const PAINT = {
   // The wizard wears the campaign: the hood turns the first colour brought
   // home, the robe the second, the staff the third — so a character carrying
   // everything is three colours over the one they set out in, and one carrying
-  // nothing is still the plain silhouette they always were. All four facings
-  // draw the same tile, so they share the one map.
+  // nothing is still the plain silhouette they always were. Each facing is
+  // its own tile now (`src/data/tiles.js`), so each gets its own map, but all
+  // four keep the same three-zone split.
   'wizard-down': {
     hues: [1, 2, 3],
     map: [
@@ -81,9 +82,71 @@ export const PAINT = {
       '................',
     ],
   },
-  'wizard-up': 'wizard-down',
-  'wizard-right': 'wizard-down',
-  'wizard-left': 'wizard-down',
+  // Turned around: the same hood and robe, mirrored so the staff swaps
+  // hands, with the face closed over — no brow or eyes, just hood.
+  'wizard-up': {
+    hues: [1, 2, 3],
+    map: [
+      '................',
+      '..3..11111111...',
+      '.33.11111111.1..',
+      '..3.11111111....',
+      '.33.11111111....',
+      '.3..11111111....',
+      '.3..11111111....',
+      '.3.1111111111...',
+      '.3.222....2222..',
+      '....222..22222..',
+      '.33..222222222..',
+      '.33..22..22.....',
+      '.....22..22.2...',
+      '.3...22..22.....',
+      '.3...22..22.....',
+      '................',
+    ],
+  },
+  'wizard-right': {
+    hues: [1, 2, 3],
+    map: [
+      '................',
+      '......1111..33..',
+      '.....111111..3..',
+      '....1111111..3..',
+      '....11111111.3..',
+      '....1111111..3..',
+      '....111111...3..',
+      '...22222222..3..',
+      '..222222222..3..',
+      '..22222222...3..',
+      '..22222222...3..',
+      '..2222222....3..',
+      '..222.222....3..',
+      '..22..22.....3..',
+      '..22..22.....3..',
+      '................',
+    ],
+  },
+  'wizard-left': {
+    hues: [1, 2, 3],
+    map: [
+      '................',
+      '..33..1111......',
+      '..3..111111.....',
+      '..3..1111111....',
+      '..3.11111111....',
+      '..3..1111111....',
+      '..3...111111....',
+      '..3..22222222...',
+      '..3..222222222..',
+      '..3...22222222..',
+      '..3...22222222..',
+      '..3....2222222..',
+      '..3....222.222..',
+      '..3.....22..22..',
+      '..3.....22..22..',
+      '................',
+    ],
+  },
 
   // --- The sanctums --------------------------------------------------------
   //

@@ -175,6 +175,21 @@ export class ExploreScene extends Phaser.Scene {
     this.mapButton.add([frame, label, zone]);
   }
 
+  // The one thing in the game that explains itself rather than being explained
+  // by the HUD: the world's edge is invisible by design — what you see is the
+  // ground running out — so walking into it once earns a sentence about why.
+  showEdge() {
+    playTap();
+    this.dialog.show({
+      title: 'THE DARK IS SOLID',
+      lines: [
+        'Out here the dark stops giving way. It has been eating your light for a while now — a tile of reach for every ten you walked — and this is where it has eaten all of it.',
+        'Nothing goes further. Turn around.',
+      ],
+      buttons: [{ label: 'BACK', onClick: () => this.dialog.hide() }],
+    });
+  }
+
   layOutRail() {
     let y = RAIL_TOP;
     this.compass.update(this.run);
@@ -386,6 +401,14 @@ export class ExploreScene extends Phaser.Scene {
         this.hud.flash(
           `THE GATE WANTS ${result.needs} COLOUR${result.needs === 1 ? '' : 'S'}. YOU HAVE ${this.run.gems}.`
         );
+      // The end of the world bumps like rock too, and a bump against nothing
+      // visible is exactly the thing that reads as a bug — so the first time a
+      // campaign reaches it, the dark says what it is (DESIGN.md §4.7). After
+      // that it is a line in the HUD, because by then the player knows.
+      if (result.reason === 'edge') {
+        if (result.firstTime) this.showEdge();
+        else this.hud.flash('THE DARK IS SOLID HERE.');
+      }
       this.animating = true;
       this.map.bump(this, DIRECTIONS[direction], () => {
         this.animating = false;

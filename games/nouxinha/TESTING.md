@@ -72,7 +72,7 @@ screen coordinate. `openAnother({ viewport })` opens one at a real device size i
 inside the viewport with no page scroll — the failure mode there is a canvas wider than the screen,
 which pushes controls off the edge and lets a tap turn into a sideways pan instead of a press.
 
-## Writing a test against an infinite procedural world
+## Writing a test against a world with no authored levels
 
 The world has no hand-authored level to write coordinates against, so **derive the route instead of
 hardcoding it**. `tests/game.test.js` runs a BFS over the real world at load time to find the

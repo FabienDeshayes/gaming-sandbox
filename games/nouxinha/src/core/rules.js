@@ -5,11 +5,13 @@
 // be played out in Node by a test, which is how the durability and burnout
 // sequencing gets checked.
 
-import { DIRECTIONS, visibleTiles, tileKey } from './light.js';
+import { DIRECTIONS, chokeShape, visibleTiles, tileKey } from './light.js';
 import {
   DEFAULT_SEED,
+  beyondEdge,
   canEnter,
   chebyshev,
+  chokeAt,
   coinValue,
   consumableAt,
   entryCost,
@@ -55,6 +57,13 @@ export function refillWater(state) {
   state.water = maxWater(state.gems);
   return state.water > before;
 }
+
+// What a campaign files "I have walked into the end of the world" under. It
+// rides along in the same set as the unique objects the run has laid eyes on
+// (`seenUnique`), which is exactly the right shelf for it: knowledge rather
+// than loot, written down whichever way the expedition ends, and never worth a
+// field of its own in the save.
+export const EDGE_SEEN = 'edge';
 
 // A run's consumables are salted with a nonce so no two expeditions walk the
 // same scatter (DESIGN.md §4.3). Tests pass one in to get a world they can
@@ -220,10 +229,13 @@ export function inventoryStacks(state) {
 }
 
 // The shape currently lighting the world — null once every light is spent,
-// which `visibleTiles` reads as blackout.
+// which `visibleTiles` reads as blackout, and narrowed by however much the dark
+// at the edge of the world is eating at this tile (DESIGN.md §4.7). The choke
+// is a property of where you are standing, not of the light: walk back in and
+// it is as wide as it ever was.
 export function activeShape(state) {
   const light = activeLight(state);
-  return light ? itemDef(light.id).shape : null;
+  return light ? chokeShape(itemDef(light.id).shape, chokeAt(state.x, state.y)) : null;
 }
 
 export function isBlackout(state) {
@@ -268,7 +280,7 @@ export function canStepOnto(state, x, y) {
 // files it into `explored`. Returns the lit tiles so the renderer can tell
 // "lit right now" from "seen once".
 export function reveal(state) {
-  const lit = visibleTiles(activeShape(state), state.x, state.y, state.facing);
+  const lit = litTiles(state);
   for (const { x, y } of lit) state.explored.add(tileKey(x, y));
   noteSeen(state, lit);
   return lit;
@@ -287,8 +299,14 @@ function noteSeen(state, lit) {
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
 }
 
+// What the light actually shows. Tiles outside the world are dropped rather
+// than lit: the dark out there is what the light is losing against, so it can
+// never be what the light reveals — which is also what keeps them out of the
+// explored set, and so off both maps.
 export function litTiles(state) {
-  return visibleTiles(activeShape(state), state.x, state.y, state.facing);
+  return visibleTiles(activeShape(state), state.x, state.y, state.facing).filter(
+    ({ x, y }) => !beyondEdge(x, y)
+  );
 }
 
 // Burns one durability off the active light. When it hits zero the light is
@@ -405,9 +423,17 @@ export function step(state, direction) {
     // A shut gate is a different answer from a wall: it tells the player there
     // is something through there and exactly what it costs to get in.
     const cost = entryCost(nx, ny, state.seed);
-    return cost === null
-      ? { moved: false, reason: 'blocked' }
-      : { moved: false, reason: 'locked', needs: cost };
+    if (cost !== null) return { moved: false, reason: 'locked', needs: cost };
+    // Walking into the end of the world is not walking into a rock, and the
+    // scene says so the first time it happens (DESIGN.md §4.7). Noted on the
+    // run's own record of what it has laid eyes on, so the explanation is
+    // offered once per campaign rather than once per expedition.
+    if (beyondEdge(nx, ny)) {
+      const first = !state.seenUnique.has(EDGE_SEEN);
+      state.seenUnique.add(EDGE_SEEN);
+      return { moved: false, reason: 'edge', firstTime: first };
+    }
+    return { moved: false, reason: 'blocked' };
   }
 
   state.x = nx;

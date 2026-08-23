@@ -27,7 +27,7 @@
 // here defaults to that one, which is what lets a run bank itself without ever
 // knowing which slot it belongs to.
 
-import { SANCTUM_PLAN, pickSeed } from './world.js';
+import { BASE_X, BASE_Y, SANCTUM_PLAN, beyondEdge, pickSeed } from './world.js';
 import { ITEMS, TOOLS } from '../data/items.js';
 
 const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;
@@ -148,10 +148,18 @@ function normaliseRun(raw) {
     for (const [id, count] of Object.entries(raw.found))
       if (ITEMS[id]) found[id] = int(count, 0, Number.MAX_SAFE_INTEGER);
 
+  // A position outside the world is one a run could never have walked to, so it
+  // only ever comes from a save that has been edited or corrupted. It matters
+  // because every neighbour of such a tile is also outside: restoring one would
+  // put the character somewhere they can neither move nor die, which is the one
+  // thing the design promises never happens (DESIGN.md §5). The hut is the tile
+  // that is always walkable, so that is where an impossible one lands.
+  const stranded = beyondEdge(whole(raw.x), whole(raw.y));
+
   return {
     seed: raw.seed | 0,
-    x: whole(raw.x),
-    y: whole(raw.y),
+    x: stranded ? BASE_X : whole(raw.x),
+    y: stranded ? BASE_Y : whole(raw.y),
     facing: FACINGS.includes(raw.facing) ? raw.facing : 'up',
     steps: int(raw.steps, 0, Number.MAX_SAFE_INTEGER),
     // Never zero: a run is suspended mid-walk, and one restored with no water

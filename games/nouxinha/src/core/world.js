@@ -55,6 +55,49 @@ export const BASE_X = 0;
 export const BASE_Y = 0;
 const BASE_CLEARING = 1;
 
+// --- The edge of the world ----------------------------------------------------
+//
+// The world is bounded, and what bounds it is the dark itself. Far enough out
+// the dark stops being something a light pushes back and becomes something that
+// pushes back: it eats into what you are carrying, a tile of reach at a time,
+// and at `EDGE_RADIUS` it has eaten everything and is simply solid. That is the
+// `'dark'` terrain below — impassable, and drawn as nothing at all, so what the
+// player sees is the ground running out.
+//
+// Measured as a true radius rather than the Chebyshev distance the rest of the
+// game counts in, because this one is a shape the player will see on the map: a
+// square edge would read as an authored box, and a circle reads as how far the
+// light ever got. (The HUD's furthest-out counter stays Chebyshev — that is a
+// different question, how far out you walked, not how close to the edge.)
+//
+// 200 puts the edge well past everything the campaign is currently about: the
+// outermost sanctum wall stands at 117, so the last third of the world is
+// unspoken for, which is where a late-game area would go.
+export const EDGE_RADIUS = 200;
+
+// One tile of light lost for every ten tiles closer to the edge — so the bigger
+// the light, the sooner the dark starts eating it, and everything converges on
+// the same guttering ring by the end. Never all the way to nothing: a tile of
+// reach is left however far out you stand, because the way the boundary is read
+// is by seeing the floor stop, and a player who cannot see at all has only
+// bumped into something invisible.
+const CHOKE_STEP = 10;
+
+export function edgeDistance(x, y) {
+  return Math.hypot(x, y);
+}
+
+export function beyondEdge(x, y) {
+  return edgeDistance(x, y) > EDGE_RADIUS;
+}
+
+// How many tiles of reach the dark leaves a light standing here. Applied to
+// whatever light is burning (`activeShape` in core/rules.js), never to the light
+// itself — walk back in and it is as bright as it ever was.
+export function chokeAt(x, y) {
+  return Math.max(1, Math.floor((EDGE_RADIUS - edgeDistance(x, y)) / CHOKE_STEP));
+}
+
 // --- Noise ------------------------------------------------------------------
 
 // 32-bit integer hash of (x, y, seed, channel) as a float in [0, 1).
@@ -109,6 +152,9 @@ export function isBase(x, y) {
 // it. Placement has to ask about terrain to find a spot that isn't sealed in,
 // and it can't ask `terrainAt` for that without asking where the structures are.
 function noiseTerrain(x, y, seed) {
+  // Outside the world entirely. Checked before anything else so that terrain,
+  // item spawning and every flood probe all agree on where the world stops.
+  if (beyondEdge(x, y)) return 'dark';
   if (chebyshev(x, y, BASE_X, BASE_Y) <= BASE_CLEARING) return 'floor';
   // Two octaves: broad masses from the coarse lattice, ragged edges from the fine one.
   const n =

@@ -4,12 +4,15 @@
 // See TESTING.md for how to run these and how to add one.
 
 import { assert, assertEqual, run, test as browserTest, unit } from './harness.js';
-import { visibleTiles, tileKey } from '../src/core/light.js';
+import { chokeShape, visibleTiles, tileKey } from '../src/core/light.js';
 import {
   canEnter,
   chebyshev,
   consumableAt,
   DEFAULT_SEED,
+  EDGE_RADIUS,
+  beyondEdge,
+  chokeAt,
   entryCost,
   isMerchant,
   isWalkable,
@@ -36,6 +39,7 @@ import {
   buy,
   canBuy,
   createRun,
+  EDGE_SEEN,
   equip,
   gateOnTile,
   hasSuspendedRun,
@@ -43,6 +47,7 @@ import {
   isBlackout,
   itemOnTile,
   litTiles,
+  reveal,
   maxWater,
   refillWater,
   rememberGround,
@@ -414,6 +419,141 @@ unit('the base clearing is always walkable', () => {
   for (let y = -1; y <= 1; y++)
     for (let x = -1; x <= 1; x++)
       for (const seed of [SEED, 5, 8, 999]) assert(isWalkable(x, y, seed), `(${x},${y}) seed ${seed}`);
+});
+
+unit('the world ends at a fixed radius, and the dark there is solid', () => {
+  // Bounded, and bounded as a circle rather than as a box: the edge is a shape
+  // the player sees on the map, and a square one reads as an authored wall
+  // (DESIGN.md §4.7).
+  assert(!beyondEdge(EDGE_RADIUS, 0), 'the rim itself is inside');
+  assert(beyondEdge(EDGE_RADIUS + 1, 0), 'and one tile further out is not');
+  // On the diagonal too, which a Chebyshev bound would get wrong.
+  const diag = Math.ceil(EDGE_RADIUS / Math.SQRT2) + 2;
+  assert(beyondEdge(diag, diag), `the diagonal is bounded at the same radius (${diag})`);
+
+  assertEqual(terrainAt(EDGE_RADIUS + 5, 0, SEED), 'dark', 'outside is its own terrain');
+  assert(!isWalkable(EDGE_RADIUS + 5, 0, SEED), 'and nothing walks on it');
+  assertEqual(entryCost(EDGE_RADIUS + 5, 0, SEED), null, 'no number of gems opens it');
+
+  // Everything the campaign is currently about is comfortably inside, with room
+  // left over — the outermost sanctum wall against the rim.
+  for (const sanctum of sanctums(SEED)) {
+    const out = Math.hypot(sanctum.centre.x, sanctum.centre.y) + sanctum.radius;
+    assert(out < EDGE_RADIUS * 0.75, `sanctum ${sanctum.index} sits well inside (${out.toFixed(0)})`);
+  }
+});
+
+unit('the dark eats into the light as you approach the edge', () => {
+  // A tile of reach for every ten walked, and never all the way to nothing:
+  // the boundary is read by seeing the ground stop, which needs a lit tile to
+  // see it from (DESIGN.md §4.7).
+  assert(chokeAt(0, 0) > 3, 'nothing is eating your light at home');
+  assertEqual(chokeAt(EDGE_RADIUS, 0), 1, 'and a single tile is left at the rim');
+  assert(chokeAt(EDGE_RADIUS - 40, 0) > chokeAt(EDGE_RADIUS - 10, 0), 'closer in is brighter');
+
+  const beacon = { kind: 'radius', radius: 3 };
+  assertEqual(chokeShape(beacon, 5), beacon, 'a light well inside is untouched');
+  assertEqual(chokeShape(beacon, 1).radius, 1, 'and choked down at the edge');
+  assertEqual(chokeShape({ kind: 'cone', depth: 4 }, 2).depth, 2, 'cones narrow the same way');
+
+  // The choke is where you stand, not what you carry: it costs the light
+  // nothing, so walking back in restores it.
+  const state = createRun(SEED, emptySave(), NONCE);
+  const home = activeShape(state).radius;
+  state.x = EDGE_RADIUS - 2;
+  assertEqual(activeShape(state).radius, 1, 'guttering at the rim');
+  state.x = 0;
+  assertEqual(activeShape(state).radius, home, 'and as wide as ever back home');
+});
+
+unit('light never reveals what is outside the world', () => {
+  // Otherwise the explored set would carry tiles that are not there, and both
+  // maps draw off that set.
+  const state = createRun(SEED, emptySave(), NONCE);
+  state.x = EDGE_RADIUS;
+  state.y = 0;
+  reveal(state);
+  for (const { x, y } of litTiles(state)) assert(!beyondEdge(x, y), `lit (${x},${y}) is inside`);
+  for (const key of state.explored) {
+    const [x, y] = key.split(',').map(Number);
+    assert(!beyondEdge(x, y), `explored (${x},${y}) is inside`);
+  }
+});
+
+unit('walking into the end of the world says so, once', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+
+  // Derived, not hardcoded: find a tile you can stand on whose next step
+  // outward is off the end of the world. Most of the rim is rock, so this walks
+  // the boundary looking for open ground against it.
+  let spot = null;
+  for (let y = -EDGE_RADIUS; y <= EDGE_RADIUS && !spot; y++) {
+    const x = Math.floor(Math.sqrt(EDGE_RADIUS * EDGE_RADIUS - y * y));
+    if (isWalkable(x, y, state.seed) && beyondEdge(x + 1, y)) spot = { x, y };
+  }
+  assert(spot, 'there is open ground standing against the rim somewhere');
+  state.x = spot.x;
+  state.y = spot.y;
+
+  const result = step(state, 'right');
+  assertEqual(result.moved, false, 'the world stops the walk');
+  assertEqual(result.reason, 'edge', 'and says it was the edge, not a rock');
+  assertEqual(result.firstTime, true, 'the first bump earns the explanation');
+  assertEqual(step(state, 'right').firstTime, false, 'the second one does not');
+
+  // Filed with the things the campaign has laid eyes on, so it is written down
+  // whichever way the expedition ends and not offered again next time out.
+  assert(state.seenUnique.has(EDGE_SEEN), 'the campaign remembers reaching it');
+});
+
+unit('a saved walk from outside the world comes home instead of stranding', () => {
+  // Not reachable by playing — you cannot walk out there — but a hand-edited or
+  // corrupted slot could name such a tile, and every neighbour of one is also
+  // outside it. Restoring that position would leave a character who can neither
+  // step nor die (DESIGN.md §5).
+  const outside = normaliseSave({
+    ...emptySave(),
+    run: { seed: SEED, x: EDGE_RADIUS + 40, y: 0, water: 50, nonce: NONCE },
+  });
+  assertEqual({ x: outside.run.x, y: outside.run.y }, { x: 0, y: 0 }, 'put back at the hut');
+
+  // And a position inside it is left exactly where it was.
+  const inside = normaliseSave({
+    ...emptySave(),
+    run: { seed: SEED, x: 12, y: -7, water: 50, nonce: NONCE },
+  });
+  assertEqual({ x: inside.run.x, y: inside.run.y }, { x: 12, y: -7 }, 'a real one is untouched');
+});
+
+unit('the whole world is one place, out to the rim', () => {
+  // The point of an edge you can walk to is that you can walk to it. If the
+  // noise sealed the outer band off, the rim would be a promise the world never
+  // keeps — so this floods the entire thing from the hut with every gate shut.
+  const seed = pickSeed(SEED);
+  const limit = EDGE_RADIUS + 2;
+  const seen = new Set(['0,0']);
+  const stack = [[0, 0]];
+  let furthest = 0;
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    furthest = Math.max(furthest, Math.hypot(x, y));
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (Math.abs(nx) > limit || Math.abs(ny) > limit) continue;
+      const key = `${nx},${ny}`;
+      if (seen.has(key) || !isWalkable(nx, ny, seed)) continue;
+      seen.add(key);
+      stack.push([nx, ny]);
+    }
+  }
+  let walkable = 0;
+  for (let y = -limit; y <= limit; y++)
+    for (let x = -limit; x <= limit; x++) if (isWalkable(x, y, seed)) walkable++;
+
+  assert(walkable > 50000, `the world is a large place (${walkable} tiles)`);
+  assert(seen.size / walkable > 0.95, `and nearly all of it connects (${seen.size}/${walkable})`);
+  assert(furthest >= EDGE_RADIUS - 1, `including the rim itself (reached ${furthest.toFixed(1)})`);
 });
 
 unit('pickSeed rejects a seed that walls the base in', () => {

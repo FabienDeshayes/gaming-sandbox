@@ -1,0 +1,247 @@
+// What outlives a run: the three slots, the ground written down whichever way
+// an expedition ends, and the walk the cogwheel can suspend into a slot and
+// pick back up. Pure — no browser.
+
+import { assert, assertEqual, runIfMain, unit } from './harness.js';
+import { DEFAULT_SEED, pickSeed } from '../src/core/world.js';
+import {
+  abandonRun,
+  bankRun,
+  createRun,
+  hasSuspendedRun,
+  itemOnTile,
+  maxWater,
+  rememberGround,
+  respawn,
+  resumeRun,
+  step,
+  suspendRun,
+} from '../src/core/rules.js';
+import { clampSlot, emptySave, MAX_GEMS, normaliseSave, SLOT_COUNT } from '../src/core/save.js';
+import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
+import { ITEMS } from '../src/data/items.js';
+import { GEM_ROUTE, NONCE, SEED, TORCH_ROUTE } from './world.js';
+
+// --- Slots -------------------------------------------------------------------
+
+unit('a slot number is always one of the three', () => {
+  assertEqual(SLOT_COUNT, 3, 'three campaigns can be walked at once');
+  assertEqual(clampSlot(0), 1, 'below the first is the first');
+  assertEqual(clampSlot(9), SLOT_COUNT, 'past the last is the last');
+  assertEqual(clampSlot('x'), 1, 'and nonsense is the first');
+});
+
+unit('a slot counts as in use the moment there is anything in it', () => {
+  assertEqual(normaliseSave(emptySave()).started, false, 'an empty save is an empty slot');
+  assertEqual(normaliseSave({ ...emptySave(), started: true }).started, true, 'a claimed one is not');
+  // The flag is belt and braces: a save with progress in it is somebody's
+  // campaign whether or not the flag survived being hand-edited.
+  for (const field of [{ runs: 2 }, { coins: 5 }, { gems: 1 }, { map: true }, { mapped: '0,0,1' }])
+    assertEqual(normaliseSave({ ...emptySave(), ...field }).started, true, `${Object.keys(field)[0]} means used`);
+});
+
+unit('a campaign keeps the world its slot was given', () => {
+  // A campaign's world is drawn once, when NEW GAME claims the slot, and lives
+  // in the save from then on (core/save.js `startSlot`). Everything else about
+  // the world falls out of it, so a run that ignored it would be a run in
+  // somebody else's cave system.
+  const mine = pickSeed(4242);
+  assertEqual(createRun(undefined, { ...emptySave(), seed: mine }).seed, mine, 'the slot decides');
+
+  // A slot with no world of its own is a campaign started before slots had
+  // them. It keeps the one world it has been mapping rather than being moved to
+  // a fresh one, which would strand its cartography.
+  assertEqual(createRun(undefined, emptySave()).seed, pickSeed(DEFAULT_SEED), 'a legacy slot keeps the old one');
+
+  // A seed named outright still wins — that is what `?seed=` on the URL is for.
+  assertEqual(createRun(SEED, { ...emptySave(), seed: mine }).seed, pickSeed(SEED), 'and the URL overrides both');
+
+  // `bankRun` rebuilds the save rather than merging onto it, so the world is
+  // the one field a walk home could silently drop — and dropping it would take
+  // the campaign's mapped ground with it.
+  const banked = bankRun(createRun(undefined, { ...emptySave(), seed: mine }, NONCE));
+  assertEqual(banked.seed, mine, 'walking home leaves the world alone');
+  assertEqual(banked.mappedSeed, mine, 'and the ground it drew belongs to it');
+});
+
+unit('a corrupt or hand-edited save cannot break a run', () => {
+  for (const bad of [null, 'nonsense', { gems: 99 }, { gems: -4 }, { gems: 'two', coins: NaN }]) {
+    const state = createRun(SEED, bad, NONCE);
+    assert(state.gems >= 0 && state.gems <= MAX_GEMS, `gems clamped for ${JSON.stringify(bad)}`);
+    assertEqual(state.water, maxWater(state.gems), 'water matches whatever gem count survived');
+  }
+});
+
+// --- The ground a run keeps --------------------------------------------------
+
+unit('run-length encoded ground survives the round trip, and a corrupt one costs only the drawing', () => {
+  const walked = new Set(['0,0', '1,0', '2,0', '3,0', '-4,7', '-3,7']);
+  const back = decodeExplored(encodeExplored(walked));
+  assertEqual(back.size, walked.size, 'round trip keeps every tile');
+  for (const key of walked) assert(back.has(key), `kept ${key}`);
+  assertEqual(decodeExplored('not a map;4,x,2').size, 0, 'and a corrupt one draws nothing');
+});
+
+unit('the ground a run lit carries into the next one, map or no map', () => {
+  // Cartography is not progress (DESIGN.md §6.1): owning the map changes what
+  // you can look at, never what the slot remembers.
+  const plain = createRun(SEED, emptySave(), NONCE);
+  for (const dir of ['right', 'right', 'right', 'up', 'up']) step(plain, dir);
+  const saved = bankRun(plain);
+  assert(saved.mapped.length > 0, 'a run without the map still writes its ground');
+  assertEqual(saved.mappedSeed, SEED, 'against the world it belongs to');
+
+  const next = createRun(SEED, saved, NONCE);
+  assertEqual(next.explored.size, plain.explored.size, 'the next run opens with it drawn');
+
+  // Ground drawn in another world is discarded rather than drawn wrong.
+  const elsewhere = createRun(SEED, { ...saved, mappedSeed: (SEED + 1) | 0 }, NONCE);
+  assert(elsewhere.explored.size < next.explored.size, 'a stale drawing is dropped');
+});
+
+unit('a run that never gets home keeps its ground and nothing else', () => {
+  // `rememberGround` writes to the active slot, which is localStorage — absent
+  // in Node, so what it hands back is the normalised save it would have stored.
+  const state = createRun(SEED, { ...emptySave(), coins: 40, runs: 3 }, NONCE);
+  for (const dir of ['right', 'right', 'up']) step(state, dir);
+  state.coins = 25;
+  state.tools.add('compass');
+
+  const kept = rememberGround(state);
+  assert(kept.mapped.length > 0, 'the walk is written down');
+  assertEqual(kept.mappedSeed, SEED, 'against the world it belongs to');
+  assertEqual(kept.coins, 0, 'but nothing the run was carrying is banked');
+  assertEqual(kept.compass, false, 'not even a tool it found on the way');
+  assertEqual(kept.runs, 0, 'and a run that never got home is not a run completed');
+});
+
+unit('the map only marks unique objects the run has actually seen', () => {
+  const state = createRun(SEED, { ...emptySave(), map: true }, NONCE);
+  assertEqual(state.seenUnique.size, 0, 'nothing seen from the doorway');
+
+  for (const dir of GEM_ROUTE.path) step(state, dir);
+  assert(state.seenUnique.has('gem-1'), 'the gem it walked onto is on the map');
+  assert(!state.seenUnique.has('map'), 'and the map lying 90 tiles out is not');
+});
+
+// --- A suspended expedition --------------------------------------------------
+
+unit('saving mid-walk writes the expedition down without banking any of it', () => {
+  // `suspendRun` merges onto the active slot, which is localStorage — absent in
+  // Node, so what it hands back is the save it would have stored.
+  const state = createRun(SEED, { ...emptySave(), coins: 40, runs: 3 }, NONCE);
+  for (const dir of TORCH_ROUTE.path) step(state, dir);
+  state.tools.add('compass');
+
+  const saved = suspendRun(state);
+  assert(hasSuspendedRun(saved), 'the slot is holding an expedition');
+  // Saving is not banking (DESIGN.md §6.1): nothing the run is carrying moves
+  // into the campaign's own numbers, the way stopping at the hut would.
+  assertEqual(saved.coins, 0, 'the coins picked up are still only carried');
+  assertEqual(saved.compass, false, 'and a tool found on the way is still at risk');
+  assertEqual(saved.runs, 0, 'a suspended walk is not a run completed');
+  assert(saved.mapped.length > 0, 'but the ground it lit is written, as always');
+
+  const back = resumeRun(saved);
+  assertEqual(back.x, state.x, 'it resumes on the tile it stopped on');
+  assertEqual(back.y, state.y, 'both ways');
+  assertEqual(back.facing, state.facing, 'facing the way it was');
+  assertEqual(back.steps, state.steps, 'with the steps it had taken');
+  assertEqual(back.water, state.water, 'the water it had left');
+  assertEqual(back.coins, state.coins, 'the coins in its pocket');
+  assertEqual(back.inventory, state.inventory, 'and every light at the durability it was at');
+  assertEqual(back.activeIndex, state.activeIndex, 'still burning the same one');
+  assertEqual([...back.tools].sort(), [...state.tools].sort(), 'holding the same tools');
+  assertEqual(back.explored.size, state.explored.size, 'on the ground it had drawn');
+  // The campaign underneath is what the run would bank into if it ever got
+  // home, so it has to survive the round trip too.
+  assertEqual(back.banked.coins, 40, 'the campaign it walked out of is still there');
+  assertEqual(back.banked.runs, 3, 'runs and all');
+});
+
+unit('a resumed expedition walks out onto the world it left', () => {
+  // The world is never stored (DESIGN.md §4.3), so this is the whole test of the
+  // save format: seed, nonce and epoch have to put the same scatter back, and
+  // `collected` has to keep what the run had already taken off it.
+  const state = createRun(SEED, emptySave(), NONCE);
+  for (const dir of TORCH_ROUTE.path) step(state, dir);
+  assert(state.collected.size > 0, 'the walk picked something up');
+  // A respawn moves the salt on, which is the half of it a stored nonce alone
+  // would get wrong.
+  respawn(state);
+  step(state, TORCH_ROUTE.path[0] === 'left' ? 'right' : 'left');
+
+  const back = resumeRun(suspendRun(state));
+  assertEqual(back.salt, state.salt, 'the same salt, so the same scatter');
+  assertEqual(back.epoch, state.epoch, 'however many times the world has been relaid');
+  assertEqual([...back.collected].sort(), [...state.collected].sort(), 'and the tiles it emptied');
+
+  let differed = 0;
+  let items = 0;
+  for (let y = -20; y <= 20; y++)
+    for (let x = -20; x <= 20; x++) {
+      const was = itemOnTile(state, x, y);
+      if (was) items += 1;
+      if (was !== itemOnTile(back, x, y)) differed += 1;
+    }
+  assert(items > 0, 'there is something out there to get wrong');
+  assertEqual(differed, 0, 'every item is exactly where the run left it');
+});
+
+unit('ending an expedition takes the saved one with it, whichever way it ends', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  for (const dir of ['right', 'right']) step(state, dir);
+
+  // The hut: the walk is over because it came home (DESIGN.md §6.1).
+  assertEqual(bankRun(state).run, null, 'banking at the hut clears the saved walk');
+  // Thirst: the walk is over because it died. A save you could reload out of
+  // would make the game's one hard failure a rewind.
+  assertEqual(abandonRun(state).run, null, 'and so does running dry');
+  // Leaving is the one that clears nothing — not saving is not unsaving — but
+  // that needs a real slot to leave a save in, so it is asserted in the browser.
+  // What is checkable here is the other end of the same rule: a slot with
+  // nothing suspended simply has nothing to carry on with.
+  assertEqual(hasSuspendedRun(emptySave()), false, 'an untouched slot has nothing to resume');
+  assertEqual(resumeRun(emptySave()), null, 'and nothing to resume it from');
+});
+
+unit('a corrupt suspended run costs the walk, not the campaign', () => {
+  const campaign = { ...emptySave(), coins: 30, gems: 1, runs: 2 };
+  for (const bad of [undefined, null, 'nonsense', 42, {}, { x: 4, y: 2 }]) {
+    const save = normaliseSave({ ...campaign, run: bad });
+    assertEqual(save.run, null, `a run block of ${JSON.stringify(bad)} is simply not a run`);
+    assertEqual(save.coins, 30, 'and the campaign around it is untouched');
+  }
+
+  // A run block that is *nearly* right is clamped rather than dropped, the same
+  // way the campaign's own numbers are.
+  const messy = normaliseSave({
+    ...campaign,
+    run: {
+      seed: SEED,
+      x: 3.7,
+      y: -2,
+      facing: 'sideways',
+      water: -50,
+      gems: 99,
+      activeIndex: 9,
+      tools: ['compass', 'jetpack'],
+      inventory: [{ id: 'coin', durability: 3 }, { id: 'torch-small', durability: 9999 }],
+      banked: { coins: 30, run: { seed: SEED } },
+    },
+  }).run;
+  assertEqual(messy.x, 3, 'a fractional coordinate is a whole one');
+  assertEqual(messy.facing, 'up', 'and a facing that is not one of the four is the default');
+  assertEqual(messy.water, 1, 'water never resumes at zero — that run could not move');
+  assertEqual(messy.gems, MAX_GEMS, 'gems clamp to the ones the game has');
+  assertEqual(messy.tools, ['compass'], 'only tools that exist');
+  assertEqual(
+    messy.inventory,
+    [{ id: 'torch-small', durability: ITEMS['torch-small'].maxDurability }],
+    'only lights, and only as much burn as a light can hold'
+  );
+  assertEqual(messy.activeIndex, 0, 'lighting one it is actually carrying');
+  assertEqual(messy.banked.run, null, 'and a save nested inside a save stops there');
+});
+
+runIfMain(import.meta.url);

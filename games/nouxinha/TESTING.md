@@ -7,16 +7,42 @@
 
 ```bash
 cd games/nouxinha
-npm install     # playwright-core + phaser, from the allowed npm registry — do NOT run `playwright install`
-npm test        # node tests/game.test.js
+npm install       # playwright-core + phaser, from the allowed npm registry — do NOT run `playwright install`
+npm test          # every suite, one server and one browser: about three minutes
+npm run test:pure # the seven pure suites only, no browser: about a second
 ```
 
 `node_modules/` is gitignored. `package.json` is test-only: the game itself has no build step and
 runs straight from `index.html` through any static server.
 
+## The suites
+
+`tests/all.test.js` is the whole run: it imports every `*.test.js` file and starts the runner once.
+Each of those files registers into the same runner and is also runnable on its own —
+`node tests/terrain.test.js` runs just that one, and a pure suite run alone never starts a browser
+at all, which is the quick way to work on the rules.
+
+| Suite | Covers |
+|---|---|
+| `light.test.js` | Light shapes, and what the dark at the edge leaves of them |
+| `rules.test.js` | A step's costs, burnout and auto-swap, pickup, the inventory, the recap, cheats |
+| `terrain.test.js` | What the noise grows, where the world stops, and that every bit of it can be walked to |
+| `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
+| `campaign.test.js` | Sanctums, gates, gems, the water ladder, the landmarks, the merchant, the compass |
+| `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume |
+| `sprites.test.js` | The tile sheet table, the derived sprites, the wall nine-slice, the palette rules |
+| `ui-shell.test.js` | Title screen, Settings, audio, the canvas against a phone, the sheet actually loading |
+| `ui-explore.test.js` | Walking, and the three visibility states the viewport draws |
+| `ui-items.test.js` | The HUD counters, the item card, the inventory panel |
+| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, cheats, the merchant, the map |
+
+Suites share `tests/world.js` — the seed, the pinned nonce, and every route BFSed out of the real
+world (see below). Pure suites run first in `all.test.js`, so a broken rule fails in a second rather
+than after three minutes of driving a canvas that was never going to agree with it.
+
 ## The two kinds of test
 
-`tests/game.test.js` registers both against the same runner:
+Both register against the same runner (`tests/harness.js`):
 
 - **`unit(name, fn)`** — no browser. Imports `src/core/*` and `src/data/*` directly and exercises
   the rules as plain functions: light shapes, durability and burnout ordering, world determinism,
@@ -27,7 +53,9 @@ runs straight from `index.html` through any static server.
   equipping a torch and seeing the lit area grow.
 
 Every browser test gets its own page, so no test inherits another's run. Any uncaught page error or
-console error fails the test that provoked it.
+console error fails the test that provoked it. A page costs a couple of seconds to open, which is
+why a browser test that would only re-assert what a neighbouring one already walked to should be
+folded into it rather than added beside it.
 
 ## Sandbox gotcha
 
@@ -75,14 +103,18 @@ which pushes controls off the edge and lets a tap turn into a sideways pan inste
 ## Writing a test against a world with no authored levels
 
 The world has no hand-authored level to write coordinates against, so **derive the route instead of
-hardcoding it**. `tests/game.test.js` runs a BFS over the real world at load time to find the
+hardcoding it**. `tests/world.js` runs a BFS over the real world at load time to find the
 nearest medium torch, the nearest spot with a rock to walk into and the nearest one with a tree,
 then replays those paths in the browser:
 
 ```js
 const SEED = pickSeed(DEFAULT_SEED);
-const TORCH_ROUTE = bfs(SEED, (x, y) => itemAt(x, y, SEED) === 'torch-medium');
+export const TORCH_ROUTE = bfs(SEED, (x, y) => scatter(x, y) === 'torch-medium', 60);
 ```
+
+That derivation lives in `tests/world.js` and every suite imports it, so it is paid for once. The
+one expensive route — four chained legs to four copies of the same torch — is worked out on request
+(`mediumTorchChain()`) rather than at load, so a suite that doesn't walk it doesn't pay for it.
 
 This keeps the suite honest if the noise is ever retuned: the route moves with the world instead of
 silently pointing at a tile that is now rock. Hardcoding `(-8, 0)` would pass today and rot at the
@@ -103,8 +135,11 @@ same world — the game reads a seed and a nonce off its own URL, which is what 
 
 ```js
 const WORLD = `seed=${DEFAULT_SEED}&nonce=${NONCE}`;
-test('...', async (game) => { ... }, { query: WORLD });
+export const test = (name, fn, opts = {}) => browserTest(name, fn, { query: WORLD, ...opts });
 ```
+
+Importing `test` from `tests/world.js` opens on that world; importing `test` from `tests/harness.js`
+opens on whatever world NEW GAME draws, which only the couple of tests that are *about* that want.
 
 Routes to terrain (the nearest rock or tree to bump into) and to unique objects (a gem, the
 merchant, the compass lying in the dark) need none of this — those don't move with the nonce.
@@ -183,7 +218,8 @@ the switch itself does it the player's way instead, through Settings.
 
 The separation rule is the one thing here worth asserting outright rather than sampling: a test walks
 a 141x141 window, buckets every consumable by kind, and checks no two of a kind are within
-`MIN_SEPARATION` — the constant, never the number, so retuning the drop rate is a one-line change. It
+`MIN_SEPARATION` from `src/balance.js` — the constant, never the number, so retuning the drop rate is
+a one-line change. It
 is quadratic in the number of items per kind and still runs in milliseconds, because the whole point
 of the rule is that there aren't many. Sanctum clearings are skipped — a clearing is a deliberate
 hoard with its own cap (two of a kind), tested separately.
@@ -225,7 +261,7 @@ that edit a test failure.
 
 ## Adding a test
 
-Add one whenever a fix covers something a player could hit by just playing. Prefer a `unit(...)`
-test if the behaviour is expressible in the pure core — `src/core/rules.js`, `src/core/light.js`,
+Add one to the suite it belongs to, whenever a fix covers something a player could hit by just
+playing. Prefer a `unit(...)` test if the behaviour is expressible in the pure core — `src/core/rules.js`, `src/core/light.js`,
 and `src/core/world.js` have no Phaser in them precisely so that most of the game can be tested
 without a browser. Reach for a `test(...)` when the bug lives in what's rendered or what a tap does.

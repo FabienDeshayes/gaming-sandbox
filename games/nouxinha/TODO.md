@@ -3,11 +3,9 @@
 Agents, do not use this file as a list of things to implement, ignore it unless explicitly asked to add or remove something from it.
 
 small tweaks:
-* review all texts
 * transition / animation for flavour text
 * panel design
 * intro text when starting an expedition 
-* fix wizard sprites
 * floor variety 
 
 

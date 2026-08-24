@@ -28,6 +28,7 @@ import {
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { makeSlider } from '../ui/slider.js';
+import { SETTINGS } from '../text.js';
 import { playTap } from '../ui/sfx.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
@@ -66,7 +67,7 @@ export class SettingsScene extends Phaser.Scene {
     startMusic('menu');
 
     this.add
-      .text(cx, 100, 'SETTINGS', { fontFamily: FONT, fontSize: '28px', color: hex(pal.fg) })
+      .text(cx, 100, SETTINGS.heading, { fontFamily: FONT, fontSize: '28px', color: hex(pal.fg) })
       .setOrigin(0.5);
 
     const gridLeft = cx - GRID_W / 2;
@@ -99,7 +100,7 @@ export class SettingsScene extends Phaser.Scene {
 
       if (active)
         this.add
-          .text(x + CELL_W - 10, y + 10, 'ON', {
+          .text(x + CELL_W - 10, y + 10, SETTINGS.paletteActive, {
             fontFamily: FONT,
             fontSize: '11px',
             color: hex(option.fg),
@@ -152,7 +153,7 @@ export class SettingsScene extends Phaser.Scene {
       min: MIN_MOVE_SPEED,
       max: MAX_MOVE_SPEED,
       value: getMoveSpeed(),
-      label: (v) => `MOVE SPEED: ${v}/s`,
+      label: (v) => SETTINGS.moveSpeed(v),
       onChange: (v) => setMoveSpeed(v),
     });
 
@@ -188,7 +189,7 @@ export class SettingsScene extends Phaser.Scene {
       this,
       cx,
       696,
-      'BACK',
+      SETTINGS.back,
       () =>
         this.opened.run
           ? this.scene.start('ExploreScene', { run: this.opened.run })
@@ -198,16 +199,6 @@ export class SettingsScene extends Phaser.Scene {
   }
 }
 
-function musicLabel(on) {
-  return `MUSIC: ${on ? 'ON' : 'OFF'}`;
-}
-
-function cheatLabel(on) {
-  return `CHEATS: ${on ? 'ON' : 'OFF'}`;
-}
-
-function cheatNote(on) {
-  return on
-    ? 'WHOLE MAP REVEALED, ONE OF EVERYTHING. NOTHING SAVES.'
-    : 'REVEALS THE MAP AND HANDS YOU EVERY ITEM.';
-}
+const musicLabel = SETTINGS.music;
+const cheatLabel = SETTINGS.cheats;
+const cheatNote = SETTINGS.cheatNote;

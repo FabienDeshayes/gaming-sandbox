@@ -7,6 +7,11 @@
 // Exactly two colours are on screen at once (DESIGN.md §9): a background and a
 // foreground. Every sprite is a white 1-bit mask that gets tinted with the
 // foreground colour, so swapping palettes is a tint change, not an asset swap.
+//
+// The words on screen are not here either — every player-facing string in the
+// game lives in `src/text.js`.
+
+import { PALETTE_NAMES } from './text.js';
 
 export const GAME_WIDTH = 480;
 export const GAME_HEIGHT = 854;
@@ -41,11 +46,13 @@ export const REMEMBERED_ALPHA = 0.3;
 // tile is baked with a dimmed grey that the same tint multiplies through.
 export const FLOOR_TEXTURE_LEVEL = 0.5;
 
+// The names Settings shows are copy, so they come from `src/text.js`; what is
+// here is the two colours each palette actually is.
 export const PALETTES = [
-  { id: 'phosphor', name: 'PHOSPHOR', bg: 0x0b1a0b, fg: 0x33ff66 },
-  { id: 'amber', name: 'AMBER', bg: 0x1a0f00, fg: 0xffb000 },
-  { id: 'cathode', name: 'CATHODE', bg: 0x06121a, fg: 0x4fd0ff },
-  { id: 'magenta', name: 'MAGENTA', bg: 0x14061a, fg: 0xff5fd2 },
+  { id: 'phosphor', name: PALETTE_NAMES.phosphor, bg: 0x0b1a0b, fg: 0x33ff66 },
+  { id: 'amber', name: PALETTE_NAMES.amber, bg: 0x1a0f00, fg: 0xffb000 },
+  { id: 'cathode', name: PALETTE_NAMES.cathode, bg: 0x06121a, fg: 0x4fd0ff },
+  { id: 'magenta', name: PALETTE_NAMES.magenta, bg: 0x14061a, fg: 0xff5fd2 },
 ];
 
 const STORAGE_KEY = 'nouxinha.palette';

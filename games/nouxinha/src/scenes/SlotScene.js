@@ -18,6 +18,7 @@
 
 import { FONT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { loadSlot, MAX_GEMS, slots, startSlot } from '../core/save.js';
+import { progressLine, SLOTS } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { playTap } from '../ui/sfx.js';
@@ -50,7 +51,7 @@ export class SlotScene extends Phaser.Scene {
     this.armed = 0;
 
     this.add
-      .text(cx, 110, this.mode === 'load' ? 'LOAD GAME' : 'NEW GAME', {
+      .text(cx, 110, this.mode === 'load' ? SLOTS.headingLoad : SLOTS.headingNew, {
         fontFamily: FONT,
         fontSize: '28px',
         color: hex(pal.fg),
@@ -61,7 +62,7 @@ export class SlotScene extends Phaser.Scene {
       .text(
         cx,
         150,
-        this.mode === 'load' ? 'PICK A CAMPAIGN TO CARRY ON' : 'PICK A SLOT TO WALK OUT FROM',
+        this.mode === 'load' ? SLOTS.hintLoad : SLOTS.hintNew,
         { fontFamily: FONT, fontSize: '12px', color: hex(pal.fg) }
       )
       .setOrigin(0.5)
@@ -69,7 +70,7 @@ export class SlotScene extends Phaser.Scene {
 
     this.rows = slots().map((entry, i) => this.buildRow(entry, FIRST_ROW_Y + i * (ROW_H + ROW_GAP), pal));
 
-    makeButton(this, cx, 700, 'BACK', () => this.scene.start('TitleScene'), { width: 240 });
+    makeButton(this, cx, 700, SLOTS.back, () => this.scene.start('TitleScene'), { width: 240 });
   }
 
   buildRow(entry, y, pal) {
@@ -85,7 +86,7 @@ export class SlotScene extends Phaser.Scene {
     border.strokeRect(left, y, ROW_W, ROW_H);
 
     this.add
-      .text(left + 20, y + 26, `SLOT ${entry.slot}`, {
+      .text(left + 20, y + 26, SLOTS.slotName(entry.slot), {
         fontFamily: FONT,
         fontSize: '18px',
         color: hex(pal.fg),
@@ -158,7 +159,7 @@ export class SlotScene extends Phaser.Scene {
     if (entry.used && this.armed !== entry.slot) {
       this.armed = entry.slot;
       for (const row of this.rows)
-        row.status.setText(row.entry.slot === entry.slot ? 'TAP AGAIN TO OVERWRITE' : summaryOf(row.entry));
+        row.status.setText(row.entry.slot === entry.slot ? SLOTS.confirmOverwrite : summaryOf(row.entry));
       return;
     }
 
@@ -172,9 +173,9 @@ export class SlotScene extends Phaser.Scene {
 }
 
 function summaryOf(entry) {
-  if (!entry.used) return 'EMPTY';
+  if (!entry.used) return SLOTS.empty;
   const { save } = entry;
-  return `${gemsOf(entry)}/${MAX_GEMS} COLOURS  ${save.coins} COINS  ${save.runs} RUNS`;
+  return progressLine(gemsOf(entry), MAX_GEMS, save.coins, save.runs);
 }
 
 // What a slot has to show for gems: the banked count, or the run's own if a
@@ -190,10 +191,10 @@ function gemsOf(entry) {
 // — unless the slot is holding a saved expedition, which is the more urgent
 // thing to say about it: this row is a walk to carry on, not a walk to start.
 function groundOf(entry) {
-  if (!entry.used) return 'NOTHING WALKED YET';
+  if (!entry.used) return SLOTS.neverWalked;
   const { run } = entry.save;
-  if (run) return `SAVED EXPEDITION  ${run.furthest} OUT  ${run.steps} STEPS`;
-  return `FURTHEST OUT ${entry.save.furthest}`;
+  if (run) return SLOTS.suspended(run.furthest, run.steps);
+  return SLOTS.furthest(entry.save.furthest);
 }
 
 // The world is a pure function of a seed, and its consumables of a nonce

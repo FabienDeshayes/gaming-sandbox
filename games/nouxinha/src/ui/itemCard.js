@@ -7,6 +7,7 @@ import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../co
 import { makeButton } from './button.js';
 import { playTap } from './sfx.js';
 import { makeScrollable } from './scroll.js';
+import { CARD } from '../text.js';
 
 const PANEL_W = 380;
 const PANEL_H = 340;
@@ -93,10 +94,9 @@ export class ItemCard {
 
     let y = cy + 16;
     if (single) {
-      const value = `${single.durability} / ${def.maxDurability}`;
       parts.push(
         scene.add
-          .text(cx, y, `DURABILITY  ${value}`, {
+          .text(cx, y, CARD.durability(single.durability, def.maxDurability), {
             fontFamily: FONT,
             fontSize: '16px',
             color: hex(pal.fg),
@@ -145,7 +145,7 @@ export class ItemCard {
         const label = scene.add.text(
           0,
           top + 4,
-          `${inst.durability} / ${def.maxDurability}${inst.isActive ? '  EQUIPPED' : ''}`,
+          CARD.instance(inst.durability, def.maxDurability, inst.isActive),
           { fontFamily: FONT, fontSize: '13px', color: hex(pal.fg) }
         );
         const bar = scene.add.graphics();
@@ -186,7 +186,7 @@ export class ItemCard {
         scene,
         cx - 96,
         buttonY,
-        single.isActive ? 'EQUIPPED' : 'EQUIP',
+        single.isActive ? CARD.equipped : CARD.equip,
         () => {
           this.onEquip(single.index);
           this.hide();
@@ -197,7 +197,7 @@ export class ItemCard {
     }
 
     parts.push(
-      makeButton(scene, single ? cx + 96 : cx, buttonY, 'CLOSE', () => this.hide(), {
+      makeButton(scene, single ? cx + 96 : cx, buttonY, CARD.close, () => this.hide(), {
         width: 160,
         height: 44,
       })

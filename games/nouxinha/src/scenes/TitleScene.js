@@ -1,5 +1,6 @@
 import { FONT, GAME_WIDTH, gemColour, getCheats, getPalette, hex } from '../config.js';
 import { anySlotUsed, loadSave, MAX_GEMS } from '../core/save.js';
+import { progressLine, TITLE } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { makeWizard, paintWizard } from '../ui/wizard.js';
@@ -30,7 +31,7 @@ export class TitleScene extends Phaser.Scene {
     const canLoad = anySlotUsed();
 
     this.add
-      .text(cx, 200, 'NOUXINHA', {
+      .text(cx, 200, TITLE.name, {
         fontFamily: FONT,
         fontSize: '46px',
         color: hex(pal.fg),
@@ -38,7 +39,7 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(cx, 252, 'THE DARK IS THE ONLY MAP', {
+      .text(cx, 252, TITLE.tagline, {
         fontFamily: FONT,
         fontSize: '13px',
         color: hex(pal.fg),
@@ -67,7 +68,7 @@ export class TitleScene extends Phaser.Scene {
 
     if (save.runs)
       this.add
-        .text(cx, 496, `${save.gems}/${MAX_GEMS} COLOURS  ${save.coins} COINS  ${save.runs} RUNS`, {
+        .text(cx, 496, progressLine(save.gems, MAX_GEMS, save.coins, save.runs), {
           fontFamily: FONT,
           fontSize: '12px',
           color: hex(pal.fg),
@@ -80,7 +81,7 @@ export class TitleScene extends Phaser.Scene {
     // at the hut (DESIGN.md §6.2).
     if (getCheats())
       this.add
-        .text(cx, 520, 'CHEATS ON — NOTHING WILL BE SAVED', {
+        .text(cx, 520, TITLE.cheatsWarning, {
           fontFamily: FONT,
           fontSize: '11px',
           color: hex(pal.fg),
@@ -90,17 +91,17 @@ export class TitleScene extends Phaser.Scene {
 
     // Both ways in go through the slot picker: which of the three campaigns
     // this is has to be answered before a run can start (DESIGN.md §6.1).
-    makeButton(this, cx, 566, 'NEW GAME', () => this.scene.start('SlotScene', { mode: 'new' }), {
+    makeButton(this, cx, 566, TITLE.newGame, () => this.scene.start('SlotScene', { mode: 'new' }), {
       width: 240,
     });
     makeButton(
       this,
       cx,
       632,
-      'LOAD GAME',
+      TITLE.loadGame,
       () => canLoad && this.scene.start('SlotScene', { mode: 'load' }),
       { width: 240, enabled: canLoad }
     );
-    makeButton(this, cx, 698, 'SETTINGS', () => this.scene.start('SettingsScene'), { width: 240 });
+    makeButton(this, cx, 698, TITLE.settings, () => this.scene.start('SettingsScene'), { width: 240 });
   }
 }

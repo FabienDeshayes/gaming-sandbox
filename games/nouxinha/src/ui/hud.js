@@ -4,6 +4,7 @@
 
 import { FONT, GAME_WIDTH, HUD_Y, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
+import { HUD } from '../text.js';
 import { activeLight, inventoryStacks, maxWater, spendable } from '../core/rules.js';
 import { playTap } from './sfx.js';
 
@@ -87,10 +88,10 @@ export class Hud {
 
   update(run) {
     const pal = getPalette();
-    this.explored.setText(`EXPLORED ${run.explored.size}`);
-    this.coins.setText(`COINS ${spendable(run)}`);
+    this.explored.setText(HUD.explored(run.explored.size));
+    this.coins.setText(HUD.coins(spendable(run)));
 
-    this.waterLabel.setText(`WATER ${run.water}/${maxWater(run.gems)}`);
+    this.waterLabel.setText(HUD.water(run.water, maxWater(run.gems)));
     this.waterBar.clear();
     const waterY = SLOT_Y + SLOT + 32 + 44;
     this.waterBar.lineStyle(2, pal.fg, 1);
@@ -144,7 +145,7 @@ export class Hud {
     if (stack.instances.length > 1) {
       parts.push(
         this.scene.add
-          .text(x + SLOT - 3, SLOT_Y + SLOT - 7, `x${stack.instances.length}`, {
+          .text(x + SLOT - 3, SLOT_Y + SLOT - 7, HUD.stackCount(stack.instances.length), {
             fontFamily: FONT,
             fontSize: '11px',
             color: hex(pal.fg),
@@ -179,7 +180,7 @@ export class Hud {
     g.strokeRect(x, SLOT_Y, SLOT, SLOT);
 
     const label = this.scene.add
-      .text(x + SLOT / 2, SLOT_Y + SLOT / 2, 'ITEMS', {
+      .text(x + SLOT / 2, SLOT_Y + SLOT / 2, HUD.items, {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -205,13 +206,13 @@ export class Hud {
     this.lightBar.clear();
 
     if (!light) {
-      this.lightLabel.setText('NO LIGHT');
-      this.status.setText('BLACKOUT. ONLY WHAT IS RIGHT AROUND YOU IS VISIBLE.');
+      this.lightLabel.setText(HUD.noLight);
+      this.status.setText(HUD.blackout);
       return;
     }
 
     const def = itemDef(light.id);
-    this.lightLabel.setText(`${def.name}  ${light.durability}/${def.maxDurability}`);
+    this.lightLabel.setText(HUD.light(def.name, light.durability, def.maxDurability));
 
     const barY = SLOT_Y + SLOT + 32;
     this.lightBar.lineStyle(2, pal.fg, 1);

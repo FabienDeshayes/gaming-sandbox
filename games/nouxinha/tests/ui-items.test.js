@@ -6,6 +6,7 @@ import { assert, assertEqual, runIfMain } from './harness.js';
 import { visibleTiles } from '../src/core/light.js';
 import { blocksSight } from '../src/core/world.js';
 import { ITEMS } from '../src/data/items.js';
+import { CARD, HUD, INVENTORY, ITEM_TEXT } from '../src/text.js';
 import { MEDIUM_TORCH_COPIES, SEED, TORCH_ROUTE, mediumTorchChain, test, walkPath } from './world.js';
 
 // What a light shows where the route ends, worked out against the real world
@@ -21,32 +22,32 @@ test('every counter and slot opens the card that explains it', async (game) => {
   await game.startRun();
 
   await game.tapSlot(0);
-  assert(await game.hasText('SMALL TORCH'), 'the item name');
-  assert(await game.hasText('DURABILITY  100 / 100'), 'durability readout');
+  assert(await game.hasText(ITEM_TEXT['torch-small'].name), 'the item name');
+  assert(await game.hasText(CARD.durability(100, 100)), 'durability readout');
   assert(await game.hasText(ITEMS['torch-small'].effect), 'effect text');
-  assert(await game.hasText('EQUIPPED'), 'the active light reads as equipped');
+  assert(await game.hasText(CARD.equipped), 'the active light reads as equipped');
   assertEqual((await game.state()).cardOpen, true, 'card is open');
-  await game.clickText('CLOSE');
+  await game.clickText(CARD.close);
   assertEqual((await game.state()).cardOpen, false, 'card is closed');
 
   await game.tapCoins();
   assert(await game.hasText(ITEMS.coin.effect), 'the coin counter opens the coin card');
-  await game.clickText('CLOSE');
+  await game.clickText(CARD.close);
 
   await game.tapWater();
-  assert(await game.hasText('WATER DROP'), 'and the water counter opens the water card');
+  assert(await game.hasText(ITEM_TEXT['water-drop'].name), 'and the water counter opens the water card');
   assert(await game.hasText(ITEMS['water-drop'].effect), 'effect text');
-  await game.clickText('CLOSE');
+  await game.clickText(CARD.close);
   assertEqual((await game.state()).cardOpen, false, 'card is closed');
 });
 
 test('the HUD tracks water down as you walk', async (game) => {
   await game.startRun();
-  assert(await game.hasText('WATER 200/200'), 'starts full');
+  assert(await game.hasText(HUD.water(200, 200)), 'starts full');
 
   await game.tapDpad('right');
   await game.settle();
-  assert(await game.hasText('WATER 199/200'), 'a step burns one water, same as durability');
+  assert(await game.hasText(HUD.water(199, 200)), 'a step burns one water, same as durability');
   assertEqual((await game.state()).water, 199, 'the model agrees');
 });
 
@@ -66,7 +67,7 @@ test('finding a torch and equipping it widens the light', async (game) => {
   assert((await game.sounds()).includes('pickup'), 'picking the torch up blipped');
 
   await game.tapSlot(1);
-  await game.clickText('EQUIP');
+  await game.clickText(CARD.equip);
 
   state = await game.state();
   assertEqual(state.activeIndex, 1, 'the medium torch is equipped');
@@ -83,26 +84,26 @@ test('two of the same torch stack into one slot, and the panel lists every stack
   for (const leg of mediumTorchChain().slice(0, 2)) await walkPath(game, leg);
 
   assertEqual((await game.state()).inventory.length, 3, 'small torch plus two mediums');
-  assert(await game.hasText('x2'), 'the medium torch slot is badged with its count');
+  assert(await game.hasText(HUD.stackCount(2)), 'the medium torch slot is badged with its count');
 
   // The strip still only shows one slot for the stack, and it opens one card.
   await game.tapSlot(1);
   assertEqual((await game.state()).cardOpen, true, 'the stack opens one card');
-  assert(await game.hasText('MEDIUM TORCH'), "the stacked item's name");
-  await game.clickText('CLOSE');
+  assert(await game.hasText(ITEM_TEXT['torch-medium'].name), "the stacked item's name");
+  await game.clickText(CARD.close);
 
   // ITEMS opens the full list, which is the only way to browse past the strip.
   await game.tapInventory();
   assertEqual((await game.state()).inventoryOpen, true, 'the panel is open');
-  assert(await game.hasText('INVENTORY'), 'panel title');
-  assert(await game.hasText('SMALL TORCH'), 'lists the small torch stack');
-  assert(await game.hasText('CARRYING 2'), 'and the medium stack shows its count');
+  assert(await game.hasText(INVENTORY.title), 'panel title');
+  assert(await game.hasText(ITEM_TEXT['torch-small'].name), 'lists the small torch stack');
+  assert(await game.hasText(INVENTORY.carrying(2)), 'and the medium stack shows its count');
 
   await game.tapInventoryRow(1);
   const state = await game.state();
   assertEqual(state.inventoryOpen, false, 'tapping a row closes the panel');
   assertEqual(state.cardOpen, true, "and opens that stack's item card");
-  assert(await game.hasText('MEDIUM TORCH'), "the right stack's card");
+  assert(await game.hasText(ITEM_TEXT['torch-medium'].name), "the right stack's card");
 });
 
 test('a multi-copy item card lists every instance and equips exactly the one tapped', async (game) => {

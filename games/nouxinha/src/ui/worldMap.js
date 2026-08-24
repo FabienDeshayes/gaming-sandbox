@@ -18,6 +18,7 @@ import { FONT, GAME_HEIGHT, GAME_WIDTH, TILE, gemColour, getPalette, hex } from 
 import { landmarks, sanctums, terrainAt } from '../core/world.js';
 import { itemDef } from '../data/items.js';
 import { makeButton } from './button.js';
+import { WORLD_MAP } from '../text.js';
 
 const TEXTURE = 'worldmap-canvas';
 
@@ -112,7 +113,7 @@ export class WorldMap {
 
     parts.push(
       scene.add
-        .text(GAME_WIDTH / 2, 34, 'THE MAP', {
+        .text(GAME_WIDTH / 2, 34, WORLD_MAP.title, {
           fontFamily: FONT,
           fontSize: '20px',
           color: hex(pal.fg),
@@ -124,7 +125,7 @@ export class WorldMap {
     if (!bounds) {
       parts.push(
         scene.add
-          .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'NOTHING WALKED YET.', {
+          .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, WORLD_MAP.empty, {
             fontFamily: FONT,
             fontSize: '14px',
             color: hex(pal.fg),
@@ -134,7 +135,7 @@ export class WorldMap {
     } else {
       parts.push(
         scene.add
-          .text(GAME_WIDTH / 2, 60, `${run.explored.size} TILES WALKED`, {
+          .text(GAME_WIDTH / 2, 60, WORLD_MAP.walked(run.explored.size), {
             fontFamily: FONT,
             fontSize: '12px',
             color: hex(pal.fg),
@@ -146,7 +147,7 @@ export class WorldMap {
     }
 
     parts.push(
-      makeButton(scene, GAME_WIDTH / 2, GAME_HEIGHT - 70, 'CLOSE', () => this.onClose(), {
+      makeButton(scene, GAME_WIDTH / 2, GAME_HEIGHT - 70, WORLD_MAP.close, () => this.onClose(), {
         width: 170,
         height: 44,
         fontSize: 13,
@@ -281,9 +282,9 @@ export class WorldMap {
     const opts = { width: 92, height: 40, fontSize: 15 };
     const out = () => this.stepZoom(1 / ZOOM_STEP);
     const into = () => this.stepZoom(ZOOM_STEP);
-    this.zoomOutButton = makeButton(scene, GAME_WIDTH / 2 - 102, y, '-', out, opts);
-    this.fitButton = makeButton(scene, GAME_WIDTH / 2, y, 'FIT', () => this.fit(), opts);
-    this.zoomInButton = makeButton(scene, GAME_WIDTH / 2 + 102, y, '+', into, opts);
+    this.zoomOutButton = makeButton(scene, GAME_WIDTH / 2 - 102, y, WORLD_MAP.zoomOut, out, opts);
+    this.fitButton = makeButton(scene, GAME_WIDTH / 2, y, WORLD_MAP.fit, () => this.fit(), opts);
+    this.zoomInButton = makeButton(scene, GAME_WIDTH / 2 + 102, y, WORLD_MAP.zoomIn, into, opts);
     this.refreshZoomControls();
     return [this.zoomOutButton, this.fitButton, this.zoomInButton];
   }

@@ -11,6 +11,7 @@
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
+import { INVENTORY } from '../text.js';
 import { inventoryStacks } from '../core/rules.js';
 import { MAX_GEMS } from '../core/save.js';
 import { makeButton } from './button.js';
@@ -73,7 +74,7 @@ export class InventoryPanel {
     panelZone.on('pointerdown', (p, x, y, event) => event.stopPropagation());
 
     const title = scene.add
-      .text(cx, top + 26, 'INVENTORY', { fontFamily: FONT, fontSize: '20px', color: hex(pal.fg) })
+      .text(cx, top + 26, INVENTORY.title, { fontFamily: FONT, fontSize: '20px', color: hex(pal.fg) })
       .setOrigin(0.5);
 
     // The gem pips: one per gem, each in the colour it gave back, the rest
@@ -102,7 +103,7 @@ export class InventoryPanel {
     if (stacks.length === 0) {
       parts.push(
         scene.add
-          .text(cx, top + listH / 2 + 56, 'NOTHING CARRIED.', {
+          .text(cx, top + listH / 2 + 56, INVENTORY.empty, {
             fontFamily: FONT,
             fontSize: '14px',
             color: hex(pal.fg),
@@ -123,8 +124,8 @@ export class InventoryPanel {
           fontSize: '14px',
           color: hex(pal.fg),
         });
-        const count = stack.instances.length > 1 ? `CARRYING ${stack.instances.length}` : 'CARRYING 1';
-        const sub = scene.add.text(56, top2 + 32, active ? `${count} · EQUIPPED` : count, {
+        const count = INVENTORY.carrying(stack.instances.length);
+        const sub = scene.add.text(56, top2 + 32, active ? INVENTORY.equippedSuffix(count) : count, {
           fontFamily: FONT,
           fontSize: '11px',
           color: hex(pal.fg),
@@ -157,7 +158,7 @@ export class InventoryPanel {
     }
 
     parts.push(
-      makeButton(scene, cx, top + PANEL_H - 38, 'CLOSE', () => this.hide(), { width: 160, height: 44 })
+      makeButton(scene, cx, top + PANEL_H - 38, INVENTORY.close, () => this.hide(), { width: 160, height: 44 })
     );
 
     this.container.add(parts);

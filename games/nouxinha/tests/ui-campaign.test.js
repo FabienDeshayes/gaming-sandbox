@@ -9,6 +9,25 @@ import { decodeExplored } from '../src/core/cartography.js';
 import { compassTarget } from '../src/core/compass.js';
 import { PRICES } from '../src/balance.js';
 import { PALETTES, gemColour } from '../src/config.js';
+import { PALETTE_NAMES } from '../src/text.js';
+import {
+  DEATH,
+  FLASH,
+  HUD,
+  HUT,
+  ITEM_TEXT,
+  LEAVING,
+  MENU,
+  RECAP,
+  SAVED,
+  SETTINGS,
+  SHOP,
+  SLOTS,
+  TITLE,
+  UI,
+  WORLD_MAP,
+  progressLine,
+} from '../src/text.js';
 import {
   FIRST_GEM,
   GEM_ROUTE,
@@ -35,7 +54,7 @@ test('reaching the hut banks the walk and fills the tank, and the run goes on', 
   assertEqual({ x: before.x, y: before.y }, { x: 0, y: 0 }, 'back at the hut');
   assertEqual(before.water, 200, 'the tank is filled by arriving, not by answering');
   assertEqual(before.dialogOpen, true, 'and the hut says so on arrival');
-  assert(await game.hasText('BACK AT THE HUT'), 'the prompt');
+  assert(await game.hasText(HUT.title), 'the prompt');
 
   // The ground is in the slot before either button has been touched — arriving
   // is what banks a walk now, so neither answer can cost it (DESIGN.md §6.1).
@@ -44,16 +63,16 @@ test('reaching the hut banks the walk and fills the tank, and the run goes on', 
 
   // Both buttons are named, and what they mean is on the panel rather than left
   // to be guessed at — the whole point of the change.
-  assert(await game.hasText('Nothing new to write down. Water topped up.'), 'what just happened');
-  assert(await game.hasText('Both ways keep it. HEAD BACK OUT carries the expedition on;'), 'and what each button means');
+  assert(await game.hasText(HUT.nothingNew), 'what just happened');
+  assert(await game.hasText(HUT.bothWays[0]), 'and what each button means');
 
   // The world is frozen behind the question.
   await game.tapDpad('right');
   assertEqual((await game.state()).x, 0, 'no stepping out from under the dialog');
 
-  await game.clickText('HEAD BACK OUT');
+  await game.clickText(HUT.headBackOut);
   assertEqual((await game.state()).dialogOpen, false, 'dismissed');
-  assert(await game.hasText('SAVED AT THE HUT. WATER FULL.'), 'the status line says so');
+  assert(await game.hasText(FLASH.headBackOut), 'the status line says so');
   assert((await game.texts()).includes('WATER 200/200'), 'the HUD counter agrees');
 
   await game.tapDpad('right');
@@ -69,7 +88,7 @@ test('the cogwheel menu closes without touching the run, and Esc opens it', asyn
 
   await game.tapMenuButton();
   assertEqual((await game.state()).menuOpen, true, 'the menu is up');
-  await game.clickText('KEEP PLAYING');
+  await game.clickText(MENU.keepPlaying);
   const closed = await game.state();
   assertEqual(closed.menuOpen, false, 'and closes again');
   assertEqual(closed.steps, walking.steps, 'having cost the run nothing');
@@ -96,27 +115,27 @@ test('stopping at the hut recaps the run and writes the slot; leaving keeps only
   assertEqual((await game.save()).runs, 0, 'a first run starts with nothing banked');
 
   await walkPath(game, OUT_AND_BACK);
-  await game.clickText('END HERE');
+  await game.clickText(HUT.endHere);
 
-  assert(await game.hasText('EXPEDITION OVER'), 'the recap');
+  assert(await game.hasText(RECAP.title), 'the recap');
   const texts = await game.texts();
-  for (const label of ['TILES EXPLORED', 'COINS FOUND', 'LIGHTS FOUND', 'FURTHEST OUT', 'STEPS TAKEN'])
+  for (const label of [RECAP.rowExplored, RECAP.rowCoins, RECAP.rowLights, RECAP.rowFurthest, RECAP.rowSteps])
     assert(texts.includes(label), `the recap reports ${label}`);
   // One tile out and back: the 3x3 around the base plus the three tiles the
   // step east added, in two steps.
   assert(texts.includes('12'), 'the tiles-explored figure');
   assert(texts.includes('2'), 'the step count');
-  assert(texts.some((t) => t.startsWith('CARRYING SMALL TORCH')), 'what is still in hand');
-  assert(await game.hasText('COLOURS SAVED'), 'and what was banked');
+  assert(texts.some((t) => t.startsWith(RECAP.carrying(ITEM_TEXT['torch-small'].name))), 'what is still in hand');
+  assert(await game.hasText(RECAP.rowColours), 'and what was banked');
 
   const saved = await game.save();
   assertEqual(saved.runs, 1, 'the run was written down');
   assertEqual(saved.gems, 0, 'with no colour on it');
   assert(saved.mapped.length > 0, 'and the ground it lit came home with it');
 
-  await game.clickText('HOME');
+  await game.clickText(RECAP.home);
   await game.waitForScene('TitleScene');
-  assert(await game.hasText('0/3 COLOURS  0 COINS  1 RUNS'), 'the title screen reads it back');
+  assert(await game.hasText(progressLine(0, 3, 0, 1)), 'the title screen reads it back');
 
   // Leaving by the cogwheel banks nothing — only the hut does (DESIGN.md §6) —
   // but the dark this run lit stays lit for the next one (§6.1). It asks first,
@@ -126,9 +145,9 @@ test('stopping at the hut recaps the run and writes the slot; leaving keeps only
   await walkPath(game, ['right', 'up']);
   const abandoned = await game.state();
   await game.tapMenuButton();
-  await game.clickText('EXIT GAME');
-  assert(await game.hasText('LEAVE THE DARK'), 'leaving asks before it costs the walk');
-  await game.clickText('LEAVE');
+  await game.clickText(MENU.exit);
+  assert(await game.hasText(LEAVING.title), 'leaving asks before it costs the walk');
+  await game.clickText(LEAVING.leave);
   await game.waitForScene('TitleScene');
 
   const after = await game.save();
@@ -142,7 +161,7 @@ test('a long carried list wraps the recap footer without it running into the but
   await game.startRun();
   await walkPath(game, TORCH_ROUTE.path);
   await walkPath(game, [...TORCH_ROUTE.path].reverse().map((dir) => OPPOSITE[dir]));
-  await game.clickText('END HERE');
+  await game.clickText(HUT.endHere);
 
   const texts = await game.texts();
   const footer = texts.find((t) => t.startsWith('CARRYING'));
@@ -189,7 +208,7 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   assertEqual(state.gems, 1, 'which is now in hand');
   // A gem gets the fanfare, not the two-note blip every other pickup gets.
   assert((await game.sounds()).includes('gem'), 'and it announced itself');
-  assert(await game.hasText('FIRST COLOUR IS BACK. CARRY IT HOME TO KEEP IT.'), 'the status line');
+  assert(await game.hasText(FLASH.gemFound(ITEM_TEXT['gem-1'].name)), 'the status line');
 
   // The colour actually reached the screen — this is the whole point of a gem,
   // and it is only observable in the render.
@@ -215,7 +234,7 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   assertEqual(arch.paint[1], gemColour(FIRST_GEM.requires), 'its leaves are the colour of whatever opened it');
   assertEqual(arch.paint[0], gemColour(1), "and its arch the colour of the sanctum's own gem");
   // Water rises with the gem, so the HUD's ceiling moves too.
-  assert(await game.hasText(`WATER ${state.water}/${maxWater(1)}`), 'the water ceiling rose');
+  assert(await game.hasText(HUD.water(state.water, maxWater(1))), 'the water ceiling rose');
 });
 
 test('the cogwheel saves the walk, and load game carries it on', async (game) => {
@@ -226,12 +245,12 @@ test('the cogwheel saves the walk, and load game carries it on', async (game) =>
   const walked = await game.state();
 
   await game.tapMenuButton();
-  assert(await game.hasText('MENU'), 'the cogwheel opens the menu');
-  for (const label of ['SETTINGS', 'SAVE GAME', 'EXIT GAME', 'KEEP PLAYING'])
+  assert(await game.hasText(MENU.title), 'the cogwheel opens the menu');
+  for (const label of [MENU.settings, MENU.save, MENU.exit, MENU.keepPlaying])
     assert(await game.hasText(label), `${label} is on it`);
 
-  await game.clickText('SAVE GAME');
-  assert(await game.hasText('EXPEDITION SAVED'), 'saving says so');
+  await game.clickText(MENU.save);
+  assert(await game.hasText(SAVED.title), 'saving says so');
   const saved = await game.save();
   assertEqual(saved.run.x, walked.x, 'and the slot is holding the tile it was standing on');
   assertEqual(saved.run.y, walked.y, 'both ways');
@@ -239,7 +258,7 @@ test('the cogwheel saves the walk, and load game carries it on', async (game) =>
   assertEqual(saved.runs, 0, 'but nothing is banked by saving — only the hut does that');
 
   // The question saving asks: carry on, or stop here for now.
-  await game.clickText('KEEP PLAYING');
+  await game.clickText(MENU.keepPlaying);
   assertEqual((await game.state()).dialogOpen, false, 'keeping playing hands the world back');
   await game.tapDpad('up');
   await game.settle();
@@ -248,19 +267,19 @@ test('the cogwheel saves the walk, and load game carries it on', async (game) =>
   // Leaving without saving again leaves the save alone: the walk since the last
   // SAVE GAME is what is lost, not the save itself (DESIGN.md §6.1).
   await game.tapMenuButton();
-  await game.clickText('EXIT GAME');
-  await game.clickText('LEAVE');
+  await game.clickText(MENU.exit);
+  await game.clickText(LEAVING.leave);
   await game.waitForScene('TitleScene');
   assertEqual((await game.save()).run.steps, walked.steps, 'the saved walk is still the saved one');
 
   // And LOAD GAME picks that expedition up rather than setting out again.
-  await game.clickText('LOAD GAME');
+  await game.clickText(UI.loadGame);
   await game.waitForScene('SlotScene');
   assert(
-    await game.hasText(`SAVED EXPEDITION  ${walked.furthest} OUT  ${walked.steps} STEPS`),
+    await game.hasText(SLOTS.suspended(walked.furthest, walked.steps)),
     'the picker says the slot is mid-walk'
   );
-  await game.clickText('SLOT 1');
+  await game.clickText(SLOTS.slotName(1));
   await game.waitForScene('ExploreScene');
 
   const resumed = await game.state();
@@ -280,15 +299,15 @@ test('settings mid-run comes back to the same tile, in the new palette', async (
   const walking = await game.state();
 
   await game.tapMenuButton();
-  await game.clickText('SETTINGS');
+  await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
   // Picking a palette re-enters Settings to repaint it, which is the step that
   // has to carry the run along with it.
-  await game.clickText('AMBER');
+  await game.clickText(PALETTE_NAMES.amber);
   await game.waitForScene('SettingsScene');
-  assert(await game.hasText('SETTINGS'), 'still on the settings screen, repainted');
+  assert(await game.hasText(SETTINGS.heading), 'still on the settings screen, repainted');
 
-  await game.clickText('BACK');
+  await game.clickText(UI.back);
   await game.waitForScene('ExploreScene');
   const back = await game.state();
   assertEqual(back.x, walking.x, 'the same tile');
@@ -305,9 +324,10 @@ test('settings mid-run comes back to the same tile, in the new palette', async (
 // NEW GAME draws, because what it is checking is that it draws one at all.
 browserTest('each slot is a campaign of its own, in a world of its own', async (game) => {
   // Three campaigns, and the picker says what is in all three (DESIGN.md §6.1).
-  await game.clickText('NEW GAME');
+  await game.clickText(UI.newGame);
   await game.waitForScene('SlotScene');
-  for (const slot of ['SLOT 1', 'SLOT 2', 'SLOT 3']) assert(await game.hasText(slot), `${slot} is offered`);
+  for (const slot of [1, 2, 3])
+    assert(await game.hasText(SLOTS.slotName(slot)), `slot ${slot} is offered`);
   assertEqual((await game.texts()).filter((t) => t === 'EMPTY').length, 3, 'all three empty');
 
   // Bank a run in each of two slots: out one tile, back, and stop at the hut.
@@ -316,14 +336,14 @@ browserTest('each slot is a campaign of its own, in a world of its own', async (
     await game.waitForScene('ExploreScene');
     const seed = (await game.state()).seed;
     await walkPath(game, OUT_AND_BACK);
-    await game.clickText('END HERE');
-    await game.clickText('HOME');
+    await game.clickText(HUT.endHere);
+    await game.clickText(RECAP.home);
     await game.waitForScene('TitleScene');
     return seed;
   };
 
   const first = await worldOf('SLOT 1');
-  await game.clickText('NEW GAME');
+  await game.clickText(UI.newGame);
   await game.waitForScene('SlotScene');
   const second = await worldOf('SLOT 2');
   assert(first !== second, `two campaigns, two worlds (both got ${first})`);
@@ -334,11 +354,11 @@ browserTest('each slot is a campaign of its own, in a world of its own', async (
   assertEqual((await game.save(2)).seed, second, 'and slot 2 kept its own');
   assertEqual((await game.save(3)), null, 'slot 3 was never touched');
 
-  await game.clickText('LOAD GAME');
+  await game.clickText(UI.loadGame);
   await game.waitForScene('SlotScene');
-  assert(await game.hasText('0/3 COLOURS  0 COINS  1 RUNS'), 'the picker reads a slot back');
+  assert(await game.hasText(progressLine(0, 3, 0, 1)), 'the picker reads a slot back');
   assertEqual((await game.texts()).filter((t) => t === 'EMPTY').length, 1, 'the third is still free');
-  await game.clickText('SLOT 1');
+  await game.clickText(SLOTS.slotName(1));
   await game.waitForScene('ExploreScene');
   const resumed = await game.state();
   assertEqual(resumed.seed, first, 'and it walks its own world again next expedition');
@@ -412,9 +432,9 @@ test('what the hut writes down cannot be lost by walking back out', async (game)
   // One step west, onto the hut.
   await game.tapDpad('left');
   await game.settle();
-  assert(await game.hasText('BACK AT THE HUT'), 'the hut speaks up');
+  assert(await game.hasText(HUT.title), 'the hut speaks up');
   assert(
-    await game.hasText('The colour, the compass and 30 coins written down. Water topped up.'),
+    await game.hasText(HUT.written(`The colour, the ${ITEM_TEXT.compass.name.toLowerCase()} and 30 coins`)),
     'naming exactly what it just wrote'
   );
 
@@ -449,7 +469,7 @@ test('what the hut writes down cannot be lost by walking back out', async (game)
 
   // Back out, and then throw the walk away — the thing that used to cost you a
   // gem you had already carried home (DESIGN.md §6.1).
-  await game.clickText('HEAD BACK OUT');
+  await game.clickText(HUT.headBackOut);
   await game.tapDpad('right');
   await game.settle();
   const out = await game.state();
@@ -457,17 +477,17 @@ test('what the hut writes down cannot be lost by walking back out', async (game)
   assertEqual(out.coins, 0, 'and an empty pocket, because the bank has it all');
 
   await game.tapMenuButton();
-  await game.clickText('EXIT GAME');
-  await game.clickText('LEAVE');
+  await game.clickText(MENU.exit);
+  await game.clickText(LEAVING.leave);
   await game.waitForScene('TitleScene');
 
   const after = await game.save();
   assertEqual(after.gems, 1, 'abandoning the walk did not take the colour with it');
   assertEqual(after.coins, 30, 'nor the coins');
   assertEqual(after.compass, true, 'nor the compass');
-  await game.clickText('LOAD GAME');
+  await game.clickText(UI.loadGame);
   await game.waitForScene('SlotScene');
-  assert(await game.hasText('1/3 COLOURS  30 COINS  0 RUNS'), 'and the slot picker reads it back');
+  assert(await game.hasText(progressLine(1, 3, 30, 0)), 'and the slot picker reads it back');
 }, { save: LOADED_RUN });
 
 test('running dry takes the saved expedition with it', async (game) => {
@@ -477,7 +497,7 @@ test('running dry takes the saved expedition with it', async (game) => {
 
   await game.tapDpad('right');
   await game.settle();
-  assert(await game.hasText('OUT OF WATER'), 'the step that empties the flask ends the run');
+  assert(await game.hasText(DEATH.title), 'the step that empties the flask ends the run');
 
   // Death is the game's one hard failure (DESIGN.md §6.1), so the save it was
   // walking on goes with it — the campaign keeps only what it had banked, and
@@ -485,24 +505,24 @@ test('running dry takes the saved expedition with it', async (game) => {
   const after = await game.save();
   assertEqual(after.run, null, 'the saved expedition is gone');
   assert(after.mapped.length > 0, 'but the ground it lit is not');
-  await game.clickText('HOME');
+  await game.clickText(RECAP.home);
   await game.waitForScene('TitleScene');
-  await game.clickText('LOAD GAME');
+  await game.clickText(UI.loadGame);
   await game.waitForScene('SlotScene');
-  assert(await game.hasText('FURTHEST OUT 0'), 'and the slot is a campaign to walk out from again');
+  assert(await game.hasText(SLOTS.furthest(0)), 'and the slot is a campaign to walk out from again');
 }, { save: THIRSTY_RUN });
 
 test('cheats reveal the map, hand you everything, and save nothing', async (game) => {
   // The switch is in Settings, and the title screen says it is on, because a
   // run under it banks nothing (DESIGN.md §6.2).
-  await game.clickText('SETTINGS');
+  await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
-  assert(await game.hasText('CHEATS: OFF'), 'off by default');
-  await game.clickText('CHEATS: OFF');
-  assert(await game.hasText('CHEATS: ON'), 'and the button says so once tapped');
-  await game.clickText('BACK');
+  assert(await game.hasText(SETTINGS.cheats(false)), 'off by default');
+  await game.clickText(SETTINGS.cheats(false));
+  assert(await game.hasText(SETTINGS.cheats(true)), 'and the button says so once tapped');
+  await game.clickText(UI.back);
   await game.waitForScene('TitleScene');
-  assert(await game.hasText('CHEATS ON — NOTHING WILL BE SAVED'), 'the title screen warns');
+  assert(await game.hasText(TITLE.cheatsWarning), 'the title screen warns');
 
   await game.startRun();
   const state = await game.state();
@@ -517,12 +537,12 @@ test('cheats reveal the map, hand you everything, and save nothing', async (game
   const view = (await game.state()).mapView;
   assertEqual(Math.round(view.width), view.viewport.width, 'the map is as wide as the screen');
   assert(view.height <= view.viewport.height + 1, 'and no taller than the window it sits in');
-  await game.clickText('CLOSE');
+  await game.clickText(UI.close);
 
   // Straight back onto the hut, which is the one place a run can write itself.
   await walkPath(game, OUT_AND_BACK);
-  await game.clickText('END HERE');
-  assert(await game.hasText('CHEATS ON — NOTHING WAS WRITTEN TO THE SLOT'), 'the recap says so');
+  await game.clickText(HUT.endHere);
+  assert(await game.hasText(RECAP.cheats), 'the recap says so');
   assertEqual((await game.save()).runs, 0, 'and the slot is untouched');
 });
 
@@ -531,14 +551,14 @@ test('walking onto the merchant opens the counter, and buying spends the purse',
   // The purse is what the merchant spends: everything banked plus what this run
   // is carrying, which is what the HUD counter has to show (DESIGN.md §4.5).
   assertEqual((await game.state()).coins, 0, 'this run has found nothing yet');
-  assert(await game.hasText('COINS 200'), 'but the counter shows the banked fortune');
+  assert(await game.hasText(HUD.coins(200)), 'but the counter shows the banked fortune');
 
   await walkPath(game, MERCHANT_ROUTE.path);
 
   let state = await game.state();
   assertEqual(state.shopOpen, true, 'arriving at the stall opens it');
-  assert(await game.hasText('THE MERCHANT'), 'the counter');
-  assert(await game.hasText(`YOU HAVE ${spendable(state)} COINS`), 'and what you can spend');
+  assert(await game.hasText(SHOP.title), 'the counter');
+  assert(await game.hasText(SHOP.purse(spendable(state))), 'and what you can spend');
 
   // The first row is the water drop (src/data/shop.js STOCK).
   const before = { water: state.water, coins: spendable(state) };
@@ -548,7 +568,7 @@ test('walking onto the merchant opens the counter, and buying spends the purse',
   assertEqual(spendable(state), before.coins - PRICES['water-drop'], 'and cost its price');
   assertEqual(state.shopOpen, true, 'the counter stays open for another purchase');
 
-  await game.clickText('LEAVE');
+  await game.clickText(LEAVING.leave);
   assertEqual((await game.state()).shopOpen, false, 'and closes when you leave');
 }, { save: { ...emptySave(), coins: 200 } });
 
@@ -574,10 +594,10 @@ test('the map draws the ground this run has walked', async (game) => {
   const before = await game.state();
   await game.tapMapButton();
   assertEqual((await game.state()).mapOpen, true, 'the map button opens it');
-  assert(await game.hasText('THE MAP'), 'the overlay');
-  assert(await game.hasText(`${before.explored} TILES WALKED`), 'and it draws what was lit');
+  assert(await game.hasText(WORLD_MAP.title), 'the overlay');
+  assert(await game.hasText(WORLD_MAP.walked(before.explored)), 'and it draws what was lit');
 
-  await game.clickText('CLOSE');
+  await game.clickText(UI.close);
   assertEqual((await game.state()).mapOpen, false, 'and closes again');
 }, { save: { ...emptySave(), map: true } });
 
@@ -613,20 +633,20 @@ test('the map opens on the whole walk and zooms and drags into it', async (game)
   view = (await game.state()).mapView;
   assertEqual(view.x, view.viewport.x, 'dragging stops at the edge of the drawing');
 
-  await game.clickText('FIT');
+  await game.clickText(WORLD_MAP.fit);
   assertEqual((await game.state()).mapView.scale, fit.scale, 'FIT puts the whole walk back');
 
   // The same zoom without the second finger: the buttons, and a mouse wheel.
-  await game.clickText('+');
+  await game.clickText(WORLD_MAP.zoomIn);
   const stepped = (await game.state()).mapView;
   assert(stepped.scale > fit.scale, 'the + button zooms in');
-  await game.clickText('-');
+  await game.clickText(WORLD_MAP.zoomOut);
   assertEqual((await game.state()).mapView.scale, fit.scale, 'and the - button back out');
 
   await game.wheelAt(cx, cy, -400);
   assert((await game.state()).mapView.scale > fit.scale, 'a wheel over the map zooms it too');
 
-  await game.clickText('CLOSE');
+  await game.clickText(UI.close);
   assertEqual((await game.state()).mapOpen, false, 'and it still closes');
 }, { cheats: true, hasTouch: true });
 

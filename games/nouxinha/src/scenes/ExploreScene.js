@@ -7,10 +7,10 @@ import {
   bankRun,
   buy,
   createRun,
+  depositRun,
   equip,
   hasSuspendedRun,
   isBlackout,
-  refillWater,
   rememberGround,
   resumeRun,
   runSummary,
@@ -59,14 +59,25 @@ function sentence(text) {
 }
 
 // What this run would lose by not making it back: gems it hasn't banked, and
-// tools it bought or found on the way. Both the hut and the death screen name
-// them, because a player who doesn't know the rule can lose an hour to it.
+// tools it bought or found on the way. The death screen and the menu's way out
+// both name them, because a player who doesn't know the rule can lose an hour
+// to it.
 function carriedAtRisk(summary) {
   return [
     ...(summary.gemsCarried
       ? [summary.gemsCarried === 1 ? 'the colour' : `all ${summary.gemsCarried} colours`]
       : []),
     ...summary.toolsCarried.map((id) => `the ${itemDef(id).name.toLowerCase()}`),
+  ];
+}
+
+// The same list read the other way round, for the hut: what arriving there just
+// wrote down. Coins ride along here and not above, because they are the one
+// thing a bad walk home costs you in *part* rather than whole.
+function carriedHome(summary) {
+  return [
+    ...carriedAtRisk(summary),
+    ...(summary.coinsCarried ? [`${summary.coinsCarried} coins`] : []),
   ];
 }
 
@@ -271,7 +282,7 @@ export class ExploreScene extends Phaser.Scene {
         : [
             ['FURTHEST OUT', summary.furthest],
             ['STEPS TAKEN', summary.steps],
-            ['COINS CARRIED', summary.coins],
+            ['COINS CARRIED', summary.coinsCarried],
           ],
       buttons: [
         { label: 'KEEP PLAYING', onClick: () => this.dialog.hide() },
@@ -429,38 +440,56 @@ export class ExploreScene extends Phaser.Scene {
     this.map.slide(this, DIRECTIONS[direction], () => {
       this.animating = false;
       // Asked/shown once the world has finished moving, so the question or the
-      // death screen doesn't land over a sliding map. Death takes priority over
-      // the hut's question — dying in the doorway is still dying.
-      if (result.died) this.showDeath();
-      else if (result.atBase) this.askToStop();
+      // death screen doesn't land over a sliding map. Getting home takes
+      // priority over dying, because the hut filled the tank on the way in
+      // (`step` in core/rules.js): a walk that reaches its own doorstep on the
+      // last drop of water has got home, and there is water at home.
+      if (result.atBase) this.arriveHome();
+      else if (result.died) this.showDeath();
       else if (result.atMerchant) this.openShop();
     });
   }
 
-  // Walking back onto the hut is the only place a run can be signed off, so
-  // arriving there asks rather than assumes — the hut is also just a landmark to
-  // cross on the way somewhere else.
-  askToStop() {
+  // Reaching the hut is what banks a run (DESIGN.md §6.1), so arriving writes
+  // the walk down before it says anything — and then the only question left is
+  // whether the expedition goes on, which is a question with two real answers
+  // rather than a trap.
+  arriveHome() {
     // An item card or the inventory panel opened during the step's 90ms slide
     // would otherwise swallow the question; arriving home is the more
     // important of the two.
     if (this.card.isOpen()) this.card.hide();
     if (this.inventory.isOpen()) this.inventory.hide();
-    // The hut is the only place a run can be written down, so a player carrying
-    // a gem needs telling that this is the moment it stops being at risk.
+
+    // Read before depositing: afterwards nothing is carried, which is the point.
     const summary = runSummary(this.run);
-    const atRisk = carriedAtRisk(summary);
+    const saved = carriedHome(summary);
+    depositRun(this.run);
+    this.hud.update(this.run);
+    this.layOutRail();
+
+    // Said plainly, because the game spent its whole life until now teaching the
+    // opposite: that stopping was what saved and walking on was what risked it.
+    // Whichever button is tapped, what is written down is already written.
+    const both = summary.cheats
+      ? ['HEAD BACK OUT carries the expedition on; END HERE closes it.']
+      : [
+          'Both ways keep it. HEAD BACK OUT carries the expedition on;',
+          'END HERE closes it and totals it up.',
+        ];
     this.dialog.show({
       title: 'BACK AT THE HUT',
-      lines: atRisk.length
-        ? [
-            `Stopping here saves ${joinWords(atRisk)} you are carrying.`,
-            'Head back out and you carry it at your own risk.',
-          ]
-        : ['Call it here, or head back out?'],
+      lines: [
+        summary.cheats
+          ? 'CHEATS ON — nothing is written down. Water topped up.'
+          : saved.length
+            ? `${sentence(joinWords(saved))} written down. Water topped up.`
+            : 'Nothing new to write down. Water topped up.',
+        ...both,
+      ],
       buttons: [
-        { label: 'KEEP GOING', onClick: () => this.resupply() },
-        { label: 'STOP HERE', onClick: () => this.showRecap() },
+        { label: 'HEAD BACK OUT', onClick: () => this.headBackOut() },
+        { label: 'END HERE', onClick: () => this.showRecap() },
       ],
     });
   }
@@ -491,18 +520,18 @@ export class ExploreScene extends Phaser.Scene {
     this.hud.flash(`BOUGHT ${itemDef(id).name}. ${spendable(this.run)} COINS LEFT.`);
   }
 
-  // The hut tops water back up on the way out, not just on the way home —
-  // it's a base, not just a save point, so a run that doubles back can push
-  // out again on a full tank.
-  resupply() {
-    const refilled = refillWater(this.run);
+  // Both the water and the writing-down happened on arrival, so heading back out
+  // is only closing the dialog — the hut is a base to push out from again, not a
+  // decision to make.
+  headBackOut() {
     this.dialog.hide();
     this.hud.update(this.run);
-    if (refilled) this.hud.flash('WATER REFILLED AT THE HUT.');
+    this.hud.flash('SAVED AT THE HUT. WATER FULL.');
   }
 
-  // Stopping at the hut is the only thing that writes the save (DESIGN.md §6),
-  // which is what makes the walk home the decision the run is really about.
+  // Closing the expedition down. The walk was already written into the slot on
+  // arrival (`arriveHome`); what `bankRun` adds is counting the run as finished
+  // and clearing any suspended walk, since this one has come home (DESIGN.md §6).
   showRecap() {
     const summary = runSummary(this.run);
     const saved = bankRun(this.run);
@@ -516,7 +545,7 @@ export class ExploreScene extends Phaser.Scene {
       rows: [
         ['TILES EXPLORED', summary.explored],
         ['NEW GROUND', summary.newGround],
-        ['COINS', summary.coins],
+        ['COINS FOUND', summary.coins],
         ['LIGHTS FOUND', summary.lightsFound],
         ['COLOURS SAVED', `${saved.gems}/${MAX_GEMS}`],
         ['FURTHEST OUT', summary.furthest],

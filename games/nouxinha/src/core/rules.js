@@ -9,6 +9,7 @@ import { DIRECTIONS, chokeShape, visibleTiles, tileKey } from './light.js';
 import {
   DEFAULT_SEED,
   beyondEdge,
+  blocksSight,
   canEnter,
   chebyshev,
   chokeAt,
@@ -44,11 +45,13 @@ export function maxWater(gems) {
   return STARTING_WATER + gems * WATER_PER_GEM;
 }
 
-// The hut's other job besides banking a run (DESIGN.md §4): choosing to keep
-// going instead of stopping tops the tank back up before the expedition
-// continues, so a run that doubles back can push out again at full water.
-// Returns whether it actually topped anything up, for the scene to decide
-// whether a refill is worth announcing.
+// The hut's other job besides writing a run down (DESIGN.md §4): reaching it
+// tops the tank back up, so a run that doubles back can push out again at full
+// water. Called by `step` the moment the hut is stood on rather than when its
+// question is answered — the water is there whichever way the question goes,
+// and a walk that gets home on its last drop has got home. Returns whether it
+// actually topped anything up, for the scene to decide whether it is worth
+// announcing.
 export function refillWater(state) {
   const before = state.water;
   state.water = maxWater(state.gems);
@@ -114,6 +117,10 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     epoch: 0,
     salt: saltOf(salted, 0),
     water: maxWater(gems),
+    // Every coin this expedition has picked up, banked or not. `coins` is only
+    // what is in the pocket right now and empties every time the hut writes it
+    // down, so the recap would under-report a walk that came home twice.
+    coinsFound: 0,
     // How far out this expedition got, for the recap the hut offers on the way
     // back in — the number DESIGN.md §6 calls the real score.
     furthest: 0,
@@ -291,14 +298,19 @@ function noteSeen(state, lit) {
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
 }
 
-// What the light actually shows. Tiles outside the world are dropped rather
-// than lit: the dark out there is what the light is losing against, so it can
-// never be what the light reveals — which is also what keeps them out of the
-// explored set, and so off both maps.
+// What the light actually shows: the shape it reaches, narrowed by the dark at
+// the edge (`activeShape`), then cut back to what it can actually see round
+// (`blocksSight` — DESIGN.md §4.1). The three compose in that order and only
+// here, which is what keeps every renderer and the explored set agreeing on one
+// answer.
+//
+// Tiles outside the world are dropped rather than lit: the dark out there is
+// what the light is losing against, so it can never be what the light reveals —
+// which is also what keeps them out of the explored set, and so off both maps.
 export function litTiles(state) {
-  return visibleTiles(activeShape(state), state.x, state.y, state.facing).filter(
-    ({ x, y }) => !beyondEdge(x, y)
-  );
+  return visibleTiles(activeShape(state), state.x, state.y, state.facing, (x, y) =>
+    blocksSight(x, y, state.seed, state.gems)
+  ).filter(({ x, y }) => !beyondEdge(x, y));
 }
 
 // Burns one durability off the active light. When it hits zero the light is
@@ -340,6 +352,7 @@ function collect(state, x, y) {
     // business (core/world.js `coinValue`).
     coins = coinValue(x, y, state.seed, state.salt);
     state.coins += coins;
+    state.coinsFound += coins;
   } else if (def.tool) {
     state.tools.add(id);
   } else if (def.gem) {
@@ -448,8 +461,16 @@ export function step(state, direction) {
   // and walking back onto the hut (DESIGN.md §4.3). Done before the reveal, so
   // the light already shows the world it relaid.
   const gemFound = state.gems > gemsBefore;
-  const respawned = gemFound || isBase(nx, ny);
+  const atBase = isBase(nx, ny);
+  const respawned = gemFound || atBase;
   if (respawned) respawn(state);
+
+  // The hut fills the tank the moment you reach it, not when you answer its
+  // question — which is also what makes arriving on your last drop of water a
+  // walk home rather than a death in the doorway (DESIGN.md §4). Always a real
+  // refill, never a no-op: the step onto the hut cost a water like any other, so
+  // there is always at least that one to give back.
+  if (atBase) refillWater(state);
 
   const lit = reveal(state);
 
@@ -468,7 +489,7 @@ export function step(state, direction) {
     // Whether this step put everything on the ground back somewhere new.
     respawned,
     lit,
-    atBase: isBase(nx, ny),
+    atBase,
     atMerchant: isMerchant(nx, ny, state.seed),
     died: state.water <= 0,
     ...burn,
@@ -483,17 +504,31 @@ export function gateOnTile(state, x, y) {
   return { requires: site.sanctum.requires, open: site.sanctum.requires <= state.gems };
 }
 
-// Banks the run into the active save slot. Only the hut calls this (DESIGN.md
-// §6): dying of thirst or leaving by the map's X ends a run without banking,
-// which is what makes carrying a gem home the moment that matters. Those two
-// still keep the ground they walked — see `rememberGround`.
+// Writes down everything the run is carrying that a campaign can keep, and
+// leaves the expedition running. **Reaching the hut is what banks a run** — the
+// tap afterwards never was (DESIGN.md §6.1). Dying of thirst or leaving by the
+// menu still banks nothing, which is what makes the walk home the thing the run
+// is about; what it no longer is, is a walk you can complete and then throw away
+// by answering a question wrong.
 //
 // A cheat run banks nothing at all: it was handed its gems rather than walking
 // them home, so writing it into a slot would overwrite a campaign with a
 // sandbox (DESIGN.md §6.2).
+export function depositRun(state) {
+  return writeDeposit(state, false);
+}
+
+// Ends the expedition, on the hut, having deposited it on the way. The recap is
+// what this is for: the writing-down is the same either way, and closing a walk
+// down is the only thing this adds to it.
 export function bankRun(state) {
+  return writeDeposit(state, true);
+}
+
+function writeDeposit(state, closing) {
   if (state.cheats) return loadSave();
-  return writeSave({
+  const suspended = normaliseSave(loadSave()).run;
+  const written = writeSave({
     v: 1,
     // The campaign's world. Rebuilt from scratch here rather than merged onto
     // what is in the slot, so this has to be carried over by hand — a walk home
@@ -501,11 +536,13 @@ export function bankRun(state) {
     // cartography with it (`mappedSeed` below).
     seed: state.seed,
     gems: Math.max(state.gems, state.banked.gems),
-    // `state.coins` is what this run picked up and `state.banked.coins` what was
-    // already banked less anything the merchant took, so this one sum settles
-    // both the finds and the shopping (see `buy`).
+    // `state.coins` is what this run has picked up since it last stood here and
+    // `state.banked.coins` what was already banked less anything the merchant
+    // took, so this one sum settles both the finds and the shopping (see `buy`).
     coins: state.banked.coins + state.coins,
-    runs: state.banked.runs + 1,
+    // Runs are counted by expeditions finished, not by visits home: a walk that
+    // crosses the hut and carries on is still one walk.
+    runs: state.banked.runs + (closing ? 1 : 0),
     furthest: Math.max(state.furthest, state.banked.furthest),
     compass: state.tools.has('compass'),
     map: state.tools.has('map'),
@@ -514,10 +551,21 @@ export function bankRun(state) {
     mapped: encodeExplored(state.explored),
     mappedSeed: state.seed,
     seen: [...state.seenUnique],
-    // The expedition is over, so whatever the menu had suspended of it goes:
-    // a saved run is a walk to carry on with, and this one has come home.
-    run: null,
+    // The expedition being over is what clears a suspended walk: a saved run is
+    // a walk to carry on with, and this one has come home.
+    run: closing ? null : suspended,
   });
+  // The run's own books, squared with what is now on disk: nothing it was
+  // carrying is at risk any more, so nothing may still read as carried.
+  // `runSummary` works out what a death would cost off exactly these two, and
+  // `buy` spends the banked half first.
+  state.banked = normaliseSave(written);
+  state.coins = 0;
+  // A suspended walk describes the campaign it belonged to as well as the walk
+  // itself, so one left standing across a deposit would hand back the purse from
+  // before it. Written again rather than dropped, so LOAD GAME still has the
+  // walk to carry on with — and from the hut, which is where it now is.
+  return !closing && suspended ? suspendRun(state) : written;
 }
 
 // Writes the ground this run lit back into the slot, and nothing else.
@@ -591,6 +639,7 @@ export function suspendRun(state) {
       steps: state.steps,
       water: state.water,
       coins: state.coins,
+      coinsFound: state.coinsFound,
       gems: state.gems,
       furthest: state.furthest,
       nonce: state.nonce,
@@ -632,6 +681,7 @@ export function resumeRun(save = loadSave()) {
     facing: suspended.facing,
     steps: suspended.steps,
     coins: suspended.coins,
+    coinsFound: suspended.coinsFound,
     gems: suspended.gems,
     banked,
     tools: new Set(suspended.tools),
@@ -670,7 +720,11 @@ export function runSummary(state) {
     // Tiles this expedition lit that no earlier one had — the ground it can
     // claim, now that the rest of it came out of the slot.
     newGround: Math.max(0, state.explored.size - (state.startExplored || 0)),
-    coins: state.coins,
+    // What the walk was worth, not what is in the pocket: the hut empties the
+    // pocket into the bank every time it is crossed (`depositRun`).
+    coins: state.coinsFound,
+    // What a death would still cost, which after a deposit is nothing.
+    coinsCarried: state.coins,
     // A cheat run reports itself, because none of its numbers are going
     // anywhere (DESIGN.md §6.2) and the recap has to say so.
     cheats: !!state.cheats,

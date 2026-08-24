@@ -5,6 +5,7 @@ import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import {
   DEFAULT_SEED,
   beyondEdge,
+  blocksSight,
   chokeAt,
   entryCost,
   isWalkable,
@@ -19,9 +20,9 @@ import {
   terrainAt,
 } from '../src/core/world.js';
 import { activeShape, createRun, litTiles, reveal, step, EDGE_SEEN } from '../src/core/rules.js';
-import { emptySave, normaliseSave } from '../src/core/save.js';
+import { emptySave, MAX_GEMS, normaliseSave } from '../src/core/save.js';
 import { EDGE_RADIUS, SEED_MIN_FRACTION } from '../src/balance.js';
-import { NONCE, ORTHOGONAL, SEED } from './world.js';
+import { NONCE, ORTHOGONAL, SEED, SHUT_GATE } from './world.js';
 
 // One window, walked once, for the three distribution tests below — the whole
 // cost of them is `terrainAt`, and asking it 20,000 times per test is the only
@@ -150,6 +151,34 @@ unit('the dark eats into the light as you approach the edge', () => {
   assertEqual(activeShape(state).radius, 1, 'guttering at the rim');
   state.x = 0;
   assertEqual(activeShape(state).radius, home, 'and as wide as ever back home');
+});
+
+unit('what stops a step mostly stops a light, and a gate stops one until it opens', () => {
+  // Sight and passage are two different questions the terrain answers, and the
+  // gate is the tile where they come apart (DESIGN.md §4.1).
+  const gate = SHUT_GATE.gate;
+  assertEqual(terrainAt(gate.x, gate.y, SEED), 'gate', 'the route found a gate');
+  assert(blocksSight(gate.x, gate.y, SEED, 0), 'shut, it stops a light like the wall it sits in');
+  assert(
+    !blocksSight(gate.x, gate.y, SEED, SHUT_GATE.requires),
+    'and the gem that opens it opens a window in the same moment'
+  );
+
+  // The ring it stands in never opens, however much is being carried.
+  const wall = (() => {
+    for (let dy = -SHUT_GATE.radius; dy <= SHUT_GATE.radius; dy++)
+      for (let dx = -SHUT_GATE.radius; dx <= SHUT_GATE.radius; dx++) {
+        const x = SHUT_GATE.centre.x + dx;
+        const y = SHUT_GATE.centre.y + dy;
+        if (terrainAt(x, y, SEED) === 'wall') return [x, y];
+      }
+    throw new Error('a sanctum with no wall around it');
+  })();
+  assert(blocksSight(wall[0], wall[1], SEED, MAX_GEMS), 'masonry stops a light at any gem count');
+
+  // And the ordinary cases, so the one rule covers the whole terrain table.
+  assert(!blocksSight(0, 0, SEED, 0), 'the hut, and floor generally, is see-through');
+  assert(blocksSight(EDGE_RADIUS + 5, 0, SEED, MAX_GEMS), 'so is the dark outside the world');
 });
 
 unit('light never reveals what is outside the world', () => {

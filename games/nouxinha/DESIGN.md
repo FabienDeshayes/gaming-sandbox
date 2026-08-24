@@ -17,7 +17,7 @@ A tile-by-tile exploration game where the only thing you can really spend is lig
 
 You step out of your base onto a vast dark grid with a small torch that shows one tile in every direction and lasts 100 steps. Everything you find — brighter torches, stranger torches, coins — is out there in the dark, and the further you push the better it gets. The tension is that light is fuel: a torch that shows you more burns out faster, so every upgrade is also a shorter leash.
 
-Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Twenty tiles out there is also a merchant, who will sell you a compass for fifty coins and a map for a hundred, on the same terms as everything else: only yours once you've walked it back.
+Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Reach it and it is yours; the walk is the whole of the risk. Twenty tiles out there is also a merchant, who will sell you a compass for fifty coins and a map for a hundred, on the same terms as everything else: only yours once you've walked it back.
 
 ## 3. Core loops
 
@@ -40,7 +40,7 @@ Somewhere out there are three gems, and each one gives the world back a colour i
 1. Find the first sanctum and take the gem at its centre — the world gains a colour, and everything lying around it is put back as something better
 2. That better water carries you further, which is what makes the next sanctum survivable at all
 3. Its gate wants the gem you're carrying, so the ground beyond it opens for the first time
-4. Walk home and stop at the hut to write it down. Die on the way and the gem goes back where it came from
+4. Walk home. Reaching the hut writes it down — die on the way and the gem goes back where it came from
 5. Coins from all of it buy a compass and eventually a map, which is what turns a walk into an expedition you can plan
 
 ## 4. Core mechanics
@@ -51,12 +51,12 @@ The world has three things in it: **terrain** (floor, two formations of rock, gr
 |---|---|---|
 | Tile stepping | The character moves exactly one tile per input, in a cardinal direction. Rock, trees and sanctum wall are impassable, and so is a gate you don't hold the gem for: a rejected step costs no durability and doesn't change facing. The character's **facing** is the direction of their last successful step (it starts pointing north from the base). | Swipe in a cardinal direction anywhere on the map, or tap the D-pad |
 | Gems and gates | Three gems sit at the centres of walled **sanctums** scattered around the hut. Picking one up gives a colour back to the world and opens the gate that wants it (§4.4). | Walk onto the gem |
-| Saving | A run is only banked by stopping at the hut (§6). Dying of thirst or leaving by the menu's **EXIT GAME** banks nothing, so a gem picked up but not carried home is still out there next run — though the ground the run lit is kept whichever way it ends (§6.1). Separately, the cogwheel menu's **SAVE GAME** suspends the expedition mid-walk so it can be carried on later; that is a bookmark, not a banking (§6.1). | **STOP HERE** on the hut's dialog, or **SAVE GAME** on the menu |
+| Saving | A run is banked by **reaching** the hut, whether or not the expedition ends there (§6). Dying of thirst or leaving by the menu's **EXIT GAME** banks nothing since the last time the hut was stood on, so a gem picked up but never carried back is still out there next run — though the ground the run lit is kept whichever way it ends (§6.1). Separately, the cogwheel menu's **SAVE GAME** suspends the expedition mid-walk so it can be carried on later; that is a bookmark, not a banking (§6.1). | Walk onto the hut, or **SAVE GAME** on the menu |
 | Light & visibility | The active light source defines a **shape** of tiles visible from the character's tile (see §4.1). Every tile has one of three states: **unknown** (never lit — drawn as flat background, indistinguishable from any other unknown tile), **remembered** (lit at some point — drawn dimmed), **lit** (inside the current light shape — drawn full brightness). Items and terrain are only readable in the lit state; a remembered tile keeps showing whatever was there when you last saw it. | — |
 | Durability | Each successful step costs **1 durability** off the *active* light only. Rejected steps (into rock) cost nothing. Carried-but-inactive lights never burn. At 0 the light is spent and removed from the inventory, and the next light in inventory order auto-equips. With no lights left the character is in **blackout**: the light shape shrinks to the character's own tile, and memory shrinks with it — a remembered tile more than one step away stops being drawn until it's lit again, so the screen is the character's own tile plus a small ring of fog of war. Blackout is not death — the character can still feel their way home a step at a time — but it is the moment the walk actually gets dangerous. | — |
-| Water | Every successful step also costs **1 water**, independent of the light and never affected by blackout. Water starts at **200** and each gem held raises that ceiling by **50**, to 350 with all three. A water pickup refills by its own amount (§4.2), capped at the ceiling. Unlike light, water has no auto-swap or backup: hitting **0** is the run's one hard failure state — the run ends and everything carried is lost (§6). The balance numbers are named constants in `src/balance.js` (`STARTING_WATER`, `WATER_PER_STEP`, `WATER_PER_GEM`) so they can be retuned without touching the mechanic itself. | — |
+| Water | Every successful step also costs **1 water**, independent of the light and never affected by blackout. Water starts at **200** and each gem held raises that ceiling by **50**, to 350 with all three. A water pickup refills by its own amount (§4.2), capped at the ceiling. Unlike light, water has no auto-swap or backup: hitting **0** is the run's one hard failure state — the run ends and everything carried is lost (§6). The one place it cannot happen is the hut, which fills the tank the moment it is stood on: a walk that gets to its own doorstep on its last drop has got home. The balance numbers are named constants in `src/balance.js` (`STARTING_WATER`, `WATER_PER_STEP`, `WATER_PER_GEM`) so they can be retuned without touching the mechanic itself. | — |
 | Pickup | Stepping onto a tile holding an item picks it up automatically, with a short rising blip — or, for a gem, a fanfare (§9). Lights go into the inventory unequipped; coins, water and gems apply immediately (coin counter, water level, colour restored) rather than sitting in the inventory. An item needing more gems than you hold isn't there to pick up at all (§4.3). | — |
-| Coming home | Stepping onto the base asks whether to stop: **KEEP GOING** tops water back up to the ceiling and the expedition continues, **STOP HERE** ends the run on a recap (§6) and returns to the title screen. It asks rather than assumes because the hut is also just a landmark to cross on the way somewhere else — but the hut is a base, not just a save point, so pushing out again always starts from a full tank. Arriving still costs a step and burns durability like any other. | Tap a button on the dialog |
+| Coming home | Stepping onto the base **writes the run down and fills the tank**, then says what it wrote and asks the one question left: **HEAD BACK OUT** carries the expedition on, **END HERE** closes it on a recap (§6) and returns to the title screen. Neither answer risks anything, and the panel says so — that is the whole difference between them (§6.1). Arriving still costs a step and burns durability like any other. | Tap a button on the dialog |
 | The merchant | One stall, 20-25 tiles from the hut and always in the same place for a seed. Selling lights, water, a **compass** and a **map** for coins — the only thing coins are for (§4.5). | Walk onto the stall |
 | Compass & map | Two tools, each bought once or found lying in the dark. The compass points at whatever unique object is worth walking to next; the map draws everywhere you have walked (§4.6). | Owned, not carried — neither takes an inventory slot |
 | Respawning | Everything lying on the ground goes back, in **new places**, whenever the world respawns: on picking up a gem, and on walking back onto the hut. Unique objects — gems, the merchant, the compass and map lying out there — never move (§4.3). | — |
@@ -64,7 +64,36 @@ The world has three things in it: **terrain** (floor, two formations of rock, gr
 
 ### 4.1 Light sources
 
-A light shape is defined relative to the character's tile, and — for the lamp — relative to their facing. Rock does **not** occlude light in the MVP: the shape is applied literally, so you can light the far side of a wall. Line-of-sight occlusion is a nice-to-have (§8).
+A light shape is defined relative to the character's tile, and — for the lamp — relative to their
+facing. What the shape says is how far the light *reaches*; what it shows is that minus whatever it
+cannot see round.
+
+**Rock, trees and masonry cast shadow.** A tile inside the shape is lit only if a straight line
+reaches it from the character's tile without crossing something solid, so a rock mass has ground
+behind it that stays dark until you walk round — which is what makes routing past one a decision
+rather than bookkeeping, and what separates the two rock formations (§4.3) in play as well as on
+screen: a mass is a wall to see round, a lone boulder throws a wedge you can step past. Light spills
+through a gap in a wall and widens as it goes.
+
+Three rules hold it together:
+
+- **The thing in the way is always lit.** You see the rock; you just don't see past it. A wall that
+  hid itself would be a wall the player only finds by walking into it, which is the failure mode this
+  game's whole visibility design is arranged to avoid.
+- **Nothing a step away can ever be hidden**, because there is no tile in between for anything to
+  stand on. A player can always see the ground they could step onto, whatever they are walled in by —
+  which is what keeps §5's promise intact, and why a radius-1 torch is unaffected by shadow entirely.
+- **A shut gate stops a light; the gem that opens it opens a window.** Sight and passage are the same
+  question everywhere else in the terrain, and the gate is the one tile where they come apart — the
+  gem lights the inside of the sanctum in the same moment it unbars the door.
+
+The line is traced two ways rather than one, because a line between tile centres passes exactly
+through a lattice corner whenever the run and the rise divide evenly, and which side it comes down on
+is arbitrary; trying both is what stops a lone boulder throwing a wedge it has no business throwing.
+The bias is deliberately permissive — a light this small has little enough to show without being
+stingy about corners. Measured against the real world, shadow costs the small torch nothing at all,
+the medium torch about 1%, the beacon about 5% and the lamp about 7% of what its shape reaches, so it
+sharpens the walk without needing the scatter (§4.3) retuned around it.
 
 | Light | Shape | Durability | Notes |
 |---|---|---|---|
@@ -242,9 +271,9 @@ shop's code.
 - **The purse is everything you have ever banked plus what you are carrying**, and the merchant takes
   the banked half first. What is in your pocket is the half a bad walk home can still cost you, so it
   is the half worth keeping there.
-- **A purchase is only real once the hut writes it down**, exactly like a gem. Die of thirst on the
-  way back and you lose the compass — *and the coins come back with it*, because the run wrote
-  nothing at all. That isn't a special case: the hut banks "what was already there plus what this run
+- **A purchase is only real once the hut writes it down**, exactly like a gem — and the hut writes it
+  down by being reached. Die of thirst on the way back and you lose the compass — *and the coins come
+  back with it*, because nothing was written between the stall and the sand. That isn't a special case: the hut banks "what was already there plus what this run
   has", and a run that never reaches the hut never touches either number.
 - Buying a light in blackout equips it immediately. Everything else about buying a light matches
   finding one: it arrives unequipped, in the inventory, at full durability.
@@ -337,6 +366,7 @@ rather than something stumbled into.
 
 - One light active at a time. Light and water are the two consumables — no food yet (§12), no timer.
 - The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off.
+- **Nothing a step away is ever hidden.** Shadow (§4.1) can darken any tile a light reaches except the ones the character could walk onto next, so no arrangement of rock can leave a player unable to see where to go.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
 - **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is a 1-bit tile baked white, so what a gem changes is a tint at draw time, never an asset.
 - **The world ends at radius 200, and the dark is what ends it** (§4.7). Nothing is walled off by it: the rim is reachable on foot from the hut, and the last third of the world sits past the outermost content.
@@ -350,21 +380,35 @@ rather than something stumbled into.
 ## 6. Win / lose conditions
 
 - **Win:** bringing all three colours home. It is a destination rather than an ending — the world is still there afterwards, with the fourth sanctum's cache open and nothing left to unlock.
-- **Lose:** running out of water. It depletes independently of light and never auto-refills — only a water pickup does that — so hitting 0 ends the run on the spot and everything carried is lost — gems, lights, coins, and any tool bought or found on the way, though the ground it lit still goes into the slot (§6.1) — with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
-- **Session end:** the player walks back to the hut and takes it up on the offer to stop (§4). The HUD tracks the numbers that stand in for a score while you're out — **tiles explored** (distinct tiles the campaign has ever lit, since ground carries between runs — §6.1), **coins**, **water** remaining, and the row of **colours** recovered — and stopping at the hut closes the run with a **recap**: tiles explored, **new ground** this expedition lit that no earlier one had, coins, lights found, colours saved, furthest distance reached, steps taken, and what's still in hand. The two ground numbers are both there on purpose: the total is how much of the world is drawn, the new one is what this particular walk was worth.
+- **Lose:** running out of water. It depletes independently of light and refills only at a water pickup or the hut, so hitting 0 out in the dark ends the run on the spot and everything carried since the hut was last stood on is lost — gems, lights, coins, and any tool bought or found on the way, though the ground it lit still goes into the slot (§6.1) — with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
+- **Session end:** the player walks back to the hut and takes it up on the offer to end the expedition (§4). The HUD tracks the numbers that stand in for a score while you're out — **tiles explored** (distinct tiles the campaign has ever lit, since ground carries between runs — §6.1), **coins**, **water** remaining, and the row of **colours** recovered — and ending the expedition closes the run with a **recap**: tiles explored, **new ground** this expedition lit that no earlier one had, **coins found** — the whole walk's, since the hut empties the pocket into the bank every time it is crossed — lights found, colours saved, furthest distance reached, steps taken, and what's still in hand. The two ground numbers are both there on purpose: the total is how much of the world is drawn, the new one is what this particular walk was worth.
 
 ### 6.1 Saving
 
-**The hut is the only place a run is banked**, and that single rule is what gives the walk home its weight. The one thing that outlives a run regardless is the ground it lit — cartography is not progress.
+**The hut is the only place a run is banked, and reaching it is what banks it**, whether or not the
+expedition ends there. That single rule is what gives the walk home its weight — and putting it on
+*arriving* rather than on the button afterwards is deliberate. Standing on the hut, there was never a
+reason to decline: coins in the pocket are lost to a death and banked ones are not, the merchant
+spends the banked half first, and a gem raises the water ceiling whether it is banked or carried. A
+question whose answer is always the same is not a decision, it is a trap — and it was a trap that
+could cost an hour's walk to a mistap. So the hut writes the walk down on arrival and then asks the
+one question that does have two answers: does the expedition go on, or is it over? The panel says in
+so many words that both answers keep what was just written, because the game has to unteach the
+opposite.
+
+The one thing that outlives a run regardless is the ground it lit — cartography is not progress.
 
 - There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, banked coins, runs completed, the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, which unique objects have been seen (§4.6), and — when the cogwheel menu has saved one — the expedition the campaign is in the middle of. They live in `localStorage` and are the only state that outlives a run.
 - **A run belongs to a slot before it starts.** The title screen offers **NEW GAME** and **LOAD GAME**, and both go through the slot picker: new empties the slot it is pointed at and starts a campaign there, load carries one on. The slot picked stays active, so a run banks itself without ever having to be told which campaign it is (§7). A slot holding a saved expedition says so on its row, because that is the difference between the two things **LOAD GAME** can do: set out from the hut again, or carry on from wherever you stopped.
-- **Stopping at the hut** is the only thing that banks. Dying of thirst banks nothing, and leaving by the menu's **EXIT GAME** abandons the run and banks nothing either — so a gem picked up but not carried home is still sitting in its sanctum next run, and a compass bought but not carried home is still on the merchant's shelf, with the coins still in the bank. Leaving asks before it does it, since an abandoned expedition can't be got back.
+- **Reaching the hut** is the only thing that banks, and it banks the moment the tile is stepped on. Dying of thirst banks nothing, and leaving by the menu's **EXIT GAME** abandons the run and banks nothing either — so a gem picked up but never carried back is still sitting in its sanctum next run, and a compass bought but never carried back is still on the merchant's shelf, with the coins still in the bank. What those two cost is always and only the walk *since the hut was last stood on*. Leaving asks before it does it, since an abandoned expedition can't be got back.
+- **The hut fills the tank on arrival too**, for the same reason and in the same moment — so a walk that gets to its own doorstep on its last drop of water has got home. Dying in the doorway of the one place with water in it was the cruellest outcome the game had, and it is now impossible.
+- **Ending the expedition adds the recap and nothing else.** What **END HERE** does that **HEAD BACK OUT** doesn't is close the walk down: count it as a run completed, clear whatever the menu had suspended, and total it up. It banks nothing further, because there is nothing further to bank.
 - **The ground is the exception, and it is deliberate.** However a run ends — banked, dead, or walked out of — the tiles it lit are written into its slot, and the next expedition opens with all of them already drawn. Everything the run was *holding* still lives or dies on the walk home; where the rock is does not. Re-walking ground you have already crossed is not the tension this game is about, and a world that opened black every time made every run start from scratch.
+- **A suspended walk is rewritten when the hut banks under it.** The bookmark records the campaign it belonged to as well as the walk itself, so one left standing across a deposit would hand back the purse from before it. It is written again rather than dropped, so **LOAD GAME** still has a walk to carry on with — from the hut, which is where it now is.
 - **Saving mid-walk suspends an expedition; it never banks one.** The cogwheel menu's **SAVE GAME** writes the run into its slot exactly as it stands — the tile you are on, the water and coins you are carrying, how far each light has burned down, the tools and gems in hand, and which of the things on the ground you have already picked up. None of it becomes the campaign's: the gem in your pocket is still unbanked and still only becomes yours at the hut. **LOAD GAME** on that slot picks the walk back up instead of setting out again, and saving confirms what it wrote before asking the one question that follows from it — keep playing, or leave now.
 - **The save holds no world.** Terrain and items are pure functions of the seed and the run's salt (§4.3), so a saved expedition stores its seed, its nonce, how many times the world has respawned under it, and the list of item tiles it has already emptied. Everything else is re-derived: the coin you didn't pick up is back because the seed says it is there, not because the save remembered it.
 - **What ends a saved expedition is the expedition ending.** Coming home to the hut clears it — that walk is over and banked. So does running dry: death is the one hard failure this game has, and a save you could reload out of would make it a rewind instead. Leaving by **EXIT GAME** is the one that doesn't touch it — not saving is not unsaving, so what you lose is the walking since your last save, never the save itself.
-- The hut says so plainly when you arrive carrying a gem, because a player who doesn't know this rule can lose an hour's walk to it without ever being told the rule existed.
+- The hut names what it has just written down — the colour, the tool, the coins — because a player who doesn't know the rule would otherwise never learn that the risk is over.
 - A save is normalised on the way in and out, so a corrupt or hand-edited file costs the player their progress at worst — never the run's arithmetic.
 - **Erasing** happens by starting a **NEW GAME** over an occupied slot — there is no standalone erase control in Settings. It asks twice, on the slot's own row: the first tap arms it, the second overwrites it.
 
@@ -388,7 +432,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Browse the full inventory | Tap **ITEMS**, the box after the strip's slots → opens the scrollable inventory panel | Click **ITEMS** |
 | Equip a light | Tap **Equip** on its item card (single copy), or tap a copy's row in a stack's instance list (multiple copies) | Click the same |
 | Close an overlay | Tap its close control, or tap outside it | Click, or press Esc |
-| Answer the hut | Tap **KEEP GOING** or **STOP HERE** on the dialog | Click |
+| Answer the hut | Tap **HEAD BACK OUT** or **END HERE** on the dialog | Click |
 | Buy something | Tap a row on the merchant's counter, then **LEAVE** | Click the same |
 | Open the map | Tap **MAP** in the top right of the viewport (only there if you own one) | Click **MAP** |
 | Zoom the map | Pinch the drawing, or tap **-** / **+** under it; **FIT** puts the whole walk back on screen | Wheel over the drawing, or click the same buttons |
@@ -421,7 +465,7 @@ scaled up to fill the width of the screen, with markers over the top (§4.6). It
 walk and is zoomed by pinch, by wheel, or by the **-** / **FIT** / **+** row under it, and panned by
 dragging the drawing itself; **CLOSE** is the way out.
 
-**The dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons — stacked one per line once there are more than two of them. It has no close control of its own: every way out is one of its buttons, because all of its uses (the hut's stop/continue question, the recap, the death screen, and the cogwheel menu) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key.
+**The dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons — stacked one per line once there are more than two of them. It has no close control of its own: every way out is one of its buttons, because all of its uses (the hut's out-or-over question, the recap, the death screen, and the cogwheel menu) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key.
 
 **The cogwheel menu** is a dialog with four choices — **SETTINGS**, **SAVE GAME**, **EXIT GAME** and **KEEP PLAYING**. Settings is the same screen the title screen opens and comes straight back to the tile you were standing on, palette and all. Saving reports what it wrote and then asks the one question that follows from it: keep playing, or leave now. Leaving asks first, and says what it is about to cost, because an abandoned expedition can't be got back (§6.1).
 
@@ -442,6 +486,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 - Procedural grid (floor/rock) from a seed, bounded by the dark at radius 200, with the base at `(0, 0)`
 - Tile stepping via swipe and D-pad, with facing tracked from the last step
 - Three visibility states with persistent memory of explored tiles
+- Line-of-sight occlusion: rock, trees and shut gates cast shadow, and the thing in the way is always lit (§4.1)
 - Small torch (radius 1) equipped at start; durability ticking per step; auto-swap on burnout; blackout when nothing is left
 - Medium torch and lamp torch as findable items, with distance-scaled spawning
 - Coins and a coin counter
@@ -453,7 +498,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 - Synthesised sound throughout: pickup blips, a gem fanfare, a torch catching, a death knell, a tap on every button but the D-pad, and a loop for the walk with a smaller one for the menus (§9)
 - Four seed-derived sanctums with masonry walls and gem-gated gates, guaranteed reachable (§4.4)
 - Three gems, each restoring a colour, opening its gate, raising the water ceiling, and revealing its tier of items
-- Three save slots, picked through NEW GAME / LOAD GAME, banked only by stopping at the hut, with progress on the title screen and a slot erased by starting a new game over it
+- Three save slots, picked through NEW GAME / LOAD GAME, banked by reaching the hut whether or not the expedition ends there, with progress on the title screen and a slot erased by starting a new game over it
 - Explored ground carried between runs however a run ends, so a campaign never starts from black again (§6.1)
 - A cheat toggle in Settings that opens a run on the whole map with one of everything, and banks nothing (§6.2)
 - Consumables spread by a minimum-separation rule and relaid on every respawn, with unique objects fixed to the seed (§4.3)
@@ -463,7 +508,6 @@ dragging the drawing itself; **CLOSE** is the way out.
 - `?seed=&nonce=` on the URL, to walk a named world twice
 
 **Nice to have (only after MVP works):**
-- Line-of-sight occlusion so rock actually casts shadow
 - Light falloff — an outer ring at partial brightness instead of a hard edge
 - More light sources (something that lights a fixed radius around a *dropped* point, a one-shot flare that reveals a wide area for one step)
 - More landmarks in the terrain generator: the sanctums and the merchant's stall are the only built things, and the ground between them is still pure noise
@@ -473,7 +517,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 - Combat, enemies, or any threat
 - Voice, licensed music, or any audio that arrives as a file
 - Multiplayer, leaderboards
-- Save/load of a run *in progress*. The save records what a finished run banked, not where you were standing — quitting mid-expedition abandons it, which is the point of §6.1
+- Combat rewards, scoring tables, or anything that turns the recap into a leaderboard
 
 ## 9. Art & audio style
 
@@ -551,11 +595,11 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
   | `src/balance.js` | **Every number the game is balanced on, and nothing else**: terrain thresholds, the edge of the world and its choke, seed validation, the sanctum and landmark plans, the scatter lattice (`MIN_SEPARATION`, `SCATTER`, the per-band spawn chance and the gem density taper), coin values, water and the leash, light durability and shapes, the merchant's prices and the cheat switch's reach. Imports nothing — it is a table, not code |
   | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), the music and cheat switches (§9, §6.2, persisted the same way), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
-  | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums and landmarks (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `canEnter`); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws (§9). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
+  | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums and landmarks (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `canEnter`, and `blocksSight` — what stops a light rather than a step); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws (§9). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw, snapped to the four the needle has sprites for. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
-  | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles. Pure |
-  | `src/core/rules.js` | The run: step legality (including gates), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, reveal, `inventoryStacks` for grouping same-id copies for display, `bankRun` for the hut's save, `rememberGround` for the ground a run keeps however it ends, `abandonRun` for the death that takes the slot's saved walk with it, `suspendRun`/`resumeRun` for the menu's SAVE GAME and the LOAD GAME that carries it on (§6.1), the cheat setup (§6.2), and `runSummary` for the recap. Pure |
+  | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles — and, handed a predicate saying what is opaque, the same set with its shadows cut out of it (§4.1). Knows what a shadow is and nothing at all about rock, which is what keeps it pure |
+  | `src/core/rules.js` | The run: step legality (including gates), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, reveal, `inventoryStacks` for grouping same-id copies for display, `depositRun` for what reaching the hut writes down and `bankRun` for the same thing plus the end of the expedition, `rememberGround` for the ground a run keeps however it ends, `abandonRun` for the death that takes the slot's saved walk with it, `suspendRun`/`resumeRun` for the menu's SAVE GAME and the LOAD GAME that carries it on (§6.1), the cheat setup (§6.2), and `runSummary` for the recap. Pure |
   | `src/core/save.js` | The three save slots and which one is active: load, write, erase, start, the slot listing the picker draws, the shape of a suspended expedition (§6.1), and the normaliser every save — and every run block inside one — passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
   | `src/data/items.js` | Item definitions — name, sprite key, effect text, `hue` (the gem colour it's drawn in) and the two tools. The numbers (durability, light shape, water refill) are spread in from `src/balance.js`; which gem brings an item into the world is the `SCATTER` table's, not an item's |
   | `src/data/shop.js` | The merchant's stock order and which lines are one-offs; the prices themselves are `src/balance.js`'s |

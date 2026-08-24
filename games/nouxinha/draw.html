@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nouxinha — tile editor</title>
+  <style>
+    /* A development page, not part of the game. It draws the pixels of one
+       tile of assets/tiles.png, so a sprite can be redrawn in place rather
+       than round-tripped through an image editor. The sheet is 1-bit — a
+       pixel is ink or it is nothing — so there is one brush and no palette to
+       pick from. Browsing the sheet is tiles.html; a tile's colour zones are
+       paint.html. */
+    :root { --bg: #0b1a0b; --fg: #33ff66; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 monospace;
+      -webkit-font-smoothing: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+    }
+    .title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    h1 { font-size: 15px; margin: 0; letter-spacing: 2px; }
+    h2 { font-size: 13px; margin: 0 0 8px; letter-spacing: 2px; }
+    a { color: var(--fg); }
+    .navlink { opacity: 0.65; text-decoration: none; }
+    .navlink:hover { opacity: 1; text-decoration: underline; }
+    p { margin: 0; opacity: 0.65; max-width: 70ch; }
+    .controls { display: flex; gap: 18px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    label { opacity: 0.65; }
+    select, button {
+      font: inherit; color: var(--fg); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+      padding: 6px 10px; cursor: pointer;
+      min-height: 34px;
+    }
+    button:hover, select:hover { background: color-mix(in srgb, var(--fg) 14%, transparent); }
+    button[disabled] { opacity: 0.35; cursor: default; }
+    button.go { border-width: 2px; }
+    .dim { opacity: 0.4; }
+
+    #editor { display: flex; gap: 26px; flex-wrap: wrap; padding: 16px; }
+    .pane { display: flex; flex-direction: column; gap: 10px; }
+    .pane.wide { flex: 1 1 420px; min-width: 0; }
+    /* Never stretched by the column it sits in: a grid scaled to a fraction of
+       a pixel is a grid you can't line a pixel up on. */
+    #grid { image-rendering: pixelated; display: block; cursor: crosshair; touch-action: none; align-self: flex-start; }
+    .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .steps { display: flex; gap: 14px; align-items: flex-end; }
+    .step { text-align: center; opacity: 0.85; }
+    .step canvas { image-rendering: pixelated; display: block; }
+    .step span { font-size: 11px; opacity: 0.6; }
+    /* The sheet is taller than a screen, so the picker scrolls in its own box
+       rather than pushing the grid off the page. */
+    #sheetBox {
+      max-height: 62vh; overflow: auto;
+      border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+    }
+    #sheet { image-rendering: pixelated; display: block; cursor: crosshair; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>NOUXINHA TILE EDITOR</h1>
+      <a class="navlink" href="tiles.html">← browse tile sheet</a>
+      <a class="navlink" href="paint.html">paint a tile's zones →</a>
+    </div>
+    <div class="controls">
+      <label>palette <select id="palette"></select></label>
+      <label>tile <select id="sprite"></select></label>
+      <span id="coord" class="dim"></span>
+    </div>
+  </header>
+
+  <section id="editor">
+    <div class="pane">
+      <h2 id="editing">—</h2>
+      <canvas id="grid"></canvas>
+      <p>drag to draw &middot; right-drag (or shift-drag) to rub out</p>
+      <div class="steps" id="steps"></div>
+    </div>
+    <div class="pane wide">
+      <div class="row">
+        <button id="confirm" class="go">CONFIRM</button>
+        <button id="revert">REVERT</button>
+        <button id="undo">UNDO</button>
+        <button id="clear">CLEAR</button>
+      </div>
+      <div class="row">
+        <button id="export" class="go">EXPORT PNG</button>
+        <span id="status" class="dim"></span>
+      </div>
+      <p>CONFIRM writes the tile into the sheet held on this page; EXPORT PNG
+        downloads that sheet, pixel for pixel, to save over
+        <code>assets/tiles.png</code>. Nothing is written until you export.</p>
+      <h2>SHEET</h2>
+      <div id="sheetBox"><canvas id="sheet"></canvas></div>
+    </div>
+  </section>
+
+<script type="module">
+import { TILES, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import { PALETTES, getPalette, setPalette } from './src/config.js';
+
+const TILE = 16;
+const STRIDE = TILE + SHEET_GAP;
+const PX = 22;   // one sheet pixel, in the editor's grid
+const PICK = 2;  // ...and in the picker below, where the whole sheet has to fit
+const GUTTER = { left: 26, top: 14 };
+
+// The sheet's own ink: near-white, which is what every existing tile is drawn
+// in. The renderer masks on alpha alone (`src/ui/textures.js`), so a new pixel
+// only has to be opaque — but matching the ink exactly keeps a hand-edited
+// tile indistinguishable from the rest of the sheet in any other tool.
+const INK = [249, 250, 251, 255];
+
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+const el = (id) => document.getElementById(id);
+
+// The table flattened to one row per tile, since a key can name several — the
+// terrains that alternate between tiles list each one as `key #n`.
+const entries = [];
+for (const [key, tile] of Object.entries(TILES)) {
+  if (Array.isArray(tile[0])) tile.forEach(([col, row], n) => entries.push([`${key}-${n}`, col, row]));
+  else entries.push([key, tile[0], tile[1]]);
+}
+const claims = new Map(); // "col,row" -> the sprite keys drawn from that tile
+for (const [key, col, row] of entries)
+  claims.set(`${col},${row}`, (claims.get(`${col},${row}`) || []).concat(key));
+
+const paletteSel = el('palette');
+PALETTES.forEach((p) => paletteSel.add(new Option(p.name, p.id)));
+let palette = getPalette();
+paletteSel.value = palette.id;
+
+let master = null;   // the whole sheet's pixels: what CONFIRM writes to and EXPORT writes out
+let tinted = null;   // ...that sheet recoloured to the palette, for the picker
+let at = [0, 0];     // the tile being edited
+let work = null;     // its 16x16 of 0/1, as being drawn
+let undos = [];      // one snapshot of `work` per stroke
+const edited = new Set(); // "col,row" of every tile confirmed since the page opened
+let exported = true;      // ...and whether the sheet has been downloaded since
+
+// --- the sheet, as pixels ---------------------------------------------------
+
+// A tile's pixels, read off the master sheet. The sheet is 1-bit — every pixel
+// is fully opaque or fully transparent — so alpha *is* the picture.
+const alphaAt = (col, row, x, y) =>
+  master.data[((row * STRIDE + y) * master.width + col * STRIDE + x) * 4 + 3];
+const readTile = (col, row) =>
+  Array.from({ length: TILE }, (_, y) =>
+    Array.from({ length: TILE }, (_, x) => (alphaAt(col, row, x, y) > 127 ? 1 : 0)));
+
+// The edit, written back. Only pixels that actually change state are touched,
+// so confirming a tile you didn't alter leaves the sheet byte for byte as it
+// was — including the handful of pure-white pixels the art already has.
+function writeTile(col, row, map) {
+  for (let y = 0; y < TILE; y++)
+    for (let x = 0; x < TILE; x++) {
+      const on = alphaAt(col, row, x, y) > 127 ? 1 : 0;
+      if (on === map[y][x]) continue;
+      const i = ((row * STRIDE + y) * master.width + col * STRIDE + x) * 4;
+      const px = map[y][x] ? INK : [0, 0, 0, 0];
+      master.data.set(px, i);
+    }
+}
+
+const asCanvas = (image) => {
+  const off = document.createElement('canvas');
+  off.width = image.width;
+  off.height = image.height;
+  return off;
+};
+
+// The picker draws the sheet the way the game does: flooded with the palette's
+// foreground through its own alpha, so a tile being drawn here reads as it will
+// read in play rather than as near-white on black.
+function retint() {
+  tinted = asCanvas(master);
+  const c = tinted.getContext('2d');
+  c.putImageData(master, 0, 0);
+  c.globalCompositeOperation = 'source-in';
+  c.fillStyle = hex(palette.fg);
+  c.fillRect(0, 0, tinted.width, tinted.height);
+}
+
+const dirty = () => {
+  const saved = readTile(at[0], at[1]);
+  return work.some((line, y) => line.some((on, x) => on !== saved[y][x]));
+};
+
+// --- drawing the page -------------------------------------------------------
+
+function drawGrid() {
+  const canvas = el('grid');
+  canvas.width = canvas.height = TILE * PX + 1;
+  const c = canvas.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  c.fillStyle = hex(palette.bg);
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < TILE; y++)
+    for (let x = 0; x < TILE; x++) {
+      if (work[y][x]) {
+        c.fillStyle = hex(palette.fg);
+        c.fillRect(x * PX, y * PX, PX, PX);
+      }
+      c.strokeStyle = hex(palette.fg);
+      // The eighth lines are stronger: a 16x16 tile is drawn by counting from
+      // its middle far more often than from its corner.
+      c.globalAlpha = work[y][x] ? 0.25 : x % 8 === 0 || y % 8 === 0 ? 0.3 : 0.12;
+      c.strokeRect(x * PX + 0.5, y * PX + 0.5, PX, PX);
+      c.globalAlpha = 1;
+    }
+}
+
+// The tile at the sizes it is actually looked at: 3x is the game's own scale,
+// 1x is what the sheet holds. Both tinted, since that is what a player sees.
+function drawSteps() {
+  const host = el('steps');
+  host.replaceChildren();
+  for (const scale of [3, 1]) {
+    const box = document.createElement('div');
+    box.className = 'step';
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = TILE * scale;
+    const c = canvas.getContext('2d');
+    c.fillStyle = hex(palette.bg);
+    c.fillRect(0, 0, canvas.width, canvas.height);
+    c.fillStyle = hex(palette.fg);
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++)
+        if (work[y][x]) c.fillRect(x * scale, y * scale, scale, scale);
+    const caption = document.createElement('span');
+    caption.textContent = `${scale}x`;
+    box.append(canvas, caption);
+    host.append(box);
+  }
+}
+
+const cellX = (col) => GUTTER.left + col * STRIDE * PICK;
+const cellY = (row) => GUTTER.top + row * STRIDE * PICK;
+
+function drawSheet() {
+  const canvas = el('sheet');
+  canvas.width = GUTTER.left + SHEET_COLS * STRIDE * PICK;
+  canvas.height = GUTTER.top + SHEET_ROWS * STRIDE * PICK;
+  const c = canvas.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  c.fillStyle = hex(palette.bg);
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  // The sheet's own one-pixel gaps do the ruling, so it goes down in one draw.
+  c.drawImage(tinted, GUTTER.left, GUTTER.top, tinted.width * PICK, tinted.height * PICK);
+
+  c.font = '9px monospace';
+  c.textBaseline = 'middle';
+  c.fillStyle = hex(palette.fg);
+  c.globalAlpha = 0.55;
+  c.textAlign = 'center';
+  for (let col = 0; col < SHEET_COLS; col++)
+    c.fillText(String(col), cellX(col) + (TILE * PICK) / 2, GUTTER.top / 2);
+  c.textAlign = 'right';
+  for (let row = 0; row < SHEET_ROWS; row++)
+    c.fillText(String(row), GUTTER.left - 4, cellY(row) + (TILE * PICK) / 2);
+  c.globalAlpha = 1;
+
+  const size = TILE * PICK;
+  for (let row = 0; row < SHEET_ROWS; row++)
+    for (let col = 0; col < SHEET_COLS; col++) {
+      const box = (alpha, width, grow) => {
+        c.globalAlpha = alpha;
+        c.lineWidth = width;
+        c.strokeRect(cellX(col) - grow, cellY(row) - grow, size + grow * 2, size + grow * 2);
+        c.globalAlpha = 1;
+      };
+      c.strokeStyle = hex(palette.fg);
+      if (claims.has(`${col},${row}`)) box(0.45, 1, -0.5);
+      if (edited.has(`${col},${row}`)) box(1, 1, 1);
+      if (col === at[0] && row === at[1]) box(1, 2, 2);
+    }
+}
+
+function refresh() {
+  const key = (claims.get(at.join(',')) || []).join(', ');
+  el('editing').textContent = (key || 'UNUSED TILE').toUpperCase();
+  el('coord').textContent = `at (${at[0]}, ${at[1]}) on the sheet`;
+  el('sprite').value = (claims.get(at.join(',')) || [''])[0];
+  el('confirm').disabled = !dirty();
+  el('revert').disabled = !dirty();
+  el('undo').disabled = undos.length === 0;
+  el('export').textContent = edited.size ? `EXPORT PNG (${edited.size} edited)` : 'EXPORT PNG';
+  drawGrid();
+  drawSteps();
+  drawSheet();
+}
+
+function say(text) {
+  el('status').textContent = text;
+  clearTimeout(say.timer);
+  say.timer = setTimeout(() => (el('status').textContent = ''), 3000);
+}
+
+// --- picking a tile ---------------------------------------------------------
+
+// Unconfirmed pixels are the one thing on this page that can be lost, so
+// leaving a tile with any is a question rather than a silent discard.
+function select(col, row) {
+  if ((col !== at[0] || row !== at[1]) && dirty()
+      && !window.confirm('This tile has changes you have not confirmed. Discard them?')) {
+    el('sprite').value = (claims.get(at.join(',')) || [''])[0];
+    return;
+  }
+  at = [col, row];
+  work = readTile(col, row);
+  undos = [];
+  history.replaceState(null, '', `?col=${col}&row=${row}`);
+  refresh();
+}
+
+// A tile picked from the dropdown, or arrived at from another tool, is usually
+// somewhere off in the picker's scroll — but a tile clicked in the picker is
+// already where the eye is, so only what can't be seen is scrolled to.
+function showTile() {
+  const box = el('sheetBox');
+  const size = TILE * PICK;
+  const x = cellX(at[0]);
+  const y = cellY(at[1]);
+  if (x < box.scrollLeft || x + size > box.scrollLeft + box.clientWidth)
+    box.scrollLeft = x + size / 2 - box.clientWidth / 2;
+  if (y < box.scrollTop || y + size > box.scrollTop + box.clientHeight)
+    box.scrollTop = y + size / 2 - box.clientHeight / 2;
+}
+
+el('sheet').addEventListener('click', (e) => {
+  const r = el('sheet').getBoundingClientRect();
+  const col = Math.floor(((e.clientX - r.left) - GUTTER.left) / (STRIDE * PICK));
+  const row = Math.floor(((e.clientY - r.top) - GUTTER.top) / (STRIDE * PICK));
+  if (col < 0 || row < 0 || col >= SHEET_COLS || row >= SHEET_ROWS) return;
+  select(col, row);
+});
+
+const spriteSel = el('sprite');
+spriteSel.add(new Option('— unused tile —', ''));
+for (const [key, col, row] of entries) spriteSel.add(new Option(`${key}  (${col}, ${row})`, key));
+spriteSel.addEventListener('change', () => {
+  const found = entries.find(([key]) => key === spriteSel.value);
+  if (!found) return;
+  select(found[1], found[2]);
+  showTile();
+});
+
+// --- drawing on the tile ----------------------------------------------------
+
+// A drag lays ink down; a right-drag (or shift-drag) rubs it out. One snapshot
+// per stroke, so UNDO takes back a slip of the hand rather than one pixel.
+let stroke = null;
+const gridPixel = (e) => {
+  const r = el('grid').getBoundingClientRect();
+  const x = Math.floor(((e.clientX - r.left) / r.width) * TILE);
+  const y = Math.floor(((e.clientY - r.top) / r.height) * TILE);
+  return x >= 0 && y >= 0 && x < TILE && y < TILE ? [x, y] : null;
+};
+const lay = (e) => {
+  const px = gridPixel(e);
+  if (!px || work[px[1]][px[0]] === stroke) return;
+  work[px[1]][px[0]] = stroke;
+  refresh();
+};
+const snapshot = () => {
+  undos.push(work.map((line) => line.slice()));
+  if (undos.length > 64) undos.shift();
+};
+el('grid').addEventListener('contextmenu', (e) => e.preventDefault());
+el('grid').addEventListener('pointerdown', (e) => {
+  snapshot();
+  stroke = e.button === 2 || e.shiftKey ? 0 : 1;
+  el('grid').setPointerCapture(e.pointerId);
+  lay(e);
+});
+el('grid').addEventListener('pointermove', (e) => stroke !== null && lay(e));
+el('grid').addEventListener('pointerup', () => (stroke = null));
+el('grid').addEventListener('pointercancel', () => (stroke = null));
+
+// --- the buttons ------------------------------------------------------------
+
+el('confirm').addEventListener('click', () => {
+  writeTile(at[0], at[1], work);
+  edited.add(at.join(','));
+  exported = false;
+  undos = [];
+  retint();
+  refresh();
+  say('confirmed into the sheet — export to keep it');
+});
+el('revert').addEventListener('click', () => {
+  snapshot();
+  work = readTile(at[0], at[1]);
+  refresh();
+});
+el('clear').addEventListener('click', () => {
+  snapshot();
+  work = Array.from({ length: TILE }, () => Array(TILE).fill(0));
+  refresh();
+});
+el('undo').addEventListener('click', () => {
+  if (!undos.length) return;
+  work = undos.pop();
+  refresh();
+});
+window.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    el('undo').click();
+  }
+});
+
+// The sheet as a file. PNG is lossless and the pixels go out exactly as they
+// are held here — same size, same 8-bit RGBA, every untouched pixel unchanged —
+// so an exported sheet can be dropped straight over assets/tiles.png.
+el('export').addEventListener('click', () => {
+  const out = asCanvas(master);
+  out.getContext('2d').putImageData(master, 0, 0);
+  out.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tiles.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    exported = true;
+    say('exported — save it over assets/tiles.png');
+  }, 'image/png');
+});
+
+// The page holds the only copy of an edit until it is exported.
+window.addEventListener('beforeunload', (e) => {
+  if (exported && !dirty()) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+paletteSel.addEventListener('change', () => {
+  // The game reads its palette from the same place, so picking one here is
+  // picking one there — which is the point: a tile has to read against the
+  // background of whichever palette the player is in.
+  setPalette(paletteSel.value);
+  palette = getPalette();
+  document.documentElement.style.setProperty('--bg', hex(palette.bg));
+  document.documentElement.style.setProperty('--fg', hex(palette.fg));
+  retint();
+  refresh();
+});
+
+const source = new Image();
+source.src = SHEET_PATH;
+await source.decode();
+if (source.width !== SHEET_COLS * STRIDE - SHEET_GAP || source.height !== SHEET_ROWS * STRIDE - SHEET_GAP)
+  throw new Error(`tile sheet is ${source.width}x${source.height}, not the size src/data/tiles.js declares`);
+{
+  const off = asCanvas(source);
+  const c = off.getContext('2d', { willReadFrequently: true });
+  c.drawImage(source, 0, 0);
+  master = c.getImageData(0, 0, off.width, off.height);
+}
+retint();
+document.documentElement.style.setProperty('--bg', hex(palette.bg));
+document.documentElement.style.setProperty('--fg', hex(palette.fg));
+
+// Arriving from another tool with ?key=..., or back to a tile with ?col=&row=.
+const params = new URLSearchParams(location.search);
+const wanted = entries.find(([key]) => key === params.get('key'));
+const col = wanted ? wanted[1] : Number(params.get('col'));
+const row = wanted ? wanted[2] : Number(params.get('row'));
+at = [
+  Number.isInteger(col) && col >= 0 && col < SHEET_COLS ? col : 0,
+  Number.isInteger(row) && row >= 0 && row < SHEET_ROWS ? row : 0,
+];
+work = readTile(at[0], at[1]);
+refresh();
+showTile();
+</script>
+</body>
+</html>

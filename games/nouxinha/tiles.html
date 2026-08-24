@@ -8,7 +8,8 @@
     /* A development page, not part of the game. It draws assets/tiles.png with
        its coordinates on it, so a sprite can be repointed by reading a label
        off the screen and editing one pair of numbers in src/data/tiles.js.
-       Colouring a tile's zones is a separate tool: paint.html. */
+       Drawing a tile's pixels and colouring its zones are separate tools:
+       draw.html and paint.html. */
     :root { --bg: #0b1a0b; --fg: #33ff66; }
     * { box-sizing: border-box; }
     body {
@@ -66,6 +67,7 @@
   <header>
     <div class="title">
       <h1>NOUXINHA TILE SHEET</h1>
+      <a class="navlink" href="draw.html">draw a tile's pixels →</a>
       <a class="navlink" href="paint.html">paint a tile's zones →</a>
     </div>
     <div class="controls">

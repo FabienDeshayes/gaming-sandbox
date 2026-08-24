@@ -7,8 +7,9 @@
   <style>
     /* A development page, not part of the game. It paints a tile's colour
        zones, so which part of a tile turns which gem's colour can be drawn
-       rather than typed (src/data/paint.js). Browsing the whole tile sheet to
-       find a sprite to point at is a separate tool: tiles.html. */
+       rather than typed (src/data/paint.js). Browsing the whole tile sheet is a
+       separate tool, tiles.html, and drawing a tile's own pixels another,
+       draw.html. */
     :root { --bg: #0b1a0b; --fg: #33ff66; }
     * { box-sizing: border-box; }
     body {
@@ -80,6 +81,7 @@
     <div class="title">
       <h1>NOUXINHA TILE PAINTER</h1>
       <a class="navlink" href="tiles.html">← browse tile sheet</a>
+      <a class="navlink" href="draw.html">draw a tile's pixels →</a>
     </div>
     <div class="controls">
       <label>palette <select id="palette"></select></label>

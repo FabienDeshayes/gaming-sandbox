@@ -7,6 +7,7 @@
 
 import { FONT, gemColour, getPalette, hex } from '../config.js';
 import { compassHeading, compassTarget } from '../core/compass.js';
+import { COMPASS } from '../text.js';
 
 export const BADGE_W = 48;
 export const BADGE_H = 78;
@@ -38,7 +39,7 @@ export class CompassBadge {
     // Standing on the thing it points at, the needle has nothing to say, so it
     // says so rather than pointing an arbitrary way.
     this.here = scene.add
-      .text(BADGE_W / 2, 24, 'HERE', { fontFamily: FONT, fontSize: '11px', color: hex(pal.fg) })
+      .text(BADGE_W / 2, 24, COMPASS.here, { fontFamily: FONT, fontSize: '11px', color: hex(pal.fg) })
       .setOrigin(0.5)
       .setVisible(false);
 

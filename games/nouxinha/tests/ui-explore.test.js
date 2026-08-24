@@ -5,6 +5,7 @@ import { assert, assertEqual, runIfMain } from './harness.js';
 import { terrainAt, variantAt } from '../src/core/world.js';
 import { variantKey } from '../src/data/tiles.js';
 import { BLACKOUT_MEMORY_RADIUS } from '../src/balance.js';
+import { HUD } from '../src/text.js';
 import { ITEMS } from '../src/data/items.js';
 import { ORTHOGONAL, ROCK_ROUTE, SEED, TREE_ROUTE, test, walkPath } from './world.js';
 
@@ -25,7 +26,7 @@ test('a run starts at the base with the small torch lit, and no tools in the cor
 
   const tiles = await game.visibleTiles();
   assertEqual(tiles.filter((t) => t.alpha === 1).length, 9, 'nine tiles at full brightness');
-  assert(await game.hasText('EXPLORED 9'), 'the explored counter');
+  assert(await game.hasText(HUD.explored(9)), 'the explored counter');
 
   // The wizard stands in the base's doorway, so the hut itself is only drawn
   // once they step off it — two dense sprites on one tile read as a blob.

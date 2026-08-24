@@ -11,6 +11,7 @@ import { itemDef } from '../data/items.js';
 import { STOCK, isOneOff, priceOf } from '../data/shop.js';
 import { canBuy, spendable } from '../core/rules.js';
 import { makeButton } from './button.js';
+import { SHOP } from '../text.js';
 import { playTap } from './sfx.js';
 
 const PANEL_W = 420;
@@ -68,9 +69,9 @@ export class Shop {
         .text(x, y, text, { fontFamily: FONT, fontSize: `${size}px`, color: hex(pal.fg) })
         .setOrigin(origin, 0.5);
 
-    parts.push(label(cx, top + PAD + TITLE_H / 2, 'THE MERCHANT', 20, 0.5));
+    parts.push(label(cx, top + PAD + TITLE_H / 2, SHOP.title, 20, 0.5));
     parts.push(
-      label(cx, top + PAD + TITLE_H + PURSE_H / 2, `YOU HAVE ${spendable(run)} COINS`, 13, 0.5)
+      label(cx, top + PAD + TITLE_H + PURSE_H / 2, SHOP.purse(spendable(run)), 13, 0.5)
     );
 
     let y = top + PAD + TITLE_H + PURSE_H;
@@ -94,7 +95,7 @@ export class Shop {
       const price = label(
         left + PANEL_W - PAD - 12,
         y + ROW_H / 2,
-        owned ? 'OWNED' : `${priceOf(id)}`,
+        owned ? SHOP.owned : SHOP.price(priceOf(id)),
         13,
         1
       ).setAlpha(alpha);
@@ -116,7 +117,7 @@ export class Shop {
     }
 
     parts.push(
-      makeButton(scene, cx, top + panelH - PAD - BUTTON_H / 2, 'LEAVE', () => this.onLeave(), {
+      makeButton(scene, cx, top + panelH - PAD - BUTTON_H / 2, SHOP.leave, () => this.onLeave(), {
         width: BUTTON_W,
         height: BUTTON_H,
         fontSize: 13,

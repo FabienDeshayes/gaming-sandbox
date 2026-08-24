@@ -4,9 +4,10 @@
 
 import { assert, assertEqual, runIfMain, test as browserTest } from './harness.js';
 import { test } from './world.js';
+import { LEAVING, MENU, PALETTE_NAMES, SETTINGS, TITLE, UI } from '../src/text.js';
 
 browserTest('a button responds across its whole width, not just the left half', async (game) => {
-  assert(await game.hasText('NOUXINHA'), 'the title screen is up');
+  assert(await game.hasText(TITLE.name), 'the title screen is up');
   // NEW GAME is a 240-wide button centred on (240, 566) (TitleScene.js), so its
   // right edge sits at x=360. Tapping 90px right of centre is still 30px
   // inside the button — Container.displayOriginX shifting the hit area left
@@ -17,30 +18,30 @@ browserTest('a button responds across its whole width, not just the left half', 
 });
 
 test('settings: picking a palette and going back both work on a single tap', async (game) => {
-  await game.clickText('SETTINGS');
+  await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
   assertEqual(await game.activeScene(), 'SettingsScene', 'scene');
 
   // Picking a row restarts the scene in the new palette — one tap, not several.
-  await game.clickText('AMBER');
+  await game.clickText(PALETTE_NAMES.amber);
   await game.waitForScene('SettingsScene');
-  assert(await game.hasText('AMBER'), 'still on the palette list, repainted');
+  assert(await game.hasText(PALETTE_NAMES.amber), 'still on the palette list, repainted');
 
   // Restore the default so this test doesn't change what every other test sees.
-  await game.clickText('PHOSPHOR');
+  await game.clickText(PALETTE_NAMES.phosphor);
   await game.waitForScene('SettingsScene');
 
-  await game.clickText('BACK');
+  await game.clickText(UI.back);
   await game.waitForScene('TitleScene');
   assertEqual(await game.activeScene(), 'TitleScene', 'back to the title screen');
 });
 
 test('the music follows the scene: the menus get one loop, the dark another', async (game) => {
   assertEqual(await game.musicTrack(), 'menu', 'the title screen has its own small loop');
-  await game.clickText('SETTINGS');
+  await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
   assertEqual(await game.musicTrack(), 'menu', 'and it carries on across the menus');
-  await game.clickText('BACK');
+  await game.clickText(UI.back);
   await game.waitForScene('TitleScene');
 
   await game.startRun();
@@ -52,19 +53,19 @@ test('the music follows the scene: the menus get one loop, the dark another', as
 
   // Out through the cogwheel, which is the only way out of a run.
   await game.tapMenuButton();
-  await game.clickText('EXIT GAME');
-  await game.clickText('LEAVE');
+  await game.clickText(MENU.exit);
+  await game.clickText(LEAVING.leave);
   await game.waitForScene('TitleScene');
   assertEqual(await game.musicTrack(), 'menu', 'and the menus take theirs back');
 });
 
 test('the music switch turns the loop off and keeps it off', async (game) => {
-  await game.clickText('SETTINGS');
+  await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
-  assert(await game.hasText('MUSIC: ON'), 'on by default');
-  await game.clickText('MUSIC: ON');
-  assert(await game.hasText('MUSIC: OFF'), 'and the button says so once tapped');
-  await game.clickText('BACK');
+  assert(await game.hasText(SETTINGS.music(true)), 'on by default');
+  await game.clickText(SETTINGS.music(true));
+  assert(await game.hasText(SETTINGS.music(false)), 'and the button says so once tapped');
+  await game.clickText(UI.back);
   await game.waitForScene('TitleScene');
 
   await game.startRun();
@@ -77,10 +78,10 @@ test('every button taps back, and the D-pad does not', async (game) => {
   const taps = async () => (await game.sounds()).filter((s) => s === 'tap').length;
   assertEqual(await taps(), 0, 'nothing has been touched yet');
 
-  await game.clickText('SETTINGS');
+  await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
   assertEqual(await taps(), 1, 'a button makes a sound');
-  await game.clickText('BACK');
+  await game.clickText(UI.back);
   await game.waitForScene('TitleScene');
   assertEqual(await taps(), 2, 'so does the one that comes back');
 

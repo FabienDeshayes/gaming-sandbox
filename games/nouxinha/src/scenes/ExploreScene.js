@@ -20,6 +20,18 @@ import {
 } from '../core/rules.js';
 import { activeSlot, loadSave, MAX_GEMS } from '../core/save.js';
 import { itemDef } from '../data/items.js';
+import {
+  CARRIED,
+  DEATH,
+  EDGE,
+  FLASH,
+  HUT,
+  LEAVING,
+  MENU,
+  RECAP,
+  SAVED,
+  WORLD_MAP,
+} from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { MapView } from '../ui/MapView.js';
 import { Hud } from '../ui/hud.js';
@@ -48,12 +60,9 @@ const MAP_BUTTON_H = 34;
 // Below this, a drag is a tap that wandered rather than a swipe.
 const SWIPE_MIN = 24;
 
-// "a, b and c" — the hut's warning reads as a sentence, not a list.
-function joinWords(words) {
-  if (words.length < 2) return words[0] || '';
-  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
-}
-
+// The list of things a run is carrying, joined and capitalised into the opening
+// of a sentence. The words themselves — and the joining — are copy (text.js);
+// this is only the capital letter.
 function sentence(text) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -65,9 +74,9 @@ function sentence(text) {
 function carriedAtRisk(summary) {
   return [
     ...(summary.gemsCarried
-      ? [summary.gemsCarried === 1 ? 'the colour' : `all ${summary.gemsCarried} colours`]
+      ? [summary.gemsCarried === 1 ? CARRIED.oneGem : CARRIED.manyGems(summary.gemsCarried)]
       : []),
-    ...summary.toolsCarried.map((id) => `the ${itemDef(id).name.toLowerCase()}`),
+    ...summary.toolsCarried.map((id) => CARRIED.tool(itemDef(id).name)),
   ];
 }
 
@@ -77,7 +86,7 @@ function carriedAtRisk(summary) {
 function carriedHome(summary) {
   return [
     ...carriedAtRisk(summary),
-    ...(summary.coinsCarried ? [`${summary.coinsCarried} coins`] : []),
+    ...(summary.coinsCarried ? [CARRIED.coins(summary.coinsCarried)] : []),
   ];
 }
 
@@ -168,7 +177,7 @@ export class ExploreScene extends Phaser.Scene {
     frame.lineStyle(2, pal.fg, 1);
     frame.strokeRect(0, 0, BADGE_W, MAP_BUTTON_H);
     const label = this.add
-      .text(BADGE_W / 2, MAP_BUTTON_H / 2, 'MAP', {
+      .text(BADGE_W / 2, MAP_BUTTON_H / 2, WORLD_MAP.button, {
         fontFamily: FONT,
         fontSize: '13px',
         color: hex(pal.fg),
@@ -192,12 +201,9 @@ export class ExploreScene extends Phaser.Scene {
   showEdge() {
     playTap();
     this.dialog.show({
-      title: 'THE DARK IS SOLID',
-      lines: [
-        'Out here the dark stops giving way. It has been eating your light for a while now — a tile of reach for every ten you walked — and this is where it has eaten all of it.',
-        'Nothing goes further. Turn around.',
-      ],
-      buttons: [{ label: 'BACK', onClick: () => this.dialog.hide() }],
+      title: EDGE.title,
+      lines: EDGE.lines,
+      buttons: [{ label: EDGE.back, onClick: () => this.dialog.hide() }],
     });
   }
 
@@ -236,13 +242,13 @@ export class ExploreScene extends Phaser.Scene {
   openMenu() {
     this.menuOpen = true;
     this.dialog.show({
-      title: 'MENU',
-      lines: ['Saving keeps this expedition exactly as it stands. Leaving without it does not.'],
+      title: MENU.title,
+      lines: [MENU.line],
       buttons: [
-        { label: 'SETTINGS', onClick: () => this.openSettings() },
-        { label: 'SAVE GAME', onClick: () => this.saveGame() },
-        { label: 'EXIT GAME', onClick: () => this.confirmExit() },
-        { label: 'KEEP PLAYING', onClick: () => this.closeMenu() },
+        { label: MENU.settings, onClick: () => this.openSettings() },
+        { label: MENU.save, onClick: () => this.saveGame() },
+        { label: MENU.exit, onClick: () => this.confirmExit() },
+        { label: MENU.keepPlaying, onClick: () => this.closeMenu() },
       ],
     });
   }
@@ -270,23 +276,18 @@ export class ExploreScene extends Phaser.Scene {
     suspendRun(this.run);
     const summary = runSummary(this.run);
     this.dialog.show({
-      title: summary.cheats ? 'NOTHING SAVED' : 'EXPEDITION SAVED',
-      lines: summary.cheats
-        ? ['Cheats are on, so this run was never a campaign and nothing was written.']
-        : [
-            `Slot ${activeSlot()} is holding this walk exactly where you are standing.`,
-            'LOAD GAME picks it up from here.',
-          ],
+      title: summary.cheats ? SAVED.titleCheats : SAVED.title,
+      lines: summary.cheats ? [SAVED.lineCheats] : SAVED.lines(activeSlot()),
       rows: summary.cheats
         ? []
         : [
-            ['FURTHEST OUT', summary.furthest],
-            ['STEPS TAKEN', summary.steps],
-            ['COINS CARRIED', summary.coinsCarried],
+            [SAVED.rowFurthest, summary.furthest],
+            [SAVED.rowSteps, summary.steps],
+            [SAVED.rowCoins, summary.coinsCarried],
           ],
       buttons: [
-        { label: 'KEEP PLAYING', onClick: () => this.dialog.hide() },
-        { label: 'EXIT GAME', onClick: () => this.leave() },
+        { label: SAVED.keepPlaying, onClick: () => this.dialog.hide() },
+        { label: SAVED.exit, onClick: () => this.leave() },
       ],
     });
   }
@@ -298,22 +299,18 @@ export class ExploreScene extends Phaser.Scene {
     const summary = runSummary(this.run);
     const atRisk = carriedAtRisk(summary);
     this.dialog.show({
-      title: 'LEAVE THE DARK',
+      title: LEAVING.title,
       lines: [
         // Precise about what leaving costs, which depends on whether there is
         // anything in the slot to fall back to (DESIGN.md §6.1).
-        hasSuspendedRun()
-          ? 'Leaving does not save. This slot goes back to the walk you last saved.'
-          : 'Leaving now saves nothing of this expedition.',
+        hasSuspendedRun() ? LEAVING.fallsBackToSave : LEAVING.savesNothing,
         atRisk.length
-          ? `${sentence(joinWords(atRisk))} you are carrying ${
-              atRisk.length > 1 ? 'go' : 'goes'
-            } back where you found ${atRisk.length > 1 ? 'them' : 'it'}.`
-          : 'The ground you lit stays on your map.',
+          ? LEAVING.atRisk(sentence(CARRIED.list(atRisk)), atRisk.length > 1)
+          : LEAVING.groundKept,
       ],
       buttons: [
-        { label: 'KEEP PLAYING', onClick: () => this.closeMenu() },
-        { label: 'LEAVE', onClick: () => this.leave() },
+        { label: LEAVING.keepPlaying, onClick: () => this.closeMenu() },
+        { label: LEAVING.leave, onClick: () => this.leave() },
       ],
     });
   }
@@ -409,16 +406,14 @@ export class ExploreScene extends Phaser.Scene {
       // A shut gate bumps like rock, but says what it wants — otherwise it
       // reads as a wall with a pattern on it and the player walks away.
       if (result.reason === 'locked')
-        this.hud.flash(
-          `THE GATE WANTS ${result.needs} COLOUR${result.needs === 1 ? '' : 'S'}. YOU HAVE ${this.run.gems}.`
-        );
+        this.hud.flash(FLASH.gateLocked(result.needs, this.run.gems));
       // The end of the world bumps like rock too, and a bump against nothing
       // visible is exactly the thing that reads as a bug — so the first time a
       // campaign reaches it, the dark says what it is (DESIGN.md §4.7). After
       // that it is a line in the HUD, because by then the player knows.
       if (result.reason === 'edge') {
         if (result.firstTime) this.showEdge();
-        else this.hud.flash('THE DARK IS SOLID HERE.');
+        else this.hud.flash(FLASH.edge);
       }
       this.animating = true;
       this.map.bump(this, DIRECTIONS[direction], () => {
@@ -471,25 +466,20 @@ export class ExploreScene extends Phaser.Scene {
     // Said plainly, because the game spent its whole life until now teaching the
     // opposite: that stopping was what saved and walking on was what risked it.
     // Whichever button is tapped, what is written down is already written.
-    const both = summary.cheats
-      ? ['HEAD BACK OUT carries the expedition on; END HERE closes it.']
-      : [
-          'Both ways keep it. HEAD BACK OUT carries the expedition on;',
-          'END HERE closes it and totals it up.',
-        ];
+    const both = summary.cheats ? HUT.bothWaysCheats : HUT.bothWays;
     this.dialog.show({
-      title: 'BACK AT THE HUT',
+      title: HUT.title,
       lines: [
         summary.cheats
-          ? 'CHEATS ON — nothing is written down. Water topped up.'
+          ? HUT.cheats
           : saved.length
-            ? `${sentence(joinWords(saved))} written down. Water topped up.`
-            : 'Nothing new to write down. Water topped up.',
+            ? HUT.written(sentence(CARRIED.list(saved)))
+            : HUT.nothingNew,
         ...both,
       ],
       buttons: [
-        { label: 'HEAD BACK OUT', onClick: () => this.headBackOut() },
-        { label: 'END HERE', onClick: () => this.showRecap() },
+        { label: HUT.headBackOut, onClick: () => this.headBackOut() },
+        { label: HUT.endHere, onClick: () => this.showRecap() },
       ],
     });
   }
@@ -517,7 +507,7 @@ export class ExploreScene extends Phaser.Scene {
     // Re-rendered rather than closed: a purchase moves the purse, which moves
     // what every other row on the counter can do.
     this.shop.show(this.run);
-    this.hud.flash(`BOUGHT ${itemDef(id).name}. ${spendable(this.run)} COINS LEFT.`);
+    this.hud.flash(FLASH.bought(itemDef(id).name, spendable(this.run)));
   }
 
   // Both the water and the writing-down happened on arrival, so heading back out
@@ -526,7 +516,7 @@ export class ExploreScene extends Phaser.Scene {
   headBackOut() {
     this.dialog.hide();
     this.hud.update(this.run);
-    this.hud.flash('SAVED AT THE HUT. WATER FULL.');
+    this.hud.flash(FLASH.headBackOut);
   }
 
   // Closing the expedition down. The walk was already written into the slot on
@@ -537,24 +527,26 @@ export class ExploreScene extends Phaser.Scene {
     const saved = bankRun(this.run);
     // What's coming home, and how much walking is left in it.
     const carried = [
-      ...summary.lights.map((light) => `${itemDef(light.id).name} ${light.durability}`),
+      ...summary.lights.map((light) => RECAP.carriedLight(itemDef(light.id).name, light.durability)),
       ...summary.tools.map((id) => itemDef(id).name),
     ];
     this.dialog.show({
-      title: 'EXPEDITION OVER',
+      title: RECAP.title,
       rows: [
-        ['TILES EXPLORED', summary.explored],
-        ['NEW GROUND', summary.newGround],
-        ['COINS FOUND', summary.coins],
-        ['LIGHTS FOUND', summary.lightsFound],
-        ['COLOURS SAVED', `${saved.gems}/${MAX_GEMS}`],
-        ['FURTHEST OUT', summary.furthest],
-        ['STEPS TAKEN', summary.steps],
+        [RECAP.rowExplored, summary.explored],
+        [RECAP.rowNewGround, summary.newGround],
+        [RECAP.rowCoins, summary.coins],
+        [RECAP.rowLights, summary.lightsFound],
+        [RECAP.rowColours, RECAP.colours(saved.gems, MAX_GEMS)],
+        [RECAP.rowFurthest, summary.furthest],
+        [RECAP.rowSteps, summary.steps],
       ],
       footer: summary.cheats
-        ? 'CHEATS ON — NOTHING WAS WRITTEN TO THE SLOT'
-        : `CARRYING ${carried.length ? carried.join(', ') : 'NOTHING'}`,
-      buttons: [{ label: 'HOME', onClick: () => this.scene.start('TitleScene') }],
+        ? RECAP.cheats
+        : carried.length
+          ? RECAP.carrying(carried.join(', '))
+          : RECAP.carryingNothing,
+      buttons: [{ label: RECAP.home, onClick: () => this.scene.start('TitleScene') }],
     });
   }
 
@@ -576,22 +568,20 @@ export class ExploreScene extends Phaser.Scene {
     // saved expedition with it: this was that walk, and it is over.
     abandonRun(this.run);
     this.dialog.show({
-      title: 'OUT OF WATER',
+      title: DEATH.title,
       lines: [
         atRisk.length
-          ? `You collapsed in the dark. ${sentence(joinWords(atRisk))} you were carrying ${
-              atRisk.length > 1 ? 'are' : 'is'
-            } back where you found ${atRisk.length > 1 ? 'them' : 'it'}.`
-          : 'You collapsed in the dark. Everything you carried is lost.',
-        'The ground you lit stays on your map.',
+          ? DEATH.collapsed(sentence(CARRIED.list(atRisk)), atRisk.length > 1)
+          : DEATH.collapsedEmptyHanded,
+        DEATH.groundKept,
       ],
       rows: [
-        ['TILES EXPLORED', summary.explored],
-        ['NEW GROUND', summary.newGround],
-        ['FURTHEST OUT', summary.furthest],
-        ['STEPS TAKEN', summary.steps],
+        [DEATH.rowExplored, summary.explored],
+        [DEATH.rowNewGround, summary.newGround],
+        [DEATH.rowFurthest, summary.furthest],
+        [DEATH.rowSteps, summary.steps],
       ],
-      buttons: [{ label: 'HOME', onClick: () => this.scene.start('TitleScene') }],
+      buttons: [{ label: DEATH.home, onClick: () => this.scene.start('TitleScene') }],
     });
   }
 
@@ -601,30 +591,30 @@ export class ExploreScene extends Phaser.Scene {
     // A gem outranks everything else that could have happened on the step: it
     // is the only pickup that repaints the world.
     if (result.gemFound) {
-      this.hud.flash(`${itemDef(result.picked).name} IS BACK. CARRY IT HOME TO KEEP IT.`);
+      this.hud.flash(FLASH.gemFound(itemDef(result.picked).name));
       return;
     }
     // A tool is the other pickup worth its own line: it changes what is on
     // screen, and it is only kept by walking it home.
     if (result.picked && itemDef(result.picked).tool) {
-      this.hud.flash(`FOUND THE ${itemDef(result.picked).name}. CARRY IT HOME TO KEEP IT.`);
+      this.hud.flash(FLASH.toolFound(itemDef(result.picked).name));
       return;
     }
     if (result.burnedOut) {
       const burned = itemDef(result.burnedId).name;
-      if (result.blackout) this.hud.flash(`${burned} BURNED OUT. NO LIGHT LEFT.`);
-      else this.hud.flash(`${burned} BURNED OUT. SWITCHED TO NEXT LIGHT.`);
+      if (result.blackout) this.hud.flash(FLASH.burnedOutBlackout(burned));
+      else this.hud.flash(FLASH.burnedOutSwapped(burned));
       return;
     }
     if (result.picked === 'coin') {
-      this.hud.flash(`FOUND ${result.coinsGained} COIN${result.coinsGained === 1 ? '' : 'S'}.`);
+      this.hud.flash(FLASH.coins(result.coinsGained));
       return;
     }
-    if (result.picked) this.hud.flash(`FOUND ${itemDef(result.picked).name}.`);
+    if (result.picked) this.hud.flash(FLASH.picked(itemDef(result.picked).name));
     // Walking back onto the hut relays everything on the ground (DESIGN.md
     // §4.3), which is worth saying — otherwise the world quietly changing under
     // a player who was heading somewhere specific reads as a bug.
-    else if (result.respawned) this.hud.flash('THE DARK HAS PUT EVERYTHING BACK SOMEWHERE NEW.');
+    else if (result.respawned) this.hud.flash(FLASH.respawned);
   }
 
   // `stack` is one entry of `inventoryStacks(run)` — see core/rules.js. Called

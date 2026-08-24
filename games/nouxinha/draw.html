@@ -50,8 +50,26 @@
     .pane { display: flex; flex-direction: column; gap: 10px; }
     .pane.wide { flex: 1 1 420px; min-width: 0; }
     /* Never stretched by the column it sits in: a grid scaled to a fraction of
-       a pixel is a grid you can't line a pixel up on. */
-    #grid { image-rendering: pixelated; display: block; cursor: crosshair; touch-action: none; align-self: flex-start; }
+       a pixel is a grid you can't line a pixel up on. It does give way to a
+       screen narrower than it is, though — a grid you can't see all of is
+       worse. Which pixel a touch lands on is measured off the drawn size, so
+       it stays right either way. */
+    #grid {
+      image-rendering: pixelated; display: block; cursor: crosshair;
+      touch-action: none; align-self: flex-start;
+      max-width: 100%; height: auto;
+    }
+    /* The draw/erase switch: one thumb-sized target per state, sitting right
+       under the grid rather than over in the button column. */
+    .tool { display: flex; max-width: 353px; }
+    .tool button { flex: 1; min-height: 48px; letter-spacing: 2px; }
+    .tool button + button { border-left: 0; }
+    /* Weight without a second border pixel, so the row doesn't shift as it
+       switches. */
+    .tool button.on {
+      background: color-mix(in srgb, var(--fg) 20%, transparent);
+      box-shadow: inset 0 0 0 2px var(--fg);
+    }
     .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
     .steps { display: flex; gap: 14px; align-items: flex-end; }
     .step { text-align: center; opacity: 0.85; }
@@ -84,7 +102,12 @@
     <div class="pane">
       <h2 id="editing">—</h2>
       <canvas id="grid"></canvas>
-      <p>drag to draw &middot; right-drag (or shift-drag) to rub out</p>
+      <div class="tool">
+        <button id="drawMode">DRAW</button>
+        <button id="eraseMode">ERASE</button>
+      </div>
+      <p>pick one, then drag on the tile &middot; on a desktop a right-drag (or
+        shift-drag) flips it for the length of one stroke</p>
       <div class="steps" id="steps"></div>
     </div>
     <div class="pane wide">
@@ -296,6 +319,8 @@ function refresh() {
   el('revert').disabled = !dirty();
   el('undo').disabled = undos.length === 0;
   el('export').textContent = edited.size ? `EXPORT PNG (${edited.size} edited)` : 'EXPORT PNG';
+  el('drawMode').classList.toggle('on', mode === 1);
+  el('eraseMode').classList.toggle('on', mode === 0);
   drawGrid();
   drawSteps();
   drawSheet();
@@ -358,8 +383,12 @@ spriteSel.addEventListener('change', () => {
 
 // --- drawing on the tile ----------------------------------------------------
 
-// A drag lays ink down; a right-drag (or shift-drag) rubs it out. One snapshot
-// per stroke, so UNDO takes back a slip of the hand rather than one pixel.
+// Which way a drag paints. A phone has no right button and no shift key, so the
+// switch under the grid is the only way to rub out there; where there is one, a
+// right-drag (or shift-drag) flips whichever way the switch is set for the
+// length of that stroke. One snapshot per stroke, so UNDO takes back a slip of
+// the hand rather than one pixel.
+let mode = 1;
 let stroke = null;
 const gridPixel = (e) => {
   const r = el('grid').getBoundingClientRect();
@@ -380,7 +409,7 @@ const snapshot = () => {
 el('grid').addEventListener('contextmenu', (e) => e.preventDefault());
 el('grid').addEventListener('pointerdown', (e) => {
   snapshot();
-  stroke = e.button === 2 || e.shiftKey ? 0 : 1;
+  stroke = e.button === 2 || e.shiftKey ? 1 - mode : mode;
   el('grid').setPointerCapture(e.pointerId);
   lay(e);
 });
@@ -389,6 +418,15 @@ el('grid').addEventListener('pointerup', () => (stroke = null));
 el('grid').addEventListener('pointercancel', () => (stroke = null));
 
 // --- the buttons ------------------------------------------------------------
+
+el('drawMode').addEventListener('click', () => {
+  mode = 1;
+  refresh();
+});
+el('eraseMode').addEventListener('click', () => {
+  mode = 0;
+  refresh();
+});
 
 el('confirm').addEventListener('click', () => {
   writeTile(at[0], at[1], work);

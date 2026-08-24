@@ -3,6 +3,7 @@
 Agents, do not use this file as a list of things to implement, ignore it unless explicitly asked to add or remove something from it.
 
 small tweaks:
+* fix issue no light refresh when going back to the but
 * transition / animation for flavour text
 * panel design
 * intro text when starting an expedition 

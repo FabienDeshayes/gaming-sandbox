@@ -38,7 +38,7 @@ export const progressLine = (gems, maxGems, coins, runs) =>
 
 export const TITLE = {
   name: 'NOUXINHA',
-  tagline: 'THE DARK IS THE ONLY MAP',
+  tagline: 'Bring back colour to the world',
   cheatsWarning: 'CHEATS ON — NOTHING WILL BE SAVED',
   newGame: UI.newGame,
   loadGame: UI.loadGame,
@@ -50,14 +50,14 @@ export const TITLE = {
 export const SLOTS = {
   headingNew: UI.newGame,
   headingLoad: UI.loadGame,
-  hintNew: 'PICK A SLOT TO WALK OUT FROM',
-  hintLoad: 'PICK A CAMPAIGN TO CARRY ON',
+  hintNew: 'PICK A SAVE SLOT',
+  hintLoad: 'PICK A SAVE TO CARRY ON',
   slotName: (n) => `SLOT ${n}`,
   empty: 'EMPTY',
   // The second tap on an occupied slot is the one that destroys a campaign, so
   // the row says what the next tap does rather than asking in a dialog.
   confirmOverwrite: 'TAP AGAIN TO OVERWRITE',
-  neverWalked: 'NOTHING WALKED YET',
+  neverWalked: 'NO EXPEDITION YET',
   suspended: (furthest, steps) => `SAVED EXPEDITION  ${furthest} OUT  ${steps} STEPS`,
   furthest: (n) => `FURTHEST OUT ${n}`,
   back: UI.back,
@@ -117,7 +117,7 @@ export const FLASH = {
   // as a wall with a pattern on it.
   gateLocked: (needs, held) => `THE GATE WANTS ${needs} COLOUR${needs === 1 ? '' : 'S'}. YOU HAVE ${held}.`,
   // The edge, every time after the first — the first bump earns the EDGE dialog.
-  edge: 'THE DARK IS SOLID HERE.',
+  edge: 'THE DARK IS BLOCKING YOU.',
   bought: (name, coinsLeft) => `BOUGHT ${name}. ${coinsLeft} COINS LEFT.`,
   headBackOut: 'SAVED AT THE HUT. WATER FULL.',
 };
@@ -143,9 +143,9 @@ export const CARRIED = {
 // Walking into the edge of the world (DESIGN.md §4). The only thing in the game
 // that explains itself, because the edge is invisible by design.
 export const EDGE = {
-  title: 'THE DARK IS SOLID',
+  title: 'THE DARK IS TOO STRONG',
   lines: [
-    'Out here the dark stops giving way. It has been eating your light for a while now — a tile of reach for every ten you walked — and this is where it has eaten all of it.',
+    'Out here the dark stops giving way. It has been eating your light for a while now and this is where it has eaten all of it.',
     'Nothing goes further. Turn around.',
   ],
   back: UI.back,
@@ -154,7 +154,7 @@ export const EDGE = {
 // The cogwheel menu.
 export const MENU = {
   title: 'MENU',
-  line: 'Saving keeps this expedition exactly as it stands. Leaving without it does not.',
+  line: 'Saving keeps this expedition exactly as it stands.',
   settings: UI.settings,
   save: 'SAVE GAME',
   exit: 'EXIT GAME',
@@ -165,7 +165,7 @@ export const MENU = {
 export const SAVED = {
   title: 'EXPEDITION SAVED',
   titleCheats: 'NOTHING SAVED',
-  lineCheats: 'Cheats are on, so this run was never a campaign and nothing was written.',
+  lineCheats: 'Cheats are on, so this run was never for real and nothing was written.',
   lines: (slot) => [
     `Slot ${slot} is holding this walk exactly where you are standing.`,
     'LOAD GAME picks it up from here.',
@@ -179,8 +179,8 @@ export const SAVED = {
 
 // EXIT GAME: banks nothing, saves nothing, and says what that costs.
 export const LEAVING = {
-  title: 'LEAVE THE DARK',
-  fallsBackToSave: 'Leaving does not save. This slot goes back to the walk you last saved.',
+  title: 'LEAVE THE GAME',
+  fallsBackToSave: 'Leaving does not save. This slot goes back to your last save.',
   savesNothing: 'Leaving now saves nothing of this expedition.',
   atRisk: (what, many) =>
     `${what} you are carrying ${many ? 'go' : 'goes'} back where you found ${many ? 'them' : 'it'}.`,
@@ -194,14 +194,14 @@ export const LEAVING = {
 // walk teaching the opposite.
 export const HUT = {
   title: 'BACK AT THE HUT',
-  written: (what) => `${what} written down. Water topped up.`,
-  nothingNew: 'Nothing new to write down. Water topped up.',
-  cheats: 'CHEATS ON — nothing is written down. Water topped up.',
+  written: (what) => `${what} stored. Water topped up.`,
+  nothingNew: 'Nothing new to store. Water topped up.',
+  cheats: 'CHEATS ON — nothing is stored. Water topped up.',
   bothWays: [
-    'Both ways keep it. HEAD BACK OUT carries the expedition on;',
-    'END HERE closes it and totals it up.',
+    'HEAD BACK OUT carries the expedition on;',
+    'END HERE to quit.',
   ],
-  bothWaysCheats: ['HEAD BACK OUT carries the expedition on; END HERE closes it.'],
+  bothWaysCheats: ['HEAD BACK OUT carries the expedition on; END HERE to quit.'],
   headBackOut: 'HEAD BACK OUT',
   endHere: 'END HERE',
 };
@@ -222,7 +222,7 @@ export const RECAP = {
   carriedLight: (name, durability) => `${name} ${durability}`,
   carrying: (what) => `CARRYING ${what}`,
   carryingNothing: 'CARRYING NOTHING',
-  cheats: 'CHEATS ON — NOTHING WAS WRITTEN TO THE SLOT',
+  cheats: 'CHEATS ON — NOTHING WAS SAVED TO THE SLOT',
   home: UI.home,
 };
 
@@ -295,19 +295,19 @@ export const COMPASS = {
 
 export const ITEM_TEXT = {
   'torch-small': {
-    name: 'SMALL TORCH',
+    name: 'CANDLE',
     effect: 'Lights the 8 tiles around you.',
   },
   'torch-medium': {
-    name: 'MEDIUM TORCH',
+    name: 'TORCH',
     effect: 'Lights 2 tiles in every direction. Twice the reach, half the leash.',
   },
   'torch-lamp': {
-    name: 'LAMP TORCH',
+    name: 'CANDELABRE',
     effect: 'Lights a widening cone 4 tiles ahead. Sees nothing behind you.',
   },
   'torch-beacon': {
-    name: 'BEACON',
+    name: 'LANTERN',
     effect: 'Lights 3 tiles in every direction, and burns longer than anything.',
   },
   coin: {

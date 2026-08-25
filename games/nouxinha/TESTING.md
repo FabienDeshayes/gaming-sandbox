@@ -28,13 +28,13 @@ at all, which is the quick way to work on the rules.
 | `rules.test.js` | A step's costs, burnout and auto-swap, pickup, the inventory, the recap, cheats |
 | `terrain.test.js` | What the noise grows, where the world stops, and that every bit of it can be walked to |
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
-| `campaign.test.js` | Sanctums, gates, gems, the water ladder, the landmarks, the merchant, the compass |
+| `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the water ladder, the landmarks, the merchant, the compass |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | Title screen, Settings, audio, the canvas against a phone, the sheet actually loading |
 | `ui-explore.test.js` | Walking, and the three visibility states the viewport draws |
 | `ui-items.test.js` | The HUD counters, the item card, the inventory panel |
-| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, cheats, the merchant, the map |
+| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, cheats, the merchant, the map, opening a chest |
 
 Suites share `tests/world.js` — the seed, the pinned nonce, and every route BFSed out of the real
 world (see below). Pure suites run first in `all.test.js`, so a broken rule fails in a second rather
@@ -80,7 +80,7 @@ reaches in to *set* game state.
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
-| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter, map or text panel. `mapView` is the open map overlay's drawing: its scale, the fit/min/max it is allowed, where it sits, how big it is drawn and the window it is drawn in — `null` while the map is closed |
+| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, **keys held and chests opened**, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter, map or text panel. `mapView` is the open map overlay's drawing: its scale, the fit/min/max it is allowed, where it sits, how big it is drawn and the window it is drawn in — `null` while the map is closed |
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground sprite, alpha, **tint**, **paint**, overlay, item and item tint. Every tile on screen is a stack of colour zones (`src/ui/painted.js`), so `tint` is the colour the bulk of the tile is in and `paint` the colours of the zones over it — a sanctum wearing its own gem's colour shows up there, not in `tint`. This is the render, not the model: it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its colour-zone layers — the silhouette the character set out in, plus the hood, robe and staff that turn the colours of gems one, two and three |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
@@ -92,7 +92,7 @@ reaches in to *set* game state.
 | `tapPanel()` / `readPanel()` | One tap on the panel, or as many as it takes to read it out and close it |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run carried it back to the hut, so asserting that has to read the save rather than the run that found it — and since arriving is what banks, the slot is worth reading *before* the hut's dialog is answered as well as after |
 | `music()` / `musicTrack()` | Whether the music loop's scheduler is running, and which of the two loops it is playing (`'menu'`, `'explore'`, or `null`) — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
-| `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` the same way, and the only way to assert that a button makes a noise and the D-pad doesn't. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
+| `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'chest'`, `'unlock'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` the same way, and the only way to assert that a button makes a noise and the D-pad doesn't. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
 | `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |
@@ -161,11 +161,38 @@ const FIRST_GEM = sanctums(SEED)[0];
 const GEM_ROUTE = bfs(SEED, (x, y) => x === FIRST_GEM.centre.x && y === FIRST_GEM.centre.y, 90);
 ```
 
-**Route with the gems the walker is carrying.** `bfs` takes a `gems` argument and steps with
-`canEnter`, not `isWalkable`, because a sanctum gate is only walkable to a run holding the gem it
-wants. Routing with the default 0 sends a test around the outside of a sanctum it was supposed to
-walk into — and the maximum depth has to be raised too, since the sanctums sit 20 to 110 tiles out
-and the default 24 will never reach one.
+**Route with the keys the walker is carrying.** `bfs` takes a `keys` argument — a `Set`, or `null`
+for empty-handed — and steps with `canEnter`, not `isWalkable`, because a sanctum gate is only
+walkable to a run holding the key it wants. `ALL_KEYS` in `tests/world.js` is the whole set, for a
+route that has to go through a gate; routing with the default `null` sends a test around the outside
+of a sanctum it was supposed to walk into. The maximum depth has to be raised too, since the sanctums
+sit 20 to 110 tiles out and the default 24 will never reach one.
+
+**A chest is reached by its apron, not by its tile.** A chest can't be stepped on, so
+`KEY_CHEST_ROUTE` in `tests/world.js` BFSes to `chestApproach(KEY_CHEST)` — one tile east of it — and
+`KEY_CHEST_BUMP` is the direction the last input goes, which is the input that opens it. A test that
+routed to the chest's own tile would never find a path.
+
+## Testing the chest-and-key chain
+
+Chests are placed like the landmarks — from the seed, never relaid by a respawn — so a test asks
+`chests(SEED)` where they are rather than naming a tile, exactly as it asks `sanctums(SEED)`. Three
+claims are worth keeping separate:
+
+- **The terrain claim is pure**: a chest tile is its own terrain, blocks a step, opens for no key,
+  casts no shadow, and has floor on all four sides. That is `terrain.test.js`, which walks every
+  chest in the world rather than picking one.
+- **The rules claim is pure too**: walking into a chest is a bump that costs no step, no water and no
+  durability, hands over exactly one key or one hoard, and does *nothing at all* the second time.
+  Banking is what keeps both the key and the shut lid, so the assertion that matters is the round
+  trip through `bankRun` and back into `createRun` — a run that opened a chest and never got home
+  walks back out to a shut one.
+- **The render and the voice need the browser**: that the tile is drawn `chest` and then
+  `chest-open`, that the text panel comes up over the world, and that the second visit says so in the
+  status line instead. One `test(...)` in `ui-campaign.test.js` covers all of it.
+
+`openChest(state, chest)` is the pure way to hand a run a key without walking to it, which is what
+the save round-trip test uses — the same way it reaches for `state.tools.add('compass')`.
 
 ## Testing the gem chain
 
@@ -174,7 +201,9 @@ A gem changes three things and each is asserted where it actually lives:
 - **The rules** — that a gate is shut, that a step into one is rejected as `locked` rather than
   `blocked`, that a tier of items is invisible below its gem count — are pure, so they're `unit(...)`
   tests that build runs with `createRun(SEED, { ...emptySave(), gems: n })`. Passing a save is the
-  public way to set a run's starting gems; nothing reaches into a live run to change it.
+  public way to set a run's starting gems, keys and opened chests; nothing reaches into a live run to
+  change it. Note that gems no longer open gates — `keys: ['key-1']` is what does, and a run holding
+  all three colours and no key is still standing outside.
 - **The render** — that the colour reached the screen — needs the browser, and is asserted from
   `wizardZoneTints()` and the `tint` and `paint` fields of `visibleTiles()` against `gemColour(n)` from
   `src/config.js` rather than a hardcoded hex, so the assertions track the palette rule instead of
@@ -208,7 +237,8 @@ from opposite ends:
 
 ## Starting from a player who already has something
 
-A run's starting gems come from the save it is handed, and so do its coins and its tools. In a pure
+A run's starting gems come from the save it is handed, and so do its coins, its keys, its opened
+chests and its tools. In a pure
 test that is `createRun(SEED, { ...emptySave(), gems: 2, compass: true }, NONCE)`. In a browser test
 it is the `save` page option, which plants save slot 1 before the page loads — `startRun()` then
 takes that campaign up through **LOAD GAME** instead of starting a new one over it:

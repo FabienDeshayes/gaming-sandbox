@@ -12,10 +12,12 @@ import {
   blocksSight,
   canEnter,
   chebyshev,
+  chestAt,
+  chests,
   chokeAt,
   coinValue,
   consumableAt,
-  entryCost,
+  entryKey,
   isBase,
   isMerchant,
   landmarks,
@@ -35,7 +37,7 @@ import {
   WATER_PER_STEP,
 } from '../balance.js';
 import { loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
-import { ITEMS, itemDef, TOOLS } from '../data/items.js';
+import { ITEMS, itemDef, KEYS, TOOLS } from '../data/items.js';
 import { isOneOff, priceOf } from '../data/shop.js';
 
 export { DIRECTIONS, tileKey };
@@ -125,6 +127,14 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
       ...(banked.compass ? ['compass'] : []),
       ...(banked.map ? ['map'] : []),
     ]),
+    // The keys, held on exactly the same terms as the tools: found in a chest
+    // rather than bought, never consumed, and only the campaign's once the hut
+    // has written them down (DESIGN.md §4.8).
+    keys: new Set(banked.keys),
+    // Which chests this campaign has already opened. Banked with the keys, so a
+    // run that opened a chest and then died walks back out to a shut one — the
+    // same rule the gem in your pocket lives under.
+    chests: new Set(banked.chests),
     // The salt the consumable layer is hashed against. `nonce` is this
     // expedition's, `epoch` counts the times the world has respawned under it.
     nonce: salted,
@@ -183,6 +193,9 @@ function applyCheats(state) {
   state.water = maxWater(state.gems);
   state.coins = CHEAT_COINS;
   for (const id of TOOLS) state.tools.add(id);
+  // Every key, so every gate stands open — the chests themselves are left shut,
+  // because a sandbox for looking at the late game should still have one to open.
+  for (const id of KEYS) state.keys.add(id);
 
   // One of every light, longest leash first, so the run starts under the widest
   // shape in the game and can still equip its way down the list.
@@ -197,6 +210,7 @@ function applyCheats(state) {
       state.explored.add(tileKey(x, y));
   for (const sanctum of sanctums(state.seed)) if (sanctum.gem) state.seenUnique.add(sanctum.gem);
   for (const landmark of landmarks(state.seed)) state.seenUnique.add(landmark.id);
+  for (const chest of chests(state.seed)) state.seenUnique.add(chest.id);
 }
 
 // Everything on the ground goes back, in new places. This is what a gem and a
@@ -283,10 +297,45 @@ export function itemOnTile(state, x, y) {
   return consumableAt(x, y, state.seed, state.salt, state.gems);
 }
 
-// Whether a step onto this tile is legal for the gems this run is carrying:
-// floor always, a gate only once you hold the gem it wants.
+// Whether a step onto this tile is legal for the keys this run is carrying:
+// floor always, a gate only once you hold the key it wants (DESIGN.md §4.8).
 export function canStepOnto(state, x, y) {
-  return canEnter(x, y, state.seed, state.gems);
+  return canEnter(x, y, state.seed, state.keys);
+}
+
+// --- Chests ------------------------------------------------------------------
+//
+// A chest is the one thing in the world you interact with by *failing* to walk
+// onto it. It stands on its own tile, can't be stepped on and doesn't cast a
+// shadow; bumping into it lifts the lid, once, and after that it is scenery.
+//
+// What it held goes into the run, not onto the ground: a key joins the keys, a
+// hoard of coins joins the pocket. Both are only the campaign's once the hut has
+// written them down, which is what makes `chests` a banked set rather than a
+// permanent one — die on the way home and the lid is shut again next time.
+
+// The chest standing on a tile and whether this run has already opened it, or
+// null where there is no chest there.
+export function chestOnTile(state, x, y) {
+  const site = chestAt(x, y, state.seed);
+  if (!site || site.part !== 'site') return null;
+  return { chest: site.chest, opened: state.chests.has(site.chest.id) };
+}
+
+// Lifts the lid. Returns what was inside — or `{ already: true }` for a chest
+// this campaign has been to before, because a chest that has been opened does
+// nothing at all rather than refilling.
+export function openChest(state, chest) {
+  if (state.chests.has(chest.id)) return { already: true, key: null, coins: 0 };
+  state.chests.add(chest.id);
+  if (chest.key) {
+    state.keys.add(chest.key);
+    state.found[chest.key] = (state.found[chest.key] || 0) + 1;
+    return { already: false, key: chest.key, coins: 0 };
+  }
+  state.coins += chest.coins;
+  state.coinsFound += chest.coins;
+  return { already: false, key: null, coins: chest.coins };
 }
 
 // Lights everything the active shape covers from where the character stands and
@@ -310,6 +359,8 @@ function noteSeen(state, lit) {
       state.seenUnique.add(sanctum.gem);
   for (const landmark of landmarks(state.seed))
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
+  for (const chest of chests(state.seed))
+    if (litKeys.has(tileKey(chest.x, chest.y))) state.seenUnique.add(chest.id);
 }
 
 // What the light actually shows: the shape it reaches, narrowed by the dark at
@@ -323,7 +374,7 @@ function noteSeen(state, lit) {
 // which is also what keeps them out of the explored set, and so off both maps.
 export function litTiles(state) {
   return visibleTiles(activeShape(state), state.x, state.y, state.facing, (x, y) =>
-    blocksSight(x, y, state.seed, state.gems)
+    blocksSight(x, y, state.seed, state.keys)
   ).filter(({ x, y }) => !beyondEdge(x, y));
 }
 
@@ -427,10 +478,11 @@ export function buy(state, id) {
   return id;
 }
 
-// One step in a cardinal direction. Rock and sanctum wall are impassable, and
-// so is a gate you don't have the gem for: the step is rejected, costs no
-// durability, and doesn't change facing. Once water has run out the run is
-// over, so every further step is rejected too.
+// One step in a cardinal direction. Rock and sanctum wall are impassable, and so
+// is a gate you don't have the key for and a chest, which is opened by walking
+// into it rather than stepped onto: the step is rejected, costs no durability,
+// and doesn't change facing. Once water has run out the run is over, so every
+// further step is rejected too.
 export function step(state, direction) {
   const dir = DIRECTIONS[direction];
   if (!dir) return { moved: false, reason: 'unknown-direction' };
@@ -439,10 +491,18 @@ export function step(state, direction) {
   const nx = state.x + dir.dx;
   const ny = state.y + dir.dy;
   if (!canStepOnto(state, nx, ny)) {
+    // Walking into a chest is what opens it (DESIGN.md §4.8). The step is still
+    // a step that didn't happen — no water, no durability, no facing change —
+    // because what moved was the lid.
+    const box = chestOnTile(state, nx, ny);
+    if (box) {
+      const opened = openChest(state, box.chest);
+      return { moved: false, reason: 'chest', chest: box.chest.id, ...opened };
+    }
     // A shut gate is a different answer from a wall: it tells the player there
-    // is something through there and exactly what it costs to get in.
-    const cost = entryCost(nx, ny, state.seed);
-    if (cost !== null) return { moved: false, reason: 'locked', needs: cost };
+    // is something through there and exactly what opens it.
+    const needs = entryKey(nx, ny, state.seed);
+    if (needs) return { moved: false, reason: 'locked', needs };
     // Walking into the end of the world is not walking into a rock, and the
     // scene says so the first time it happens (DESIGN.md §4.7). Noted on the
     // run's own record of what it has laid eyes on, so the explanation is
@@ -454,6 +514,9 @@ export function step(state, direction) {
     }
     return { moved: false, reason: 'blocked' };
   }
+  // The gate opening under you is worth a sound and a line, and only the first
+  // time: after that it is an arch you walk through (scenes/ExploreScene.js).
+  const unlocked = entryKey(nx, ny, state.seed);
 
   state.x = nx;
   state.y = ny;
@@ -506,18 +569,25 @@ export function step(state, direction) {
     relit,
     lit,
     atBase,
+    // The key this step turned, for the walk through a gate that was shut until
+    // the chest three days back gave it up.
+    unlocked,
     atMerchant: isMerchant(nx, ny, state.seed),
     died: state.water <= 0,
     ...burn,
   };
 }
 
-// Which gate stands on this tile and whether this run can open it — the
-// renderer needs both to draw a gate in the colour of the gem that opened it.
+// Which gate stands on this tile, what it wants and whether this run can open it
+// — the renderer needs all three to draw a gate in the colour of the key that
+// opened it. `colour` is that gem's number and is what the tile is painted with;
+// it never changes, so a gate you cannot open yet is drawn in the plain
+// foreground exactly like the key still sitting in its chest.
 export function gateOnTile(state, x, y) {
   const site = sanctumAt(x, y, state.seed);
   if (!site || site.part !== 'gate') return null;
-  return { requires: site.sanctum.requires, open: site.sanctum.requires <= state.gems };
+  const { key, colour } = site.sanctum;
+  return { needs: key, colour, open: !key || state.keys.has(key) };
 }
 
 // Writes down everything the run is carrying that a campaign can keep, and
@@ -562,6 +632,11 @@ function writeDeposit(state, closing) {
     furthest: Math.max(state.furthest, state.banked.furthest),
     compass: state.tools.has('compass'),
     map: state.tools.has('map'),
+    // The keys, and which chests gave them up. Both are banked here and nowhere
+    // else, so a chest opened on a walk that never got home is shut again — with
+    // its key back inside it — exactly like a gem left in its sanctum.
+    keys: [...state.keys],
+    chests: [...state.chests],
     // Ground is written whichever way a run ends, so this is the same drawing
     // `rememberGround` would have left — banking simply gets there first.
     mapped: encodeExplored(state.explored),
@@ -661,6 +736,8 @@ export function suspendRun(state) {
       nonce: state.nonce,
       epoch: state.epoch,
       tools: [...state.tools],
+      keys: [...state.keys],
+      chests: [...state.chests],
       inventory: state.inventory.map((light) => ({ ...light })),
       activeIndex: state.activeIndex,
       found: { ...state.found },
@@ -701,6 +778,8 @@ export function resumeRun(save = loadSave()) {
     gems: suspended.gems,
     banked,
     tools: new Set(suspended.tools),
+    keys: new Set(suspended.keys),
+    chests: new Set(suspended.chests),
     nonce: suspended.nonce,
     epoch: suspended.epoch,
     salt: saltOf(suspended.nonce, suspended.epoch),
@@ -756,9 +835,13 @@ export function runSummary(state) {
     toolsCarried: [...state.tools].filter(
       (id) => !(id === 'compass' ? state.banked.compass : state.banked.map)
     ),
+    // The same two questions for the keys: what is held, and what a death out
+    // here would put back in its chest.
+    keys: [...state.keys],
+    keysCarried: [...state.keys].filter((id) => !state.banked.keys.includes(id)),
     // Coins and gems are counted separately, so "found" here means lights only.
     lightsFound: Object.entries(state.found)
-      .filter(([id]) => id !== 'coin' && !itemDef(id).gem && !itemDef(id).water)
+      .filter(([id]) => itemDef(id) && itemDef(id).isLight)
       .reduce((total, [, count]) => total + count, 0),
     lights,
   };

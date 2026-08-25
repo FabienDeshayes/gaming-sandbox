@@ -31,6 +31,9 @@ import {
 import {
   FIRST_GEM,
   GEM_ROUTE,
+  KEY_CHEST,
+  KEY_CHEST_BUMP,
+  KEY_CHEST_ROUTE,
   MERCHANT_ROUTE,
   NONCE,
   SEED,
@@ -231,10 +234,47 @@ test('walking into the first sanctum restores a colour to the world', async (gam
   // gem, so they stay plain, while the arch over them belongs to the sanctum.
   const arch = tiles.find((t) => t.x === FIRST_GEM.gate.x && t.y === FIRST_GEM.gate.y);
   assertEqual(arch.ground, 'gate-open', 'the gateway is drawn as an open arch');
-  assertEqual(arch.paint[1], gemColour(FIRST_GEM.requires), 'its leaves are the colour of whatever opened it');
+  assertEqual(arch.paint[1], gemColour(FIRST_GEM.colour), 'its leaves are the colour of whatever opened it');
   assertEqual(arch.paint[0], gemColour(1), "and its arch the colour of the sanctum's own gem");
   // Water rises with the gem, so the HUD's ceiling moves too.
   assert(await game.hasText(HUD.water(state.water, maxWater(1))), 'the water ceiling rose');
+});
+
+test('walking into a chest opens it, says its piece, and hands over the key', async (game) => {
+  await game.startRun();
+  await walkPath(game, KEY_CHEST_ROUTE.path);
+
+  // It is drawn shut, and it does not stop the light: the wizard is standing
+  // right next to it, so the ground behind it has to be lit too.
+  const shut = await game.visibleTiles();
+  const before = shut.find((t) => t.x === KEY_CHEST.x && t.y === KEY_CHEST.y);
+  assertEqual(before.ground, 'chest', 'the chest is drawn shut');
+
+  // Opening it is a bump, not a step — the wizard never moves onto the tile.
+  const standing = await game.state();
+  await game.tapDpad(KEY_CHEST_BUMP);
+  await game.settle();
+  const opened = await game.state();
+  assertEqual({ x: opened.x, y: opened.y }, { x: standing.x, y: standing.y }, 'the step did not happen');
+  assertEqual(opened.steps, standing.steps, 'and cost no step');
+  assertEqual(opened.water, standing.water, 'and no water');
+  assertEqual(opened.keys, ['key-1'], 'but the key is in hand');
+  assertEqual(opened.chests, [KEY_CHEST.id], 'and the chest is on the opened list');
+  assert((await game.sounds()).includes('chest'), 'the lid was heard going up');
+
+  // The game says its piece over the world, the way setting out does.
+  assert(opened.textPanelOpen, 'the text panel is up');
+  await game.readPanel();
+
+  const after = await game.visibleTiles();
+  const now = after.find((t) => t.x === KEY_CHEST.x && t.y === KEY_CHEST.y);
+  assertEqual(now.ground, 'chest-open', 'and the lid stays up behind it');
+
+  // A second visit does nothing at all — that is the whole rule.
+  await game.tapDpad(KEY_CHEST_BUMP);
+  await game.settle();
+  assert(await game.hasText(FLASH.chestEmpty), 'walking back into it says so');
+  assertEqual((await game.state()).keys, ['key-1'], 'and hands over nothing');
 });
 
 test('the cogwheel saves the walk, and load game carries it on', async (game) => {

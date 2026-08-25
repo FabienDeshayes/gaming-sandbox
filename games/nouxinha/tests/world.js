@@ -13,6 +13,8 @@ import { tileKey } from '../src/core/light.js';
 import {
   blocksSight,
   canEnter,
+  chestApproach,
+  chests,
   DEFAULT_SEED,
   isMerchant,
   isWalkable,
@@ -22,6 +24,7 @@ import {
   sanctums,
   terrainAt,
 } from '../src/core/world.js';
+import { KEYS } from '../src/data/items.js';
 
 export const SEED = pickSeed(DEFAULT_SEED);
 
@@ -35,10 +38,16 @@ export const scatter = (x, y, gems = 0, salt = SALT) => itemAt(x, y, SEED, { sal
 
 export const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-// `gems` is what the walker is carrying, because a sanctum gate is only
-// walkable to a run holding the gem it wants — routing with 0 would send a test
+// Every key in the game, and the list of them in order — for a route that has
+// to walk through a gate, and for the tests that assert what an empty-handed
+// walker can and can't open.
+export const ALL_KEYS_LIST = KEYS;
+export const ALL_KEYS = new Set(KEYS);
+
+// `keys` is what the walker is carrying, because a sanctum gate is only walkable
+// to a run holding the key it wants — routing with nothing would send a test
 // round the outside of a sanctum it is supposed to walk into.
-export function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], gems = 0) {
+export function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], keys = null) {
   const [sx, sy] = start;
   const prev = new Map([[tileKey(sx, sy), null]]);
   let frontier = [[sx, sy]];
@@ -49,7 +58,7 @@ export function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], gems = 0) {
         const nx = x + dx;
         const ny = y + dy;
         const key = tileKey(nx, ny);
-        if (prev.has(key) || !canEnter(nx, ny, seed, gems)) continue;
+        if (prev.has(key) || !canEnter(nx, ny, seed, keys)) continue;
         prev.set(key, [tileKey(x, y), name]);
         next.push([nx, ny]);
         const hit = isGoal(nx, ny);
@@ -157,8 +166,18 @@ export const GEM_ROUTE = bfs(SEED, (x, y) => x === FIRST_GEM.centre.x && y === F
 // holds for any page — but it is 20-odd taps, so only one test walks it.
 export const MERCHANT_ROUTE = bfs(SEED, (x, y) => isMerchant(x, y, SEED), 60);
 
-// The nearest tile from which a step walks into a gate that is still shut.
-export const SHUT_GATE = SANCTUMS.find((s) => s.requires === 1);
+// The nearest sanctum whose gate is still shut, and the chest holding the key
+// that opens it — the two ends of the chain a test has to walk to prove a gate
+// opens (DESIGN.md §4.8).
+export const SHUT_GATE = SANCTUMS.find((s) => s.key === 'key-1');
+export const KEY_CHEST = chests(SEED).find((c) => c.key === 'key-1');
+// The walk to that chest, and the direction the last step of it bumps in — a
+// chest is opened by walking *into* it, so the route stops on its apron.
+export const KEY_CHEST_ROUTE = (() => {
+  const at = chestApproach(KEY_CHEST);
+  return bfs(SEED, (x, y) => x === at.x && y === at.y, 90);
+})();
+export const KEY_CHEST_BUMP = 'left'; // the apron is one tile east of the chest
 
 // Opening the game on a named seed and nonce reproduces an expedition exactly
 // (TitleScene reads both off the URL), which is how a browser test can know

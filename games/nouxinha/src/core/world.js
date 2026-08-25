@@ -5,9 +5,9 @@
 //   terrain    — noise plus the built sanctums and landmark clearings. A pure
 //                function of (x, y, seed): the same every run, forever. Floor,
 //                two formations of rock, groves of trees, and the built walls.
-//   unique     — the gems, the merchant, and the one compass and one map lying
-//                out in the dark. Also pure in (x, y, seed), so a run always
-//                finds them where the last run left them.
+//   unique     — the gems, the merchant, the chests, and the one compass and one
+//                map lying out in the dark. Also pure in (x, y, seed), so a run
+//                always finds them where the last run left them.
 //   consumable — coins, water and lights. A function of (x, y, seed, salt),
 //                where the salt changes every run and every time the world
 //                respawns, so these are never twice in the same places.
@@ -23,6 +23,8 @@ import {
   BAND_MID,
   BASE_CLEARING,
   BOULDER_CHANCE,
+  CHEST_COIN_VALUES,
+  CHEST_PLAN,
   CHOKE_STEP,
   COIN_VALUE_MAX,
   COIN_VALUE_MIN,
@@ -56,6 +58,7 @@ const CH_LANDMARK = 6;
 const CH_COIN = 7;
 const CH_BOULDER = 8;
 const CH_VARIANT = 9;
+const CH_CHEST = 10;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
@@ -289,32 +292,35 @@ function buildSanctums(seed) {
 // A landmark carrying an `item` is a pickup; the merchant carries none, because
 // what you do at the merchant's tile is trade, not collect.
 
+// Whether a single-tile site with a forced-floor apron can stand here: clear of
+// the sanctums, of everything already placed, and of the base clearing, and
+// opening onto the cave system rather than onto a pocket — the same bar a
+// sanctum door has to clear. Shared by the landmarks and the chests, which are
+// placed the same way and have to stay off each other.
+//
 // `built` is the sanctums, passed in rather than looked up: this runs *during*
 // `structures`, before the cache exists, so asking `sanctumAt` or `terrainAt`
 // where a landmark can go would ask where the landmarks are.
-function buildLandmarks(seed, built) {
-  const taken = [];
-  // A landmark's tile and apron can't overlap a sanctum, another landmark, or
-  // the base clearing — and it has to open onto the cave system rather than a
-  // pocket, the same bar a sanctum door has to clear.
-  const clear = (site) => {
-    if (chebyshev(site.x, site.y, BASE_X, BASE_Y) <= BASE_CLEARING + 1) return false;
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        const x = site.x + dx;
-        const y = site.y + dy;
-        if (built.some((s) => chebyshev(x, y, s.centre.x, s.centre.y) <= s.radius + 1))
-          return false;
-        if (taken.some((t) => chebyshev(x, y, t.x, t.y) <= 2)) return false;
-      }
-    return opensOntoCaves(
-      site,
-      (x, y) =>
-        chebyshev(x, y, site.x, site.y) <= 1 ||
-        (!built.some((s) => chebyshev(x, y, s.centre.x, s.centre.y) <= s.radius + 1) &&
-          noiseTerrain(x, y, seed) === 'floor')
-    );
-  };
+function siteIsClear(site, seed, built, taken) {
+  if (chebyshev(site.x, site.y, BASE_X, BASE_Y) <= BASE_CLEARING + 1) return false;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = site.x + dx;
+      const y = site.y + dy;
+      if (built.some((s) => chebyshev(x, y, s.centre.x, s.centre.y) <= s.radius + 1)) return false;
+      if (taken.some((t) => chebyshev(x, y, t.x, t.y) <= 2)) return false;
+    }
+  return opensOntoCaves(
+    site,
+    (x, y) =>
+      chebyshev(x, y, site.x, site.y) <= 1 ||
+      (!built.some((s) => chebyshev(x, y, s.centre.x, s.centre.y) <= s.radius + 1) &&
+        noiseTerrain(x, y, seed) === 'floor')
+  );
+}
+
+function buildLandmarks(seed, built, taken) {
+  const clear = (site) => siteIsClear(site, seed, built, taken);
 
   return LANDMARK_PLAN.map((plan, i) => {
     const roll = randomAt(i + 1, 0, seed, CH_LANDMARK);
@@ -342,10 +348,49 @@ function buildLandmarks(seed, built) {
   });
 }
 
+// --- Chests -------------------------------------------------------------------
+//
+// A chest is placed exactly like a landmark — seed-derived, a forced-floor apron
+// around it, checked for a way in — and differs in the one thing that matters:
+// its own tile is not walkable. You open it by walking into it, which is why it
+// has to be something you bump against rather than something you stand on, and
+// it never blocks a light, because a box you cannot see past would be a wall
+// wearing a lid (DESIGN.md §4.8).
+//
+// What a chest holds is fixed by the seed too: three of them hold the three
+// keys, in the order the gates want them, and the rest hold a pile of coins
+// picked out of balance.js `CHEST_COIN_VALUES`.
+
+function buildChests(seed, built, taken) {
+  return CHEST_PLAN.map((plan, i) => {
+    const roll = randomAt(i + 1, 0, seed, CH_CHEST);
+    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_CHEST) * plan.span);
+    const base = roll * Math.PI * 2;
+    const coins =
+      CHEST_COIN_VALUES[
+        Math.floor(randomAt(i + 1, 2, seed, CH_CHEST) * CHEST_COIN_VALUES.length) %
+          CHEST_COIN_VALUES.length
+      ];
+    const holds = plan.key ? { key: plan.key } : { coins };
+
+    for (const delta of HEADING_SEARCH) {
+      const site = ringPoint(distance, base + delta * Math.PI * 2);
+      if (siteIsClear(site, seed, built, taken)) {
+        taken.push(site);
+        return { ...plan, ...holds, index: i, x: site.x, y: site.y };
+      }
+    }
+    // Nothing in the sweep worked; `pickSeed` is the backstop that rejects it.
+    const site = ringPoint(distance, base);
+    taken.push(site);
+    return { ...plan, ...holds, index: i, x: site.x, y: site.y };
+  });
+}
+
 // Deriving the world's structures costs a flood probe apiece, and `terrainAt`
 // asks for them on every tile lookup — so they're worked out once per seed and
 // kept. The cache is a derivation, not world state: nothing in it is authored,
-// and a given seed always produces the same seven.
+// and a given seed always produces the same set.
 const structureCache = new Map();
 
 function structures(seed = DEFAULT_SEED) {
@@ -353,7 +398,11 @@ function structures(seed = DEFAULT_SEED) {
   const cached = structureCache.get(key);
   if (cached) return cached;
   const built = buildSanctums(key);
-  const world = { sanctums: built, landmarks: buildLandmarks(key, built) };
+  // Landmarks first, then chests onto the same `taken` list, so a chest can
+  // never land on the merchant's apron — or on another chest.
+  const taken = [];
+  const marks = buildLandmarks(key, built, taken);
+  const world = { sanctums: built, landmarks: marks, chests: buildChests(key, built, taken) };
   structureCache.set(key, world);
   return world;
 }
@@ -364,6 +413,14 @@ export function sanctums(seed = DEFAULT_SEED) {
 
 export function landmarks(seed = DEFAULT_SEED) {
   return structures(seed).landmarks;
+}
+
+export function chests(seed = DEFAULT_SEED) {
+  return structures(seed).chests;
+}
+
+export function chestNamed(id, seed = DEFAULT_SEED) {
+  return chests(seed).find((c) => c.id === id) || null;
 }
 
 export function landmarkNamed(id, seed = DEFAULT_SEED) {
@@ -405,6 +462,23 @@ export function isMerchant(x, y, seed = DEFAULT_SEED) {
   return !!site && site.part === 'site' && site.landmark.id === 'merchant';
 }
 
+// Which chest a tile belongs to: the chest's own tile, or the forced-floor apron
+// around it that keeps every side of it approachable whatever the noise did.
+export function chestAt(x, y, seed = DEFAULT_SEED) {
+  for (const chest of chests(seed)) {
+    const d = chebyshev(x, y, chest.x, chest.y);
+    if (d === 0) return { chest, part: 'site' };
+    if (d === 1) return { chest, part: 'apron' };
+  }
+  return null;
+}
+
+// The tile a chest is opened from. The apron is forced floor all the way round,
+// so any of the four would do; this one is what the reachability check aims at.
+export function chestApproach(chest) {
+  return { x: chest.x + 1, y: chest.y };
+}
+
 export function terrainAt(x, y, seed = DEFAULT_SEED) {
   const site = sanctumAt(x, y, seed);
   if (site) {
@@ -413,6 +487,8 @@ export function terrainAt(x, y, seed = DEFAULT_SEED) {
     return 'floor'; // the clearing inside, and the apron at the door
   }
   if (landmarkAt(x, y, seed)) return 'floor'; // the landmark and its apron
+  const box = chestAt(x, y, seed);
+  if (box) return box.part === 'site' ? 'chest' : 'floor';
   return noiseTerrain(x, y, seed);
 }
 
@@ -424,31 +500,41 @@ export function isWalkable(x, y, seed = DEFAULT_SEED) {
 }
 
 // What stops a light rather than a step (DESIGN.md §4.1). Rock, trees and
-// masonry all stop one dead; a gate stops it only while it is shut, so the gem
+// masonry all stop one dead; a gate stops it only while it is shut, so the key
 // that opens a sanctum opens a window into it in the same moment it opens the
-// door. Everything outside the world counts as opaque too, which costs nothing:
-// the world is a disc, and a straight line between two points inside a disc
-// never leaves it, so the edge can never shadow ground that is still in play.
-export function blocksSight(x, y, seed = DEFAULT_SEED, gems = 0) {
+// door. A **chest doesn't stop one at all** — it is a thing standing on the
+// floor, not a piece of the world's shape, and a box you could hide behind would
+// read as a wall wearing a lid. Everything outside the world counts as opaque
+// too, which costs nothing: the world is a disc, and a straight line between two
+// points inside a disc never leaves it, so the edge can never shadow ground that
+// is still in play.
+export function blocksSight(x, y, seed = DEFAULT_SEED, keys = null) {
   const terrain = terrainAt(x, y, seed);
-  if (terrain === 'floor') return false;
-  if (terrain === 'gate') return !canEnter(x, y, seed, gems);
+  if (terrain === 'floor' || terrain === 'chest') return false;
+  if (terrain === 'gate') return !canEnter(x, y, seed, keys);
   return true;
 }
 
-// How many gems a tile demands before it can be stepped on: 0 for open ground,
-// and for a gate the number of gems its sanctum wants. Null where the tile is
-// impassable however much you're carrying.
-export function entryCost(x, y, seed = DEFAULT_SEED) {
+// Which key a tile demands before it can be stepped on: null for open ground and
+// for the one arch that stands open, the key id for every other gate. `false`
+// where the tile is impassable whatever you are carrying — rock, trees, masonry
+// and a chest, which is opened rather than walked through.
+export const ENTRY_BLOCKED = false;
+
+export function entryKey(x, y, seed = DEFAULT_SEED) {
   const terrain = terrainAt(x, y, seed);
-  if (terrain === 'floor') return 0;
-  if (terrain !== 'gate') return null;
-  return sanctumAt(x, y, seed).sanctum.requires;
+  if (terrain === 'floor') return null;
+  if (terrain !== 'gate') return ENTRY_BLOCKED;
+  return sanctumAt(x, y, seed).sanctum.key;
 }
 
-export function canEnter(x, y, seed = DEFAULT_SEED, gems = 0) {
-  const cost = entryCost(x, y, seed);
-  return cost !== null && cost <= gems;
+// `keys` is what the walker is carrying — anything with a `has`, so a run's own
+// Set goes straight in, and `null` reads as "carrying nothing", which is the
+// worst case every flood probe walks.
+export function canEnter(x, y, seed = DEFAULT_SEED, keys = null) {
+  const needs = entryKey(x, y, seed);
+  if (needs === ENTRY_BLOCKED) return false;
+  return !needs || !!(keys && keys.has(needs));
 }
 
 // --- Connectivity -----------------------------------------------------------
@@ -487,15 +573,18 @@ export function reachableFraction(seed, radius = SEED_WINDOW) {
   return floor === 0 ? 0 : seen.size / floor;
 }
 
-// Every sanctum door and every landmark has to be walkable-to from the hut with
-// nothing in hand, or a gem is sealed off and the chain stops dead — or the
-// merchant is somewhere no coin can ever reach. Only the tile *outside* each
-// gate is checked: the clearing behind it is forced floor, so once you're
-// through you can always reach the gem.
+// Every sanctum door, every landmark and every chest has to be walkable-to from
+// the hut with nothing in hand, or a gem is sealed off and the chain stops dead
+// — or the merchant is somewhere no coin can ever reach, or a key is in a box
+// nobody can walk up to. Only the tile *outside* each gate is checked: the
+// clearing behind it is forced floor, so once you're through you can always
+// reach the gem. A chest is checked by its apron for the same reason in reverse:
+// its own tile is never walkable, and the apron is where you open it from.
 export function landmarksReachable(seed) {
   const targets = [
     ...sanctums(seed).map((s) => s.approach),
     ...landmarks(seed).map((l) => ({ x: l.x, y: l.y })),
+    ...chests(seed).map(chestApproach),
   ];
   const radius = Math.max(...targets.map((t) => chebyshev(t.x, t.y))) + 8;
   const wanted = new Set(targets.map((t) => `${t.x},${t.y}`));
@@ -547,7 +636,9 @@ function saltedSeed(seed, salt) {
 
 // Fixed for a seed and never rerolled: the gems at the sanctum centres, and the
 // compass and map lying out in the dark. The merchant is a landmark too but
-// carries no item — you trade there, you don't pick it up.
+// carries no item — you trade there, you don't pick it up. Neither is a chest:
+// what a chest holds is handed over by opening it (core/rules.js `openChest`),
+// so nothing is ever lying on its tile.
 export function uniqueAt(x, y, seed = DEFAULT_SEED) {
   const site = sanctumAt(x, y, seed);
   if (site)
@@ -586,12 +677,13 @@ export function coinValue(x, y, seed = DEFAULT_SEED, salt = 0) {
 }
 
 // Ground a consumable can lie on. Sanctum clearings are excluded because they
-// have their own rule below, and the base and landmark clearings because they
-// are places to arrive at, not to loot.
+// have their own rule below, and the base, landmark and chest clearings because
+// they are places to arrive at, not to loot.
 function spawnable(x, y, seed) {
   if (chebyshev(x, y, BASE_X, BASE_Y) <= BASE_CLEARING) return false;
   if (sanctumAt(x, y, seed)) return false;
   if (landmarkAt(x, y, seed)) return false;
+  if (chestAt(x, y, seed)) return false;
   return noiseTerrain(x, y, seed) === 'floor';
 }
 

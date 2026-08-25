@@ -13,7 +13,7 @@ import { MEDIUM_TORCH_COPIES, SEED, TORCH_ROUTE, mediumTorchChain, test, walkPat
 // rather than written down: a shape is only its own tile count where nothing
 // stands in the way of it (DESIGN.md §4.1).
 const showsAt = (id, { x, y }, facing) =>
-  visibleTiles(ITEMS[id].shape, x, y, facing, (px, py) => blocksSight(px, py, SEED, 0)).length;
+  visibleTiles(ITEMS[id].shape, x, y, facing, (px, py) => blocksSight(px, py, SEED, null)).length;
 // The way the walk left the character looking — only a cone cares, but the
 // shape is asked the same question the run asks it.
 const lastStep = TORCH_ROUTE.path[TORCH_ROUTE.path.length - 1];

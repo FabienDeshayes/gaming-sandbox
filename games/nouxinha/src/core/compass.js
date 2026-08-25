@@ -1,14 +1,14 @@
 // Which way the compass points.
 //
 // The compass exists because the world is unbounded and the interesting things
-// in it are seven tiles wide (DESIGN.md §4.6). It deliberately points at objects
-// the player has *not* found yet — that is the whole value of it — but only at
-// ones this run could actually walk into, so it never sends anyone to a gate
-// they can't open.
+// in it are single tiles (DESIGN.md §4.6). It deliberately points at objects the
+// player has *not* found yet — that is the whole value of it — but only at ones
+// this run could actually walk into, so it never sends anyone to a gate they
+// can't open.
 //
 // Pure: no Phaser, no run mutation.
 
-import { BASE_X, BASE_Y, chebyshev, landmarks, sanctums } from './world.js';
+import { BASE_X, BASE_Y, chebyshev, chests, landmarks, sanctums } from './world.js';
 import { itemDef } from '../data/items.js';
 
 // The hut, which is what the compass falls back to when there is nothing left
@@ -27,14 +27,24 @@ function fromItem(id, x, y) {
 export function availableTargets(state) {
   const out = [];
 
-  // A gem is available once its gate opens, and stops being once it's yours.
+  // A gem is available once this run holds the key to its gate, and stops being
+  // once it's yours.
   for (const sanctum of sanctums(state.seed)) {
     if (!sanctum.gem) continue;
     const def = itemDef(sanctum.gem);
     if (def.gem <= state.gems) continue;
-    if (sanctum.requires > state.gems) continue;
+    if (sanctum.key && !state.keys.has(sanctum.key)) continue;
     out.push(fromItem(sanctum.gem, sanctum.centre.x, sanctum.centre.y));
   }
+
+  // A chest is worth pointing at while it is still shut, and stops being the
+  // moment the lid is up — which is the whole reason a key is findable at all:
+  // a box you have to stumble on would leave the campaign stuck behind a gate.
+  // Whether it holds a key or a hoard is not the needle's business, so every
+  // shut chest reads the same.
+  for (const chest of chests(state.seed))
+    if (!state.chests.has(chest.id))
+      out.push({ id: chest.id, sprite: 'chest', hue: 0, x: chest.x, y: chest.y });
 
   for (const landmark of landmarks(state.seed)) {
     if (landmark.item) {

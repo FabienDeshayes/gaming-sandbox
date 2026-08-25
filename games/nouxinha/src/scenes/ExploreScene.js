@@ -44,7 +44,15 @@ import { Shop } from '../ui/shop.js';
 import { WorldMap } from '../ui/worldMap.js';
 import { CompassBadge, BADGE_H, BADGE_W } from '../ui/compassBadge.js';
 import { makeDpad } from '../ui/dpad.js';
-import { playDeath, playPickup, playTap, playTorch, unlockAudio } from '../ui/sfx.js';
+import {
+  playChest,
+  playDeath,
+  playPickup,
+  playTap,
+  playTorch,
+  playUnlock,
+  unlockAudio,
+} from '../ui/sfx.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
 const DPAD_CX = 361;
@@ -78,6 +86,7 @@ function carriedAtRisk(summary) {
     ...(summary.gemsCarried
       ? [summary.gemsCarried === 1 ? CARRIED.oneGem : CARRIED.manyGems(summary.gemsCarried)]
       : []),
+    ...summary.keysCarried.map((id) => CARRIED.key(itemDef(id).name)),
     ...summary.toolsCarried.map((id) => CARRIED.tool(itemDef(id).name)),
   ];
 }
@@ -420,10 +429,15 @@ export class ExploreScene extends Phaser.Scene {
 
     const result = step(this.run, direction);
     if (!result.moved) {
+      // Walking into a chest is what opens it (DESIGN.md §4.8). The bump still
+      // plays — the step really didn't happen — but what it says depends on
+      // whether the lid moved, and a lid that moved is the game's own voice
+      // rather than a line in the HUD.
+      if (result.reason === 'chest') this.openedChest(result);
       // A shut gate bumps like rock, but says what it wants — otherwise it
       // reads as a wall with a pattern on it and the player walks away.
       if (result.reason === 'locked')
-        this.hud.flash(FLASH.gateLocked(result.needs, this.run.gems));
+        this.hud.flash(FLASH.gateLocked(itemDef(result.needs).name));
       // The end of the world bumps like rock too, and a bump against nothing
       // visible is exactly the thing that reads as a bug — so the first time a
       // campaign reaches it, the dark says what it is (DESIGN.md §4.7). After
@@ -443,6 +457,9 @@ export class ExploreScene extends Phaser.Scene {
     this.hud.update(this.run);
     this.layOutRail();
     this.announce(result);
+    // The key turning under you as you walk through: the one moment a gate is
+    // anything other than scenery.
+    if (result.unlocked) playUnlock();
     if (result.picked) playPickup(result.picked);
     // The dark equipping a light for you: the torch that took over is the same
     // event as one you chose off the item card, and it sounds the same.
@@ -463,6 +480,32 @@ export class ExploreScene extends Phaser.Scene {
       else if (result.died) this.showDeath();
       else if (result.atMerchant) this.openShop();
     });
+  }
+
+  // A chest, opened by walking into it. What was inside gets the text panel
+  // rather than a line in the HUD, because a chest is the only thing in this
+  // world that somebody else left behind on purpose — and the panel leaves the
+  // world on screen, so the lid is visibly up behind it while it is read.
+  //
+  // A chest that was already open does nothing at all, which is the whole of the
+  // rule: no second hoard, no second key, and the status line says so rather
+  // than the panel, because it is a non-event.
+  openedChest(result) {
+    this.map.refresh(this.run);
+    this.hud.update(this.run);
+    this.layOutRail();
+    if (result.already) {
+      this.hud.flash(FLASH.chestEmpty);
+      return;
+    }
+    playChest();
+    if (result.key) {
+      this.hud.flash(FLASH.keyFound(itemDef(result.key).name));
+      this.textPanel.show(SAY.chestKey(itemDef(result.key).name));
+      return;
+    }
+    this.hud.flash(FLASH.chestCoins(result.coins));
+    this.textPanel.show(SAY.chestCoins(result.coins));
   }
 
   // Reaching the hut is what banks a run (DESIGN.md §6.1), so arriving writes
@@ -548,6 +591,7 @@ export class ExploreScene extends Phaser.Scene {
     // What's coming home, and how much walking is left in it.
     const carried = [
       ...summary.lights.map((light) => RECAP.carriedLight(itemDef(light.id).name, light.durability)),
+      ...summary.keys.map((id) => itemDef(id).name),
       ...summary.tools.map((id) => itemDef(id).name),
     ];
     this.dialog.show({
@@ -631,6 +675,9 @@ export class ExploreScene extends Phaser.Scene {
       return;
     }
     if (result.picked) this.hud.flash(FLASH.picked(itemDef(result.picked).name));
+    // Nothing was picked up, but a gate gave way, which is the other thing a
+    // step can be worth saying something about.
+    else if (result.unlocked) this.hud.flash(FLASH.gateOpened(itemDef(result.unlocked).name));
     // Walking back onto the hut relays everything on the ground (DESIGN.md
     // §4.3), which is worth saying — otherwise the world quietly changing under
     // a player who was heading somewhere specific reads as a bug.

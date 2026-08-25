@@ -21,7 +21,7 @@ import {
   getPalette,
 } from '../config.js';
 import { isBase, isMerchant, sanctumAt, terrainAt, variantAt } from '../core/world.js';
-import { gateOnTile, isBlackout, itemOnTile, litTiles, tileKey } from '../core/rules.js';
+import { chestOnTile, gateOnTile, isBlackout, itemOnTile, litTiles, tileKey } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
 import { variantKey, wallSprite } from '../data/tiles.js';
 import { makePainted, paintTile } from './painted.js';
@@ -43,7 +43,7 @@ function wallPiece(site, x, y) {
 // gem three pays for still arrives somewhere wearing a colour.
 function sanctumHue(sanctum) {
   const gem = itemDef(sanctum.gem);
-  return gem ? gem.hue : sanctum.requires;
+  return gem ? gem.hue : sanctum.colour;
 }
 
 export class MapView {
@@ -146,17 +146,27 @@ export class MapView {
       // on one.
       const showGate = gate && !underCharacter;
 
+      // A chest fills its tile too: it is a thing standing on the ground rather
+      // than lying on it, which is why it can't be walked onto and why the lid
+      // being up or down is the tile itself changing rather than an item
+      // disappearing off it (DESIGN.md §4.8).
+      const chest = terrain === 'chest' ? chestOnTile(run, wx, wy) : null;
+
       // A gate fills its tile the way rock and wall do — it *is* the ring it
       // stands in, not something lying on the floor.
       const ground = showGate
         ? gate.open
           ? 'gate-open'
           : 'gate'
-        : terrain === 'rock' || terrain === 'tree'
-          ? variantKey(terrain, variantAt(wx, wy, run.seed))
-          : terrain === 'wall'
-            ? wallPiece(site, wx, wy)
-            : 'floor';
+        : chest
+          ? chest.opened
+            ? 'chest-open'
+            : 'chest'
+          : terrain === 'rock' || terrain === 'tree'
+            ? variantKey(terrain, variantAt(wx, wy, run.seed))
+            : terrain === 'wall'
+              ? wallPiece(site, wx, wy)
+              : 'floor';
 
       // The two hues a tile can only get from where it stands: the gem the
       // sanctum around it keeps, and the gem whose colour opened its gate. Both
@@ -164,13 +174,13 @@ export class MapView {
       // you can't open yet is just more wall and an unclaimed sanctum is just
       // more masonry.
       const roles = site
-        ? { gem: sanctumHue(site.sanctum), opened: gate ? gate.requires : 0 }
+        ? { gem: sanctumHue(site.sanctum), opened: gate ? gate.colour : 0 }
         : {};
 
       cell.ground.setVisible(true).setAlpha(alpha);
       paintTile(cell.ground, ground, { gems: run.gems, base: fg, roles });
 
-      // Nothing lies on rock, on trees, on wall, or in a gateway.
+      // Nothing lies on rock, on trees, on wall, on a chest, or in a gateway.
       if (terrain !== 'floor') {
         cell.overlay.setVisible(false);
         cell.item.setVisible(false);

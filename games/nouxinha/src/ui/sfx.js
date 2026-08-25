@@ -192,10 +192,9 @@ const PICKUP = {
 };
 
 // The gem's own fanfare: the run up, a leading note, and a held chord over a
-// bass — the shape of a chest opening in a game that had an orchestra. A gem is
-// the only pickup that repaints the world, and the only one worth a second and
-// a half of everything else being quiet.
-const CHEST = [
+// bass. A gem is the only pickup that repaints the world, and the only one worth
+// a second and a half of everything else being quiet.
+const FANFARE = [
   { freq: 523, at: 0, duration: 0.12 },
   { freq: 659, at: 0.11, duration: 0.12 },
   { freq: 784, at: 0.22, duration: 0.12 },
@@ -204,9 +203,9 @@ const CHEST = [
   { freq: 1046, at: 0.61, duration: 0.95 },
 ];
 
-function playChest() {
+function playFanfare() {
   play('gem', (a, bus, now) => {
-    for (const step of CHEST) {
+    for (const step of FANFARE) {
       note(a, bus, { ...step, at: now + step.at, peak: 0.075, cutoff: 3600 });
       // The same line an octave down, quietly: two square waves are what turns
       // a blip into a fanfare without adding an instrument.
@@ -227,12 +226,37 @@ function playChest() {
 }
 
 export function playPickup(itemId) {
-  if (itemId && itemId.startsWith('gem-')) return playChest();
+  if (itemId && itemId.startsWith('gem-')) return playFanfare();
   const freqs = itemId === 'coin' ? PICKUP.coin : PICKUP.light;
   play(itemId === 'coin' ? 'coin' : 'pickup', (a, bus, now) => {
     freqs.forEach((freq, i) =>
       note(a, bus, { freq, at: now + i * 0.055, duration: 0.09, peak: 0.06 })
     );
+  });
+}
+
+// A chest lifting its lid: the creak of it going up, and a small bright figure
+// on top of that for what was inside. Noise rather than a tone for the hinge,
+// the same reason the torch is noise — a lid has no pitch — and much shorter
+// than the gem's fanfare, because a chest is a good moment and a gem is *the*
+// moment.
+export function playChest() {
+  play('chest', (a, bus, now) => {
+    whoosh(a, bus, { at: now, duration: 0.3, peak: 0.05, from: 240, to: 900 });
+    note(a, bus, { freq: 147, glide: 196, at: now, duration: 0.22, peak: 0.05, cutoff: 600 });
+    note(a, bus, { freq: 587, at: now + 0.14, duration: 0.1, peak: 0.05 });
+    note(a, bus, { freq: 880, at: now + 0.23, duration: 0.16, peak: 0.05 });
+  });
+}
+
+// A key turning: two notes a fifth apart with a clack under them, once, as the
+// gate gives. Short and mechanical — this is a lock, not a reward, and the
+// reward is on the other side of it.
+export function playUnlock() {
+  play('unlock', (a, bus, now) => {
+    note(a, bus, { freq: 196, glide: 131, at: now, duration: 0.07, peak: 0.05, cutoff: 900 });
+    note(a, bus, { freq: 784, at: now + 0.06, duration: 0.1, peak: 0.05 });
+    note(a, bus, { freq: 1174, at: now + 0.15, duration: 0.2, peak: 0.045 });
   });
 }
 

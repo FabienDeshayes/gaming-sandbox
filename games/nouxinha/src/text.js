@@ -114,8 +114,13 @@ export const FLASH = {
   picked: (name) => `FOUND ${name}.`,
   respawned: 'THE DARK HAS PUT EVERYTHING BACK SOMEWHERE NEW.',
   // A shut gate bumps like rock, so it says what it wants rather than reading
-  // as a wall with a pattern on it.
-  gateLocked: (needs, held) => `THE GATE WANTS ${needs} COLOUR${needs === 1 ? '' : 'S'}. YOU HAVE ${held}.`,
+  // as a wall with a pattern on it. It names the key by colour, because the key
+  // and the gate are drawn in the same one.
+  gateLocked: (keyName) => `LOCKED. IT WANTS THE ${keyName}.`,
+  gateOpened: (keyName) => `THE ${keyName} TURNS. THE GATE IS OPEN.`,
+  keyFound: (name) => `FOUND THE ${name}. CARRY IT HOME TO KEEP IT.`,
+  chestCoins: (n) => `THE CHEST HELD ${n} COINS.`,
+  chestEmpty: 'THE CHEST IS ALREADY OPEN.',
   // The edge, every time after the first — the first bump earns the EDGE dialog.
   edge: 'THE DARK IS BLOCKING YOU.',
   bought: (name, coinsLeft) => `BOUGHT ${name}. ${coinsLeft} COINS LEFT.`,
@@ -135,6 +140,7 @@ export const CARRIED = {
   oneGem: 'the colour',
   manyGems: (n) => `all ${n} colours`,
   tool: (name) => `the ${name.toLowerCase()}`,
+  key: (name) => `the ${name.toLowerCase()}`,
   coins: (n) => `${n} coins`,
 };
 
@@ -257,6 +263,19 @@ export const SAY = {
     'You are only equipped with your torch and some water.',
     'Explore the land, and bring back colour to the world.',
   ],
+  // Opening a chest. Somebody was here before you and left something behind —
+  // which is the only story the world tells about itself, so it gets the panel
+  // rather than a line in the HUD.
+  chestKey: (keyName) => [
+    'The lid gives, and centuries of dust go up with it.',
+    `Inside, on a bed of rotted cloth, lies the ${keyName.toLowerCase()}.`,
+    'Somewhere out there is a gate cut in the same colour.',
+  ],
+  chestCoins: (coins) => [
+    'The lid gives, and centuries of dust go up with it.',
+    `Inside is a hoard of ${coins} coins, counted out and left for nobody.`,
+    'The merchant will not ask where you got them.',
+  ],
 };
 
 // --- Panels ------------------------------------------------------------------
@@ -348,15 +367,29 @@ export const ITEM_TEXT = {
   },
   'gem-1': {
     name: 'FIRST COLOUR',
-    effect: 'The first colour, back in the world. Opens the gate that wants one gem.',
+    effect: 'The first colour, back in the world. More water, and better things lying about.',
   },
   'gem-2': {
     name: 'SECOND COLOUR',
-    effect: 'The second colour, back in the world. Opens the gate that wants two gems.',
+    effect: 'The second colour, back in the world. More water again, and the lantern with it.',
   },
   'gem-3': {
     name: 'THIRD COLOUR',
-    effect: 'The last colour. Opens the gate at the far edge of everything.',
+    effect: 'The last colour, and the last of the water the world can give you.',
+  },
+  // A key is named for the gate it opens, because that is the only thing a
+  // player ever has to know about it — and the two are drawn in the same colour.
+  'key-1': {
+    name: 'FIRST KEY',
+    effect: 'Opens the gate of the second sanctum. Carry it home to keep it.',
+  },
+  'key-2': {
+    name: 'SECOND KEY',
+    effect: 'Opens the gate of the third sanctum. Carry it home to keep it.',
+  },
+  'key-3': {
+    name: 'THIRD KEY',
+    effect: 'Opens the last gate of all. Carry it home to keep it.',
   },
   compass: {
     name: 'COMPASS',

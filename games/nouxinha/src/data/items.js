@@ -103,6 +103,36 @@ export const ITEMS = {
     hue: 3,
   },
 
+  // The three keys, one per shut gate. Like a gem, a key is a thing you *hold*
+  // rather than a thing you carry: it never burns down, never stacks, and is
+  // only yours once the hut has written it down. Its `hue` is the gate it opens
+  // — the key and the gate wear the same gem's colour, which is the whole of
+  // what makes "the blue gate wants the blue key" legible without a word of UI.
+  'key-1': {
+    id: 'key-1',
+    ...ITEM_TEXT['key-1'],
+    sprite: 'key',
+    isLight: false,
+    key: 1,
+    hue: 1,
+  },
+  'key-2': {
+    id: 'key-2',
+    ...ITEM_TEXT['key-2'],
+    sprite: 'key',
+    isLight: false,
+    key: 2,
+    hue: 2,
+  },
+  'key-3': {
+    id: 'key-3',
+    ...ITEM_TEXT['key-3'],
+    sprite: 'key',
+    isLight: false,
+    key: 3,
+    hue: 3,
+  },
+
   // The two tools. Neither is consumed and neither stacks — you own one or you
   // don't — so they sit outside the inventory entirely and show up in the HUD
   // instead. Each can be bought from the merchant or found lying in the dark
@@ -125,6 +155,10 @@ export const ITEMS = {
 
 // The tools, in the order they are offered and shown.
 export const TOOLS = ['compass', 'map'];
+
+// The keys, in the order the gates want them — which is also the order of the
+// colours they are drawn in (balance.js `SANCTUM_PLAN`).
+export const KEYS = ['key-1', 'key-2', 'key-3'];
 
 export function itemDef(id) {
   return ITEMS[id] || null;

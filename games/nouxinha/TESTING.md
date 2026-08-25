@@ -75,12 +75,12 @@ reaches in to *set* game state.
 | Helper | Does |
 |---|---|
 | `clickText(label, nth)` | Taps an on-screen label, searching inside containers (buttons and the item card build their text into one) |
-| `startRun(slot)` | Title screen to a walking run the way a player gets there: **NEW GAME** or **LOAD GAME**, then a slot. Loads slot 1 when a save was planted there, starts a fresh campaign in it otherwise |
+| `startRun(slot)` | Title screen to a walking run the way a player gets there: **NEW GAME** or **LOAD GAME**, then a slot, then reading the opening text panel out. Loads slot 1 when a save was planted there, starts a fresh campaign in it otherwise |
 | `tapDpad(dir)` | Taps a D-pad arrow |
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
-| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter or map. `mapView` is the open map overlay's drawing: its scale, the fit/min/max it is allowed, where it sits, how big it is drawn and the window it is drawn in — `null` while the map is closed |
+| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter, map or text panel. `mapView` is the open map overlay's drawing: its scale, the fit/min/max it is allowed, where it sits, how big it is drawn and the window it is drawn in — `null` while the map is closed |
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground sprite, alpha, **tint**, **paint**, overlay, item and item tint. Every tile on screen is a stack of colour zones (`src/ui/painted.js`), so `tint` is the colour the bulk of the tile is in and `paint` the colours of the zones over it — a sanctum wearing its own gem's colour shows up there, not in `tint`. This is the render, not the model: it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its colour-zone layers — the silhouette the character set out in, plus the hood, robe and staff that turn the colours of gems one, two and three |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
@@ -88,9 +88,11 @@ reaches in to *set* game state.
 | `wheelAt(x, y, dy)` | A wheel notch over a point, which is how a mouse zooms the map |
 | `pinch(x, y, from, to)` | Two fingers centred on a point, going from `from` to `to` pixels apart. Multi-touch is the one input Playwright's mouse can't send, so this goes down to CDP's raw touch events — which is what a phone sends anyway. Needs the page opened with `{ hasTouch: true }` |
 | `tapMenuButton()` | Taps the **cogwheel** in the top right, which opens the in-run menu (SETTINGS, SAVE GAME, EXIT GAME, KEEP PLAYING) |
+| `textPanel()` | What the text panel is showing: which block of how many, the characters of it on screen so far, and whether that block has finished typing — `null` while the panel is closed |
+| `tapPanel()` / `readPanel()` | One tap on the panel, or as many as it takes to read it out and close it |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run carried it back to the hut, so asserting that has to read the save rather than the run that found it — and since arriving is what banks, the slot is worth reading *before* the hut's dialog is answered as well as after |
 | `music()` / `musicTrack()` | Whether the music loop's scheduler is running, and which of the two loops it is playing (`'menu'`, `'explore'`, or `null`) — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
-| `sounds()` | Every sound played so far, in order — `'tap'`, `'coin'`, `'pickup'`, `'gem'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` the same way, and the only way to assert that a button makes a noise and the D-pad doesn't |
+| `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` the same way, and the only way to assert that a button makes a noise and the D-pad doesn't. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
 | `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |
@@ -272,6 +274,23 @@ two:
 Don't assert on the *contents* of a real tile: which tile a sprite points at is a design choice that
 is meant to be repointed by editing one pair of numbers, and a test that pins the pixels would make
 that edit a test failure.
+
+## Testing the text panel
+
+A fresh expedition opens with the text panel over the HUD, and it owns the input while it is up
+(DESIGN.md §7) — so `startRun` reads it to the end on the way past, and no other test has to know
+that setting out says anything. The one test that is *about* the panel takes the long way to a run
+instead (**NEW GAME**, a slot, then straight into `textPanel()`), because `startRun` would have
+dismissed the thing it came to look at.
+
+Two things about it are worth asserting and easy to get wrong. **Progressive** is a claim about two
+moments, not one: read `textPanel()`, wait a beat, read it again, and the same block has more of
+itself on screen. And a tap **fills the block in rather than skipping it** — the assertion is that
+the index has *not* moved and `shown` now equals `full`, which is the whole difference between a
+text box and a dismiss button.
+
+`full` is the block after wrapping, with real newlines in it, so a test comparing against
+`src/text.js` has to put the newlines back to spaces rather than expect the raw string.
 
 ## Adding a test
 

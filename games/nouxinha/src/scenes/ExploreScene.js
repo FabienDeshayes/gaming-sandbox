@@ -30,6 +30,7 @@ import {
   MENU,
   RECAP,
   SAVED,
+  SAY,
   WORLD_MAP,
 } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
@@ -38,6 +39,7 @@ import { Hud } from '../ui/hud.js';
 import { ItemCard } from '../ui/itemCard.js';
 import { InventoryPanel } from '../ui/inventoryPanel.js';
 import { Dialog } from '../ui/dialog.js';
+import { TextPanel } from '../ui/textPanel.js';
 import { Shop } from '../ui/shop.js';
 import { WorldMap } from '../ui/worldMap.js';
 import { CompassBadge, BADGE_H, BADGE_W } from '../ui/compassBadge.js';
@@ -129,10 +131,13 @@ export class ExploreScene extends Phaser.Scene {
     //
     // A cheat run only ever takes the third: it is a sandbox rather than a
     // campaign, so it neither writes a slot nor reads one (DESIGN.md §6.2).
-    this.run =
-      asked.run ||
-      (cheats ? null : resumeRun(loadSave())) ||
-      createRun(asked.seed, undefined, asked.nonce, { cheats });
+    const handed = asked.run;
+    const carriedOn = handed ? null : cheats ? null : resumeRun(loadSave());
+    this.run = handed || carriedOn || createRun(asked.seed, undefined, asked.nonce, { cheats });
+    // Which of the three it was, because only the third is a character walking
+    // out of the door for the first time — and that is the one the text panel
+    // has something to say about (`show` at the end of `create`).
+    const settingOut = !handed && !carriedOn;
     // Blocks input while the world is sliding, so a fast tapper can't queue
     // steps the renderer hasn't caught up with.
     this.animating = false;
@@ -151,6 +156,7 @@ export class ExploreScene extends Phaser.Scene {
     this.card = new ItemCard(this, { onEquip: (i) => this.equipSlot(i) });
     this.inventory = new InventoryPanel(this, { onOpenStack: (stack) => this.openStack(stack) });
     this.dialog = new Dialog(this);
+    this.textPanel = new TextPanel(this);
     this.shop = new Shop(this, {
       onBuy: (id) => this.buyFromMerchant(id),
       onLeave: () => this.shop.hide(),
@@ -165,6 +171,10 @@ export class ExploreScene extends Phaser.Scene {
     this.map.refresh(this.run);
     this.hud.update(this.run);
     this.layOutRail();
+
+    // Last, over a screen that is already drawn: the panel leaves the viewport
+    // showing, so what it covers has to be there to be covered.
+    if (settingOut) this.textPanel.show(SAY.expeditionStart);
   }
 
   // The compass badge and the map button, both built once and shown only for the
@@ -331,6 +341,7 @@ export class ExploreScene extends Phaser.Scene {
   // screen while they're up: nothing behind them steps, swipes, or reacts to a key.
   modalOpen() {
     return (
+      this.textPanel.isOpen() ||
       this.card.isOpen() ||
       this.inventory.isOpen() ||
       this.dialog.isOpen() ||
@@ -375,6 +386,12 @@ export class ExploreScene extends Phaser.Scene {
     for (const [event, dir] of Object.entries(keys))
       this.input.keyboard.on(event, () => this.tryStep(dir));
     this.input.keyboard.on('keydown-ESC', () => {
+      // The panel's one control, on the keyboard: Esc reads it on rather than
+      // closing it, because there is nothing behind it to go back to yet.
+      if (this.textPanel.isOpen()) {
+        this.textPanel.advance();
+        return;
+      }
       if (this.menuOpen) {
         this.closeMenu();
         return;

@@ -13,8 +13,8 @@
 //
 // Convention: SHOUTED CAPS are the game's chrome — buttons, labels, counters,
 // headings, the status line. Sentence case is the game talking to you, which it
-// only does in a dialog's body. Keep a string on the side of the line it is
-// already on.
+// only does in a dialog's body and in the text panel. Keep a string on the side
+// of the line it is already on.
 
 import { WATER_VALUE } from './balance.js';
 
@@ -240,6 +240,23 @@ export const DEATH = {
   rowFurthest: RECAP.rowFurthest,
   rowSteps: RECAP.rowSteps,
   home: UI.home,
+};
+
+// --- What the game says out loud ---------------------------------------------
+//
+// The text panel (ui/textPanel.js) covers the bottom of the screen and reads
+// itself out a character at a time, one block per tap. One string per block, in
+// the order they are read — a block is a beat rather than a line, so the split
+// is a matter of pacing, not of width.
+
+export const SAY = {
+  // Setting out. Said once, at the top of a fresh expedition, and never to a
+  // walk that is only being carried on (scenes/ExploreScene.js).
+  expeditionStart: [
+    'You venture out of the hut, and the dark is surrounding you.',
+    'You are only equipped with your torch and some water.',
+    'Explore the land, and bring back colour to the world.',
+  ],
 };
 
 // --- Panels ------------------------------------------------------------------

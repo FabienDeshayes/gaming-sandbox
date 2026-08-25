@@ -3,7 +3,9 @@
 > Grid exploration game about walking into the dark on a limited supply of light.
 
 > See [`TESTING.md`](./TESTING.md) for how to run the suite and how to write a test against a
-> procedural world with no authored levels in it.
+> procedural world with no authored levels in it, and [`STORY.md`](./STORY.md) for the fiction the
+> late game is being pointed at — who took the sun, what the shards are for, and why a campaign is a
+> cycle. Nothing in `STORY.md` is built yet; this doc stays the record of what is.
 
 > **Doc convention:** this doc describes the game *as it is now*. When something changes, edit the
 > relevant sections in place — don't leave "superseded"/"previously"/"was X, now Y" notes. Git history

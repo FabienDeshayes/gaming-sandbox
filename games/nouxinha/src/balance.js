@@ -90,7 +90,8 @@ export const SEED_MAX_ATTEMPTS = 20;
 // so the sanctum you have just walked to is what makes the next one survivable.
 //
 // `cache` is what the clearing holds besides the centrepiece, HOARD_PER_KIND of
-// each — a hoard, not a pile.
+// each — a hoard, not a pile. `hall` marks the one clearing that holds neither:
+// the sorcerer stands at the centre of it instead (DESIGN.md §4.9).
 export const SANCTUM_PLAN = [
   {
     gem: 'gem-1',
@@ -116,15 +117,17 @@ export const SANCTUM_PLAN = [
     colour: 2,
     cache: ['coin', 'water-drop', 'spring-vial', 'torch-beacon'],
   },
-  // The last one holds no gem: it is what the third key is *for*, and the
-  // richest cache in the game (DESIGN.md §4.4).
+  // The last one holds no gem and no hoard: it is the **hall**, and what stands
+  // at the centre of it is Nouxinha (DESIGN.md §4.9). The third key is what it
+  // is for, and a conversation is what is behind it.
   {
     gem: null,
+    hall: true,
     distance: 110,
     radius: 7,
     key: 'key-3',
     colour: 3,
-    cache: ['coin', 'water-flask', 'spring-vial', 'torch-beacon', 'torch-lamp'],
+    cache: [],
   },
 ];
 

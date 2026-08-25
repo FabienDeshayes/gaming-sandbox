@@ -59,6 +59,9 @@ export const SLOTS = {
   confirmOverwrite: 'TAP AGAIN TO OVERWRITE',
   neverWalked: 'NO EXPEDITION YET',
   suspended: (furthest, steps) => `SAVED EXPEDITION  ${furthest} OUT  ${steps} STEPS`,
+  // The worlds this campaign has already lost in the hall — the one thing on a
+  // row that is about the campaign rather than about the world it is in now.
+  cycles: (n) => `${n} WORLD${n === 1 ? '' : 'S'} ENDED`,
   furthest: (n) => `FURTHEST OUT ${n}`,
   back: UI.back,
 };
@@ -91,6 +94,9 @@ export const HUD = {
   explored: (tiles) => `EXPLORED ${tiles}`,
   coins: (coins) => `COINS ${coins}`,
   water: (water, ceiling) => `WATER ${water}/${ceiling}`,
+  // How many worlds the hall has taken off this campaign (DESIGN.md §4.9).
+  // Only on screen once there is one to count.
+  cycles: (n) => `WORLDS ${n}`,
   light: (name, durability, max) => `${name}  ${durability}/${max}`,
   noLight: 'NO LIGHT',
   blackout: 'BLACKOUT. ONLY WHAT IS RIGHT AROUND YOU IS VISIBLE.',
@@ -210,6 +216,19 @@ export const HUT = {
   endHere: 'END HERE',
 };
 
+// What the hall leaves you with: a world nobody has lit a tile of, and the same
+// two answers the hut asks for — carry on, or stop here (DESIGN.md §4.9).
+export const HALL = {
+  title: 'A NEW WORLD',
+  moulded: (n) =>
+    `He has moulded the world ${n === 1 ? 'again' : `${n} times now`}. You are at your door with a candle and a full tank.`,
+  kept: 'Your coins and your tools are still yours. The colours are not, and neither is the ground you drew.',
+  cheats: 'CHEATS ON — nothing was stored, and this world is a sandbox like the last one.',
+  rowWorlds: 'WORLDS ENDED',
+  setOut: 'SET OUT AGAIN',
+  endHere: 'END HERE',
+};
+
 // END HERE: the run is over and counted up.
 export const RECAP = {
   title: 'EXPEDITION OVER',
@@ -273,6 +292,22 @@ export const SAY = {
     'The lid gives, and centuries of dust go up with it.',
     `Inside is a hoard of ${coins} coins, counted out and left for nobody.`,
     'The merchant will not ask where you got them.',
+  ],
+  // The hall (DESIGN.md §4.9). He introduces himself, he is courteous, he takes
+  // what you brought, and he moulds the world again. What he says about the
+  // shards is the one part of it that depends on the walk you actually had, so
+  // it is a function of what you are carrying.
+  hall: (gems, max) => [
+    'The clearing holds no hoard. It holds a hall, and a man standing in front of it with his hands full of light.',
+    '"Nouxinha," he says, as though you had asked. "You have come a long way, and not for the first time — though you would not remember that."',
+    gems >= max
+      ? '"All three. Good — they are flakes off what I am holding, and my hands are rather full."'
+      : gems
+        ? `"${gems === 1 ? 'One' : 'Two'} of three. Close is not the same as finished, and I will take those."`
+        : '"Empty-handed. That is a long walk for a conversation, and I am glad of the conversation."',
+    'He takes what you are carrying out of your hands, one piece at a time, and you let him.',
+    '"The sun went out because I caught it," he says. "I am not sorry, and I am not finished. Go home and rest."',
+    'The ground goes. When it comes back it is not the ground you learned — and your own door is behind you.',
   ],
 };
 

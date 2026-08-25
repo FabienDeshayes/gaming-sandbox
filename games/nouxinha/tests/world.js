@@ -138,6 +138,26 @@ export const GEM_ROUTE = bfs(SEED, (x, y) => x === FIRST_GEM.centre.x && y === F
 // holds for any page — but it is 20-odd taps, so only one test walks it.
 export const MERCHANT_ROUTE = bfs(SEED, (x, y) => isMerchant(x, y, SEED), 60);
 
+// The hall, and the walk to the tile you talk to the sorcerer from (DESIGN.md
+// §4.9). His own tile can't be stepped on, so — like a chest — the route stops
+// beside him and `hit` is the direction the last input bumps in. It is 110
+// tiles out and behind the last gate in the game, so it is routed with every
+// key and never actually walked: the browser test plants itself on his doorstep
+// (`standingAt`) and takes the one step that matters.
+export const HALL = SANCTUMS.find((s) => s.hall);
+export const HALL_ROUTE = bfs(
+  SEED,
+  (x, y) => {
+    const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
+      ([, dx, dy]) => x + dx === HALL.centre.x && y + dy === HALL.centre.y
+    );
+    return into ? into[0] : null;
+  },
+  200,
+  START,
+  ALL_KEYS
+);
+
 // The nearest sanctum whose gate is still shut, and the chest holding the key
 // that opens it — the two ends of the chain a test has to walk to prove a gate
 // opens (DESIGN.md §4.8).

@@ -15,7 +15,8 @@
 // ground, the hut, the merchant, the chests and the sanctums.
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, TILE, gemColour, getPalette, hex } from '../config.js';
-import { chests, landmarks, sanctums, terrainAt } from '../core/world.js';
+import { chests, hall, landmarks, sanctums, terrainAt } from '../core/world.js';
+import { HALL_SEEN } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
 import { biomeKey } from '../data/tiles.js';
 import { makeButton } from './button.js';
@@ -241,6 +242,12 @@ export class WorldMap {
     for (const chest of chests(run.seed))
       if (run.seenUnique.has(chest.id))
         mark(chest.x, chest.y, run.chests.has(chest.id) ? 'chest-open' : 'chest', 0);
+    // And the sorcerer, once a light has actually reached him (DESIGN.md §4.9).
+    // He is marked like everything else the campaign has laid eyes on, which is
+    // the only thing on this map that is a person rather than a place.
+    const hallOf = hall(run.seed);
+    if (hallOf && run.seenUnique.has(HALL_SEEN))
+      mark(hallOf.centre.x, hallOf.centre.y, 'sorcerer', 0);
 
     // Current position: a solid dot that holds still, plus a ring that
     // continually pulses outward from it. Every other marker on this map is a

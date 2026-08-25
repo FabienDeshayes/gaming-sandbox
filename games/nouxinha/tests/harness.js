@@ -546,6 +546,8 @@ export async function openGame(
           coins: r.coins,
           water: r.water,
           gems: r.gems,
+          // How many worlds the hall has taken off this campaign (DESIGN.md §4.9).
+          cycles: r.cycles,
           seed: r.seed,
           explored: r.explored.size,
           inventory: r.inventory.map((i) => ({ id: i.id, durability: i.durability })),
@@ -636,6 +638,17 @@ export async function openGame(
       page.evaluate(() =>
         window.__game.scene.getScene('ExploreScene').map.wizard.layers.map((l) => l.tintTopLeft)
       ),
+
+    // Waits for a dialog to be up. Every other overlay in the game opens on the
+    // scene the test is already holding, so `state()` is enough — the hall is
+    // the one moment where reading a panel out replaces the whole scene
+    // underneath the test (a new world, a new palette, a new run), and the
+    // question over that new world is the first thing that says it is there.
+    waitForDialog: () =>
+      page.waitForFunction(() => {
+        const s = window.__game.scene.getScene('ExploreScene');
+        return !!s && !!s.dialog && s.dialog.isOpen();
+      }),
 
     settle: async () => {
       await page.waitForFunction(() => {

@@ -41,13 +41,13 @@ at all, which is the quick way to work on the rules.
 | `rules.test.js` | A step's costs, burnout and auto-swap, pickup, the inventory, the recap, cheats |
 | `terrain.test.js` | What the noise grows, where the world stops, which biome the seed makes it, and that every bit of it can be walked to |
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
-| `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the water ladder, the landmarks, the merchant, the compass |
-| `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume |
+| `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall, the water ladder, the landmarks, the merchant, the compass |
+| `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, and what a cycle in the hall takes and leaves |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | The canvas against a phone, the sheet actually loading, the game's own voice |
 | `ui-explore.test.js` | The controls that walk, and the three visibility states the viewport draws |
 | `ui-items.test.js` | The HUD counters, the item card, and finding a light and burning it |
-| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, the merchant, the map, a sanctum's colour, a chest's key |
+| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, the merchant, the map, a sanctum's colour, a chest's key, the sorcerer and the world he moulds |
 
 Suites share `tests/world.js` — the seed, the pinned nonce, and every route BFSed out of the real
 world (see below). Pure suites run first in `all.test.js`, so a broken rule fails in a couple of seconds
@@ -123,6 +123,7 @@ reaches in to *set* game state.
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run carried it back to the hut, so asserting that has to read the save rather than the run that found it — and since arriving is what banks, the slot is worth reading *before* the hut's dialog is answered as well as after |
 | `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'chest'`, `'unlock'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` itself, since a headless browser can't be asked to listen, and the only way to assert that a gem gets the fanfare and a torch is heard catching. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
+| `waitForDialog()` | Waits for a dialog to be up. Only the hall needs it: reading the sorcerer out replaces the whole scene under the test — new world, new palette, new run — so there is no tween to settle on, and the question over that new world is the first thing that says it is there |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
 | `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |
 
@@ -233,6 +234,32 @@ claims are worth keeping separate:
 
 `openChest(state, chest)` is the pure way to hand a run a key without walking to it, which is what
 the save round-trip test uses — the same way it reaches for `state.tools.add('compass')`.
+
+## Testing the hall
+
+The last sanctum holds the sorcerer instead of a hoard, and walking into him turns the campaign over
+into a new world (DESIGN.md §4.9). Three claims, in the three places they belong:
+
+- **The terrain claim is pure.** His tile is its own terrain, blocks a step, opens for no key and
+  casts no shadow — the same four assertions a chest gets, in `campaign.test.js`, next to the one
+  that says his clearing holds nothing to pick up (`scatter.test.js`).
+- **The cycle is pure too**, and it is the one worth being fussy about: `turnCycle(state)` hands back
+  the run it would start, so a `unit(...)` test can read straight off it what he took (the colours,
+  the keys, the chests, the drawing, the suspended walk) and what he left (the purse, the tools, the
+  runs, the count of worlds ended) — and that the seed is not the one the campaign walked in on.
+  That is `save.test.js`, because it is a claim about a slot rather than about a walk.
+- **The bump, the voice and the world turning over need the browser**, and are one `test(...)` in
+  `ui-campaign.test.js`: he is drawn standing there, the step into him does not happen, the panel
+  comes up over the world, and reading it out leaves the page in a world with a different seed, no
+  colours, the purse intact and the counter in the HUD.
+
+`HALL_ROUTE` in `tests/world.js` is the walk to the tile you talk to him from — his own tile can't be
+stepped on, so, like a chest, the route stops beside him and `hit` is the direction the last input
+bumps in. It is 127 taps long and behind the last gate in the game, so nothing ever walks it: both
+tests plant themselves on his doorstep with `standingAt(HALL_ROUTE, ...)` and take the one step that
+is actually under test. Plant the run holding what a campaign that got there would be holding —
+`gems`, `keys` and `tools` on the *run* as well as on the save behind it, since what he takes he
+takes out of the run's hands.
 
 ## Testing the gem chain
 

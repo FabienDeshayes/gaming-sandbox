@@ -128,6 +128,20 @@ export class SlotScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setAlpha(usable ? 0.5 : 0.25);
 
+    // How many worlds this campaign has already had taken off it in the hall
+    // (DESIGN.md §4.9) — the one line on the row that is about the campaign
+    // rather than about the world it is standing in, which is exactly why it
+    // sits under the name of that world. Nothing is drawn until there is one.
+    if (entry.save.cycles)
+      this.add
+        .text(left + ROW_W - 20, y + 82, SLOTS.cycles(entry.save.cycles), {
+          fontFamily: FONT,
+          fontSize: '11px',
+          color: hex(pal.fg),
+        })
+        .setOrigin(1, 0.5)
+        .setAlpha(usable ? 0.5 : 0.25);
+
     // The same gem pips the title screen shows, so a slot is recognisable by
     // how much colour it has brought home rather than by its number. A
     // suspended expedition hasn't banked what it's carrying yet, but it isn't

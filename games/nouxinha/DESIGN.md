@@ -4,8 +4,9 @@
 
 > See [`TESTING.md`](./TESTING.md) for how to run the suite and how to write a test against a
 > procedural world with no authored levels in it, and [`STORY.md`](./STORY.md) for the fiction the
-> late game is being pointed at — who took the sun, what the shards are for, and why a campaign is a
-> cycle. Nothing in `STORY.md` is built yet; this doc stays the record of what is.
+> late game is pointed at — who took the sun, what the shards are for, and why a campaign is a
+> cycle. The first turn of that cycle is built (§4.9); the rest of `STORY.md` is not, and this doc
+> stays the record of what is.
 
 > **Doc convention:** this doc describes the game *as it is now*. When something changes, edit the
 > relevant sections in place — don't leave "superseded"/"previously"/"was X, now Y" notes. Git history
@@ -18,6 +19,12 @@ A tile-by-tile exploration game where the only thing you can really spend is lig
 ## 2. Pitch
 
 You step out of your base onto a vast dark grid with a small torch that shows one tile in every direction and lasts 100 steps. Everything you find — brighter torches, stranger torches, coins — is out there in the dark, and the further you push the better it gets. The tension is that light is fuel: a torch that shows you more burns out faster, so every upgrade is also a shorter leash.
+
+And at the far end of it, behind the last gate, there is somebody waiting. Bringing the three
+colours home is the middle of the game rather than the end of it: the walk that finishes it is the
+walk out to the hall at 110, where a sorcerer called Nouxinha takes what you found off you and
+moulds the world again — a new dark, in the same save slot, with your coins and your tools still in
+hand (§4.9).
 
 Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Reach it and it is yours; the walk is the whole of the risk. Three of the four sanctums they sit in are locked, and what opens them is out in the dark too: chests, standing on their own tiles, holding a key apiece in the colour of the gate it fits. Twenty tiles out there is also a merchant, who will sell you a compass for fifty coins and a map for a hundred, on the same terms as everything else: only yours once you've walked it back.
 
@@ -47,7 +54,7 @@ Somewhere out there are three gems, and each one gives the world back a colour i
 
 ## 4. Core mechanics
 
-The world has three things in it: **terrain** (floor, two formations of rock, groves of trees, the chests standing on their own tiles, and the built walls and gates of the sanctums — all static and procedurally generated), **items** (lights, water, coins and gems, lying on floor tiles until picked up), and **the character** (one tile, one facing).
+The world has three things in it: **terrain** (floor, two formations of rock, groves of trees, the chests standing on their own tiles, the sorcerer standing on his, and the built walls and gates of the sanctums — all static and procedurally generated), **items** (lights, water, coins and gems, lying on floor tiles until picked up), and **the character** (one tile, one facing).
 
 | Mechanic | Description | Input |
 |---|---|---|
@@ -59,6 +66,7 @@ The world has three things in it: **terrain** (floor, two formations of rock, gr
 | Water | Every successful step also costs **1 water**, independent of the light and never affected by blackout. Water starts at **200** and each gem held raises that ceiling by **50**, to 350 with all three. A water pickup refills by its own amount (§4.2), capped at the ceiling. Unlike light, water has no auto-swap or backup: hitting **0** is the run's one hard failure state — the run ends and everything carried is lost (§6). The one place it cannot happen is the hut, which fills the tank the moment it is stood on: a walk that gets to its own doorstep on its last drop has got home. The balance numbers are named constants in `src/balance.js` (`STARTING_WATER`, `WATER_PER_STEP`, `WATER_PER_GEM`) so they can be retuned without touching the mechanic itself. | — |
 | Pickup | Stepping onto a tile holding an item picks it up automatically, with a short rising blip — or, for a gem, a fanfare (§9). Lights go into the inventory unequipped; coins, water and gems apply immediately (coin counter, water level, colour restored) rather than sitting in the inventory. An item needing more gems than you hold isn't there to pick up at all (§4.3). | — |
 | Coming home | Stepping onto the base **writes the run down and fills the tank**, then says what it wrote and asks the one question left: **HEAD BACK OUT** carries the expedition on, **END HERE** closes it on a recap (§6) and returns to the title screen. Neither answer risks anything, and the panel says so — that is the whole difference between them (§6.1). Arriving still costs a step and burns durability like any other. | Tap a button on the dialog |
+| The hall | The fourth sanctum holds no gem and no hoard: it holds **Nouxinha**, standing at the centre of its clearing. Walking into him is a conversation, and the end of it is a new world in the same slot (§4.9). | Walk into him |
 | The merchant | One stall, 20-25 tiles from the hut and always in the same place for a seed. Selling lights, water, a **compass** and a **map** for coins — the only thing coins are for (§4.5). | Walk onto the stall |
 | Compass & map | Two tools, each bought once or found lying in the dark. The compass points at whatever unique object is worth walking to next; the map draws everywhere you have walked (§4.6). | Owned, not carried — neither takes an inventory slot |
 | Respawning | Everything lying on the ground goes back, in **new places**, whenever the world respawns: on picking up a gem, and on walking back onto the hut. Unique objects — gems, the merchant, the compass and map lying out there — never move (§4.3). | — |
@@ -70,10 +78,11 @@ A light shape is defined relative to the character's tile, and — for the lamp 
 facing. What the shape says is how far the light *reaches*; what it shows is that minus whatever it
 cannot see round.
 
-**Rock, trees and masonry cast shadow; a chest never does.** A tile inside the shape is lit only if a
+**Rock, trees and masonry cast shadow; a chest and the sorcerer never do.** A tile inside the shape is lit only if a
 straight line reaches it from the character's tile without crossing something solid — and what counts
 as solid is the *shape of the world*, not everything that blocks a step. A chest (§4.8) stops a step
-and stops nothing else, because a box you could hide behind would read as a wall wearing a lid. So a
+and stops nothing else, because a box you could hide behind would read as a wall wearing a lid; the
+sorcerer (§4.9) is the same kind of thing standing on the same kind of tile. So a
 rock mass has ground behind it that stays dark until you walk round — which is what makes routing
 past one a decision rather than bookkeeping, and what separates the two rock formations (§4.3) in
 play as well as on screen: a mass is a wall to see round, a lone boulder throws a wedge you can step
@@ -261,14 +270,15 @@ The one built structure in an otherwise noise-grown world, and the spine of the 
 | 1 | 20 | 4 | nothing — the arch stands open | The first gem |
 | 2 | 45 | 5 | the first key | The second gem |
 | 3 | 80 | 6 | the second key | The third gem |
-| 4 | 110 | 7 | the third key | No gem — the richest cache in the game, and what the third key is *for* |
+| 4 | 110 | 7 | the third key | No gem and no cache — **the hall**, and Nouxinha standing in it (§4.9). What the third key is *for* |
 
+- **The fourth is not a fourth sanctum.** Three of them are a wall around a gem; the last is a wall around a person, and what is behind its gate is a conversation rather than a hoard (§4.9). Everything else about it is the same object: the same masonry, the same one gate, the same forced-floor clearing, and its own key well inside its own distance.
 - **The chain is the pacing, and it is two chains braided.** Sanctum 1's arch is open because the first gem has to be reachable carrying nothing. Every gate after it is *locked*, and what opens it is a key in a chest (§4.8) standing well inside that gate's own distance — so the walk to a gem is always a walk to a chest first. Meanwhile each gem raises the water ceiling by 50 and upgrades the water lying around the world (§4.3), so the gem you just found is precisely what makes the next sanctum survivable — the distances above are past what a gemless run could walk home from. A key says *whether* you may go; a gem says whether you would get back.
 - **Positions are derived from the seed, not authored.** Each sanctum takes a quarter of the compass with a jitter inside it, so the four always sit in different directions at different distances (a new seed relays all four, and no two are ever within 45° of each other). Distance is Chebyshev and exact, so a sanctum's ring lands on the number the HUD's furthest-out counter reports.
 - **A gate wears the colour of the key that opens it**, and so does the key — one colour per gate, taken from the gem of the same number. That pairing is the whole of the UI: a player who has picked up a blue key knows at a glance which arch it is for. Like every restored colour it only appears once *that gem* has been brought home (§9), so a key found before its colour is drawn in the plain foreground, exactly as its gate is.
 - **The gate always faces the hut**, on a wall *face* and never a corner — there are no diagonal steps, so a corner gate could never be walked through. The tile you approach from is therefore always orthogonally adjacent to the tile you walk into.
 - **A sanctum's clearing is forced floor**, so once you are through the gate the gem is always reachable. That is what lets the seed check below worry only about the door.
-- **The clearing is a hoard, and the hoard is fixed.** Each sanctum holds a named cache — coins, water and lights of its own tier — laid out **two of each**, ranked rather than rolled, so opening a gate always pays the same amount and a clearing can never turn into a pile of one thing. Unlike the open world it doesn't upgrade with your gems: what a sanctum holds is what it was built holding.
+- **The clearing is a hoard, and the hoard is fixed.** Each gem-keeping sanctum holds a named cache — coins, water and lights of its own tier — laid out **two of each**, ranked rather than rolled, so opening a gate always pays the same amount and a clearing can never turn into a pile of one thing. Unlike the open world it doesn't upgrade with your gems: what a sanctum holds is what it was built holding.
 - **Reachability is guaranteed by placement, then by the seed.** Roughly one seed in ten drops a given sanctum where a rock blob seals its door into a pocket against its own wall. Rather than reroll the whole world for it, the sanctum is *turned* a few degrees around the hut until its door opens onto the cave system — measured with a bounded flood probe, which separates the two cases cleanly (a sealed door measures 6–22 tiles, a real one runs past the 80-tile limit). `pickSeed` then rejects any seed that still leaves a door sealed, which after placement is about 2 seeds in 120. Carving corridors to each gate was the alternative and was rejected twice over: it leaves the visible lattice §4.3 avoids, and a road pointing at each gem removes the search that makes finding one worth anything.
 
 ### 4.5 The merchant
@@ -318,7 +328,9 @@ shortcut rather than a tax.
 its own is useless and "that way, and it's a gem" is a decision. The needle snaps to the four
 directions its sprites can draw (§9) — enough to start walking, and the icon does the rest. It points at the nearest
 **available** unique object: a chest still shut, a gem whose gate this run already has the key to, a
-tool it doesn't own yet, or the merchant while there is still a one-off on the shelf. It deliberately
+tool it doesn't own yet, the merchant while there is still a one-off on the shelf, or — once all
+three colours and the third key are in hand — the sorcerer at 110 (§4.9), which by then is the only
+thing left in the world worth walking to. It deliberately
 points at things the player has *not* found — that is the whole value of it, and with the keys behind
 chests (§4.8) it is also what keeps the chain from dead-ending. When nothing qualifies it points at the hut, which
 is also what it is for at three in the morning with no light left.
@@ -383,10 +395,11 @@ where the drawing's own outline becomes the shape of the world. A square edge wo
 authored wall around a level. The HUD's furthest-out counter stays Chebyshev: how far out you walked
 is a different question from how close to the edge you got.
 
-**There is room past the content.** The outermost sanctum wall stands at 117, so the last third of
-the world is unspoken for — that is where a late-game area goes, and the edge is far enough out that
-reaching it is a 400-step round trip and therefore a late-campaign expedition in its own right,
-rather than something stumbled into.
+**There is room past the content.** The hall's wall — the outermost of the four — stands at 117, so
+the last third of the world is still unspoken for: nothing out there is placed, nothing out there is
+generated differently, and the edge is far enough out that reaching it is a 400-step round trip and
+therefore a late-campaign expedition in its own right rather than something stumbled into. What
+`STORY.md` §8 wants to put there (a thinner ground, and one remnant near the rim) is not built.
 
 ### 4.8 Chests and keys
 
@@ -407,10 +420,66 @@ The one thing in the world you interact with by **failing to walk onto it**. A c
 - **The compass points at shut chests** (§4.6), which is what stops the chain dead-ending: a key you have to stumble on would leave a campaign standing at a gate with nowhere to go. An opened chest drops off the needle immediately. Chests are on the map too, drawn with the lid the way you left it — the one marker on that map that says what you have *done* rather than what is there.
 - **Opening one earns the text panel** (§7) rather than a line in the HUD, because the panel leaves the world on screen: the lid is visibly up behind the words while they are read.
 
+### 4.9 The hall, and the cycle
+
+The fourth sanctum's clearing holds no gem and no cache. It holds **Nouxinha**, the sorcerer who
+took the sun, standing dead centre of it — and the only conversation in the game
+([`STORY.md`](./STORY.md) §5-7).
+
+- **He is terrain, of the kind a chest is.** His tile can't be stepped on and can't be opened by any
+  key, and — like a chest, and for the same reason — he stops no light at all: he is somebody
+  standing on the floor rather than a piece of the world's shape. Anything switching on terrain has
+  to answer for him as well as for floor, rock, trees and chests.
+- **You talk to him by walking into him**, exactly as a chest is opened by walking into it: a bump
+  rather than a step, costing no water, no durability and no facing.
+- **What he says is the text panel** (§7), because the panel leaves the world on screen and he is
+  visibly standing there while he talks. He introduces himself, he is courteous, he takes the
+  colours out of your hands — and what he says about them depends on how many you actually brought,
+  because a walk that arrives one short is a walk that happened.
+- **He takes nothing until the last block is read.** Reading him out is what turns the world over,
+  so the ground going is something the player reads about and then sees.
+
+**Then the world is moulded again, and that is what a cycle is.** Everything about the world falls
+out of its seed (§4.3), so re-drawing the seed *is* the re-mould, and it happens inside the same
+save slot:
+
+| He takes | He leaves |
+|---|---|
+| The three colours, banked and carried alike | The purse, banked and pocketed alike |
+| The keys, and every lid you left up | The compass and the map, if you own them |
+| The ground the campaign drew, and the unique things it had laid eyes on | The expeditions you have walked, and how far out you got |
+| The expedition you were on, and any walk suspended in the slot | The count of worlds he has taken, which is the one number that survives every one of them |
+
+What comes back is a **fresh expedition out of the hut door**: a full tank, a candle, no colours,
+and a world nobody has lit a tile of — which is generally a different **biome**, so the whole game
+is drawn in a different colour from the moment his last line is read. It opens on a dialog rather
+than on the three blocks a normal expedition sets out to (§7), and that dialog is where the walk can
+also simply be stopped: **SET OUT AGAIN** starts walking, **END HERE** goes back to the title screen
+with the new world already written into the slot.
+
+- **The walk into the hall counts as an expedition finished**, because it is one — it ended
+  somewhere other than the hut, but it ended, and everything it was carrying was written down by
+  the only thing that ever writes anything down: him.
+- **Nothing about it is a death.** The run isn't lost, the world is. Only water kills (§6).
+- **The counter is the reminder.** Worlds ended shows in the HUD's counter row while a campaign has
+  any, and on the slot's own row in **LOAD GAME** — a campaign three worlds in reads as a campaign
+  three worlds in before it is loaded.
+- **The compass turns to him** once all three colours are in hand and the third key with them
+  (§4.6): everything else worth walking to has been found by then, so the needle saying "that way,
+  and it's him" is the whole of how the endgame is signposted.
+- **A cheat run gets the hall too** and writes none of it (§6.2) — the switch exists to look at the
+  late game without walking to it, and the late game is now this.
+
+Three things in `STORY.md` that this deliberately does *not* do yet, so the doc and the game don't
+drift: there are no **remnants** out past the fourth wall and so no **truths** to say back to him,
+the far dark is not thinned, and the rim does not come in cycle over cycle. Every cycle is the same
+world size and the same conversation.
+
 ## 5. Constraints
 
 - One light active at a time. Light and water are the two consumables — no food yet (§12), no timer.
 - The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off. A chest can't wall anything off either: its own tile is solid, but the forced-floor apron round it means there is always a way past.
+- The only conversation in the game is at the hall (§4.9), and it is never a fight: he takes the world, never the run and never your life.
 - **Nothing a step away is ever hidden.** Shadow (§4.1) can darken any tile a light reaches except the ones the character could walk onto next, so no arrangement of rock can leave a player unable to see where to go.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
 - **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is a 1-bit tile baked white, so what a gem changes is a tint at draw time, never an asset.
@@ -424,7 +493,7 @@ The one thing in the world you interact with by **failing to walk onto it**. A c
 
 ## 6. Win / lose conditions
 
-- **Win:** bringing all three colours home. It is a destination rather than an ending — the world is still there afterwards, with the fourth sanctum's cache open and nothing left to unlock.
+- **Win:** walking the three colours home and then carrying them out to the hall at 110, where the sorcerer takes them and moulds the world again (§4.9). Bringing the colours home is the middle of a cycle rather than the end of one: what it opens is the last gate and the walk behind it. The campaign does not end there either — a cycle turns, the slot keeps its purse, its tools and its count of worlds ended, and the whole game is walked again in a world nobody has lit.
 - **Lose:** running out of water. It depletes independently of light and refills only at a water pickup or the hut, so hitting 0 out in the dark ends the run on the spot and everything carried since the hut was last stood on is lost — gems, keys, lights, coins, and any tool bought or found on the way, though the ground it lit still goes into the slot (§6.1) — with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
 - **Session end:** the player walks back to the hut and takes it up on the offer to end the expedition (§4). The HUD tracks the numbers that stand in for a score while you're out — **tiles explored** (distinct tiles the campaign has ever lit, since ground carries between runs — §6.1), **coins**, **water** remaining, and the row of **colours** recovered — and ending the expedition closes the run with a **recap**: tiles explored, **new ground** this expedition lit that no earlier one had, **coins found** — the whole walk's, since the hut empties the pocket into the bank every time it is crossed — lights found, colours saved, furthest distance reached, steps taken, and what's still in hand. The two ground numbers are both there on purpose: the total is how much of the world is drawn, the new one is what this particular walk was worth.
 
@@ -443,7 +512,7 @@ opposite.
 
 The one thing that outlives a run regardless is the ground it lit — cartography is not progress.
 
-- There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, the keys held, which chests have been opened, banked coins, runs completed, the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, which unique objects have been seen (§4.6), and — when the cogwheel menu has saved one — the expedition the campaign is in the middle of. They live in `localStorage` and are the only state that outlives a run.
+- There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, the keys held, which chests have been opened, banked coins, runs completed, worlds ended in the hall (§4.9), the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, which unique objects have been seen (§4.6), and — when the cogwheel menu has saved one — the expedition the campaign is in the middle of. They live in `localStorage` and are the only state that outlives a run.
 - **A run belongs to a slot before it starts.** The title screen offers **NEW GAME** and **LOAD GAME**, and both go through the slot picker: new empties the slot it is pointed at and starts a campaign there, load carries one on. The slot picked stays active, so a run banks itself without ever having to be told which campaign it is (§7). A slot holding a saved expedition says so on its row, because that is the difference between the two things **LOAD GAME** can do: set out from the hut again, or carry on from wherever you stopped. A used row also names the kind of world that campaign walks (§4.3), which is the one thing on it that is about the ground rather than about the walking — three slots read as three places rather than three numbers.
 - **Reaching the hut** is the only thing that banks, and it banks the moment the tile is stepped on. Dying of thirst banks nothing, and leaving by the menu's **EXIT GAME** abandons the run and banks nothing either — so a gem picked up but never carried back is still sitting in its sanctum next run, and a compass bought but never carried back is still on the merchant's shelf, with the coins still in the bank. What those two cost is always and only the walk *since the hut was last stood on*. Leaving asks before it does it, since an abandoned expedition can't be got back.
 - **The hut fills the tank on arrival too**, for the same reason and in the same moment — so a walk that gets to its own doorstep on its last drop of water has got home. Dying in the doorway of the one place with water in it was the cruellest outcome the game had, and it is now impossible.
@@ -456,6 +525,7 @@ The one thing that outlives a run regardless is the ground it lit — cartograph
 - **What ends a saved expedition is the expedition ending.** Coming home to the hut clears it — that walk is over and banked. So does running dry: death is the one hard failure this game has, and a save you could reload out of would make it a rewind instead. Leaving by **EXIT GAME** is the one that doesn't touch it — not saving is not unsaving, so what you lose is the walking since your last save, never the save itself.
 - The hut names what it has just written down — the colour, the tool, the coins — because a player who doesn't know the rule would otherwise never learn that the risk is over.
 - A save is normalised on the way in and out, so a corrupt or hand-edited file costs the player their progress at worst — never the run's arithmetic.
+- **The hall rewrites the whole slot** (§4.9), and it is the only thing besides NEW GAME that ever does: a new seed, no colours, no keys, no chests, no drawing, and no suspended walk — with the purse, the tools, the runs and the worlds-ended count carried across by hand. A slot's world is drawn when NEW GAME claims it *and* every time a cycle turns; everything else about a campaign outlives its world.
 - **Erasing** happens by starting a **NEW GAME** over an occupied slot — there is no standalone erase control in Settings. It asks twice, on the slot's own row: the first tap arms it, the second overwrites it.
 
 ### 6.2 Cheats
@@ -474,6 +544,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 |---|---|---|
 | Step | Swipe in a cardinal direction anywhere on the map area, or tap a D-pad arrow (right of the HUD) | Arrow keys / WASD, or click a D-pad arrow |
 | Open a chest | Step into it — it can't be stood on, so walking against it is what lifts the lid (§4.8) | The same |
+| Talk to the sorcerer | Step into him, the same way, at the centre of the hall (§4.9) | The same |
 | Walk | Hold a D-pad arrow down — after a 300ms hold, steps repeat at the rate set in Settings until released | Hold the same arrow's click |
 | Inspect a stack | Tap its slot in the inventory strip (bottom left of the HUD) → opens the item card | Click the slot |
 | Browse the full inventory | Tap **ITEMS**, the box after the strip's slots → opens the scrollable inventory panel | Click **ITEMS** |
@@ -481,6 +552,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Close an overlay | Tap its close control, or tap outside it | Click, or press Esc |
 | Read the text panel on | Tap anywhere — once to put the rest of the block up, again for the next one, and once more on the last to close it | Click, or press Esc |
 | Answer the hut | Tap **HEAD BACK OUT** or **END HERE** on the dialog | Click |
+| Answer a new world | Tap **SET OUT AGAIN** or **END HERE** on the dialog the hall leaves you on (§4.9) | Click |
 | Buy something | Tap a row on the merchant's counter, then **LEAVE** | Click the same |
 | Open the map | Tap **MAP** in the top right of the viewport (only there if you own one) | Click **MAP** |
 | Zoom the map | Pinch the drawing, or tap **-** / **+** under it; **FIT** puts the whole walk back on screen | Wheel over the drawing, or click the same buttons |
@@ -514,7 +586,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 
 **The dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons — stacked one per line once there are more than two of them. It has no close control of its own: every way out is one of its buttons, because all of its uses (the hut's out-or-over question, the recap, the death screen, and the cogwheel menu) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key.
 
-**The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is one: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again. **Opening a chest** (§4.8) is the other, and the reason the panel leaves the world on screen: the lid is visibly up behind the words.
+**The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is one: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again. **Opening a chest** (§4.8) is the second, and the reason the panel leaves the world on screen: the lid is visibly up behind the words. **The sorcerer** (§4.9) is the third and the longest, and the only one whose callback does something the player cannot undo — the world turns over when his last block has been read.
 
 **The cogwheel menu** is a dialog with four choices — **SETTINGS**, **SAVE GAME**, **EXIT GAME** and **KEEP PLAYING**. Settings is the same screen the title screen opens and comes straight back to the tile you were standing on. Saving reports what it wrote and then asks the one question that follows from it: keep playing, or leave now. Leaving asks first, and says what it is about to cost, because an abandoned expedition can't be got back (§6.1).
 
@@ -527,7 +599,7 @@ dragging the drawing itself; **CLOSE** is the way out.
   settings, saving and leaving are all one tap in rather than three buttons fighting over the same
   48 pixels.
 - Top 624px: the map viewport. 48px tiles, with the character's tile centred exactly on the viewport centre (240, 312). Because 480 and 624 are both whole multiples of 48, exact centring puts the grid on a half-tile offset: 9 full columns plus a half column bleeding off each edge, and 12 full rows plus a half row top and bottom. That partial outer ring is a feature — tiles cut by the screen edge read as "the world keeps going", which is the right message for this game.
-- Bottom ~230px (about a quarter): the HUD. Everything but the D-pad lives in a narrow left column: the run counters (tiles explored and the coin purse, each with an icon off the tile sheet), the inventory strip with **ITEMS** as one more same-sized slot after it, then the active light's label and bar, then water's — same size, directly under it, since the two read as the same kind of resource — then the status line for the things worth calling out the moment they happen. The four-direction D-pad fills the whole right side, sized for a thumb and with nothing else sharing its column.
+- Bottom ~230px (about a quarter): the HUD. Everything but the D-pad lives in a narrow left column: the run counters (tiles explored and the coin purse, each with an icon off the tile sheet, and — once there is one to count — the worlds ended, right-aligned at the far end of the same row), the inventory strip with **ITEMS** as one more same-sized slot after it, then the active light's label and bar, then water's — same size, directly under it, since the two read as the same kind of resource — then the status line for the things worth calling out the moment they happen. The four-direction D-pad fills the whole right side, sized for a thumb and with nothing else sharing its column.
 
 ## 8. Scope
 
@@ -548,6 +620,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 - Four seed-derived sanctums with masonry walls and key-locked gates, guaranteed reachable (§4.4)
 - Eight seed-derived chests, opened by walking into them, holding the three keys and five hoards of coins (§4.8)
 - Three gems, each restoring a colour, raising the water ceiling, and revealing its tier of items
+- The hall at 110: the sorcerer standing in the fourth sanctum, the conversation, and the cycle it turns — a new world in the same slot, the colours and the ground taken, the purse and the tools kept, and a counter of worlds ended in the HUD and on the slot's row (§4.9)
 - Three save slots, picked through NEW GAME / LOAD GAME, banked by reaching the hut whether or not the expedition ends there, with progress on the title screen and a slot erased by starting a new game over it
 - Explored ground carried between runs however a run ends, so a campaign never starts from black again (§6.1)
 - A cheat toggle in Settings that opens a run on the whole map with one of everything, and banks nothing (§6.2)
@@ -615,6 +688,13 @@ dragging the drawing itself; **CLOSE** is the way out.
     a light and from the map's one-pixel-a-tile drawing, so the difference is the *silhouette* — the
     lid moving — rather than any detail inside it. Both are plain foreground: what is in a chest is
     not something the player is allowed to know before opening it.
+  - **The sorcerer is a person, and the wizard is the only other one.** A deep cowl over a robe with
+    nothing readable inside the hood — where the character is face-on and bearded, with a staff. The
+    two are the only figures in the world and they stand a tile apart while he talks, so the whole
+    job of his tile is to not be mistaken for the player's. He is drawn in the palette's own
+    foreground and nothing paints him: he is the one thing on screen that belongs to no gem, and a
+    world he has just moulded is a world with none of them in it anyway. Nor is he a biome's to
+    repoint (§4.3) — the ground changes every cycle and he does not.
   - **The key is one tile and three tints**, like the gem, and for the same reason: three keys
     pointed at three tiles would be three ways of saying the same thing. What tells them apart is
     the colour, which is the colour of the gate — that pairing is doing all the work, so nothing

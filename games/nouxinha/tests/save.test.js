@@ -3,7 +3,7 @@
 // pick back up. Pure — no browser.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
-import { DEFAULT_SEED, pickSeed } from '../src/core/world.js';
+import { BASE_X, BASE_Y, DEFAULT_SEED, pickSeed } from '../src/core/world.js';
 import {
   abandonRun,
   bankRun,
@@ -19,11 +19,12 @@ import {
   runSummary,
   step,
   suspendRun,
+  turnCycle,
 } from '../src/core/rules.js';
 import { clampSlot, emptySave, MAX_GEMS, normaliseSave, SLOT_COUNT } from '../src/core/save.js';
 import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
 import { ITEMS } from '../src/data/items.js';
-import { GEM_ROUTE, KEY_CHEST, NONCE, SEED, TORCH_ROUTE } from './world.js';
+import { ALL_KEYS_LIST, GEM_ROUTE, KEY_CHEST, NONCE, SEED, TORCH_ROUTE } from './world.js';
 
 // --- Slots -------------------------------------------------------------------
 
@@ -286,6 +287,80 @@ unit('ending an expedition takes the saved one with it, whichever way it ends', 
   // nothing suspended simply has nothing to carry on with.
   assertEqual(hasSuspendedRun(emptySave()), false, 'an untouched slot has nothing to resume');
   assertEqual(resumeRun(emptySave()), null, 'and nothing to resume it from');
+});
+
+// --- The hall, and what a cycle is -------------------------------------------
+
+// A campaign that has done everything the world it is in has to offer: three
+// colours banked, every key in hand, both tools carried home, a purse, and a
+// drawing of everywhere it walked.
+const finishedCampaign = () => ({
+  ...emptySave(),
+  seed: SEED,
+  gems: MAX_GEMS,
+  keys: ALL_KEYS_LIST,
+  chests: [KEY_CHEST.id],
+  coins: 120,
+  runs: 7,
+  compass: true,
+  map: true,
+  mapped: encodeExplored(new Set(['40,40', '41,40'])),
+  mappedSeed: SEED,
+  seen: [KEY_CHEST.id],
+});
+
+unit('the hall takes the world and leaves what was yours', () => {
+  const state = createRun(SEED, finishedCampaign(), NONCE);
+  state.coins = 30; // still in the pocket when he took everything else
+  const walked = state.explored.size;
+
+  const next = turnCycle(state);
+
+  // A new world in the same slot, which is the whole of what a cycle is
+  // (DESIGN.md §4.9): everything about the ground falls out of the seed, so
+  // re-drawing it is the whole re-mould.
+  assert(next.seed !== SEED, 'he moulds a world that is not the one you walked');
+  assertEqual(next.banked.cycles, 1, 'and the slot counts it');
+  assertEqual(next.cycles, 1, 'so the run can say so');
+
+  // What he takes: the colours, the keys, the lids you left up, and the ground.
+  assertEqual(next.gems, 0, 'the colours are his');
+  assertEqual([...next.keys], [], 'and the keys with them');
+  assertEqual([...next.chests], [], 'and every chest is shut again');
+  assertEqual(next.banked.mapped, '', 'the drawing goes with the ground it was of');
+  assertEqual([...next.seenUnique].filter((id) => id === KEY_CHEST.id), [],
+    'and nothing in the old world is still marked');
+  assert(next.explored.size < walked, 'the new world opens black but for the light in hand');
+
+  // What he leaves: everything that was yours rather than his.
+  assertEqual(next.banked.coins, 150, 'the purse, banked and pocketed alike');
+  assertEqual([...next.tools].sort(), ['compass', 'map'], 'and both tools');
+  assertEqual(next.banked.runs, 8, 'the walk into the hall counted as an expedition');
+
+  // And it is a fresh walk out of the hut door, not a death: full tank, a
+  // candle, and the character standing where every run starts.
+  assertEqual({ x: next.x, y: next.y }, { x: BASE_X, y: BASE_Y + 1 }, 'back at your own door');
+  assertEqual(next.water, maxWater(0), 'with the tank full');
+  assertEqual(next.inventory.length, 1, 'and one light');
+  assertEqual(next.banked.run, null, 'a walk suspended in the old world is not a walk any more');
+
+  // And the count survives the next walk home, which rebuilds the slot from
+  // scratch the same way this did — the two places a save is written out by
+  // hand are the two places a number like this goes missing.
+  step(next, 'up');
+  assertEqual(bankRun(next).cycles, 1, 'and the hut writes the count back down');
+});
+
+unit('a cheat run gets its new world and still writes nothing', () => {
+  // The switch exists to look at the late game without walking to it
+  // (DESIGN.md §6.2), so the hall has to work under it — and, like everything
+  // else a cheat run does, count for nothing.
+  const state = createRun(SEED, emptySave(), NONCE, { cheats: true });
+  const next = turnCycle(state);
+  assert(next.seed !== SEED, 'the world is moulded anyway');
+  assertEqual(next.cheats, true, 'and is still a sandbox');
+  assertEqual(next.cycles, 0, 'but no cycle was ever written down');
+  assertEqual(next.gems, MAX_GEMS, 'and it opens holding everything, like any cheat run');
 });
 
 unit('a corrupt suspended run costs the walk, not the campaign', () => {

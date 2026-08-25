@@ -460,6 +460,20 @@ export function sanctumAt(x, y, seed = DEFAULT_SEED) {
   return null;
 }
 
+// The hall: the last sanctum, the one that keeps no gem (balance.js
+// `SANCTUM_PLAN`). What is behind its gate is a clearing with the sorcerer
+// standing in the middle of it (DESIGN.md §4.9).
+export function hall(seed = DEFAULT_SEED) {
+  return sanctums(seed).find((sanctum) => sanctum.hall) || null;
+}
+
+// Whether this is the tile Nouxinha is standing on. Asked by `terrainAt`, so it
+// reads the sanctum list directly rather than going back through `sanctumAt`.
+export function isSorcerer(x, y, seed = DEFAULT_SEED) {
+  const site = hall(seed);
+  return !!site && x === site.centre.x && y === site.centre.y;
+}
+
 // Which landmark a tile belongs to: the tile itself, or the forced-floor apron
 // around it that keeps it approachable whatever the noise did.
 export function landmarkAt(x, y, seed = DEFAULT_SEED) {
@@ -498,6 +512,11 @@ export function terrainAt(x, y, seed = DEFAULT_SEED) {
   if (site) {
     if (site.part === 'wall') return 'wall';
     if (site.part === 'gate') return 'gate';
+    // The one tile of clearing that isn't clearing: the sorcerer, standing dead
+    // centre of the hall (DESIGN.md §4.9). Solid to a step and transparent to a
+    // light, exactly like a chest — he is somebody standing on the floor, not a
+    // piece of the world's shape.
+    if (isSorcerer(x, y, seed)) return 'sorcerer';
     return 'floor'; // the clearing inside, and the apron at the door
   }
   if (landmarkAt(x, y, seed)) return 'floor'; // the landmark and its apron
@@ -518,21 +537,23 @@ export function isWalkable(x, y, seed = DEFAULT_SEED) {
 // that opens a sanctum opens a window into it in the same moment it opens the
 // door. A **chest doesn't stop one at all** — it is a thing standing on the
 // floor, not a piece of the world's shape, and a box you could hide behind would
-// read as a wall wearing a lid. Everything outside the world counts as opaque
-// too, which costs nothing: the world is a disc, and a straight line between two
+// read as a wall wearing a lid; the sorcerer is the same kind of thing standing
+// on the same kind of tile. Everything outside the world counts as opaque too,
+// which costs nothing: the world is a disc, and a straight line between two
 // points inside a disc never leaves it, so the edge can never shadow ground that
 // is still in play.
 export function blocksSight(x, y, seed = DEFAULT_SEED, keys = null) {
   const terrain = terrainAt(x, y, seed);
-  if (terrain === 'floor' || terrain === 'chest') return false;
+  if (terrain === 'floor' || terrain === 'chest' || terrain === 'sorcerer') return false;
   if (terrain === 'gate') return !canEnter(x, y, seed, keys);
   return true;
 }
 
 // Which key a tile demands before it can be stepped on: null for open ground and
 // for the one arch that stands open, the key id for every other gate. `false`
-// where the tile is impassable whatever you are carrying — rock, trees, masonry
-// and a chest, which is opened rather than walked through.
+// where the tile is impassable whatever you are carrying — rock, trees, masonry,
+// a chest, which is opened rather than walked through, and the sorcerer, who is
+// talked to the same way.
 export const ENTRY_BLOCKED = false;
 
 export function entryKey(x, y, seed = DEFAULT_SEED) {
@@ -795,10 +816,11 @@ function accepted(cx, cy, seed, salt, gems, memo) {
   return landed;
 }
 
-// What a sanctum's clearing holds: the centrepiece dead centre, and exactly
-// HOARD_PER_KIND of each kind in the sanctum's cache scattered around it. Ranked
-// rather than rolled, so opening a gate always pays the same amount — and so a
-// clearing can never turn into a pile of one thing.
+// What a sanctum's clearing holds: exactly HOARD_PER_KIND of each kind in the
+// sanctum's cache, scattered around the centre. Ranked rather than rolled, so
+// opening a gate always pays the same amount — and so a clearing can never turn
+// into a pile of one thing. The hall's cache is empty (balance.js), so this
+// hands back nothing at all for it.
 const hoardCache = new Map();
 
 function hoardOf(sanctum, seed, salt) {
@@ -808,26 +830,23 @@ function hoardOf(sanctum, seed, salt) {
 
   const s = saltedSeed(seed, salt);
   const held = new Map();
-  // The last sanctum has no gem, so its centre holds the best water in the game.
-  const centrepiece = sanctum.gem ? null : 'spring-vial';
-  if (centrepiece) held.set(`${sanctum.centre.x},${sanctum.centre.y}`, centrepiece);
 
   const span = sanctum.radius - 1;
   const tiles = [];
   for (let dy = -span; dy <= span; dy++)
     for (let dx = -span; dx <= span; dx++) {
-      if (!dx && !dy) continue; // the centrepiece's tile
+      // The centre is never the hoard's: it holds the sanctum's gem, out of the
+      // unique layer, or — in the hall — the sorcerer himself (DESIGN.md §4.9),
+      // and a pickup underneath either would be a pickup nobody could see.
+      if (!dx && !dy) continue;
       tiles.push([sanctum.centre.x + dx, sanctum.centre.y + dy]);
     }
 
   sanctum.cache.forEach((id, i) => {
-    // The centrepiece counts against its own kind's share, so a clearing whose
-    // centre already holds a spring vial gets one more rather than two.
-    const room = HOARD_PER_KIND - (id === centrepiece ? 1 : 0);
     tiles
       .filter(([tx, ty]) => !held.has(`${tx},${ty}`))
       .sort((a, b) => hash(b[0], b[1], s, CH_HOARD + i) - hash(a[0], a[1], s, CH_HOARD + i))
-      .slice(0, room)
+      .slice(0, HOARD_PER_KIND)
       .forEach(([tx, ty]) => held.set(`${tx},${ty}`, id));
   });
 

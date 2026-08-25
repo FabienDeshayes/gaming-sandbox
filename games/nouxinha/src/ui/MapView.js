@@ -156,7 +156,8 @@ export class MapView {
       // A chest fills its tile too: it is a thing standing on the ground rather
       // than lying on it, which is why it can't be walked onto and why the lid
       // being up or down is the tile itself changing rather than an item
-      // disappearing off it (DESIGN.md §4.8).
+      // disappearing off it (DESIGN.md §4.8). The sorcerer fills his the same
+      // way, and for the same reason — he is stood on it, not lying on it.
       const chest = terrain === 'chest' ? chestOnTile(run, wx, wy) : null;
 
       // A gate fills its tile the way rock and wall do — it *is* the ring it
@@ -165,11 +166,13 @@ export class MapView {
         ? biomeKey(gate.open ? 'gate-open' : 'gate', biome)
         : chest
           ? biomeKey(chest.opened ? 'chest-open' : 'chest', biome)
-          : terrain === 'rock' || terrain === 'tree'
-            ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
-            : terrain === 'wall'
-              ? biomeKey(wallPiece(site, wx, wy), biome)
-              : biomeKey('floor', biome);
+          : terrain === 'sorcerer'
+            ? 'sorcerer'
+            : terrain === 'rock' || terrain === 'tree'
+              ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
+              : terrain === 'wall'
+                ? biomeKey(wallPiece(site, wx, wy), biome)
+                : biomeKey('floor', biome);
 
       // The two hues a tile can only get from where it stands: the gem the
       // sanctum around it keeps, and the gem whose colour opened its gate. Both

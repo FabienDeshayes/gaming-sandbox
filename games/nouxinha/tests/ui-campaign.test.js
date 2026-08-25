@@ -17,13 +17,14 @@
 
 import { assert, assertEqual, runIfMain, test as browserTest } from './harness.js';
 import { maxWater, spendable } from '../src/core/rules.js';
-import { emptySave } from '../src/core/save.js';
+import { emptySave, MAX_GEMS } from '../src/core/save.js';
 import { decodeExplored } from '../src/core/cartography.js';
 import { PRICES } from '../src/balance.js';
 import { gemColour } from '../src/config.js';
 import {
   DEATH,
   FLASH,
+  HALL,
   HUD,
   HUT,
   ITEM_TEXT,
@@ -38,8 +39,11 @@ import {
   progressLine,
 } from '../src/text.js';
 import {
+  ALL_KEYS_LIST,
   FIRST_GEM,
   GEM_ROUTE,
+  HALL as THE_HALL,
+  HALL_ROUTE,
   KEY_CHEST,
   KEY_CHEST_BUMP,
   KEY_CHEST_ROUTE,
@@ -230,6 +234,69 @@ test('walking into a chest opens it, says its piece, and hands over the key', as
   assert(await game.hasText(FLASH.chestEmpty), 'walking back into it says so');
   assertEqual((await game.state()).keys, ['key-1'], 'and hands over nothing');
 }, { save: AT_CHEST.save });
+
+// Standing on the sorcerer's doorstep, at the end of the longest walk in the
+// game, with everything a campaign can be holding when it gets there.
+const AT_HALL = standingAt(HALL_ROUTE, {
+  save: { ...emptySave(), gems: MAX_GEMS, keys: ALL_KEYS_LIST, coins: 40, compass: true },
+  run: {
+    gems: MAX_GEMS,
+    keys: ALL_KEYS_LIST,
+    tools: ['compass'],
+    water: 300,
+    inventory: [{ id: 'torch-beacon', durability: 60 }],
+  },
+});
+
+test('walking into the sorcerer ends the world and hands you a new one', async (game) => {
+  await game.startRun();
+
+  // He is drawn standing in his clearing, and — like a chest — he stops a step
+  // without stopping a light.
+  const clearing = await game.visibleTiles();
+  const him = clearing.find((t) => t.x === THE_HALL.centre.x && t.y === THE_HALL.centre.y);
+  assertEqual(him.ground, 'sorcerer', 'he is drawn standing there');
+
+  const standing = await game.state();
+  await game.tapDpad(HALL_ROUTE.hit);
+  await game.settle();
+
+  const met = await game.state();
+  assertEqual({ x: met.x, y: met.y }, { x: standing.x, y: standing.y }, 'the step did not happen');
+  assertEqual(met.steps, standing.steps, 'and cost no step');
+  // He gets the game's own voice, over the world, so he is visibly standing
+  // there while he talks (DESIGN.md §4.9).
+  assert(met.textPanelOpen, 'he has the floor');
+  await game.readPanel();
+
+  // Reading him out is what turns the world over, so the scene the test was
+  // holding is gone by the time the question about the new one is up.
+  await game.waitForDialog();
+  const after = await game.state();
+  assert(after.seed !== standing.seed, 'the world is one he has just moulded');
+  assertEqual(after.cycles, 1, 'and the campaign counts it');
+  assertEqual(after.gems, 0, 'the colours went with him');
+  assertEqual({ x: after.x, y: after.y }, { x: 0, y: 1 }, 'and you are back at your own door');
+  assert(await game.hasText(HALL.title), 'the new world says what it is');
+  assert(await game.hasText(HUD.cycles(1)), 'and the HUD keeps the count from here on');
+
+  // The slot is the campaign, and this is the one thing that rewrites the whole
+  // of it: a new world, no colours, no keys, no drawing — and the purse and the
+  // compass still yours (DESIGN.md §4.9).
+  const saved = await game.save();
+  assertEqual(saved.seed, after.seed, 'the slot walks the new world from now on');
+  assertEqual(saved.cycles, 1, 'with a world behind it');
+  assertEqual(saved.gems, 0, 'no colours');
+  assertEqual(saved.keys, [], 'no keys');
+  assertEqual(saved.mapped, '', 'and no ground drawn yet');
+  assertEqual(saved.coins, 40, 'the purse is still yours');
+  assertEqual(saved.compass, true, 'and so is the compass');
+
+  // And stopping here is one of the two answers, since the walk that ended in
+  // the hall is already written down.
+  await game.clickText(HALL.endHere);
+  await game.waitForScene('TitleScene');
+}, { save: AT_HALL.save });
 
 test('the cogwheel saves the walk, and load game carries it on', async (game) => {
   await game.startRun();

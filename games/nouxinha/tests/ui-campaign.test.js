@@ -283,6 +283,9 @@ test('the cogwheel saves the walk, and load game carries it on', async (game) =>
   await game.waitForScene('ExploreScene');
 
   const resumed = await game.state();
+  // A walk being carried on is not a character setting out, so it is not read
+  // the opening piece again (src/ui/textPanel.js).
+  assertEqual(resumed.textPanelOpen, false, 'and it is not talked at about setting out');
   assertEqual(resumed.x, walked.x, 'the run resumes on the tile it saved on');
   assertEqual(resumed.y, walked.y, 'both ways');
   assertEqual(resumed.steps, walked.steps, 'with its steps');
@@ -334,6 +337,10 @@ browserTest('each slot is a campaign of its own, in a world of its own', async (
   const worldOf = async (slot) => {
     await game.clickText(slot);
     await game.waitForScene('ExploreScene');
+    // Setting out is read its piece before it can be walked, and this test takes
+    // the long way to a run rather than through `startRun`, which reads it for
+    // everybody else (src/ui/textPanel.js).
+    await game.readPanel();
     const seed = (await game.state()).seed;
     await walkPath(game, OUT_AND_BACK);
     await game.clickText(HUT.endHere);
@@ -360,6 +367,7 @@ browserTest('each slot is a campaign of its own, in a world of its own', async (
   assertEqual((await game.texts()).filter((t) => t === 'EMPTY').length, 1, 'the third is still free');
   await game.clickText(SLOTS.slotName(1));
   await game.waitForScene('ExploreScene');
+  await game.readPanel();
   const resumed = await game.state();
   assertEqual(resumed.seed, first, 'and it walks its own world again next expedition');
   assertEqual(resumed.banked.runs, 1, 'carrying on where it left off');

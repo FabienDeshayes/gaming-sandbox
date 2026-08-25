@@ -40,6 +40,11 @@ function shopTop() {
   const panelH = SHOP.pad + SHOP.titleH + SHOP.purseH + SHOP_STOCK * SHOP.rowH + 20 + 44 + SHOP.pad;
   return (854 - panelH) / 2;
 }
+// Mirrored from src/ui/textPanel.js: the panel is the HUD's own band, and any
+// point on the screen advances it — the centre of the band is only the most
+// honest place for a thumb to land.
+const TEXT_PANEL = { x: 240, y: VIEW_H + (854 - VIEW_H) / 2 };
+
 const INV_PANEL = { left: CARD_CX - 380 / 2, top: CARD_CY - 460 / 2 };
 // The list starts below the title and the gem-pip row (DESIGN.md §7).
 const INV_LIST = { x: INV_PANEL.left + 20, y: INV_PANEL.top + 90, rowH: 64 };
@@ -331,8 +336,8 @@ export async function openGame(
     musicTrack: () =>
       page.evaluate(() => import('/src/ui/music.js').then((m) => m.musicTrack())),
 
-    // Every sound played so far, in order ('tap', 'coin', 'pickup', 'gem',
-    // 'torch', 'death'). Same trick as `music()`, and the only way to assert
+    // Every sound played so far, in order ('tap', 'text', 'coin', 'pickup',
+    // 'gem', 'torch', 'death'). Same trick as `music()`, and the only way to assert
     // that a button makes a noise and the D-pad doesn't.
     sounds: () => page.evaluate(() => import('/src/ui/sfx.js').then((m) => m.soundLog())),
 
@@ -391,16 +396,45 @@ export async function openGame(
 
     clickAt,
 
+    // What the text panel is showing: which block of how many, the characters of
+    // it on screen so far, and whether that block has finished typing itself out.
+    // Null while the panel is closed (src/ui/textPanel.js).
+    textPanel: () =>
+      page.evaluate(() => {
+        const s = window.__game.scene.getScene('ExploreScene');
+        return s && s.textPanel ? s.textPanel.viewState() : null;
+      }),
+
+    // Taps the panel, which is the only thing a player can do to it: finish the
+    // block, or move on to the next one.
+    tapPanel: () => clickAt(TEXT_PANEL.x, TEXT_PANEL.y),
+
+    // Reads the panel to the end, the way a player who has seen it before does:
+    // two taps a block, one to fill it and one to move on. `startRun` calls it,
+    // so no test has to know that setting out says anything.
+    readPanel: async () => {
+      for (let taps = 0; taps < 40; taps++) {
+        if (!(await game.textPanel())) return;
+        await game.tapPanel();
+      }
+      throw new Error('the text panel would not close');
+    },
+
     // Title screen to a walking run, the way a player gets there: NEW GAME or
     // LOAD GAME, then a slot. A test that planted a save wants that campaign
     // back, so it loads slot 1; one that planted nothing starts a fresh one in
     // the same slot.
+    //
+    // A fresh expedition opens with the text panel over the HUD, and it owns the
+    // input while it is up — so getting to "a walking run" means reading it,
+    // exactly as a player has to.
     startRun: async (slot = 1) => {
       const used = await page.evaluate((n) => !!localStorage.getItem(`nouxinha.save.${n}`), slot);
       await game.clickText(used ? 'LOAD GAME' : 'NEW GAME');
       await game.waitForScene('SlotScene');
       await game.clickText(`SLOT ${slot}`);
       await game.waitForScene('ExploreScene');
+      await game.readPanel();
     },
 
     // Taps a D-pad arrow, the way a thumb would.
@@ -573,6 +607,7 @@ export async function openGame(
           // hut's question or the death screen.
           menuOpen: s.menuOpen,
           shopOpen: s.shop.isOpen(),
+          textPanelOpen: s.textPanel.isOpen(),
           mapOpen: s.worldMap.isOpen(),
           // Where the map overlay's drawing currently sits and how far it can
           // be zoomed — null while the overlay is closed (src/ui/worldMap.js).

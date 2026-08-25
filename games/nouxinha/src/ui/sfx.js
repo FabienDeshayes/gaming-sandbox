@@ -82,14 +82,19 @@ export function soundLog() {
 // Schedules a sound, or doesn't, and never throws. A context the player hasn't
 // opened yet is resumed first and the sound follows it — the tap that unlocks
 // the audio is usually a tap that should be heard.
-function play(name, schedule) {
+//
+// `collapse` is for a sound that fires dozens of times a second and means one
+// thing while it does — the typewriter, and only the typewriter. Such a run
+// goes into the log as a single entry, so a sentence being read out doesn't
+// push every other sound in the run off the end of it.
+function play(name, schedule, { collapse = false } = {}) {
   const a = audio();
   const bus = audioOut();
   if (!a || !bus) return;
   const run = () => {
     try {
       schedule(a, bus, a.currentTime);
-      log.push(name);
+      if (!collapse || log[log.length - 1] !== name) log.push(name);
       if (log.length > LOG_MAX) log.shift();
     } catch (e) {
       /* a sound is never worth taking the game down for */
@@ -161,6 +166,20 @@ function whoosh(a, bus, { at, duration, peak, from, to }) {
 export function playTap() {
   play('tap', (a, bus, now) =>
     note(a, bus, { freq: 1046, glide: 740, at: now, duration: 0.05, peak: 0.03, cutoff: 2400 })
+  );
+}
+
+// The game talking: one blip every couple of characters while the text panel
+// types itself out (ui/textPanel.js). Higher, quieter and far shorter than the
+// button's tock — at this rate anything with a tail turns into a buzz, and the
+// pitch drop across the note is what stops a run of them reading as one held
+// tone.
+export function playTextBlip() {
+  play(
+    'text',
+    (a, bus, now) =>
+      note(a, bus, { freq: 1568, glide: 1244, at: now, duration: 0.022, peak: 0.014, cutoff: 2800 }),
+    { collapse: true }
   );
 }
 

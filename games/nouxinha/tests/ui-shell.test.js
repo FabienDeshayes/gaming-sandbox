@@ -4,7 +4,7 @@
 
 import { assert, assertEqual, runIfMain, test as browserTest } from './harness.js';
 import { test } from './world.js';
-import { LEAVING, MENU, PALETTE_NAMES, SETTINGS, TITLE, UI } from '../src/text.js';
+import { LEAVING, MENU, PALETTE_NAMES, SAY, SETTINGS, SLOTS, TITLE, UI } from '../src/text.js';
 
 browserTest('a button responds across its whole width, not just the left half', async (game) => {
   assert(await game.hasText(TITLE.name), 'the title screen is up');
@@ -144,6 +144,57 @@ test('the tile sheet is loaded and cut into every sprite the game draws', async 
   // (src/data/paint.js).
   for (const key of ['floor', 'rock-2', 'tree-7', 'wall-tl', 'base', 'wizard-down-z1', 'wall-tl-z1'])
     assert(cut.sprites.some((s) => s.key === key), `${key} was cut`);
+});
+
+test('setting out, the game says its piece a character at a time', async (game) => {
+  // Every other test gets to a run through `startRun`, which reads the panel to
+  // the end on the way past. This one takes the long way round, because the
+  // panel is the thing it is about.
+  await game.clickText(TITLE.newGame);
+  await game.waitForScene('SlotScene');
+  await game.clickText(SLOTS.slotName(1));
+  await game.waitForScene('ExploreScene');
+
+  const opening = await game.textPanel();
+  assert(opening, 'a fresh expedition opens with the panel up');
+  assertEqual(opening.blocks, SAY.expeditionStart.length, 'one block per line of the copy');
+  assertEqual(opening.index, 0, 'starting at the first');
+  // The block is wrapped to the panel, not reworded by it.
+  assertEqual(opening.full.replace(/\n/g, ' '), SAY.expeditionStart[0], 'saying what text.js says');
+  assert(opening.shown.length < opening.full.length, 'and it is not all there yet');
+
+  // Progressively: two reads a beat apart see different amounts of it.
+  await game.page.waitForTimeout(150);
+  const more = await game.textPanel();
+  assert(more.shown.length > opening.shown.length, 'it fills itself in as it goes');
+  assert((await game.sounds()).includes('text'), 'and it is audible doing it');
+
+  // The first tap fills the block in rather than skipping past it.
+  await game.tapPanel();
+  const filled = await game.textPanel();
+  assertEqual(filled.index, 0, 'a tap mid-sentence is not a tap to the next block');
+  assertEqual(filled.shown, filled.full, 'it puts the rest of it up at once');
+
+  // The next one moves on.
+  await game.tapPanel();
+  assertEqual((await game.textPanel()).index, 1, 'and the tap after that is the next block');
+
+  // Anywhere on the screen is the panel's, so the D-pad under it reads it on
+  // instead of walking.
+  const before = await game.state();
+  assert(before.textPanelOpen, 'the panel owns the screen while it talks');
+  await game.tapDpad('right');
+  await game.settle();
+  const bumped = await game.state();
+  assertEqual(bumped.steps, before.steps, 'the D-pad does not step while it is up');
+  assert(bumped.textPanelOpen, 'it took the tap itself');
+
+  // Read out, it gets out of the way and hands the expedition over.
+  await game.readPanel();
+  assertEqual(await game.textPanel(), null, 'the last block closes it');
+  await game.tapDpad('right');
+  await game.settle();
+  assertEqual((await game.state()).steps, before.steps + 1, 'and now the run walks');
 });
 
 runIfMain(import.meta.url);

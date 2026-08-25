@@ -3,7 +3,7 @@
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import { tileKey } from '../src/core/light.js';
-import { isWalkable, sanctums } from '../src/core/world.js';
+import { isBase, isWalkable, sanctums } from '../src/core/world.js';
 import {
   activeLight,
   activeShape,
@@ -23,16 +23,23 @@ import {
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
 import { CHEAT_COINS, CHEAT_REVEAL_RADIUS, STARTING_WATER } from '../src/balance.js';
 import { ITEMS } from '../src/data/items.js';
-import { NONCE, ROCK_ROUTE, SEED, SHADOW_ROUTE, TORCH_ROUTE, WATER_ROUTE, scatter } from './world.js';
+import { NONCE, ROCK_ROUTE, SEED, SHADOW_ROUTE, START, TORCH_ROUTE, WATER_ROUTE, bfs, scatter } from './world.js';
 
 // Rock is impassable, so tests that need to burn a lot of steps pace back and
 // forth on two tiles proved walkable first — and on two tiles *off* the hut,
 // since standing on it fills the tank (DESIGN.md §4), which a test counting
-// water down to zero would wait for forever.
+// water down to zero would wait for forever. Found from the tile a run
+// actually starts on (`START`, one tile south of the hut), not from the hut
+// itself, so the first step of `pace` is always legal.
 const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
 const OUT = (() => {
+  const [sx, sy] = START;
   const found = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
-    ([, dx, dy]) => isWalkable(dx, dy, SEED) && isWalkable(dx * 2, dy * 2, SEED)
+    ([, dx, dy]) =>
+      !isBase(sx + dx, sy + dy) &&
+      !isBase(sx + dx * 2, sy + dy * 2) &&
+      isWalkable(sx + dx, sy + dy, SEED) &&
+      isWalkable(sx + dx * 2, sy + dy * 2, SEED)
   );
   if (!found) throw new Error('nowhere two steps clear of the hut to pace on');
   return found[0];
@@ -43,6 +50,16 @@ const pace = (state, steps) => {
   const results = [];
   for (let i = 0; i < steps; i++) results.push(step(state, i < 2 || i % 2 === 1 ? OUT : BACK));
   return results;
+};
+
+// BFSes from wherever pacing left the state to the hut and walks it, so a test
+// that has burned an arbitrary number of steps off-hut doesn't have to reason
+// about which direction — or how many steps — actually leads home.
+const walkHome = (state) => {
+  const { path } = bfs(state.seed, (x, y) => isBase(x, y), 60, [state.x, state.y], state.keys);
+  let result;
+  for (const dir of path) result = step(state, dir);
+  return result;
 };
 
 unit('a step costs one durability, one water and one step, and sets facing', () => {
@@ -113,12 +130,13 @@ unit('running out of water ends the run, and nothing else can move it again', ()
 unit('reaching the hut fills the tank, and getting home on the last drop is getting home', () => {
   const state = createRun(SEED, emptySave(), NONCE);
   const out = step(state, OUT);
-  assert(out.moved && !out.atBase, 'one step off the doorstep');
+  assert(out.moved && !out.atBase, 'one step off the start tile');
   assert(state.water < maxWater(state.gems), 'and a step out here costs water like any other');
 
-  // The walk home on fumes: water set to exactly the one step it takes.
-  state.water = 1;
-  const home = step(state, BACK);
+  // The walk home on fumes: water set to exactly what the walk back costs.
+  const { path } = bfs(state.seed, (x, y) => isBase(x, y), 60, [state.x, state.y], state.keys);
+  state.water = path.length;
+  const home = walkHome(state);
   assert(home.atBase, 'back on the hut');
   assertEqual(home.died, false, 'reaching your own doorstep is not dying in it');
   assertEqual(state.water, maxWater(state.gems), 'because the hut fills the tank on arrival');
@@ -169,8 +187,7 @@ unit('reaching the hut in blackout hands back a starting light', () => {
   pace(state, ITEMS['torch-small'].maxDurability);
   assert(isBlackout(state), 'burned out into blackout, off the hut');
 
-  step(state, BACK);
-  const home = step(state, BACK);
+  const home = walkHome(state);
   assert(home.atBase, 'back on the hut');
   assert(home.relit, 'the hut reports handing back a light');
   assertEqual(isBlackout(state), false, 'no longer in blackout');
@@ -215,9 +232,12 @@ unit('a picked-up item does not come back', () => {
 
 unit('a step reports arriving back at the hut', () => {
   const state = createRun(SEED, emptySave(), NONCE);
-  // The base clearing is forced floor, so stepping out and back is always legal.
-  assertEqual(step(state, 'right').atBase, false, 'stepping off the hut');
-  assertEqual(step(state, 'left').atBase, true, 'stepping back onto it');
+  // The base clearing is forced floor, so stepping around and back is always
+  // legal. A run starts one tile south of the hut, not on it, so getting back
+  // takes an extra step onto the hut's own tile.
+  assertEqual(step(state, 'right').atBase, false, 'stepping further from the hut');
+  assertEqual(step(state, 'left').atBase, false, 'back on the start tile, still not the hut');
+  assertEqual(step(state, 'up').atBase, true, 'stepping onto the hut itself');
   assertEqual({ x: state.x, y: state.y }, { x: 0, y: 0 }, 'home again');
 });
 

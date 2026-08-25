@@ -11,8 +11,6 @@
 // The words on screen are not here either — every player-facing string in the
 // game lives in `src/text.js`.
 
-import { PALETTE_NAMES } from './text.js';
-
 export const GAME_WIDTH = 480;
 export const GAME_HEIGHT = 854;
 
@@ -46,59 +44,27 @@ export const REMEMBERED_ALPHA = 0.3;
 // tile is baked with a dimmed grey that the same tint multiplies through.
 export const FLOOR_TEXTURE_LEVEL = 0.5;
 
-// The names Settings shows are copy, so they come from `src/text.js`; what is
-// here is the two colours each palette actually is.
+// The two colours each palette is. There is no picking one in Settings any
+// more — a world's colour comes from its biome (`biomes.js`), full stop.
 export const PALETTES = [
-  { id: 'phosphor', name: PALETTE_NAMES.phosphor, bg: 0x0b1a0b, fg: 0x33ff66 },
-  { id: 'amber', name: PALETTE_NAMES.amber, bg: 0x1a0f00, fg: 0xffb000 },
-  { id: 'cathode', name: PALETTE_NAMES.cathode, bg: 0x06121a, fg: 0x4fd0ff },
-  { id: 'magenta', name: PALETTE_NAMES.magenta, bg: 0x14061a, fg: 0xff5fd2 },
+  { id: 'phosphor', bg: 0x0b1a0b, fg: 0x33ff66 },
+  { id: 'amber', bg: 0x1a0f00, fg: 0xffb000 },
+  { id: 'cathode', bg: 0x06121a, fg: 0x4fd0ff },
+  { id: 'magenta', bg: 0x14061a, fg: 0xff5fd2 },
 ];
 
-const STORAGE_KEY = 'nouxinha.palette';
-
 let activeId = PALETTES[0].id;
-// Whether the player has ever picked a palette themselves. Until they have,
-// the world chooses: each biome is drawn in a colour of its own (`biomes.js`),
-// so a frozen world reads cold and a desert warm without anyone touching
-// Settings. The moment one is picked in Settings it is theirs, in every world,
-// and nothing overrides it again.
-let chosen = false;
-
-// localStorage throws in some embedded/private contexts; a palette preference
-// is never worth taking the game down for.
-try {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && PALETTES.some((p) => p.id === saved)) {
-    activeId = saved;
-    chosen = true;
-  }
-} catch (e) {
-  /* keep the default */
-}
 
 export function getPalette() {
   return PALETTES.find((p) => p.id === activeId) || PALETTES[0];
 }
 
-// The player's own choice: persisted, and from here on it outranks whatever
-// world they walk into.
-export function setPalette(id) {
-  if (!PALETTES.some((p) => p.id === id)) return;
-  activeId = id;
-  chosen = true;
-  try {
-    localStorage.setItem(STORAGE_KEY, id);
-  } catch (e) {
-    /* preference just won't persist */
-  }
-}
-
-// The colour a world is drawn in for a player who has not asked for another
-// one. Not persisted: it is re-read off whichever world is being walked
-// (`ExploreScene`), so it can never outlive the run it came from.
+// The colour a run's world is drawn in, set from its biome the moment a run
+// opens (`ExploreScene`). Not persisted: it is re-read off whichever world is
+// being walked, so it can never outlive the run it came from, and the menus
+// stay in whatever world was last walked until the next one sets it again.
 export function setDefaultPalette(id) {
-  if (!chosen && PALETTES.some((p) => p.id === id)) activeId = id;
+  if (PALETTES.some((p) => p.id === id)) activeId = id;
   return getPalette();
 }
 
@@ -203,8 +169,8 @@ export function setMoveSpeed(stepsPerSecond) {
 //
 // `hue` 0 means "no gem": the palette's own foreground, which is what the whole
 // world is drawn in before the first gem and what most of it stays after.
-// Switching palettes mid-game reshuffles which colour belongs to which gem;
-// that's deterministic and it's the same three, so nothing is lost by it.
+// Walking into a different biome reshuffles which colour belongs to which
+// gem; that's deterministic and it's the same three, so nothing is lost by it.
 export function gemColour(hue) {
   const active = getPalette();
   if (!hue) return active.fg;

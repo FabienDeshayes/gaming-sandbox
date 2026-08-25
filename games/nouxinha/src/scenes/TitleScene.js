@@ -30,11 +30,18 @@ export class TitleScene extends Phaser.Scene {
     const save = loadSave();
     const canLoad = anySlotUsed();
 
+    // Two independent picks off the three gem hues, so the title text is never
+    // the same colour as the wizard below it — the screen reads as freshly
+    // rolled rather than as one colour bleeding into the next.
+    const hues = [1, 2, 3];
+    const wizardHue = hues[Math.floor(Math.random() * hues.length)];
+    const textHue = hues.filter((h) => h !== wizardHue)[Math.floor(Math.random() * 2)];
+
     this.add
       .text(cx, 200, TITLE.name, {
         fontFamily: FONT,
         fontSize: '46px',
-        color: hex(pal.fg),
+        color: hex(gemColour(textHue)),
       })
       .setOrigin(0.5);
 
@@ -50,21 +57,8 @@ export class TitleScene extends Phaser.Scene {
     // The wizard, lit by the torch they're about to spend. The title screen
     // always dresses them in a colour — picked fresh from the palette on every
     // visit — rather than the plain foreground a fresh campaign would draw
-    // them in; the gem pips below are what actually report how much colour
-    // has been carried home.
-    const flair = gemColour(1 + Math.floor(Math.random() * 3));
-    paintWizard(makeWizard(this, cx, 380, 'down', 7), 'down', 0, flair);
-
-    // One pip per gem, the found ones in the colour they gave back.
-    const gap = 44;
-    for (let i = 1; i <= MAX_GEMS; i++) {
-      const held = i <= save.gems;
-      this.add
-        .image(cx + (i - (MAX_GEMS + 1) / 2) * gap, 462, 'gem')
-        .setScale(2)
-        .setTint(held ? gemColour(i) : pal.fg)
-        .setAlpha(held ? 1 : 0.25);
-    }
+    // them in.
+    paintWizard(makeWizard(this, cx, 380, 'down', 7), 'down', 0, gemColour(wizardHue));
 
     if (save.runs)
       this.add

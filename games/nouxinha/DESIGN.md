@@ -51,7 +51,7 @@ The world has three things in it: **terrain** (floor, two formations of rock, gr
 
 | Mechanic | Description | Input |
 |---|---|---|
-| Tile stepping | The character moves exactly one tile per input, in a cardinal direction. Rock, trees and sanctum wall are impassable, and so is a gate you don't hold the gem for: a rejected step costs no durability and doesn't change facing. The character's **facing** is the direction of their last successful step (it starts pointing north from the base). | Swipe in a cardinal direction anywhere on the map, or tap the D-pad |
+| Tile stepping | The character moves exactly one tile per input, in a cardinal direction. Rock, trees and sanctum wall are impassable, and so is a gate you don't hold the gem for: a rejected step costs no durability and doesn't change facing. The character's **facing** is the direction of their last successful step (it starts pointing south, out of the base). | Swipe in a cardinal direction anywhere on the map, or tap the D-pad |
 | Gems and gates | Three gems sit at the centres of walled **sanctums** scattered around the hut. Picking one up gives a colour back to the world and opens the gate that wants it (§4.4). | Walk onto the gem |
 | Saving | A run is banked by **reaching** the hut, whether or not the expedition ends there (§6). Dying of thirst or leaving by the menu's **EXIT GAME** banks nothing since the last time the hut was stood on, so a gem picked up but never carried back is still out there next run — though the ground the run lit is kept whichever way it ends (§6.1). Separately, the cogwheel menu's **SAVE GAME** suspends the expedition mid-walk so it can be carried on later; that is a bookmark, not a banking (§6.1). | Walk onto the hut, or **SAVE GAME** on the menu |
 | Light & visibility | The active light source defines a **shape** of tiles visible from the character's tile (see §4.1). Every tile has one of three states: **unknown** (never lit — drawn as flat background, indistinguishable from any other unknown tile), **remembered** (lit at some point — drawn dimmed), **lit** (inside the current light shape — drawn full brightness). Items and terrain are only readable in the lit state; a remembered tile keeps showing whatever was there when you last saw it. | — |
@@ -150,20 +150,21 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
   with one answer.
 
   A biome is two things so far. It has a **colour of its own** — temperate is drawn in PHOSPHOR,
-  frozen in CATHODE, desert in AMBER, the mystical realm in MAGENTA (§9) — which applies to a player
-  who has not picked a palette in Settings; pick one there and it is yours in every world from then
-  on. The colour is set when a run opens, so the menus are drawn in whatever world was last walked
-  and a page opened cold is drawn in the temperate green until the first expedition sets out. And it has **tiles of its own**: a biome names the world tiles it wants drawn differently and
+  frozen in CATHODE, desert in AMBER, the mystical realm in MAGENTA (§9), and that is the whole of how
+  a world's colour is decided; there is no picking one in Settings. The colour is set when a run
+  opens, so the menus are drawn in whatever world was last walked and a page opened cold is drawn in
+  the temperate green until the first expedition sets out. And it has **tiles of its own**: a biome names the world tiles it wants drawn differently and
   shares the rest, so frozen rock and desert rock can be different stone without either being a
   second copy of the sheet. Today all four draw the same art, and the difference is the colour alone.
   What a biome does *not* change yet is the ground it grows: rock density, groves, the scatter and
   the distances are one set of numbers for every world (`src/balance.js`), and per-biome landscape
   parameters are the next thing this grows into.
-- The **base** sits at `(0, 0)` and is where every run starts. Its 3×3 neighbourhood is forced to
-  floor so you can never be walled in at spawn. It renders as a hut with a flag so it's recognisable
-  from the edge of your light, and it's the one tile that's always on the map. The hut isn't drawn
-  while the wizard is standing on it — two dense sprites on one tile read as an unidentifiable blob,
-  so the wizard is simply in the doorway.
+- The **base** sits at `(0, 0)`. Its 3×3 neighbourhood is forced to floor so you can never be walled
+  in at spawn. It renders as a hut with a flag so it's recognisable from the edge of your light, and
+  it's the one tile that's always on the map. The hut isn't drawn while the wizard is standing on
+  it — two dense sprites on one tile read as an unidentifiable blob — which is why every run actually
+  starts one tile south of it, facing further away: the hut is in view, behind the character, from
+  the first frame, rather than hidden until the first step off it.
 - **The seed is validated at run start.** A clearing at spawn isn't enough: at any density of blocked
   ground that still looks like a cave system, a slice of seeds seals the base into a pocket of a few
   tiles, which would break the promise that the character is never permanently stuck (§5). So a run
@@ -462,8 +463,8 @@ The one thing that outlives a run regardless is the ground it lit — cartograph
 A developer switch in Settings, off by default, for looking at what the late game actually does without a campaign's worth of walking behind it.
 
 - A run started with cheats on opens with **the whole world revealed** — every tile out past the fourth sanctum, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **all three keys** so every gate stands open, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust. The chests themselves are left shut, so a sandbox for looking at the late game still has one to open.
-- **A cheat run writes nothing at all.** It banks no progress at the hut, it cannot be saved mid-walk from the menu (which says so instead of writing), and it does not even keep its ground, because a run that was *handed* three gems is not a campaign and must never overwrite one. The toggle says so on itself, the title screen says so under the gem pips, and the recap says so instead of listing what is being carried home.
-- It is a preference rather than run state: `src/config.js` persists it next to the palette, the scene reads it and hands it to `createRun`, and `src/core/rules.js` never asks.
+- **A cheat run writes nothing at all.** It banks no progress at the hut, it cannot be saved mid-walk from the menu (which says so instead of writing), and it does not even keep its ground, because a run that was *handed* three gems is not a campaign and must never overwrite one. The toggle says so on itself, the title screen says so under the character, and the recap says so instead of listing what is being carried home.
+- It is a preference rather than run state: `src/config.js` persists it to `localStorage`, the scene reads it and hands it to `createRun`, and `src/core/rules.js` never asks.
 
 ## 7. Controls
 
@@ -486,7 +487,6 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Pan the map | Drag the drawing (or move both fingers of a pinch together) | Drag it |
 | Start a run | **NEW GAME** or **LOAD GAME** on the title screen, then a slot on the picker | Click the same |
 | Overwrite a campaign | Tap an occupied slot under **NEW GAME**, then tap it again | Click the same |
-| Change palette | Settings, from the title screen | Same |
 | Turn the music off | Settings → **MUSIC** (§9), which silences both loops | Same |
 | Set the walking speed | Settings → drag or tap the **MOVE SPEED** slider (2-10 steps/second) | Same |
 | Turn cheats on or off | Settings → **CHEATS** (§6.2) | Same |
@@ -499,7 +499,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 
 **The item card** is an overlay, opened from a slot in the strip or a row in the inventory panel, showing: the item's name, its sprite at large scale, and a one-line **effect** description ("Lights the 8 tiles around you"). A kind carried as a single copy shows that copy's **durability** as `current / max` with a bar and an **Equip** button (greyed out if it's already active). A kind carried as several copies shows a scrollable list instead — one row per copy, its own durability bar, and an `EQUIPPED` tag on whichever is active — since copies rarely share a durability and the choice of *which* one to equip has to be visible; tapping a row equips that exact copy and closes the card. Opening a card doesn't cost a step — the game is turn-based on movement only.
 
-**The inventory panel** is opened from the HUD's **ITEMS** slot and lists every carried stack — icon, name, and count — in a scrollable list, so a run isn't limited to what fits in the strip's slots. Above the list sits the same gem-pip row the title screen shows a campaign's save with: one pip per gem, recovered ones in the colour they gave back and the rest dimmed, so the run's progress toward all three colours is visible without standing on screen throughout a walk. The three keys sit on the same row after a gap, drawn in the same colours, because a key *is* a gate's colour and two rows would only be asking the player to hold two palettes in their head. Tapping a stack closes the panel and opens its item card.
+**The inventory panel** is opened from the HUD's **ITEMS** slot and lists every carried stack — icon, name, and count — in a scrollable list, so a run isn't limited to what fits in the strip's slots. Above the list sits a gem-pip row: one pip per gem, recovered ones in the colour they gave back and the rest dimmed, so the run's progress toward all three colours is visible without standing on screen throughout a walk. The three keys sit on the same row after a gap, drawn in the same colours, because a key *is* a gate's colour and two rows would only be asking the player to hold two palettes in their head. Tapping a stack closes the panel and opens its item card.
 
 **The merchant's counter** is a modal listing one row per line of stock — icon, name, price — over
 the purse it has to be paid from. A row the run can't act on is dimmed rather than hidden, so the
@@ -516,7 +516,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 
 **The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is one: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again. **Opening a chest** (§4.8) is the other, and the reason the panel leaves the world on screen: the lid is visibly up behind the words.
 
-**The cogwheel menu** is a dialog with four choices — **SETTINGS**, **SAVE GAME**, **EXIT GAME** and **KEEP PLAYING**. Settings is the same screen the title screen opens and comes straight back to the tile you were standing on, palette and all. Saving reports what it wrote and then asks the one question that follows from it: keep playing, or leave now. Leaving asks first, and says what it is about to cost, because an abandoned expedition can't be got back (§6.1).
+**The cogwheel menu** is a dialog with four choices — **SETTINGS**, **SAVE GAME**, **EXIT GAME** and **KEEP PLAYING**. Settings is the same screen the title screen opens and comes straight back to the tile you were standing on. Saving reports what it wrote and then asks the one question that follows from it: keep playing, or leave now. Leaving asks first, and says what it is about to cost, because an abandoned expedition can't be got back (§6.1).
 
 **Screen layout** (480×854):
 
@@ -541,7 +541,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 - Coins and a coin counter
 - Water: depletes one per step regardless of light state, starts at 200 and rises 50 per gem held, refilled by the three water pickups; hitting 0 ends the run and everything carried is lost
 - Stacked inventory strip, a scrollable inventory panel, and an item card (durability, effect, Equip — a scrollable per-copy list for stacks of more than one)
-- Duo-chromatic rendering with four CRT palettes selectable in Settings, persisted
+- Duo-chromatic rendering with four CRT palettes, one per biome
 - Tiles-explored counter
 - The hut's stop/continue question and the end-of-run recap
 - Synthesised sound throughout: pickup blips, a gem fanfare, a torch catching, a death knell, a tap on every button but the D-pad, and a loop for the walk with a smaller one for the menus (§9)
@@ -633,9 +633,8 @@ dragging the drawing itself; **CLOSE** is the way out.
 - **The character** is a hooded, bearded wizard with a staff. The hood and the staff line are the whole identity at 16×16 — which is why they are also the two things a gem colours, along with the robe between them. Facing down, the face stays the colour they set out in.
 
   **Each facing is its own tile.** Down is the sheet's own face-on figure; up turns it around, the same hood and robe mirrored so the staff swaps hands, with the face closed over — no brow or eyes, just hood, since there is nothing to show from behind. Left and right are a profile silhouette drawn for this game (the sheet holds none), mirrored off each other. Facing is mechanically load-bearing regardless — the lamp torch's cone points wherever the character does — but until these existed, only the *shape of the lit ground* showed which way they were looking; a wrong-looking turn would have been worse than no turn at all, which is why the sheet's face-on tile stood in for all four for as long as it did.
-- **Palettes:** four combinations, all CRT-flavoured, one per biome (§4.3) — a world is drawn in its
-  own colour until a player picks one in Settings, and from that moment their pick is theirs in every
-  world and is the only one persisted in `localStorage`:
+- **Palettes:** four combinations, all CRT-flavoured, one per biome (§4.3) — a world is always drawn
+  in its own biome's colour; there is no picking one in Settings:
 
   | Name | Background | Foreground | The world it colours |
   |---|---|---|---|
@@ -657,7 +656,7 @@ dragging the drawing itself; **CLOSE** is the way out.
   - **A death knell:** three falling notes and a low one sagging under them when the water runs out. The only sound in the game that descends, and the one place the music stops before the scene does (§6).
   - **A tap:** a short tock on every button, panel and row in the game — except the D-pad, which is tapped often enough that a sound on it would turn walking into a rattle.
   - **The typewriter:** a very short, quiet, high blip every couple of characters while the text panel types itself out (§7). It is the one sound that fires dozens of times a second, which is why it is the shortest and quietest thing in the game — anything with a tail on it at that rate is a buzz rather than a voice.
-  - **Two loops, following the scene:** the walk gets eight eight-step phrases in A minor pentatonic over a filtered square-wave drone, about half a minute end to end, with the second half an octave up; the menus get a smaller, slower, thinner one — three phrases, a single-octave drone, a long release — in the same key, so the title screen sounds like the dark heard from indoors. Both are written as text in `src/ui/music.js`, and most of their steps are rests: a loop marks time in a place where nothing else does, and a tune would start competing with the blips, which are the sounds that actually mean something. They sit well under them in level for the same reason: the blip is information, the loop is weather. Each scene asks for the track it wants when it opens and none of them stop the music on the way out, so the handover is a crossfade. **MUSIC** in Settings turns it off, persisted in `localStorage` like the palette. A backgrounded tab or app stops the loop the same way — WebAudio keeps running behind an inactive tab, so `music.js` listens for `visibilitychange` and fades out on hide, resuming the same track from the top of its phrase on return.
+  - **Two loops, following the scene:** the walk gets eight eight-step phrases in A minor pentatonic over a filtered square-wave drone, about half a minute end to end, with the second half an octave up; the menus get a smaller, slower, thinner one — three phrases, a single-octave drone, a long release — in the same key, so the title screen sounds like the dark heard from indoors. Both are written as text in `src/ui/music.js`, and most of their steps are rests: a loop marks time in a place where nothing else does, and a tune would start competing with the blips, which are the sounds that actually mean something. They sit well under them in level for the same reason: the blip is information, the loop is weather. Each scene asks for the track it wants when it opens and none of them stop the music on the way out, so the handover is a crossfade. **MUSIC** in Settings turns it off, persisted in `localStorage`. A backgrounded tab or app stops the loop the same way — WebAudio keeps running behind an inactive tab, so `music.js` listens for `visibilitychange` and fades out on hide, resuming the same track from the top of its phrase on return.
 
 ## 10. Theme
 
@@ -674,8 +673,8 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   |---|---|
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
   | `src/balance.js` | **Every number the game is balanced on, and nothing else**: terrain thresholds, the edge of the world and its choke, seed validation, the sanctum, landmark and chest plans, the scatter lattice (`MIN_SEPARATION`, `SCATTER`, the per-band spawn chance and the gem density taper), coin values, water and the leash, light durability and shapes, the merchant's prices and the cheat switch's reach. Imports nothing — it is a table, not code |
-  | `src/text.js` | **Every word the game says to the player, and nothing else**: the title screen and its tagline, the slot picker, Settings and the palette names, the HUD's counters and status line, every dialog — the hut, the recap, the death screen, the menu, the edge — the merchant, the map, the panels, and each item's name and card copy. Anything that varies is a function of what it varies on, so copy and the number it quotes cannot drift apart. Imports only `src/balance.js`, for the refill figures the water cards quote. No layout, no logic — a scene never spells a player-facing string itself |
-  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (a player's pick, persisted to `localStorage`) and `setDefaultPalette`, the colour a world is drawn in for a player who has not picked one (§4.3), the music and cheat switches (§9, §6.2, persisted the same way), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
+  | `src/text.js` | **Every word the game says to the player, and nothing else**: the title screen and its tagline, the slot picker, Settings, the HUD's counters and status line, every dialog — the hut, the recap, the death screen, the menu, the edge — the merchant, the map, the panels, and each item's name and card copy. Anything that varies is a function of what it varies on, so copy and the number it quotes cannot drift apart. Imports only `src/balance.js`, for the refill figures the water cards quote. No layout, no logic — a scene never spells a player-facing string itself |
+  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor and `setDefaultPalette` — which sets it from a run's biome, the only way it is ever set (§4.3) — the music and cheat switches (§9, §6.2, persisted to `localStorage`), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
   | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums, landmarks and chests (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `chests`, `chestAt`, `entryKey`/`canEnter` — which key a tile wants — and `blocksSight`, what stops a light rather than a step); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws — and `biomeOf`, which kind of world a seed is (§9, §4.3). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw, snapped to the four the needle has sprites for. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
@@ -701,7 +700,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers — and the pinch/drag/wheel/button zoom and pan over the top of it, which are one container's scale and position |
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |
   | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js`, `src/ui/slider.js` | The D-pad, held to repeat a step at the rate `getMoveSpeed` gives; the item card overlay (single-copy or scrollable instance list); the full scrollable inventory panel, with the gem-pip row above its list; the title/rows/buttons dialog the hut, the recap and the cogwheel menu all use, its buttons in a row or stacked one per line once there are more than two; the shared bordered button; the shared drag-or-tap slider, used once for the move-speed setting |
-  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker, which says which slots are mid-expedition), `SettingsScene` (the palette grid, the music switch, the move-speed slider, the cheat switch — and, opened from a run, the way back into it), `ExploreScene` (the run, and the cogwheel menu hanging off it) |
+  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker, which says which slots are mid-expedition), `SettingsScene` (the music switch, the move-speed slider, the cheat switch — and, opened from a run, the way back into it), `ExploreScene` (the run, and the cogwheel menu hanging off it) |
   | `tests/` | `harness.js` (local server + Playwright driver + runner), `world.js` (the seed and every route BFSed out of it), eleven `*.test.js` suites and `all.test.js`, which runs them all — see `TESTING.md` |
 
 - **Sprites are coordinates on one sheet.** `src/data/tiles.js` names a **(col, row)** of `assets/tiles.png` per sprite key; the tile is cut out as a 1-bit mask at boot, baked into a white texture and tinted at draw time. One image, no image editor to repoint a sprite, no build step — and one texture set serves all four palettes.

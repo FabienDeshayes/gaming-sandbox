@@ -5,21 +5,24 @@ import { assert, assertEqual, runIfMain } from './harness.js';
 import { terrainAt, variantAt } from '../src/core/world.js';
 import { variantKey } from '../src/data/tiles.js';
 import { BLACKOUT_MEMORY_RADIUS } from '../src/balance.js';
-import { HUD } from '../src/text.js';
+import { HUD, HUT } from '../src/text.js';
 import { ITEMS } from '../src/data/items.js';
 import { ORTHOGONAL, ROCK_ROUTE, SEED, TREE_ROUTE, test, walkPath } from './world.js';
 
-test('a run starts at the base with the small torch lit, and no tools in the corner', async (game) => {
+test('a run starts one tile south of the base with the small torch lit, and no tools in the corner', async (game) => {
   await game.startRun();
 
   const state = await game.state();
-  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 0 }, 'starts on the base');
+  // One tile off the hut, facing further away, so the hut is in view from the
+  // first frame instead of hidden under the wizard until the first step off.
+  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 1 }, 'starts south of the base');
+  assertEqual(state.facing, 'down', 'facing away from the base');
   assertEqual(
     state.inventory,
     [{ id: 'torch-small', durability: ITEMS['torch-small'].maxDurability }],
     'inventory'
   );
-  assertEqual(state.explored, 9, 'the 3x3 block around the base is lit');
+  assertEqual(state.explored, 9, 'the 3x3 block around the start tile is lit');
   // Nothing is owned yet, so the navigation rail is empty (DESIGN.md §4.6).
   assertEqual(state.tools, [], 'owning nothing');
   assertEqual(state.compassShown, false, 'means no needle in the corner');
@@ -28,13 +31,24 @@ test('a run starts at the base with the small torch lit, and no tools in the cor
   assertEqual(tiles.filter((t) => t.alpha === 1).length, 9, 'nine tiles at full brightness');
   assert(await game.hasText(HUD.explored(9)), 'the explored counter');
 
-  // The wizard stands in the base's doorway, so the hut itself is only drawn
-  // once they step off it — two dense sprites on one tile read as a blob.
-  assert(!tiles.some((t) => t.overlay === 'base'), 'the hut is hidden under the wizard');
-  await game.tapDpad('right');
+  // The hut is already off the character's own tile, so it's drawn from the
+  // very first frame.
+  assertEqual(tiles.find((t) => t.x === 0 && t.y === 0).overlay, 'base', 'the hut is visible from the start');
+
+  // Walking onto the hut still hides it — two dense sprites on one tile read
+  // as a blob — and stepping back off draws it again. Arriving opens the
+  // hut's own question, which freezes the world until it is answered.
+  await game.tapDpad('up');
   await game.settle();
-  const after = await game.visibleTiles();
-  assertEqual(after.find((t) => t.x === 0 && t.y === 0).overlay, 'base', 'the hut is drawn once you step off it');
+  const onHut = await game.visibleTiles();
+  assert(!onHut.some((t) => t.overlay === 'base'), 'the hut is hidden under the wizard standing on it');
+  assert(await game.hasText(HUT.title), 'and the hut speaks up on arrival');
+  await game.clickText(HUT.headBackOut);
+
+  await game.tapDpad('down');
+  await game.settle();
+  const offHut = await game.visibleTiles();
+  assertEqual(offHut.find((t) => t.x === 0 && t.y === 0).overlay, 'base', 'and reappears once they step off again');
 });
 
 test('the d-pad walks and burns the torch', async (game) => {
@@ -44,7 +58,7 @@ test('the d-pad walks and burns the torch', async (game) => {
   await game.settle();
 
   const state = await game.state();
-  assertEqual({ x: state.x, y: state.y }, { x: 1, y: 0 }, 'moved one tile east');
+  assertEqual({ x: state.x, y: state.y }, { x: 1, y: 1 }, 'moved one tile east');
   assertEqual(state.facing, 'right', 'facing');
   assertEqual(state.inventory[0].durability, ITEMS['torch-small'].maxDurability - 1, 'one durability spent');
   assertEqual(await game.wizardTexture(), 'wizard-right', 'the wizard turned');
@@ -74,13 +88,13 @@ test('swiping the map and the arrow keys both walk', async (game) => {
   await game.swipe('down');
   await game.settle();
   let state = await game.state();
-  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 1 }, 'a swipe moved one tile south');
+  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 2 }, 'a swipe moved one tile south');
   assertEqual(await game.wizardTexture(), 'wizard-down', 'the wizard turned');
 
   await game.press('ArrowUp');
   await game.settle();
   state = await game.state();
-  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 0 }, 'and an arrow key moved one tile back north');
+  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 1 }, 'and an arrow key moved one tile back north');
 });
 
 test('walking into rock bumps instead of moving', async (game) => {
@@ -127,7 +141,7 @@ test('blackout shrinks memory to a fog of war around the character', async (game
   await game.tapDpad('right');
   await game.settle();
   for (let i = 0; i < ITEMS['torch-small'].maxDurability - 1; i++) {
-    await game.tapDpad(i % 2 === 0 ? 'down' : 'up');
+    await game.tapDpad(i % 2 === 0 ? 'up' : 'down');
     await game.settle();
   }
   const state = await game.state();

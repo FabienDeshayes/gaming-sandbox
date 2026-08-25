@@ -67,8 +67,6 @@ export const SLOTS = {
 
 export const SETTINGS = {
   heading: UI.settings,
-  // Badge on the palette currently in use.
-  paletteActive: 'ON',
   music: (on) => `MUSIC: ${on ? 'ON' : 'OFF'}`,
   moveSpeed: (stepsPerSecond) => `MOVE SPEED: ${stepsPerSecond}/s`,
   cheats: (on) => `CHEATS: ${on ? 'ON' : 'OFF'}`,
@@ -77,14 +75,6 @@ export const SETTINGS = {
       ? 'WHOLE MAP REVEALED, ONE OF EVERYTHING. NOTHING SAVES.'
       : 'REVEALS THE MAP AND HANDS YOU EVERY ITEM.',
   back: UI.back,
-};
-
-// The palettes' display names (config.js holds the colours themselves).
-export const PALETTE_NAMES = {
-  phosphor: 'PHOSPHOR',
-  amber: 'AMBER',
-  cathode: 'CATHODE',
-  magenta: 'MAGENTA',
 };
 
 // The biomes' display names (data/biomes.js holds what a biome actually is).

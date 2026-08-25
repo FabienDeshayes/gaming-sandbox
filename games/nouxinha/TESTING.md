@@ -126,8 +126,8 @@ silently pointing at a tile that is now rock. Hardcoding `(-8, 0)` would pass to
 next threshold change.
 
 **The world's colour is the world's, so the suite adopts it.** Which biome a seed names decides
-which palette a page walking it draws itself in, for a browser that has never picked one in Settings
-(DESIGN.md §4.3) — which is every test page. So `tests/world.js` puts Node into the same colours on
+which palette a page walking it draws itself in — that's the only way a palette is ever chosen, there
+is no picking one in Settings (DESIGN.md §4.3). So `tests/world.js` puts Node into the same colours on
 the way past:
 
 ```js
@@ -136,9 +136,7 @@ setDefaultPalette(biomeDef(BIOME).palette);
 ```
 
 A test that says what colour something should be works it out from `gemColour` in Node, and that
-line is what keeps the two ends in the same world. A test about *picking* a palette should pick one
-the world is not already drawn in (`PALETTES.find((p) => p.id !== biomeDef(BIOME).palette)`), or it
-proves nothing.
+line is what keeps the two ends in the same world.
 
 **Consumables move; terrain and unique objects don't.** Coins, water and lights are salted with a
 nonce the run draws at the start and re-salted every time the world respawns (DESIGN.md §4.3), so a

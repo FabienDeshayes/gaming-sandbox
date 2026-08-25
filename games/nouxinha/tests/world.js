@@ -11,12 +11,15 @@
 import { test as browserTest } from './harness.js';
 import { tileKey } from '../src/core/light.js';
 import {
+  BASE_X,
+  BASE_Y,
   biomeOf,
   blocksSight,
   canEnter,
   chestApproach,
   chests,
   DEFAULT_SEED,
+  isBase,
   isMerchant,
   isWalkable,
   itemAt,
@@ -51,6 +54,11 @@ export const scatter = (x, y, gems = 0, salt = SALT) => itemAt(x, y, SEED, { sal
 
 export const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+// Where a run actually starts (core/rules.js `createRun`): one tile south of
+// the hut, not on it, so every route BFSed against it walks the same tiles a
+// real run's D-pad taps would.
+export const START = [BASE_X, BASE_Y + 1];
+
 // Every key in the game, and the list of them in order — for a route that has
 // to walk through a gate, and for the tests that assert what an empty-handed
 // walker can and can't open.
@@ -59,8 +67,11 @@ export const ALL_KEYS = new Set(KEYS);
 
 // `keys` is what the walker is carrying, because a sanctum gate is only walkable
 // to a run holding the key it wants — routing with nothing would send a test
-// round the outside of a sanctum it is supposed to walk into.
-export function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], keys = null) {
+// round the outside of a sanctum it is supposed to walk into. The hut answers
+// a step onto it with its own dialog, which freezes every further tap until
+// it's dismissed — so a route may only ever end there, never cross it, unless
+// the hut is itself what's being routed to.
+export function bfs(seed, isGoal, maxDepth = 24, start = START, keys = null) {
   const [sx, sy] = start;
   const prev = new Map([[tileKey(sx, sy), null]]);
   let frontier = [[sx, sy]];
@@ -73,7 +84,6 @@ export function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], keys = null) {
         const key = tileKey(nx, ny);
         if (prev.has(key) || !canEnter(nx, ny, seed, keys)) continue;
         prev.set(key, [tileKey(x, y), name]);
-        next.push([nx, ny]);
         const hit = isGoal(nx, ny);
         if (hit) {
           const path = [];
@@ -85,6 +95,7 @@ export function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], keys = null) {
           }
           return { x: nx, y: ny, path, hit };
         }
+        if (!isBase(nx, ny)) next.push([nx, ny]);
       }
     }
     frontier = next;
@@ -101,7 +112,7 @@ export function bfs(seed, isGoal, maxDepth = 24, start = [0, 0], keys = null) {
 // walk to an empty tile, which is a flake rather than a failure.
 function bfsChain(seed, wantId, count, maxDepth = 24) {
   const used = new Set();
-  let start = [0, 0];
+  let start = START;
   const legs = [];
   for (let i = 0; i < count; i++) {
     const found = bfs(

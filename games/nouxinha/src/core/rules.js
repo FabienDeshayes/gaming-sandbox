@@ -7,6 +7,8 @@
 
 import { DIRECTIONS, chokeShape, visibleTiles, tileKey } from './light.js';
 import {
+  BASE_X,
+  BASE_Y,
   DEFAULT_SEED,
   beyondEdge,
   biomeOf,
@@ -114,8 +116,11 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // carried, so it is the world's own answer and not something a save could
     // disagree with — everything that draws the ground asks the run for it.
     biome: biomeOf(picked),
-    x: 0,
-    y: 0,
+    // One tile south of the hut, not on it — the hut is a dense sprite of its
+    // own, and standing on top of it hid it until the first step off (DESIGN.md
+    // §4). Facing further away keeps the hut in view, behind the character.
+    x: BASE_X,
+    y: BASE_Y + 1,
     facing: 'down',
     steps: 0,
     coins: 0,

@@ -8,7 +8,7 @@ import { emptySave } from '../src/core/save.js';
 import { decodeExplored } from '../src/core/cartography.js';
 import { compassTarget } from '../src/core/compass.js';
 import { PRICES } from '../src/balance.js';
-import { PALETTES, gemColour } from '../src/config.js';
+import { gemColour } from '../src/config.js';
 import {
   DEATH,
   FLASH,
@@ -27,9 +27,7 @@ import {
   WORLD_MAP,
   progressLine,
 } from '../src/text.js';
-import { biomeDef } from '../src/data/biomes.js';
 import {
-  BIOME,
   FIRST_GEM,
   GEM_ROUTE,
   KEY_CHEST,
@@ -43,17 +41,18 @@ import {
   walkPath,
 } from './world.js';
 
-// One tile out and straight back: the shortest walk that ends on the hut, which
-// is the only tile that offers to end a run.
-const OUT_AND_BACK = ['right', 'left'];
+// The shortest walk that ends on the hut, which is the only tile that offers to
+// end a run — a run starts one tile south of it, so a single step home does it.
+const OUT_AND_BACK = ['up'];
 
 test('reaching the hut banks the walk and fills the tank, and the run goes on', async (game) => {
   await game.startRun();
 
   // A loop through the base's guaranteed-floor neighbourhood that only lands
   // back on the hut at the very end, so the water spend is real before the
-  // dialog interrupts anything.
-  await walkPath(game, ['right', 'up', 'left', 'down']);
+  // dialog interrupts anything. A run starts one tile south of the hut, so
+  // the loop has to clear it on the way out and only cross it on the way in.
+  await walkPath(game, ['right', 'up', 'up', 'left', 'down']);
   const before = await game.state();
   assertEqual({ x: before.x, y: before.y }, { x: 0, y: 0 }, 'back at the hut');
   assertEqual(before.water, 200, 'the tank is filled by arriving, not by answering');
@@ -125,10 +124,10 @@ test('stopping at the hut recaps the run and writes the slot; leaving keeps only
   const texts = await game.texts();
   for (const label of [RECAP.rowExplored, RECAP.rowCoins, RECAP.rowLights, RECAP.rowFurthest, RECAP.rowSteps])
     assert(texts.includes(label), `the recap reports ${label}`);
-  // One tile out and back: the 3x3 around the base plus the three tiles the
-  // step east added, in two steps.
+  // The 3x3 around the start tile plus the row the step onto the hut added,
+  // in one step.
   assert(texts.includes('12'), 'the tiles-explored figure');
-  assert(texts.includes('2'), 'the step count');
+  assert(texts.includes('1'), 'the step count');
   assert(texts.some((t) => t.startsWith(RECAP.carrying(ITEM_TEXT['torch-small'].name))), 'what is still in hand');
   assert(await game.hasText(RECAP.rowColours), 'and what was banked');
 
@@ -164,7 +163,11 @@ test('a long carried list wraps the recap footer without it running into the but
 
   await game.startRun();
   await walkPath(game, TORCH_ROUTE.path);
+  // Reversing the route home only retraces it back to the start tile, which
+  // is one south of the hut itself — the last step onto the hut is
+  // OUT_AND_BACK's own.
   await walkPath(game, [...TORCH_ROUTE.path].reverse().map((dir) => OPPOSITE[dir]));
+  await walkPath(game, OUT_AND_BACK);
   await game.clickText(HUT.endHere);
 
   const texts = await game.texts();
@@ -336,7 +339,7 @@ test('the cogwheel saves the walk, and load game carries it on', async (game) =>
   assertEqual(resumed.nonce, walked.nonce, 'salt and all');
 });
 
-test('settings mid-run comes back to the same tile, in the new palette', async (game) => {
+test('settings mid-run comes back to the same tile', async (game) => {
   await game.startRun();
   await game.tapDpad('right');
   await game.settle();
@@ -345,15 +348,7 @@ test('settings mid-run comes back to the same tile, in the new palette', async (
   await game.tapMenuButton();
   await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
-  // A palette this world is not already drawn in: each biome has a default
-  // colour of its own (src/data/biomes.js), so picking the one the world would
-  // have chosen anyway would prove nothing.
-  const picked = PALETTES.find((option) => option.id !== biomeDef(BIOME).palette);
-  // Picking a palette re-enters Settings to repaint it, which is the step that
-  // has to carry the run along with it.
-  await game.clickText(picked.name);
-  await game.waitForScene('SettingsScene');
-  assert(await game.hasText(SETTINGS.heading), 'still on the settings screen, repainted');
+  assert(await game.hasText(SETTINGS.heading), 'on the settings screen');
 
   await game.clickText(UI.back);
   await game.waitForScene('ExploreScene');
@@ -362,9 +357,6 @@ test('settings mid-run comes back to the same tile, in the new palette', async (
   assertEqual(back.y, walking.y, 'both ways');
   assertEqual(back.steps, walking.steps, 'and not a step was spent on the round trip');
   assertEqual(back.water, walking.water, 'nor a drop of water');
-  // Ground is drawn in the palette's own foreground (src/ui/MapView.js), so the
-  // tint on a tile is how a test sees which palette the page is actually in.
-  assertEqual((await game.visibleTiles())[0].tint, picked.fg, 'the world is drawn in the palette just picked');
 });
 
 // Deliberately opened on no seed: the only test that wants whatever world

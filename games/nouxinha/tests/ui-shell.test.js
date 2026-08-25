@@ -4,7 +4,7 @@
 
 import { assert, assertEqual, runIfMain, test as browserTest } from './harness.js';
 import { test } from './world.js';
-import { LEAVING, MENU, PALETTE_NAMES, SAY, SETTINGS, SLOTS, TITLE, UI } from '../src/text.js';
+import { LEAVING, MENU, SAY, SETTINGS, SLOTS, TITLE, UI } from '../src/text.js';
 
 browserTest('a button responds across its whole width, not just the left half', async (game) => {
   assert(await game.hasText(TITLE.name), 'the title screen is up');
@@ -17,19 +17,18 @@ browserTest('a button responds across its whole width, not just the left half', 
   assertEqual(await game.activeScene(), 'SlotScene', 'scene');
 });
 
-test('settings: picking a palette and going back both work on a single tap', async (game) => {
+browserTest('the title screen has no gem indicator, and colours the wizard and name at random', async (game) => {
+  const t = await game.titleScreen();
+  assertEqual(t.gemImages, 0, 'no gem pips are drawn any more');
+  assert(t.wizardIsGemHue, 'the wizard is tinted one of the three gem colours');
+  assert(t.nameIsGemHue, 'the name is coloured one of the three gem colours');
+  assert(t.distinct, 'and the two are never the same colour');
+});
+
+test('settings: going back works on a single tap', async (game) => {
   await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
   assertEqual(await game.activeScene(), 'SettingsScene', 'scene');
-
-  // Picking a row restarts the scene in the new palette — one tap, not several.
-  await game.clickText(PALETTE_NAMES.amber);
-  await game.waitForScene('SettingsScene');
-  assert(await game.hasText(PALETTE_NAMES.amber), 'still on the palette list, repainted');
-
-  // Restore the default so this test doesn't change what every other test sees.
-  await game.clickText(PALETTE_NAMES.phosphor);
-  await game.waitForScene('SettingsScene');
 
   await game.clickText(UI.back);
   await game.waitForScene('TitleScene');
@@ -87,9 +86,11 @@ test('every button taps back, and the D-pad does not', async (game) => {
 
   await game.startRun();
   // Walking is the one control tapped often enough that a sound on it would
-  // turn an expedition into a rattle, so the D-pad is the exception.
+  // turn an expedition into a rattle, so the D-pad is the exception. A loop
+  // through the base's guaranteed-floor neighbourhood that stays clear of the
+  // hut itself, so the hut's own dialog doesn't interrupt the count.
   const before = await taps();
-  for (const dir of ['right', 'up', 'left']) {
+  for (const dir of ['left', 'up', 'up']) {
     await game.tapDpad(dir);
     await game.settle();
   }

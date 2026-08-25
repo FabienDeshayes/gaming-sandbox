@@ -689,6 +689,29 @@ export async function openGame(
         window.__game.scene.getScene('ExploreScene').map.wizard.layers.map((l) => l.tintTopLeft)
       ),
 
+    // The title screen's decorative wizard (a static colour preview, not the
+    // live character) and its name text, both coloured fresh on every visit —
+    // there is no gem-pip row here any more (src/scenes/TitleScene.js). Worked
+    // out entirely inside the page so it reads the same palette the screen was
+    // actually drawn in, whatever world (if any) this page was opened on.
+    titleScreen: () =>
+      page.evaluate(async () => {
+        const { TITLE } = await import('/src/text.js');
+        const { gemColour } = await import('/src/config.js');
+        const s = window.__game.scene.getScene('TitleScene');
+        const wizard = s.children.list.find((c) => c.layers);
+        const name = s.children.list.find((c) => c.text === TITLE.name);
+        const toHex = (n) => '#' + n.toString(16).padStart(6, '0');
+        const hues = [1, 2, 3].map(gemColour);
+        const wizardTint = wizard.layers[0].tintTopLeft;
+        return {
+          gemImages: s.children.list.filter((c) => c.texture && c.texture.key === 'gem').length,
+          wizardIsGemHue: hues.includes(wizardTint),
+          nameIsGemHue: hues.map(toHex).includes(name.style.color),
+          distinct: name.style.color !== toHex(wizardTint),
+        };
+      }),
+
     // Drives the run forward without the test having to care about terrain:
     // tries directions until one actually moves, up to `steps` times.
     walk: async (steps) => {

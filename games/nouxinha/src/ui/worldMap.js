@@ -12,10 +12,10 @@
 //
 // Items are deliberately absent. They move every time the world respawns, so a
 // map of them would be a lie by the time it was drawn; what doesn't move is the
-// ground, the hut, the merchant and the sanctums.
+// ground, the hut, the merchant, the chests and the sanctums.
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, TILE, gemColour, getPalette, hex } from '../config.js';
-import { landmarks, sanctums, terrainAt } from '../core/world.js';
+import { chests, landmarks, sanctums, terrainAt } from '../core/world.js';
 import { itemDef } from '../data/items.js';
 import { makeButton } from './button.js';
 import { WORLD_MAP } from '../text.js';
@@ -230,6 +230,12 @@ export class WorldMap {
     for (const landmark of landmarks(run.seed))
       if (run.seenUnique.has(landmark.id))
         mark(landmark.x, landmark.y, landmark.item ? itemDef(landmark.item).sprite : 'merchant', 0);
+    // Chests are marked with their lid the way you left it, which is the one
+    // marker on this map that says what you have *done* rather than what is
+    // there: a shut one is somewhere still worth the walk.
+    for (const chest of chests(run.seed))
+      if (run.seenUnique.has(chest.id))
+        mark(chest.x, chest.y, run.chests.has(chest.id) ? 'chest-open' : 'chest', 0);
 
     // Current position: a solid dot that holds still, plus a ring that
     // continually pulses outward from it. Every other marker on this map is a

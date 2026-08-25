@@ -17,7 +17,7 @@ A tile-by-tile exploration game where the only thing you can really spend is lig
 
 You step out of your base onto a vast dark grid with a small torch that shows one tile in every direction and lasts 100 steps. Everything you find — brighter torches, stranger torches, coins — is out there in the dark, and the further you push the better it gets. The tension is that light is fuel: a torch that shows you more burns out faster, so every upgrade is also a shorter leash.
 
-Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Reach it and it is yours; the walk is the whole of the risk. Twenty tiles out there is also a merchant, who will sell you a compass for fifty coins and a map for a hundred, on the same terms as everything else: only yours once you've walked it back.
+Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Reach it and it is yours; the walk is the whole of the risk. Three of the four sanctums they sit in are locked, and what opens them is out in the dark too: chests, standing on their own tiles, holding a key apiece in the colour of the gate it fits. Twenty tiles out there is also a merchant, who will sell you a compass for fifty coins and a map for a hundred, on the same terms as everything else: only yours once you've walked it back.
 
 ## 3. Core loops
 
@@ -39,13 +39,13 @@ Somewhere out there are three gems, and each one gives the world back a colour i
 
 1. Find the first sanctum and take the gem at its centre — the world gains a colour, and everything lying around it is put back as something better
 2. That better water carries you further, which is what makes the next sanctum survivable at all
-3. Its gate wants the gem you're carrying, so the ground beyond it opens for the first time
-4. Walk home. Reaching the hut writes it down — die on the way and the gem goes back where it came from
-5. Coins from all of it buy a compass and eventually a map, which is what turns a walk into an expedition you can plan
+3. The next sanctum's gate is locked, so the walk is to a chest first: it holds a key in the colour of that gate, and the ground beyond it opens for the first time
+4. Walk home. Reaching the hut writes it down — die on the way and the gem and the key both go back where they came from
+5. Coins from all of it — including the hoards in the other chests — buy a compass and eventually a map, which is what turns a walk into an expedition you can plan
 
 ## 4. Core mechanics
 
-The world has three things in it: **terrain** (floor, two formations of rock, groves of trees, and the built walls and gates of the sanctums — all static and procedurally generated), **items** (lights, water, coins and gems, lying on floor tiles until picked up), and **the character** (one tile, one facing).
+The world has three things in it: **terrain** (floor, two formations of rock, groves of trees, the chests standing on their own tiles, and the built walls and gates of the sanctums — all static and procedurally generated), **items** (lights, water, coins and gems, lying on floor tiles until picked up), and **the character** (one tile, one facing).
 
 | Mechanic | Description | Input |
 |---|---|---|
@@ -68,12 +68,14 @@ A light shape is defined relative to the character's tile, and — for the lamp 
 facing. What the shape says is how far the light *reaches*; what it shows is that minus whatever it
 cannot see round.
 
-**Rock, trees and masonry cast shadow.** A tile inside the shape is lit only if a straight line
-reaches it from the character's tile without crossing something solid, so a rock mass has ground
-behind it that stays dark until you walk round — which is what makes routing past one a decision
-rather than bookkeeping, and what separates the two rock formations (§4.3) in play as well as on
-screen: a mass is a wall to see round, a lone boulder throws a wedge you can step past. Light spills
-through a gap in a wall and widens as it goes.
+**Rock, trees and masonry cast shadow; a chest never does.** A tile inside the shape is lit only if a
+straight line reaches it from the character's tile without crossing something solid — and what counts
+as solid is the *shape of the world*, not everything that blocks a step. A chest (§4.8) stops a step
+and stops nothing else, because a box you could hide behind would read as a wall wearing a lid. So a
+rock mass has ground behind it that stays dark until you walk round — which is what makes routing
+past one a decision rather than bookkeeping, and what separates the two rock formations (§4.3) in
+play as well as on screen: a mass is a wall to see round, a lone boulder throws a wedge you can step
+past. Light spills through a gap in a wall and widens as it goes.
 
 Three rules hold it together:
 
@@ -116,7 +118,8 @@ The compass and the map are **tools** rather than items: one of each exists, nei
 | Water drop | — | Refills water by 30 (§4), a seventh of a full tank. Running dry is the run's one death condition — this is the thing worth detouring for. |
 | Water flask | 1 | Refills water by 60. Two drops in one. |
 | Spring vial | 3 | Refills water to the ceiling, wherever you are. |
-| Gem | — | One per sanctum, three in all. Gives a colour back to the world and opens the gate that wants it (§4.4). |
+| Gem | — | One per sanctum, three in all. Gives a colour back to the world, widens the water ceiling and upgrades what is lying about (§4.4). |
+| Key | — | One per shut gate, three in all, each found in a chest (§4.8) and drawn in the colour of the gate it opens. Held rather than carried: never consumed, never stacked, and only the campaign's once the hut has written it down. |
 | Compass | — | Points at the next unique object worth walking to (§4.6). Bought for 50 or found. |
 | Map | — | Draws everywhere the campaign has walked, all at once (§4.6). Bought for 100 or found. |
 
@@ -129,7 +132,7 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
 | Layer | Depends on | Holds |
 |---|---|---|
 | **Terrain** | `(x, y, seed)` | Floor, rock in two formations, groves of trees, and the built walls, gates and clearings. The same every run, forever. |
-| **Unique objects** | `(x, y, seed)` | The three gems, the merchant, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
+| **Unique objects** | `(x, y, seed)` | The three gems, the merchant, the eight chests, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
 | **Consumables** | `(x, y, seed, salt)` | Coins, water and lights. The salt changes every run and every respawn, so these are never twice in the same places. |
 
 - **Each campaign gets a world of its own.** The seed is drawn when NEW GAME claims a save slot and
@@ -236,12 +239,13 @@ The one built structure in an otherwise noise-grown world, and the spine of the 
 | Sanctum | Distance from the hut | Ring radius | Gate wants | Holds |
 |---|---|---|---|---|
 | 1 | 20 | 4 | nothing — the arch stands open | The first gem |
-| 2 | 45 | 5 | 1 gem | The second gem |
-| 3 | 80 | 6 | 2 gems | The third gem |
-| 4 | 110 | 7 | 3 gems | No gem — the richest cache in the game, and what the third gem is *for* |
+| 2 | 45 | 5 | the first key | The second gem |
+| 3 | 80 | 6 | the second key | The third gem |
+| 4 | 110 | 7 | the third key | No gem — the richest cache in the game, and what the third key is *for* |
 
-- **The chain is the pacing.** Sanctum 1's arch is open because the first gem has to be reachable carrying nothing; every gate after it wants the gem from the sanctum before it. Since each gem also raises the water ceiling by 50 and upgrades the water lying around the world (§4.3), the gem you just found is precisely what makes the next sanctum survivable — the distances above are past what a gemless run could walk home from.
+- **The chain is the pacing, and it is two chains braided.** Sanctum 1's arch is open because the first gem has to be reachable carrying nothing. Every gate after it is *locked*, and what opens it is a key in a chest (§4.8) standing well inside that gate's own distance — so the walk to a gem is always a walk to a chest first. Meanwhile each gem raises the water ceiling by 50 and upgrades the water lying around the world (§4.3), so the gem you just found is precisely what makes the next sanctum survivable — the distances above are past what a gemless run could walk home from. A key says *whether* you may go; a gem says whether you would get back.
 - **Positions are derived from the seed, not authored.** Each sanctum takes a quarter of the compass with a jitter inside it, so the four always sit in different directions at different distances (a new seed relays all four, and no two are ever within 45° of each other). Distance is Chebyshev and exact, so a sanctum's ring lands on the number the HUD's furthest-out counter reports.
+- **A gate wears the colour of the key that opens it**, and so does the key — one colour per gate, taken from the gem of the same number. That pairing is the whole of the UI: a player who has picked up a blue key knows at a glance which arch it is for. Like every restored colour it only appears once *that gem* has been brought home (§9), so a key found before its colour is drawn in the plain foreground, exactly as its gate is.
 - **The gate always faces the hut**, on a wall *face* and never a corner — there are no diagonal steps, so a corner gate could never be walked through. The tile you approach from is therefore always orthogonally adjacent to the tile you walk into.
 - **A sanctum's clearing is forced floor**, so once you are through the gate the gem is always reachable. That is what lets the seed check below worry only about the door.
 - **The clearing is a hoard, and the hoard is fixed.** Each sanctum holds a named cache — coins, water and lights of its own tier — laid out **two of each**, ranked rather than rolled, so opening a gate always pays the same amount and a clearing can never turn into a pile of one thing. Unlike the open world it doesn't upgrade with your gems: what a sanctum holds is what it was built holding.
@@ -293,14 +297,16 @@ shortcut rather than a tax.
 **The compass** shows an arrow and the icon of what the arrow is pointing at, because "that way" on
 its own is useless and "that way, and it's a gem" is a decision. The needle snaps to the four
 directions its sprites can draw (§9) — enough to start walking, and the icon does the rest. It points at the nearest
-**available** unique object: a gem whose gate this run can already open, a tool it doesn't own yet, or
-the merchant while there is still a one-off on the shelf. It deliberately points at things the player
-has *not* found — that is the whole value of it. When nothing qualifies it points at the hut, which
+**available** unique object: a chest still shut, a gem whose gate this run already has the key to, a
+tool it doesn't own yet, or the merchant while there is still a one-off on the shelf. It deliberately
+points at things the player has *not* found — that is the whole value of it, and with the keys behind
+chests (§4.8) it is also what keeps the chain from dead-ending. When nothing qualifies it points at the hut, which
 is also what it is for at three in the morning with no light left.
 
 **The map** draws every tile this run has lit, at once, a pixel a tile scaled up to fill the width of
 the screen. It shows terrain and nothing else: the ground you crossed, the rock and walls you skirted, markers for the hut and for the
-unique objects you have actually laid eyes on, and a ring around where you are standing. Ground you
+unique objects you have actually laid eyes on — chests among them, drawn shut or open as you left
+them — and a ring around where you are standing. Ground you
 have never lit is not on it, because a map you didn't draw isn't a map. Items are absent on purpose —
 they move every time the world respawns (§4.3), so a map of them would be out of date before it was
 read.
@@ -362,15 +368,34 @@ the world is unspoken for — that is where a late-game area goes, and the edge 
 reaching it is a 400-step round trip and therefore a late-campaign expedition in its own right,
 rather than something stumbled into.
 
+### 4.8 Chests and keys
+
+The one thing in the world you interact with by **failing to walk onto it**. A chest stands on its own tile: it cannot be stepped on, and stepping into it is what opens it — a bump, not a step, so it costs no water, no durability and no facing. It never stops a light, because a box you could hide behind would read as a wall wearing a lid, and every shadow rule in §4.1 is about the shape of the world rather than about the things standing on it.
+
+**A chest opens once, and after that it is scenery.** The lid stays up, on the map and in the viewport, and walking back into it says so and does nothing else. There is no second hoard and no second key. That is deliberate: a chest is the only thing in this world somebody else left there on purpose, and a box that refilled would be a vending machine.
+
+**There are eight, and they belong to the slot rather than to the expedition.** Like the merchant and the two tools lying in the dark, a chest is placed from the seed and never relaid by a respawn (§4.3) — so a chest you saw last run is exactly where you left it. Each has a forced-floor apron round it, so whichever side you come from there is somewhere to stand, and `pickSeed` checks every one of them can be walked to.
+
+| Holds | How many | Distance from the hut |
+|---|---|---|
+| The three keys | 3 | 26-35, 52-63, 86-99 — each one well inside the gate it opens |
+| A hoard of coins: 50, 75 or 100, picked from the seed | 5 | 12-19, 32-41, 58-69, 84-97, 104-117 |
+
+- **A key is what a gate wants** (§4.4). Try to walk through a shut gate without it and the HUD says which key it wants, by name and therefore by colour; walk through with it and the lock turns, with a sound of its own. A key is never consumed — once it is yours, that gate is simply a doorway.
+- **A key is held on a gem's terms, not a torch's.** It doesn't stack, doesn't burn down, and takes no inventory slot: it shows as a pip beside the gem pips in the inventory panel, in the colour of the gate it opens. And like a gem it is only the campaign's once the hut has written it down — die on the way home and the key goes back in its chest, *with the lid shut again*, because the set of opened chests is banked at the hut exactly like the set of keys. There is no way to lose a key and leave its chest empty.
+- **A coin chest is worth two orders of magnitude more than a coin pile**, because it is opened once per campaign and never comes back: 50 is the compass, 100 is the map, and 75 is most of the way to either. Those three numbers live in `CHEST_COIN_VALUES` in `src/balance.js`, next to the prices they were set against.
+- **The compass points at shut chests** (§4.6), which is what stops the chain dead-ending: a key you have to stumble on would leave a campaign standing at a gate with nowhere to go. An opened chest drops off the needle immediately. Chests are on the map too, drawn with the lid the way you left it — the one marker on that map that says what you have *done* rather than what is there.
+- **Opening one earns the text panel** (§7) rather than a line in the HUD, because the panel leaves the world on screen: the lid is visibly up behind the words while they are read.
+
 ## 5. Constraints
 
 - One light active at a time. Light and water are the two consumables — no food yet (§12), no timer.
-- The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off.
+- The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off. A chest can't wall anything off either: its own tile is solid, but the forced-floor apron round it means there is always a way past.
 - **Nothing a step away is ever hidden.** Shadow (§4.1) can darken any tile a light reaches except the ones the character could walk onto next, so no arrangement of rock can leave a player unable to see where to go.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
 - **Two colours, plus one per gem recovered.** The world starts strictly duo-chromatic and can reach five colours only by earning them (§9). Every sprite is a 1-bit tile baked white, so what a gem changes is a tint at draw time, never an asset.
 - **The world ends at radius 200, and the dark is what ends it** (§4.7). Nothing is walled off by it: the rim is reachable on foot from the hut, and the last third of the world sits past the outermost content.
-- Every gem is optional. Nothing in the game requires finding one; the sanctums gate their own contents and nothing else. The compass and the map are optional too — they make the walk legible, never possible.
+- Every gem is optional. Nothing in the game requires finding one; the sanctums gate their own contents and nothing else. The compass and the map are optional too — they make the walk legible, never possible. So is every chest: a key only ever opens ground that was closed anyway.
 - **No two of the same consumable within 8 tiles.** The world spreads items rather than scattering them, which caps how much there is to find (§4.3). One constant decides the trade.
 - Portrait, mobile-first, touch as the primary input. 480×854 fixed canvas.
 - Turn-based: the world only advances when the player steps. No real-time pressure.
@@ -380,7 +405,7 @@ rather than something stumbled into.
 ## 6. Win / lose conditions
 
 - **Win:** bringing all three colours home. It is a destination rather than an ending — the world is still there afterwards, with the fourth sanctum's cache open and nothing left to unlock.
-- **Lose:** running out of water. It depletes independently of light and refills only at a water pickup or the hut, so hitting 0 out in the dark ends the run on the spot and everything carried since the hut was last stood on is lost — gems, lights, coins, and any tool bought or found on the way, though the ground it lit still goes into the slot (§6.1) — with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
+- **Lose:** running out of water. It depletes independently of light and refills only at a water pickup or the hut, so hitting 0 out in the dark ends the run on the spot and everything carried since the hut was last stood on is lost — gems, keys, lights, coins, and any tool bought or found on the way, though the ground it lit still goes into the slot (§6.1) — with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
 - **Session end:** the player walks back to the hut and takes it up on the offer to end the expedition (§4). The HUD tracks the numbers that stand in for a score while you're out — **tiles explored** (distinct tiles the campaign has ever lit, since ground carries between runs — §6.1), **coins**, **water** remaining, and the row of **colours** recovered — and ending the expedition closes the run with a **recap**: tiles explored, **new ground** this expedition lit that no earlier one had, **coins found** — the whole walk's, since the hut empties the pocket into the bank every time it is crossed — lights found, colours saved, furthest distance reached, steps taken, and what's still in hand. The two ground numbers are both there on purpose: the total is how much of the world is drawn, the new one is what this particular walk was worth.
 
 ### 6.1 Saving
@@ -398,7 +423,7 @@ opposite.
 
 The one thing that outlives a run regardless is the ground it lit — cartography is not progress.
 
-- There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, banked coins, runs completed, the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, which unique objects have been seen (§4.6), and — when the cogwheel menu has saved one — the expedition the campaign is in the middle of. They live in `localStorage` and are the only state that outlives a run.
+- There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, the keys held, which chests have been opened, banked coins, runs completed, the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, which unique objects have been seen (§4.6), and — when the cogwheel menu has saved one — the expedition the campaign is in the middle of. They live in `localStorage` and are the only state that outlives a run.
 - **A run belongs to a slot before it starts.** The title screen offers **NEW GAME** and **LOAD GAME**, and both go through the slot picker: new empties the slot it is pointed at and starts a campaign there, load carries one on. The slot picked stays active, so a run banks itself without ever having to be told which campaign it is (§7). A slot holding a saved expedition says so on its row, because that is the difference between the two things **LOAD GAME** can do: set out from the hut again, or carry on from wherever you stopped.
 - **Reaching the hut** is the only thing that banks, and it banks the moment the tile is stepped on. Dying of thirst banks nothing, and leaving by the menu's **EXIT GAME** abandons the run and banks nothing either — so a gem picked up but never carried back is still sitting in its sanctum next run, and a compass bought but never carried back is still on the merchant's shelf, with the coins still in the bank. What those two cost is always and only the walk *since the hut was last stood on*. Leaving asks before it does it, since an abandoned expedition can't be got back.
 - **The hut fills the tank on arrival too**, for the same reason and in the same moment — so a walk that gets to its own doorstep on its last drop of water has got home. Dying in the doorway of the one place with water in it was the cruellest outcome the game had, and it is now impossible.
@@ -417,7 +442,7 @@ The one thing that outlives a run regardless is the ground it lit — cartograph
 
 A developer switch in Settings, off by default, for looking at what the late game actually does without a campaign's worth of walking behind it.
 
-- A run started with cheats on opens with **the whole world revealed** — every tile out past the fourth sanctum, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust.
+- A run started with cheats on opens with **the whole world revealed** — every tile out past the fourth sanctum, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **all three keys** so every gate stands open, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust. The chests themselves are left shut, so a sandbox for looking at the late game still has one to open.
 - **A cheat run writes nothing at all.** It banks no progress at the hut, it cannot be saved mid-walk from the menu (which says so instead of writing), and it does not even keep its ground, because a run that was *handed* three gems is not a campaign and must never overwrite one. The toggle says so on itself, the title screen says so under the gem pips, and the recap says so instead of listing what is being carried home.
 - It is a preference rather than run state: `src/config.js` persists it next to the palette, the scene reads it and hands it to `createRun`, and `src/core/rules.js` never asks.
 
@@ -428,6 +453,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Action | Input (touch — primary) | Input (keyboard/mouse) |
 |---|---|---|
 | Step | Swipe in a cardinal direction anywhere on the map area, or tap a D-pad arrow (right of the HUD) | Arrow keys / WASD, or click a D-pad arrow |
+| Open a chest | Step into it — it can't be stood on, so walking against it is what lifts the lid (§4.8) | The same |
 | Walk | Hold a D-pad arrow down — after a 300ms hold, steps repeat at the rate set in Settings until released | Hold the same arrow's click |
 | Inspect a stack | Tap its slot in the inventory strip (bottom left of the HUD) → opens the item card | Click the slot |
 | Browse the full inventory | Tap **ITEMS**, the box after the strip's slots → opens the scrollable inventory panel | Click **ITEMS** |
@@ -454,7 +480,7 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 
 **The item card** is an overlay, opened from a slot in the strip or a row in the inventory panel, showing: the item's name, its sprite at large scale, and a one-line **effect** description ("Lights the 8 tiles around you"). A kind carried as a single copy shows that copy's **durability** as `current / max` with a bar and an **Equip** button (greyed out if it's already active). A kind carried as several copies shows a scrollable list instead — one row per copy, its own durability bar, and an `EQUIPPED` tag on whichever is active — since copies rarely share a durability and the choice of *which* one to equip has to be visible; tapping a row equips that exact copy and closes the card. Opening a card doesn't cost a step — the game is turn-based on movement only.
 
-**The inventory panel** is opened from the HUD's **ITEMS** slot and lists every carried stack — icon, name, and count — in a scrollable list, so a run isn't limited to what fits in the strip's slots. Above the list sits the same gem-pip row the title screen shows a campaign's save with: one pip per gem, recovered ones in the colour they gave back and the rest dimmed, so the run's progress toward all three colours is visible without standing on screen throughout a walk. Tapping a stack closes the panel and opens its item card.
+**The inventory panel** is opened from the HUD's **ITEMS** slot and lists every carried stack — icon, name, and count — in a scrollable list, so a run isn't limited to what fits in the strip's slots. Above the list sits the same gem-pip row the title screen shows a campaign's save with: one pip per gem, recovered ones in the colour they gave back and the rest dimmed, so the run's progress toward all three colours is visible without standing on screen throughout a walk. The three keys sit on the same row after a gap, drawn in the same colours, because a key *is* a gate's colour and two rows would only be asking the player to hold two palettes in their head. Tapping a stack closes the panel and opens its item card.
 
 **The merchant's counter** is a modal listing one row per line of stock — icon, name, price — over
 the purse it has to be paid from. A row the run can't act on is dimmed rather than hidden, so the
@@ -469,7 +495,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 
 **The dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons — stacked one per line once there are more than two of them. It has no close control of its own: every way out is one of its buttons, because all of its uses (the hut's out-or-over question, the recap, the death screen, and the cogwheel menu) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key.
 
-**The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is that use: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again.
+**The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is one: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again. **Opening a chest** (§4.8) is the other, and the reason the panel leaves the world on screen: the lid is visibly up behind the words.
 
 **The cogwheel menu** is a dialog with four choices — **SETTINGS**, **SAVE GAME**, **EXIT GAME** and **KEEP PLAYING**. Settings is the same screen the title screen opens and comes straight back to the tile you were standing on, palette and all. Saving reports what it wrote and then asks the one question that follows from it: keep playing, or leave now. Leaving asks first, and says what it is about to cost, because an abandoned expedition can't be got back (§6.1).
 
@@ -490,7 +516,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 - Procedural grid (floor/rock) from a seed, bounded by the dark at radius 200, with the base at `(0, 0)`
 - Tile stepping via swipe and D-pad, with facing tracked from the last step
 - Three visibility states with persistent memory of explored tiles
-- Line-of-sight occlusion: rock, trees and shut gates cast shadow, and the thing in the way is always lit (§4.1)
+- Line-of-sight occlusion: rock, trees and shut gates cast shadow, chests don't, and the thing in the way is always lit (§4.1)
 - Small torch (radius 1) equipped at start; durability ticking per step; auto-swap on burnout; blackout when nothing is left
 - Medium torch and lamp torch as findable items, with distance-scaled spawning
 - Coins and a coin counter
@@ -500,8 +526,9 @@ dragging the drawing itself; **CLOSE** is the way out.
 - Tiles-explored counter
 - The hut's stop/continue question and the end-of-run recap
 - Synthesised sound throughout: pickup blips, a gem fanfare, a torch catching, a death knell, a tap on every button but the D-pad, and a loop for the walk with a smaller one for the menus (§9)
-- Four seed-derived sanctums with masonry walls and gem-gated gates, guaranteed reachable (§4.4)
-- Three gems, each restoring a colour, opening its gate, raising the water ceiling, and revealing its tier of items
+- Four seed-derived sanctums with masonry walls and key-locked gates, guaranteed reachable (§4.4)
+- Eight seed-derived chests, opened by walking into them, holding the three keys and five hoards of coins (§4.8)
+- Three gems, each restoring a colour, raising the water ceiling, and revealing its tier of items
 - Three save slots, picked through NEW GAME / LOAD GAME, banked by reaching the hut whether or not the expedition ends there, with progress on the title screen and a slot erased by starting a new game over it
 - Explored ground carried between runs however a run ends, so a campaign never starts from black again (§6.1)
 - A cheat toggle in Settings that opens a run on the whole map with one of everything, and banks nothing (§6.2)
@@ -514,7 +541,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 **Nice to have (only after MVP works):**
 - Light falloff — an outer ring at partial brightness instead of a hard edge
 - More light sources (something that lights a fixed radius around a *dropped* point, a one-shot flare that reveals a wide area for one step)
-- More landmarks in the terrain generator: the sanctums and the merchant's stall are the only built things, and the ground between them is still pure noise
+- More landmarks in the terrain generator: the sanctums, the chests and the merchant's stall are the only built things, and the ground between them is still pure noise
 - Screen-shake-free CRT dressing: scanline overlay, phosphor bloom on the lit ring
 
 **Explicitly out of scope:**
@@ -541,7 +568,8 @@ dragging the drawing itself; **CLOSE** is the way out.
     | The character | the hood on the first, the robe on the second, the staff on the third — so a wizard carrying everything is three colours over the one they set out in |
     | Terrain | flecks in the ground on the first, veins in the stone on the second, the lit edge of a canopy on the third — a handful of pixels each, one layer of the world per gem |
     | Sanctums | the crown and outward faces of the ring, in the colour of the gem that sanctum keeps (the last one keeps none, so it takes the colour of the gem its gate wanted) |
-    | Gates | the arch belongs to the sanctum behind it; the bars — or the leaves folded back once it is open — to the gem that opened it |
+    | Gates | the arch belongs to the sanctum behind it; the bars — or the leaves folded back once it is open — to the gem whose colour the key that opens it wears |
+    | Keys | the whole tile, in the colour of the gate it fits |
     | Items | the whole tile, in the colour of the gem whose tier brought it into the world |
     | The HUD | the gem pips |
 
@@ -551,6 +579,17 @@ dragging the drawing itself; **CLOSE** is the way out.
   - **Floor is ground drawn at half strength, and nothing else.** The texture — scatter from the sheet, drawn at `FLOOR_TEXTURE_LEVEL` — is what separates "ground I have lit" from "dark I have never been to", and it holds that read at the remembered state's 30% alpha too. At full strength it was noise — loose pixels compete with the things that actually matter, and the wizard got lost in them. Rock uses the inverse weight: dense, near-solid, so a rock wall reads as a mass. A tree carries the same weight and spends it differently — a canopy over a trunk, so a grove reads as foliage rather than stone and a player can see at a glance that this blocked step is a different kind of thing. Both are drawn in the palette's own foreground: they are terrain, which is the constant every restored colour has to read against.
   - **Items are drawn hollow.** A solid silhouette turns to mush at 16×16 once it's tinted flat, so the item tiles are outlines with small solid accents — the hollow interior is what gives the eye an edge to read. The four lights differ in *silhouette* rather than in detail, because they have to be told apart at the edge of the light: a candle, a lantern, a candelabra, and — for the beacon, the only one that has to say "this lights everything" — a radiating burst. The three waters have the same job: a teardrop, a hard-sided flask, a round-bottomed vial.
   - **Sanctum wall is masonry where rock is a blob.** Rock's tiles are chosen to *mass*: several in a block read as one dense wall of stone, and one on its own still reads as a boulder. The sanctum wall is battlemented masonry, and it is drawn as a **nine-slice** — four corners, four runs and a standalone piece — picked from where the tile sits on its ring rather than from what its neighbours are, since neighbours can't tell a top run from a bottom one. A ring that turns proper corners is what stops a player reading it as more terrain. That contrast is load-bearing rather than decorative — a player who reads a sanctum wall as terrain walks its perimeter looking for a way round instead of looking for the gate. A shut gate is a barred arch and an open one the same arch with the leaves folded back; a gate you can't open yet is drawn in the palette's own foreground on its own, because the gem that would colour its bars is one you don't have.
+  - **A chest is a chest, drawn for this game.** The sheet is a dungeon set with no chest in it, so
+    two tiles were drawn over crates nothing claimed — the same way three of the wizard's four
+    facings were. Shut, it is a domed lid over a hollow body with a lock hanging under the seam;
+    open, the lid is tipped back above an empty mouth. The pair has to be told apart at the edge of
+    a light and from the map's one-pixel-a-tile drawing, so the difference is the *silhouette* — the
+    lid moving — rather than any detail inside it. Both are plain foreground: what is in a chest is
+    not something the player is allowed to know before opening it.
+  - **The key is one tile and three tints**, like the gem, and for the same reason: three keys
+    pointed at three tiles would be three ways of saying the same thing. What tells them apart is
+    the colour, which is the colour of the gate — that pairing is doing all the work, so nothing
+    else should compete with it.
   - **The merchant is a stall, not a person.** A pillared canopy over a counter. It has to read as
     "somebody is here" against the hut's pitched roof and door at the edge of a light, so the awning
     line carries it — a lone figure would read as a second wizard. Like the hut it isn't drawn while
@@ -578,6 +617,11 @@ dragging the drawing itself; **CLOSE** is the way out.
 - **Audio:** every sound is synthesised through WebAudio rather than loaded as a file — the tile sheet is the game's one binary asset, there is no build step, and the score diffs in git. Square waves are the audio equivalent of the two-colour rule; the one exception is the torch, which is filtered noise, because a flame catching has no pitch. Everything goes through a single master gain in `src/ui/sfx.js`, so the game has one volume and the peaks below stay relative to each other, and everything shares one `AudioContext`. All of it is best-effort by design: a browser that blocks or lacks audio costs the player nothing.
   - **A pickup blip:** a short rising arpeggio when you pick something up, two notes for a coin and three, landing higher, for a light.
   - **A gem fanfare:** a run up, a leading note and a held chord over a bass, about a second and a half. A gem is the only pickup that repaints the world, so it is the only one that gets a tune instead of a blip.
+  - **A chest lid:** a short noise creak going up with a low note under it, and two bright notes on
+    top of that for what was inside. Much shorter than the gem's fanfare, because a chest is a good
+    moment and a gem is *the* moment.
+  - **A key turning:** a clack and two notes a fifth apart as a gate gives. Short and mechanical —
+    this is a lock, not a reward, and the reward is on the other side of it.
   - **A torch catching:** a noise whoosh and a low thump whenever a light takes over — equipped from the item card, auto-equipped when the one before it burned out, or bought out of blackout. The player's choice and the dark's are the same event from two sides, and both change the shape of what is lit.
   - **A death knell:** three falling notes and a low one sagging under them when the water runs out. The only sound in the game that descends, and the one place the music stops before the scene does (§6).
   - **A tap:** a short tock on every button, panel and row in the game — except the D-pad, which is tapped often enough that a sound on it would turn walking into a rattle.
@@ -598,16 +642,16 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | Path | Holds |
   |---|---|
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
-  | `src/balance.js` | **Every number the game is balanced on, and nothing else**: terrain thresholds, the edge of the world and its choke, seed validation, the sanctum and landmark plans, the scatter lattice (`MIN_SEPARATION`, `SCATTER`, the per-band spawn chance and the gem density taper), coin values, water and the leash, light durability and shapes, the merchant's prices and the cheat switch's reach. Imports nothing — it is a table, not code |
+  | `src/balance.js` | **Every number the game is balanced on, and nothing else**: terrain thresholds, the edge of the world and its choke, seed validation, the sanctum, landmark and chest plans, the scatter lattice (`MIN_SEPARATION`, `SCATTER`, the per-band spawn chance and the gem density taper), coin values, water and the leash, light durability and shapes, the merchant's prices and the cheat switch's reach. Imports nothing — it is a table, not code |
   | `src/text.js` | **Every word the game says to the player, and nothing else**: the title screen and its tagline, the slot picker, Settings and the palette names, the HUD's counters and status line, every dialog — the hut, the recap, the death screen, the menu, the edge — the merchant, the map, the panels, and each item's name and card copy. Anything that varies is a function of what it varies on, so copy and the number it quotes cannot drift apart. Imports only `src/balance.js`, for the refill figures the water cards quote. No layout, no logic — a scene never spells a player-facing string itself |
   | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor (persisted to `localStorage`), the music and cheat switches (§9, §6.2, persisted the same way), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
-  | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums and landmarks (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `canEnter`, and `blocksSight` — what stops a light rather than a step); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws (§9). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
+  | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums, landmarks and chests (`sanctums`, `sanctumAt`, `landmarks`, `landmarkAt`, `isMerchant`, `chests`, `chestAt`, `entryKey`/`canEnter` — which key a tile wants — and `blocksSight`, what stops a light rather than a step); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`landmarksReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws (§9). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw, snapped to the four the needle has sprites for. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
   | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles — and, handed a predicate saying what is opaque, the same set with its shadows cut out of it (§4.1). Knows what a shadow is and nothing at all about rock, which is what keeps it pure |
-  | `src/core/rules.js` | The run: step legality (including gates), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, reveal, `inventoryStacks` for grouping same-id copies for display, `depositRun` for what reaching the hut writes down and `bankRun` for the same thing plus the end of the expedition, `rememberGround` for the ground a run keeps however it ends, `abandonRun` for the death that takes the slot's saved walk with it, `suspendRun`/`resumeRun` for the menu's SAVE GAME and the LOAD GAME that carries it on (§6.1), the cheat setup (§6.2), and `runSummary` for the recap. Pure |
-  | `src/core/save.js` | The three save slots and which one is active: load, write, erase, start, the slot listing the picker draws, the shape of a suspended expedition (§6.1), and the normaliser every save — and every run block inside one — passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
-  | `src/data/items.js` | Item definitions — sprite key, `hue` (the gem colour it's drawn in), and the two tools. The words (name, effect text) are spread in from `src/text.js` and the numbers (durability, light shape, water refill) from `src/balance.js`; which gem brings an item into the world is the `SCATTER` table's, not an item's |
+  | `src/core/rules.js` | The run: step legality (including gates and chests), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, `openChest`/`chestOnTile` for the lid, reveal, `inventoryStacks` for grouping same-id copies for display, `depositRun` for what reaching the hut writes down and `bankRun` for the same thing plus the end of the expedition, `rememberGround` for the ground a run keeps however it ends, `abandonRun` for the death that takes the slot's saved walk with it, `suspendRun`/`resumeRun` for the menu's SAVE GAME and the LOAD GAME that carries it on (§6.1), the cheat setup (§6.2), and `runSummary` for the recap. Pure |
+  | `src/core/save.js` | The three save slots and which one is active: load, write, erase, start, the keys held and chests opened, the slot listing the picker draws, the shape of a suspended expedition (§6.1), and the normaliser every save — and every run block inside one — passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
+  | `src/data/items.js` | Item definitions — sprite key, `hue` (the gem colour it's drawn in), the three keys and the two tools. The words (name, effect text) are spread in from `src/text.js` and the numbers (durability, light shape, water refill) from `src/balance.js`; which gem brings an item into the world is the `SCATTER` table's, not an item's |
   | `src/data/shop.js` | The merchant's stock order and which lines are one-offs; the prices themselves are `src/balance.js`'s |
   | `assets/tiles.png` | The tile sheet: 49×22 tiles of 16px, 1px apart, near-white on transparent. The game's only binary asset |
   | `tiles.html` | A development page, not part of the game: draws the sheet with its coordinates on it and boxes the tiles the game claims, so a sprite can be repointed by reading a label off the screen. Links each tile to `paint.html`, and the sheet to `draw.html` |
@@ -619,7 +663,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/MapView.js` | The tile pool, the three visibility states, per-tile tinting (gates and gem-tier items), the step slide and the blocked-step bump. Holds no game state |
   | `src/ui/hud.js` | The grouped, icon-led run counters (explored, coins), the stacked inventory strip with **ITEMS** as one more slot in it, the active light's durability and water's — same size, stacked one under the other — and the status line |
   | `src/ui/scroll.js` | A drag/wheel-scrollable, mask-clipped list region shared by the item card's instance list and the inventory panel |
-  | `src/ui/sfx.js` | Every sound but the music — the tap, the pickup blips, the gem fanfare, the torch and the death knell — plus the one `AudioContext` and the master gain everything audible goes through. No assets, and silently inert where audio is unavailable |
+  | `src/ui/sfx.js` | Every sound but the music — the tap, the pickup blips, the gem fanfare, the chest lid, the key turning, the torch and the death knell — plus the one `AudioContext` and the master gain everything audible goes through. No assets, and silently inert where audio is unavailable |
   | `src/ui/music.js` | The two loops: both scores as text, the square-wave voices, and the lookahead scheduler that writes them to the clock. The track follows the scene — `menu` for the title, slot picker and settings, `explore` for a run |
   | `src/ui/shop.js` | The merchant's counter: a row per line of stock, over the purse it's paid from |
   | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers — and the pinch/drag/wheel/button zoom and pan over the top of it, which are one container's scale and position |
@@ -630,8 +674,8 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
 
 - **Sprites are coordinates on one sheet.** `src/data/tiles.js` names a **(col, row)** of `assets/tiles.png` per sprite key; the tile is cut out as a 1-bit mask at boot, baked into a white texture and tinted at draw time. One image, no image editor to repoint a sprite, no build step — and one texture set serves all four palettes.
 
-- **Explored-tile storage:** a `Set` of `"x,y"` keys for tiles ever lit. Terrain and items are re-derived from the seed on demand, so nothing else about the world needs storing. A run additionally keeps only what the recap reports plus the water level: the coin count, the current water, the gem count, the two tools, the high-water mark of distance from the base, and a tally of what it has picked up — and, per epoch, the set of consumable tiles it has emptied, which a respawn simply clears. That short list is exactly what a suspended expedition writes into its slot (§6.1), run-length encoded the same way the explored set is: saving a run is describing it, never copying a world.
-- **The structures are derived, then memoised.** Placing four sanctums and three landmarks costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same seven. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.
+- **Explored-tile storage:** a `Set` of `"x,y"` keys for tiles ever lit. Terrain and items are re-derived from the seed on demand, so nothing else about the world needs storing. A run additionally keeps only what the recap reports plus the water level: the coin count, the current water, the gem count, the keys held, the chests opened, the two tools, the high-water mark of distance from the base, and a tally of what it has picked up — and, per epoch, the set of consumable tiles it has emptied, which a respawn simply clears. That short list is exactly what a suspended expedition writes into its slot (§6.1), run-length encoded the same way the explored set is: saving a run is describing it, never copying a world.
+- **The structures are derived, then memoised.** Placing four sanctums, three landmarks and eight chests costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same fifteen. Landmarks are placed first and chests onto the same claimed list, so nothing can land on anything else. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.
 - **The consumable scatter is thrown, then thinned, then memoised.** A tile asks its lattice cell whether a candidate lands there, and a candidate is crowded out only by a same-kind conflict that *itself* landed — resolved by a short recursion that only ever walks to higher-priority candidates, so it terminates. Dropping every candidate that merely has a stronger neighbour would keep only local maxima and thin the world to a third of what the separation rule actually allows. The recursion is memoised per (seed, salt, gems); a respawn moves the salt, and old memos are dropped wholesale because the cache is a speed-up and never state. A full viewport repaint costs about a tenth of a millisecond.
 - **Run-start cost.** `pickSeed` flood-fills for the base pocket check and again out past the furthest sanctum for the landmark check, which measures about 54ms on average and 131ms at worst — paid once, during a scene transition. The landmark fill short-circuits as soon as it has reached all four doors and all three landmarks, and never runs at all for a seed the cheaper pocket check has already rejected.
 - **The page has to be the viewport.** Phaser fits the canvas to its parent element, so `#game` is sized to the full viewport and Phaser's own `autoCenter` does the centring. Centring the parent with flexbox instead leaves it shrink-to-fit — a size Phaser cannot fit into, which on a portrait phone scaled the canvas to the viewport *height* and let the width overflow: the sides of the HUD ran off screen and the page panned sideways, which ate taps, because a touch the browser is still deciding might be a pan never becomes a click. The canvas also sets `touch-action: none` so there is no pan gesture to wait on. `tests/ui-shell.test.js` pins this with a phone-sized viewport.

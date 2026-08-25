@@ -4,13 +4,15 @@
 // a stack opens its item card (itemCard.js) for full per-copy detail.
 //
 // It also carries the colour pips that used to live in the main HUD as a
-// standing "COLOURS" row: how much of the world's colour is back only matters
-// while looking at what you're carrying, not on every screen.
+// standing "COLOURS" row — plus a pip per key, in the colour of the gate it
+// opens: how much of the world's colour is back, and which gates will let you
+// through, only matter while looking at what you're carrying, not on every
+// screen.
 //
 // Opening it costs no step, the same as the item card and the hut dialog.
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
-import { itemDef } from '../data/items.js';
+import { itemDef, KEYS } from '../data/items.js';
 import { INVENTORY } from '../text.js';
 import { inventoryStacks } from '../core/rules.js';
 import { MAX_GEMS } from '../core/save.js';
@@ -79,21 +81,30 @@ export class InventoryPanel {
 
     // The gem pips: one per gem, each in the colour it gave back, the rest
     // dimmed — the same read the HUD's old "COLOURS" row gave, just here
-    // instead of standing on screen throughout a run.
+    // instead of standing on screen throughout a run. The keys sit on the same
+    // row, in the same colours, because a key *is* a gate's colour and the two
+    // rows would only be asking the player to hold two palettes in their head.
     const gemY = top + 58;
-    const gems = [];
-    for (let i = 1; i <= MAX_GEMS; i++) {
-      const held = i <= run.gems;
-      gems.push(
+    const pips = [];
+    const pip = (x, sprite, colour, held) =>
+      pips.push(
         scene.add
-          .image(cx + (i - (MAX_GEMS + 1) / 2) * GEM_GAP, gemY, 'gem')
+          .image(x, gemY, sprite)
           .setScale(1.4)
-          .setTint(held ? gemColour(i) : pal.fg)
+          .setTint(held ? gemColour(colour) : pal.fg)
           .setAlpha(held ? 1 : 0.25)
       );
-    }
 
-    const parts = [backdrop, panel, panelZone, title, ...gems];
+    // Gems left of centre, keys right of it, with a gap between the two groups
+    // so they read as two counts rather than one long row.
+    const columns = MAX_GEMS + KEYS.length + 1;
+    const at = (i) => cx + (i - (columns - 1) / 2) * GEM_GAP;
+    for (let i = 1; i <= MAX_GEMS; i++) pip(at(i - 1), 'gem', i, i <= run.gems);
+    KEYS.forEach((id, i) =>
+      pip(at(MAX_GEMS + 1 + i), 'key', itemDef(id).hue, run.keys.has(id))
+    );
+
+    const parts = [backdrop, panel, panelZone, title, ...pips];
 
     const listX = left + LIST_PAD;
     const listY = top + 90;

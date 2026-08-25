@@ -12,8 +12,9 @@
 // everything the run was *holding* still lives or dies on the walk home.
 //
 // Gems are stored as a *count*, not a list. The sanctum chain hands them out in
-// order — each gate wants the gem from the sanctum before it — so "how many"
-// says everything "which ones" would.
+// order, nearest first, so "how many" says everything "which ones" would. Keys
+// are a list, because a chest three days' walk out can be opened before one
+// closer to home and the gate it opens has to know which one you are holding.
 //
 // A slot also holds, alongside the banked campaign, an optional **suspended
 // expedition**: the run the cogwheel menu's SAVE GAME wrote down mid-walk
@@ -27,9 +28,9 @@
 // here defaults to that one, which is what lets a run bank itself without ever
 // knowing which slot it belongs to.
 
-import { SANCTUM_PLAN } from '../balance.js';
+import { CHEST_PLAN, SANCTUM_PLAN } from '../balance.js';
 import { BASE_X, BASE_Y, beyondEdge, pickSeed } from './world.js';
-import { ITEMS, TOOLS } from '../data/items.js';
+import { ITEMS, KEYS, TOOLS } from '../data/items.js';
 
 const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;
 const ACTIVE_KEY = 'nouxinha.slot';
@@ -41,6 +42,10 @@ const VERSION = 2;
 export const SLOT_COUNT = 3;
 
 export const MAX_GEMS = SANCTUM_PLAN.filter((s) => s.gem).length;
+
+// Every chest id the world can hold, so a save can be checked against the set
+// that actually exists rather than trusting whatever is in the file.
+const CHEST_IDS = CHEST_PLAN.map((plan) => plan.id);
 
 export function emptySave() {
   return {
@@ -61,6 +66,10 @@ export function emptySave() {
     furthest: 0,
     compass: false,
     map: false,
+    // The keys carried home, and the chests this campaign has opened. Both are
+    // banked at the hut like everything else a run holds (DESIGN.md §4.8).
+    keys: [],
+    chests: [],
     // Run-length encoded explored ground, and the seed it belongs to.
     mapped: '',
     mappedSeed: 0,
@@ -80,6 +89,12 @@ const int = (value, min, max) =>
 // A coordinate: any whole number, either side of zero, since the world has no
 // edge and a run can be suspended anywhere in it.
 const whole = (value) => (Number.isFinite(value) ? Math.trunc(value) : 0);
+
+// A list of ids, kept to the ones that actually exist and deduplicated — the set
+// of keys and the set of opened chests are both written out of a `Set` and read
+// back into one, so a file naming the same chest twice must not grow it.
+const ids = (value, allowed) =>
+  Array.isArray(value) ? [...new Set(value.filter((id) => allowed.includes(id)))] : [];
 
 // A saved file is just text the player could have edited, and a corrupt one
 // should cost them their progress rather than the game — so every field is
@@ -104,6 +119,8 @@ export function normaliseSave(raw, keepRun = true) {
   save.furthest = int(raw.furthest, 0, Number.MAX_SAFE_INTEGER);
   save.compass = !!raw.compass;
   save.map = !!raw.map;
+  save.keys = ids(raw.keys, KEYS);
+  save.chests = ids(raw.chests, CHEST_IDS);
   save.mapped = typeof raw.mapped === 'string' ? raw.mapped : '';
   save.mappedSeed = Number.isFinite(raw.mappedSeed) ? raw.mappedSeed | 0 : 0;
   save.seen = Array.isArray(raw.seen)
@@ -119,6 +136,8 @@ export function normaliseSave(raw, keepRun = true) {
     save.gems > 0 ||
     save.compass ||
     save.map ||
+    save.keys.length > 0 ||
+    save.chests.length > 0 ||
     !!save.mapped ||
     !!save.run;
   return save;
@@ -178,6 +197,8 @@ function normaliseRun(raw) {
     nonce: Number.isFinite(raw.nonce) ? raw.nonce | 0 : 0,
     epoch: int(raw.epoch, 0, Number.MAX_SAFE_INTEGER),
     tools: Array.isArray(raw.tools) ? raw.tools.filter((id) => TOOLS.includes(id)) : [],
+    keys: ids(raw.keys, KEYS),
+    chests: ids(raw.chests, CHEST_IDS),
     inventory,
     // -1 is blackout, and it is the only answer for an empty inventory.
     activeIndex: inventory.length ? int(raw.activeIndex, 0, inventory.length - 1) : -1,

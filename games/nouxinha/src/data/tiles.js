@@ -89,6 +89,11 @@ export const TILES = {
   // --- Structures ----------------------------------------------------------
   base: [1, 20],
   merchant: [19, 10],
+  // The chest, shut and open. Drawn for this game — the sheet is a dungeon set
+  // with no chest in it — over two of its interchangeable crates, the same way
+  // three of the wizard's four facings were drawn over tiles nothing claimed.
+  chest: [26, 15],
+  'chest-open': [27, 15],
 
   // --- Items ---------------------------------------------------------------
   // The four lights climb a silhouette: candle, lantern, candelabra, and a
@@ -103,6 +108,9 @@ export const TILES = {
   'spring-vial': [33, 13],
   coin: [41, 3],
   gem: [23, 4],
+  // One key tile for all three, tinted by the gate it opens — the same economy
+  // the three gems are drawn with.
+  key: [32, 3],
   compass: [24, 14],
   map: [47, 6],
 

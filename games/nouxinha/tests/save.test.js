@@ -12,6 +12,7 @@ import {
   hasSuspendedRun,
   itemOnTile,
   maxWater,
+  openChest,
   rememberGround,
   respawn,
   resumeRun,
@@ -22,7 +23,7 @@ import {
 import { clampSlot, emptySave, MAX_GEMS, normaliseSave, SLOT_COUNT } from '../src/core/save.js';
 import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
 import { ITEMS } from '../src/data/items.js';
-import { GEM_ROUTE, NONCE, SEED, TORCH_ROUTE } from './world.js';
+import { GEM_ROUTE, KEY_CHEST, NONCE, SEED, TORCH_ROUTE } from './world.js';
 
 // --- Slots -------------------------------------------------------------------
 
@@ -72,6 +73,17 @@ unit('a corrupt or hand-edited save cannot break a run', () => {
     assert(state.gems >= 0 && state.gems <= MAX_GEMS, `gems clamped for ${JSON.stringify(bad)}`);
     assertEqual(state.water, maxWater(state.gems), 'water matches whatever gem count survived');
   }
+
+  // Keys and chests are lists of ids, which is the one shape a hand-edited file
+  // can put nonsense into without tripping a number check: an id that names no
+  // key would leave a run holding something no gate has ever heard of.
+  const forged = normaliseSave({
+    keys: ['key-1', 'key-1', 'skeleton-key', 7, null],
+    chests: ['chest-key-1', 'chest-of-drawers'],
+  });
+  assertEqual(forged.keys, ['key-1'], 'only real keys survive, once each');
+  assertEqual(forged.chests, ['chest-key-1'], 'and only chests the world actually holds');
+  assertEqual(normaliseSave({ keys: 'key-1' }).keys, [], 'a key list that is not a list is none');
 });
 
 // --- The ground a run keeps --------------------------------------------------
@@ -195,6 +207,9 @@ unit('saving mid-walk writes the expedition down without banking any of it', () 
   const state = createRun(SEED, { ...emptySave(), coins: 40, runs: 3 }, NONCE);
   for (const dir of TORCH_ROUTE.path) step(state, dir);
   state.tools.add('compass');
+  // A key out of a chest is carried on exactly the same terms as that compass,
+  // so the round trip has to keep both — and bank neither.
+  openChest(state, KEY_CHEST);
 
   const saved = suspendRun(state);
   assert(hasSuspendedRun(saved), 'the slot is holding an expedition');
@@ -202,6 +217,8 @@ unit('saving mid-walk writes the expedition down without banking any of it', () 
   // into the campaign's own numbers, the way stopping at the hut would.
   assertEqual(saved.coins, 0, 'the coins picked up are still only carried');
   assertEqual(saved.compass, false, 'and a tool found on the way is still at risk');
+  assertEqual(saved.keys, [], 'a key found on the way is still at risk too');
+  assertEqual(saved.chests, [], 'and so is the chest it came out of');
   assertEqual(saved.runs, 0, 'a suspended walk is not a run completed');
   assert(saved.mapped.length > 0, 'but the ground it lit is written, as always');
 
@@ -215,6 +232,8 @@ unit('saving mid-walk writes the expedition down without banking any of it', () 
   assertEqual(back.inventory, state.inventory, 'and every light at the durability it was at');
   assertEqual(back.activeIndex, state.activeIndex, 'still burning the same one');
   assertEqual([...back.tools].sort(), [...state.tools].sort(), 'holding the same tools');
+  assertEqual([...back.keys].sort(), [...state.keys].sort(), 'and the same keys');
+  assertEqual([...back.chests].sort(), [...state.chests].sort(), 'with the same chests left open');
   assertEqual(back.explored.size, state.explored.size, 'on the ground it had drawn');
   // The campaign underneath is what the run would bank into if it ever got
   // home, so it has to survive the round trip too.

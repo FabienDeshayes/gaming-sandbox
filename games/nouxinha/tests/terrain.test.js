@@ -6,8 +6,10 @@ import {
   DEFAULT_SEED,
   beyondEdge,
   blocksSight,
+  chestAt,
+  chests,
   chokeAt,
-  entryCost,
+  entryKey,
   isWalkable,
   itemAt,
   landmarkAt,
@@ -20,9 +22,9 @@ import {
   terrainAt,
 } from '../src/core/world.js';
 import { activeShape, createRun, litTiles, reveal, step, EDGE_SEEN } from '../src/core/rules.js';
-import { emptySave, MAX_GEMS, normaliseSave } from '../src/core/save.js';
-import { EDGE_RADIUS, SEED_MIN_FRACTION } from '../src/balance.js';
-import { NONCE, ORTHOGONAL, SEED, SHUT_GATE } from './world.js';
+import { emptySave, normaliseSave } from '../src/core/save.js';
+import { CHEST_COIN_VALUES, EDGE_RADIUS, SEED_MIN_FRACTION } from '../src/balance.js';
+import { ALL_KEYS, ALL_KEYS_LIST, NONCE, ORTHOGONAL, SEED, SHUT_GATE } from './world.js';
 
 // One window, walked once, for the three distribution tests below — the whole
 // cost of them is `terrainAt`, and asking it 20,000 times per test is the only
@@ -103,14 +105,14 @@ unit('trees grow in groves and stop a step the way rock does', () => {
   // Groves, not scattered trunks — that is what the coarse lattice buys.
   assert(survey.treesInAStand / trees > 0.9, 'nearly every tree should have another beside it');
 
-  // Blocking, and blocking absolutely: no number of gems opens a tree.
+  // Blocking, and blocking absolutely: no key opens a tree.
   const tree = (() => {
     for (let y = -SPAN; y <= SPAN; y++)
       for (let x = -SPAN; x <= SPAN; x++) if (terrainAt(x, y, SEED) === 'tree') return [x, y];
     throw new Error('the survey found trees but the sweep did not');
   })();
   assert(!isWalkable(tree[0], tree[1], SEED), 'a tree blocks');
-  assertEqual(entryCost(tree[0], tree[1], SEED), null, 'and no gem count opens it');
+  assertEqual(entryKey(tree[0], tree[1], SEED), false, 'and nothing carried opens it');
 });
 
 unit('the world ends at a fixed radius, and the dark there is solid', () => {
@@ -125,7 +127,7 @@ unit('the world ends at a fixed radius, and the dark there is solid', () => {
 
   assertEqual(terrainAt(EDGE_RADIUS + 5, 0, SEED), 'dark', 'outside is its own terrain');
   assert(!isWalkable(EDGE_RADIUS + 5, 0, SEED), 'and nothing walks on it');
-  assertEqual(entryCost(EDGE_RADIUS + 5, 0, SEED), null, 'no number of gems opens it');
+  assertEqual(entryKey(EDGE_RADIUS + 5, 0, SEED), false, 'nothing carried opens it');
 
   // Everything the campaign is currently about is comfortably inside, with room
   // left over — the outermost sanctum wall against the rim.
@@ -158,10 +160,10 @@ unit('what stops a step mostly stops a light, and a gate stops one until it open
   // gate is the tile where they come apart (DESIGN.md §4.1).
   const gate = SHUT_GATE.gate;
   assertEqual(terrainAt(gate.x, gate.y, SEED), 'gate', 'the route found a gate');
-  assert(blocksSight(gate.x, gate.y, SEED, 0), 'shut, it stops a light like the wall it sits in');
+  assert(blocksSight(gate.x, gate.y, SEED, null), 'shut, it stops a light like the wall it sits in');
   assert(
-    !blocksSight(gate.x, gate.y, SEED, SHUT_GATE.requires),
-    'and the gem that opens it opens a window in the same moment'
+    !blocksSight(gate.x, gate.y, SEED, new Set([SHUT_GATE.key])),
+    'and the key that opens it opens a window in the same moment'
   );
 
   // The ring it stands in never opens, however much is being carried.
@@ -174,11 +176,64 @@ unit('what stops a step mostly stops a light, and a gate stops one until it open
       }
     throw new Error('a sanctum with no wall around it');
   })();
-  assert(blocksSight(wall[0], wall[1], SEED, MAX_GEMS), 'masonry stops a light at any gem count');
+  assert(blocksSight(wall[0], wall[1], SEED, ALL_KEYS), 'masonry stops a light whatever you hold');
 
   // And the ordinary cases, so the one rule covers the whole terrain table.
-  assert(!blocksSight(0, 0, SEED, 0), 'the hut, and floor generally, is see-through');
-  assert(blocksSight(EDGE_RADIUS + 5, 0, SEED, MAX_GEMS), 'so is the dark outside the world');
+  assert(!blocksSight(0, 0, SEED, null), 'the hut, and floor generally, is see-through');
+  assert(blocksSight(EDGE_RADIUS + 5, 0, SEED, ALL_KEYS), 'so is the dark outside the world');
+});
+
+unit('a chest blocks a step, never a light, and stands on ground you can reach', () => {
+  // The one thing in the world you meet by failing to walk onto it (DESIGN.md
+  // §4.8) — so it has to be solid to a step and transparent to a light, or a
+  // box would be a wall the shadow rules never accounted for.
+  for (const chest of chests(SEED)) {
+    assertEqual(terrainAt(chest.x, chest.y, SEED), 'chest', `${chest.id} is its own terrain`);
+    assert(!isWalkable(chest.x, chest.y, SEED), `${chest.id} cannot be stepped on`);
+    assertEqual(entryKey(chest.x, chest.y, SEED), false, `${chest.id} opens for no key`);
+    assert(!blocksSight(chest.x, chest.y, SEED, null), `${chest.id} casts no shadow`);
+    // Forced-floor apron all the way round, so whichever side you come from
+    // there is somewhere to stand and open it.
+    for (const [dx, dy] of ORTHOGONAL)
+      assert(
+        isWalkable(chest.x + dx, chest.y + dy, SEED),
+        `${chest.id} has floor on every side of it`
+      );
+    assertEqual(chestAt(chest.x, chest.y, SEED).part, 'site', `${chest.id} knows its own tile`);
+  }
+
+  // And they stay off each other and off everything else that was placed first.
+  const sites = chests(SEED);
+  for (const a of sites)
+    for (const b of sites)
+      if (a !== b)
+        assert(
+          Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) > 2,
+          `${a.id} and ${b.id} stand clear of each other`
+        );
+});
+
+unit('the three keys are in three chests, each inside the gate it opens', () => {
+  // The pacing rests on this: a gate is only shut until you have walked to the
+  // chest that holds its key, and that chest is always the nearer of the two
+  // (DESIGN.md §4.8).
+  const keyChests = chests(SEED).filter((chest) => chest.key);
+  assertEqual(keyChests.map((chest) => chest.key), ALL_KEYS_LIST, 'one chest per shut gate');
+  for (const sanctum of sanctums(SEED)) {
+    if (!sanctum.key) continue;
+    const chest = keyChests.find((c) => c.key === sanctum.key);
+    const out = Math.max(Math.abs(chest.x), Math.abs(chest.y));
+    assert(
+      out < sanctum.distance,
+      `${chest.id} (${out} out) is inside the gate it opens (${sanctum.distance})`
+    );
+  }
+
+  // Everything else in a chest is a hoard of coins, and one of the three sizes
+  // balance.js offers.
+  for (const chest of chests(SEED))
+    if (!chest.key)
+      assert(CHEST_COIN_VALUES.includes(chest.coins), `${chest.id} holds a hoard the table names`);
 });
 
 unit('light never reveals what is outside the world', () => {

@@ -77,10 +77,17 @@ export const SEED_MAX_ATTEMPTS = 20;
 // --- Sanctums -----------------------------------------------------------------
 //
 // The chain is what turns three gems into a reason to keep walking: sanctum 1's
-// arch stands open (gem 1 has to be reachable carrying nothing), and each gate
-// after it wants the gem from the sanctum before it. `requires` is both the
-// count of gems needed and the index of the gem whose colour the open gate
-// takes — see config.js `gemColour`.
+// arch stands open, so the first gem is reachable carrying nothing, and every
+// gate after it is locked and wants a key out of a chest (CHEST_PLAN below).
+//
+// `key` is the key that opens the gate, and `colour` the gem whose colour the
+// gate, its key and the sanctum's own masonry are all drawn in — see config.js
+// `gemColour`. The two run together on purpose: a key is *the colour of the gate
+// it opens*, which is the whole of what a player has to learn about them.
+//
+// The distances are still the pacing. A gem no longer opens the next gate, but
+// it still widens the leash by WATER_PER_GEM and upgrades what is lying about,
+// so the sanctum you have just walked to is what makes the next one survivable.
 //
 // `cache` is what the clearing holds besides the centrepiece, HOARD_PER_KIND of
 // each — a hoard, not a pile.
@@ -89,35 +96,69 @@ export const SANCTUM_PLAN = [
     gem: 'gem-1',
     distance: 20,
     radius: 4,
-    requires: 0,
+    key: null,
+    colour: 0,
     cache: ['coin', 'water-drop', 'water-flask', 'torch-medium'],
   },
   {
     gem: 'gem-2',
     distance: 45,
     radius: 5,
-    requires: 1,
+    key: 'key-1',
+    colour: 1,
     cache: ['coin', 'water-drop', 'water-flask', 'torch-beacon'],
   },
   {
     gem: 'gem-3',
     distance: 80,
     radius: 6,
-    requires: 2,
+    key: 'key-2',
+    colour: 2,
     cache: ['coin', 'water-drop', 'spring-vial', 'torch-beacon'],
   },
-  // The last one holds no gem: it is what gem 3 is *for*, and the richest cache
-  // in the game (DESIGN.md §4.4).
+  // The last one holds no gem: it is what the third key is *for*, and the
+  // richest cache in the game (DESIGN.md §4.4).
   {
     gem: null,
     distance: 110,
     radius: 7,
-    requires: 3,
+    key: 'key-3',
+    colour: 3,
     cache: ['coin', 'water-flask', 'spring-vial', 'torch-beacon', 'torch-lamp'],
   },
 ];
 
 export const HOARD_PER_KIND = 2;
+
+// --- Chests -------------------------------------------------------------------
+//
+// The other built thing in the world, and the only one you open rather than
+// walk onto: a chest stands on its own tile, cannot be stepped on, and does not
+// stop a light. Walking into it opens it, once, forever — so like the merchant
+// and the two tools lying in the dark, a chest belongs to the *slot* rather than
+// to the expedition: it is placed with the seed and never relaid by a respawn.
+//
+// Three of them hold the three keys, one per shut gate, and each sits well
+// inside the gate it opens so the walk to a gem is still the walk the distances
+// above describe. The rest hold coins, spread a band apart so a campaign meets
+// one every so often rather than all of them at once.
+export const CHEST_PLAN = [
+  { id: 'chest-key-1', key: 'key-1', near: 26, span: 10 },
+  { id: 'chest-key-2', key: 'key-2', near: 52, span: 12 },
+  { id: 'chest-key-3', key: 'key-3', near: 86, span: 14 },
+  { id: 'chest-coin-1', key: null, near: 12, span: 8 },
+  { id: 'chest-coin-2', key: null, near: 32, span: 10 },
+  { id: 'chest-coin-3', key: null, near: 58, span: 12 },
+  { id: 'chest-coin-4', key: null, near: 84, span: 14 },
+  { id: 'chest-coin-5', key: null, near: 104, span: 14 },
+];
+
+// What a coin chest is worth, picked per chest from the seed. Two orders of
+// magnitude above a coin pile on the ground (COIN_VALUE_MIN/MAX below) because a
+// chest is opened once per campaign and never comes back: 50 is the compass, 100
+// is the map, and 75 is most of the way to either. The merchant's prices are the
+// scale these are set against — retune PRICES and these want a second look.
+export const CHEST_COIN_VALUES = [50, 75, 100];
 
 // --- Landmarks ----------------------------------------------------------------
 //

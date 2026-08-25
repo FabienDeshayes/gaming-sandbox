@@ -597,6 +597,10 @@ export async function openGame(
           nonce: r.nonce,
           epoch: r.epoch,
           tools: [...r.tools],
+          // The keys in hand and the chests this campaign has already opened —
+          // the two halves of what a chest changes (DESIGN.md §4.8).
+          keys: [...r.keys],
+          chests: [...r.chests],
           seenUnique: [...r.seenUnique],
           banked: { ...r.banked },
           animating: s.animating,

@@ -164,6 +164,20 @@ unit('with no lights left you see only your own tile, and can still walk', () =>
   assertEqual(state.steps, before + 1, 'still able to move');
 });
 
+unit('reaching the hut in blackout hands back a starting light', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  pace(state, ITEMS['torch-small'].maxDurability);
+  assert(isBlackout(state), 'burned out into blackout, off the hut');
+
+  step(state, BACK);
+  const home = step(state, BACK);
+  assert(home.atBase, 'back on the hut');
+  assert(home.relit, 'the hut reports handing back a light');
+  assertEqual(isBlackout(state), false, 'no longer in blackout');
+  assertEqual(activeLight(state).id, 'torch-small', 'a fresh starting light');
+  assertEqual(activeLight(state).durability, ITEMS['torch-small'].maxDurability, 'at full durability');
+});
+
 unit('equipping a carried light changes what you can see', () => {
   const state = createRun(SEED, emptySave(), NONCE);
   assertEqual(litTiles(state).length, 9, 'small torch');

@@ -58,6 +58,20 @@ export function refillWater(state) {
   return state.water > before;
 }
 
+// The hut's third job: a walk that reaches it in blackout gets a starting
+// light handed back, on arrival, the same as the tank (DESIGN.md §4.7).
+// Blackout is a setback rather than a dead end everywhere else in the world
+// too, but the hut is the one tile the game promises is always safe — it
+// shouldn't be the one place a lightless run is left unable to see. Returns
+// whether it actually handed one back, for the scene to decide whether it is
+// worth announcing.
+export function restockLight(state) {
+  if (state.inventory.length > 0) return false;
+  state.inventory.push(newLight(STARTING_LIGHT));
+  state.activeIndex = 0;
+  return true;
+}
+
 // What a campaign files "I have walked into the end of the world" under. It
 // rides along in the same set as the unique objects the run has laid eyes on
 // (`seenUnique`), which is exactly the right shelf for it: knowledge rather
@@ -471,6 +485,7 @@ export function step(state, direction) {
   // refill, never a no-op: the step onto the hut cost a water like any other, so
   // there is always at least that one to give back.
   if (atBase) refillWater(state);
+  const relit = atBase && restockLight(state);
 
   const lit = reveal(state);
 
@@ -488,6 +503,7 @@ export function step(state, direction) {
     coinsGained: got ? got.coins : 0,
     // Whether this step put everything on the ground back somewhere new.
     respawned,
+    relit,
     lit,
     atBase,
     atMerchant: isMerchant(nx, ny, state.seed),

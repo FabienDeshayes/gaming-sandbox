@@ -1,235 +1,308 @@
 # Nouxinha — the story
 
-> The fiction the game is told in: what happened to the world, why a wizard walks into the dark
-> carrying a candle, what the three colours are for, and what is at the far end of it.
+> The fiction the game is told in: why the world is dark, why a wizard walks into it for shards of a
+> sun, who is waiting at the end of the walk, and why the world is different every time.
 
 > **Status:** none of this is implemented. `DESIGN.md` describes the game as it is; this describes
 > the story it is being pointed at, so the late game can be built towards something rather than
-> towards more tiles. Everything here is arranged to fit the mechanics that already exist — where it
-> asks for something new, §10 says so plainly.
+> towards more tiles. Everything here is arranged to sit on mechanics that already exist — where it
+> asks for something new, §11 says so plainly, and §11 is where the real work is.
 
 > **Doc convention:** this doc describes the story *as it stands now*. When it changes, edit the
 > relevant section in place — no "previously"/"superseded" notes. Git history is the changelog.
 
 ## 1. The short version
 
-The sun went out. Its name was **Nouxinha**.
+The sun went out. Nobody knows why, and there is nobody left to ask.
 
-What is left is a small hut with a flag on it, a wizard who is the last one who remembers there was
-a sun at all, and a world that only goes as far as the light has ever got. Three colours survive,
-each walled into a sanctum by people who are gone. The wizard's whole job is to walk out, find them,
-and carry them home — because a world that remembers its colours remembers the rest of itself with
-them: where its water is, how a flame is meant to burn, and finally where the last ember of Nouxinha
-fell.
+You wake in a small hut in a dark world, alone, sure of one thing: there are **shards of the sun**
+out there, and shards bring colour back. You find three. You carry them home. And then something
+pulls you towards a walled hall you have never been able to open, where a sorcerer called
+**Nouxinha** is standing with the sun in his hands.
 
-The ultimate goal is to carry that ember home and put the sun back up. What it lights is exactly the
-ground the campaign lit, and no more.
+He took it. He is not sorry, and he is not finished. You try to talk him out of it. He takes your
+shards, and puts you back at your door — and the world outside it is not the world you learned. He
+has moulded a new one.
 
-## 2. What happened
+That is the game. **Every world is one he made, and every campaign is one more time round.** What
+survives a re-moulding is what you *know*, and knowing enough is the only thing that has ever got
+anybody out.
 
-The dark is not weather and it is not an enemy. **The world is being forgotten, and the dark is what
-forgetting looks like from the inside.** Ground nobody has looked at in long enough stops being
-ground. That is why:
+## 2. The world you wake in
 
-- **Unknown tiles are drawn as nothing at all.** There is nothing there yet. Lighting a tile is not
-  discovering it, it is *remembering* it, which is why the one thing that outlives every run —
-  banked or died or walked out of — is the ground the run lit. Cartography is the only thing in this
-  game that cannot be lost, because it is the only thing that is actually being saved.
-- **The world is a circle centred on the hut.** Not an island, not a level with a wall round it: the
-  rim at 200 is simply how far light has ever got from that door. The dark eats a tile of reach for
-  every ten tiles closer to it because out there the world is thinner — there is less of it to see.
-- **Everything on the ground moves when you aren't looking.** A world nobody is holding in mind
-  doesn't keep its furniture where it was. The status line already says it: *the dark has put
-  everything back somewhere new.*
+Dark, and not naturally dark. The dark is the shape of a hole where a sun used to be, and everything
+in the world is arranged around the fact that light is a thing somebody has to carry.
 
-The one thing the dark cannot counterfeit is **colour**. It can put a coin somewhere else and it can
-take a stretch of ground back, but it has nothing to make colour out of. That is the whole reason
-the gates are keyed to gems, and the reason a colour once carried home stays.
+You are alone. There is not one other living thing on the ground: no animals, no people, no enemies,
+nothing that moves unless you move it. The stall at 20 tiles out has a counter and a canopy and
+nobody behind it. That is not scenery — it is the truth of this world stated in one sprite, and it
+is why the game has no combat and never will.
 
-## 3. The wizard, the hut, the flag
+And you know one thing you cannot account for knowing: **the shards bring the sun back.** You did not
+read it anywhere. It was simply there when you woke up. Holding on to where that certainty came from
+is the first thing this story spends, because you did not think of it yourself — he told you, the
+first time round, and then took the telling with the rest of the world.
 
-One person, one room, one flag so it can be found from the edge of a light. The hut is at the centre
-of the world because the world is measured from it: it is the last place still lit by somebody
-living in it.
+## 3. The shards
 
-Nobody asked the wizard to do this. There is nobody left to ask. They are simply the last one who
-remembers the sun had a name, and the game never says more about them than that — the wizard is a
-hood, a beard and a staff, and the three things a gem paints on them (hood, robe, staff) are the
-only character arc the art has room for.
+Three of them, one to a sanctum, and each is a piece of the real sun — which is why each is a colour
+this world does not contain. That is exactly what the art already does: a shard's hue is the
+foreground of a palette you are *not* playing in, so it is guaranteed to be a colour the world has
+never shown you.
 
-Coming home is the game's one moral rule, stated mechanically: **nothing is real until it is carried
-back.** A colour in your pocket is a colour the world could still lose.
+A shard is named by **what it lets back in**, never by hue — the palette owns hue, and there are
+four palettes.
 
-## 4. The three colours
+| Shard | Lets back in | Which is |
+|---|---|---|
+| First | **water** | Springs that were there all along. The flask replaces the drop and the tank holds 50 more — the first shard is what makes walking out at all possible. |
+| Second | **fire** | How a flame is supposed to burn. The beacon replaces the medium torch, and the third sanctum stops being out of reach. |
+| Third | **the way** | Not a new thing so much as a door. It fills the tank from the vial, and it is what opens the hall at 110. |
 
-Each gem is a colour the world can no longer do without being reminded. They are named by **what
-they are the colour of**, never by hue — the palette decides what green or amber means, and a gem is
-always the foreground of a palette you are not playing in.
+**A shard held is a piece of the true world showing through his one.** That is the whole reason
+holding one improves the ground around you: better water, longer fire, and — past the fourth wall —
+the ability to see anything real at all (§8). Carrying three, you are standing in two worlds at once.
 
-| Gem | Is the colour of | Gives back | Which is why |
-|---|---|---|---|
-| First | **water** | springs the world had forgotten it had — the flask replaces the drop, and the tank holds 50 more | A world that remembers where its water is has water in it. This is the colour that lets you walk further out at all. |
-| Second | **fire** | how a flame is supposed to burn — the beacon replaces the medium torch | Light stops being something you spend so fast. The second colour is what makes the third sanctum survivable. |
-| Third | **the sun** | the last gate, and water running properly again — the spring vial replaces the flask | It doesn't hand you a new thing so much as hand you the far dark. Holding the sun's colour is what lets you see anything out there at all (§7). |
+He cannot pick them up. His hands are full of the sun and have been for a very long time; the shards
+are what flakes off it, and they fall where his grip does not reach. So he built somewhere for each
+of them to land (§4), and a chain of gates so that whoever fetched them would arrive with all three
+at once, in one piece, and out of breath.
 
-Three consequences worth keeping straight:
+**You are his hands.** The whole escalating structure of this game — three sanctums at 20, 45 and
+80, each gate keyed to the shard behind the last one, supplies cached inside, a shop on the way — is
+not a difficulty curve. It is a route, built by somebody, for you.
 
-- **A gem upgrades the world rather than adding to it**, and thins it as it upgrades. That is the
-  world remembering itself better, not the wizard getting richer — fewer things, each of them more
-  like what it was supposed to be.
-- **Nothing is ever drawn in a colour the campaign has not brought back.** A tile *gains* a colour
-  when the gem lands. Nothing is ever taken away, because nothing the player has seen was ever a lie.
-- **Every gem is optional and the game never requires one.** The story has to survive a player who
-  ignores all of it, and it does: they are a wizard who walked around in the dark for a while.
+## 4. What he built, and what he left you
 
-## 5. The ones who came before
+Every worked thing in the world is his, and each of them is doing a job:
 
-Somebody built the sanctums. They are the only worked stone in a world grown out of noise, and they
-were built *after* the sun went out, by people who had already given up on the world and had not
-given up on the colours.
+- **The sanctums.** The only masonry in a world grown out of noise. Walls to keep a shard where it
+  fell, and gates keyed in order so the fetching happens in the order that keeps the fetcher alive.
+  The caches inside are supplies, laid out two of each, ranked and never rolled — a dump packed by
+  somebody who knew what the walk to it costs.
+- **The stall.** A shop with nobody in it, for a world with one person in it, taking a currency he
+  invented for the purpose. **The coins are worthless and he minted them anyway**, because a world
+  with no money in it does not look like a world, and he needs this one to look like a world.
+- **The scatter.** Water, light and coins thrown across the ground and moved every time you turn your
+  back. The status line already says it out loud: *the dark has put everything back somewhere new.*
+  That is him, fidgeting.
+- **The hut.** One room, a flag on it so you can find it from the edge of a light, water that never
+  runs out and a fresh candle waiting if you come in blind. He leaves it standing every single time.
+  It is a kindness and it is a cage, and it is the same object.
 
-They did not try to save everything. They walled up three colours, one apiece, and keyed each gate
-to the colour behind the last one — so that whoever came after would have to walk the chain in
-order, and would be strong enough by the end of it to be worth handing the last one to. The first
-arch stands open because the first colour has to be reachable by somebody carrying nothing.
+The hut is also the story's answer to the game's oldest rule. **Nothing is real until it is carried
+home** — because the hut is the one tile he does not re-mould, so what reaches it is out of his
+reach. Banking at the hut is not bookkeeping. It is the only place in the world he has agreed not to
+touch, and every rule about coins, tools and shards follows from that one concession.
 
-They are gone. Every trace of them in the world is a thing left standing:
+## 5. Nouxinha
 
-- **The merchant's stall** is a canopy over a counter with nobody behind it. It has never been drawn
-  as a person and it never should be. You take what you need and **leave the coins on the counter**,
-  because that is what the counter is for, and because a wizard who started stealing from the last
-  shop in the world would be a different game.
-- **The compass and the map lying out in the dark** were dropped. Somebody was walking out with
-  them, and stopped.
-- **The fourth sanctum** is where they stopped (§6).
+A sorcerer. He used old, deep, dark magic to catch the power of the sun and keep it, and it worked.
 
-## 6. The fourth sanctum — the old hut
+He is not a monster and he must never be written as one. He is a man holding something enormous with
+both hands who cannot put it down, standing in a world he builds and rebuilds out of the leak. He
+introduces himself. He is courteous. He answers questions. **He keeps you** — not as a prisoner
+exactly, but because a world with nobody in it is a world he would have to look at alone, and he has
+looked at it alone for longer than you have been walking.
 
-The sanctum at 110 that wants all three colours and holds no gem is **the hut of the keeper before
-you**: one room, walled in from the inside, with a ring of masonry round it and a gate they barred
-behind them. They walked further out than anyone and they came back this far and no further.
+What he does when you finally reach him is always the same. He takes the three shards out of your
+hands, he says something kind, and he puts you back at your door. Then he moulds the world again —
+new ground, new sanctums, new places for everything, a new dark for you to walk into — because a
+fetcher who already knows the route is no use to him, and because rebuilding is the only thing he
+can still do with what he is holding.
 
-It holds two things.
+Three things about him that the game earns rather than states, and that §9 turns into the endgame:
 
-**Their cache** — the richest in the game, ranked and fixed, exactly as `DESIGN.md` §4.4 already
-describes. It is the last supply dump before the far dark, and it is a supply dump because that is
-what a person walls up when they are planning to go out again.
+- He is not the dark. He made the world *in* the dark; he did not make the hole.
+- What he is holding is going out anyway. That is what the shards are.
+- He knows both of those already.
 
-**Their chart.** The third tool, alongside the compass and the map, and the only one that cannot be
-bought: a drawing of the far dark with the cinders on it (§7). Owning it marks the cinders on your
-own map whether or not you have lit them — which is the difference between the far dark being a
-route and being a coin flip. Like every tool it is only yours once it is carried home, and the walk
-back from 110 with it is the first genuinely late-game expedition the campaign has.
+## 6. The hall
 
-This is also where the game says what it is about, out loud, once, in the text panel: what the
-colours were for, what fell out there, and what the wizard is going to have to do about it. The
-whole story can be carried by three text panels — setting out, the first gem, and this room.
+The fourth walled place, at 110 tiles out, wanting all three shards and holding no shard of its own.
+The compass turns to it the moment you are carrying the third one, which is what "drawn to it"
+means: the one tool in the game that points at what is worth walking to next stops pointing at
+anything else.
 
-## 7. The far dark
+Inside is a clearing, a hall, and him.
 
-Past the fourth sanctum's wall at 117, the last third of the world. It is the late-game area, and it
-is different in kind rather than in difficulty.
+**The confrontation is a conversation.** It is the text panel, doing the thing the text panel was
+built for, plus one dialog with the things you are able to say on it — and *you can only say what you
+know*. The first time through, you know nothing, so you listen, he takes the shards, and the world
+turns over. Every time after that you can say one thing more, he answers it, and his answer is how
+the next thing gets learned. **You lose better each cycle**, and the losing is the content.
 
-- **The ground has nothing on it.** No rock masses, no boulders, no groves — the terrain thins out
-  towards the rim until it is bare floor and cinder. There is less world out here, and it looks it.
-  Nothing blocks a step and nothing casts a shadow, so the only thing between you and anywhere is
-  distance and water.
-- **The dark eats your light** at a tile per ten from 170 in, as it already does. Out here that stops
-  being flavour: whatever you set out carrying, you arrive walking on a guttering ring.
-- **The cinders are what you walk by.** Pieces of Nouxinha, thrown out when it broke, lying where
-  they fell. Each is a small permanent light in the world — fixed, un-eaten by the choke, burning
-  whether or not anybody is standing there. They are the only thing out here that the dark has not
-  been able to take, because they are the sun and the sun is what colour *is*.
-- **So the far dark is an archipelago.** Islands of light with black water between them, and the
-  route from one to the next is the level design — the first real navigation puzzle in a game that
-  has so far only ever asked how far you dare go. The chart (§6) is the thing that turns it from a
-  guess into a plan.
-- **You can only see any of this because you hold the third colour.** A cinder is drawn in the
-  sun's own hue, and nothing in this game is ever drawn in a colour the campaign has not brought
-  back. The gate at 117 is not what keeps a gemless player out of the far dark; it is only what
-  keeps them from wasting the walk.
+Nothing about it is combat. He never chases, he is never on the ground, there is never a fight, and
+being sent back is not death — the run is not lost, the *world* is.
 
-## 8. The Ember, and the walk home
+## 7. The cycle
 
-At the rim, roughly 190 out, is the largest of them: **the Ember** — the last piece of Nouxinha, and
-the only cinder that can be picked up.
+One turn of the game, and the reason a save slot is a campaign rather than a save.
 
-Taking it **puts its island out.** The brightest place in the world goes dark in the moment you
-claim it, and the walk home starts in the hole you just made. Nothing else is added: no chase, no
-timer, no enemy. The game already has the only pressure it needs — a 200-tile walk back on a water
-ceiling of 350, which cannot be done without finding water on the way, and which loses everything if
-it fails. That is the hardest thing this game can ask for and it is the right last thing to ask.
+1. **A world is moulded.** New seed: new terrain, new sanctum positions, new stall, new landmarks,
+   new dark. The ground you lit last time is gone, because it is not there any more.
+2. **You walk it.** Three shards out of three sanctums, banked at the hut in the usual way, over
+   however many expeditions it takes.
+3. **You choose.** Go to the hall now — or spend what you have left pushing past it, into the far
+   dark, for the one thing in the world he did not make (§8). This is the decision the whole endgame
+   rests on, and it is the game's own push-your-luck question asked at the largest scale it has: the
+   walk to a remnant and back is the longest in the game, and dying on it costs you the shards.
+4. **You reach him.** You say what you know. He takes them and puts you back.
+5. **Round again**, one truth better.
 
-It is carried home like everything else, and it is only yours at the hut, like everything else. The
-last walk is the first walk with the stakes turned all the way up, and the rule it is played by is
-the one the game has been teaching since the first candle.
+**What he takes:** the three shards, and the world. Every time.
 
-## 9. The ending
+**What he leaves:** everything that is yours rather than his — the compass and the map if you have
+carried them home, your coins, and above all **what you know**. He can unmake ground. He has never
+found a way to unmake the fact that you have been here before.
 
-Put the Ember on the hut and the sun comes back up.
+So the campaign ramps: cycle one is the whole game learned from nothing, and cycle four opens with
+both tools in hand, a purse, a shorter world (§8) and three things to say.
 
-What it lights is **exactly the ground the campaign lit, and nothing else** — the map, all of it at
-once, in daylight, with the dark still sitting past the edge of everywhere the wizard ever walked.
-The size of the world is the size of what one person bothered to remember, and the last screen of
-the game is a drawing of that with a number on it.
+## 8. The far dark, and the remnants
 
-Which is also the answer to *why play again*: there is more dark out there than any one campaign
-lights, and a slot that has finished is a world with a sun over the part of it you walked. Ground
-carries between runs. It always did.
+Past the fourth wall at 117, the last third of the world — and it is different in kind, not in
+difficulty, because **it is where his moulding gives out**.
 
-The win is still a destination rather than an ending, exactly as `DESIGN.md` §6 has it. The world is
-still there afterwards. It is just lit.
+- **The ground thins.** Fewer rock masses, fewer boulders, fewer groves, until it is bare floor. He
+  stopped bothering out here. Nothing blocks a step and nothing casts a shadow: the only things
+  between you and anywhere are distance and water.
+- **The dark eats your light**, a tile of reach per ten from 170 in, exactly as it does now. Out here
+  that stops being flavour — whatever you set out carrying, you arrive walking on a guttering ring,
+  and the rim is where the world he made simply runs out.
+- **Something of the old world shows through.** One per moulded world, near the rim: a **remnant** —
+  a piece of the world from before the sun went out. A doorstep with no house, a burnt tree standing
+  in the same shape it burned in, a name scratched into a stone. He did not make it and he cannot
+  unmake it, which is the only reason it is still there.
+- **You can only see one while carrying all three shards.** A remnant is a piece of the true world,
+  and the true world had colour in it; the shards are the only colour in this one. So finding a
+  remnant requires finishing the fetch first — which is precisely what makes step 3 of the cycle a
+  choice rather than a chore. The compass points at it, because it is the only unique thing left
+  that you have not got.
+- **Carry it home like everything else.** Banking it at the hut is what turns a remnant into a
+  **truth** — one thing you know about him, kept through every re-moulding after.
 
-## 10. What this asks the game for
+**And each world he moulds is a little smaller than the last.** The rim comes in, cycle over cycle,
+down to a floor it never goes below. Two things fall out of it, both wanted: it is the first hard
+evidence the player gets that what he is holding is going out (§9), readable straight off the map
+and the furthest-out counter without a word of dialogue — and it makes the late cycles *shorter*, so
+the last one, when you have the most to do, is the tightest and fastest world in the game.
 
-Everything above rests on systems that exist. The genuinely new pieces, smallest first:
+## 9. The three truths
 
-1. **Copy.** Three text panels (setting out, the first gem, the old hut) and an ending screen. All of
-   it goes in `src/text.js` like every other word in the game.
-2. **Terrain thinning past 117.** The rock, boulder and tree thresholds fall off with distance. A
-   band in `src/balance.js`; `pickSeed` gets easier, not harder, since less is blocked.
-3. **Cinders.** A new kind in the unique layer (seed-derived, never moving, like the gems), plus the
-   one rule the light code doesn't have yet: a light source that is not the character. `litTiles` is
-   the only place shape, choke and shadow compose, so it is the only place this can go — and a
-   cinder's own reach is deliberately *not* choked, which is what makes it a stepping stone. Nothing
-   outside the world is lit, cinders included.
-4. **The chart.** A third tool alongside the compass and the map — owned, not carried, banked at the
-   hut, drawn on the rail. Its only effect is that the map draws cinders the run has not lit.
-5. **The Ember.** One more unique object, at the rim, whose pickup puts its own cinder out and sets
-   the flag the hut reads on arrival.
-6. **Dawn.** The map renderer, run once at full brightness over the whole explored set, as the last
-   screen.
+Three remnants, three truths, three things you can say to him. The number is a dial and it sets the
+length of the game: three truths is four cycles.
 
-## 11. Rules the story must not break
+1. **It is going out anyway.** The sun in his hands is dying and the shards are what dying looks
+   like. Every world he moulds is dimmer and smaller than the last, and he has been calling that
+   *keeping it*. — *You are not holding a sun. You are watching one go out slowly enough to pretend
+   you aren't.*
+2. **He was trying to save it.** He did not steal the sun for power. He caught it because it was
+   already going and he could not stand to watch, and the magic he used to catch it is the grip he
+   cannot now open. The dark is not his crime; it is his rescue, still in progress, several centuries
+   in. — *You meant this.*
+3. **Letting go will unmake him.** The reason he cannot, and has never been able to. He has held it
+   so long that he is made of the holding — open his hands and there is no sorcerer and, for a
+   moment, no world at all: no ground, no hut, no walls, nothing to stand on while the sun decides
+   what to do. That is what he has been protecting, every cycle, from everyone. From you. —
+   *I know what it costs. I came back anyway. Do it.*
 
-Written down because they are the things a good line of dialogue will happily walk into.
+The arc is deliberate: **the first truth is an accusation, the second is an apology, and the third is
+company.** Nothing you learn makes him worse. Everything you learn makes him more difficult to be
+angry at, and the last thing you say is not a threat — it is an offer to be standing there.
 
-- **No enemies, ever, and nothing that chases.** The dark is a condition, not a character. It has no
-  intent, it wants nothing, and it must never be written as if it did — "the dark has put everything
-  back somewhere new" is the outer limit of how personified it gets.
-- **Water is the only thing that kills.** Not the dark, not the far dark, not the Ember.
-- **The character can never be permanently stuck.** Anything the far dark does to light has to leave
-  a tile of reach and leave every adjacent tile visible.
-- **Nothing is shown in a colour the campaign has not brought back**, which is what dates every
-  visual beat in this story to the gem that unlocks it.
-- **A gate holds ground back; it never fences a run in.**
-- **Colour names are jobs, not hues.** "The colour of water", never "the green one" — the palette
-  owns hue, and there are four palettes.
-- **The story is thin on purpose.** It has to justify why light is scarce, why you walk back home,
-  and why the last thing you do is walk back home carrying something. It should not grow a
-  cosmology, a villain, or a second character.
+He cannot answer the third one, because there is no answer to it. What beats him is not a weapon and
+not a spell. It is that you are the one thing in his world he has never been able to re-mould, and
+you kept coming back until you knew all of it.
 
-## 12. Roads not taken
+## 10. The ending
 
-- **The wizard is Nouxinha.** Naming the wizard rather than the sun is warmer and makes the title
-  screen a name tag. It is rejected because the title's tagline is *bring back colour to the world*,
-  and a title that names the thing you are bringing back is doing more work than one that names who
-  is carrying it.
-- **The dark closes in behind you once the Ember is taken** — the rim creeping inward on the walk
-  home. It is the best drama available and it is rejected for now: it risks the never-stuck promise,
-  it needs a fairness dial nobody has tuned, and the 200-tile walk on a 350 tank is already the
-  hardest ask in the game. Worth revisiting only if that walk plays out slack.
-- **The far dark is a scan artefact** — leaning the CRT palette into a reveal that the world is a
-  failing display. Clever, and it makes the ending a shrug. The CRT stays texture, not twist.
-- **A vault at the hut** (`DESIGN.md` §12) fits this story perfectly — the wizard storing what they
-  bring back — but it is a mechanic looking for a home, not a story beat, and it is left where it is.
+He opens his hands.
+
+The world goes — his ground, his walls, his stall, his coins, and the hut he has been leaving
+standing for you every single time — and for a moment there is nothing under either of you at all.
+Then the sun comes up on whatever was actually there, which is not a world anybody moulded and is
+the first honest ground the game has ever drawn.
+
+Then the one real choice in the game, and it belongs on the dialog that every other decision in this
+game has been rehearsing:
+
+- **LET GO** — the ending above. The sun comes back, he does not, and the last screen is daylight
+  over ground that is nobody's.
+- **STAY** — you don't say the third truth. He takes the shards, and puts you back at your door, and
+  moulds another world, and there are two of you in it, the way there have always been. The game
+  goes round again and you can end it any time.
+
+Both are endings and neither is the good one. A game whose every mechanic is about deciding when to
+turn back has earned the right to make turning back an ending.
+
+## 11. What this asks the game for
+
+Ordered by how much of the existing design it moves. Items 1-3 are the restructure; the rest is
+content on top of it.
+
+1. **A cycle is a new seed inside the same slot.** Today the seed is drawn at NEW GAME and lives in
+   the slot forever (`save.js`, `createRun`, `bankRun`). It has to become per-cycle: re-drawn when
+   the hall sends you back, with the slot keeping cycles turned, truths learned, tools owned and
+   coins. Everything in `core/` derives from the seed already, so **the world costs nothing to
+   re-mould** — this is a save-shape change, not a world change.
+2. **The explored ground goes with it.** The map is already tied to the seed it was drawn against
+   and already discards a drawing whose world changed underneath it — so the re-mould wipes the map
+   for free, and correctly. What is worth checking is that it wipes rather than mixes.
+3. **The win condition moves.** Banking three shards stops being the win and becomes the middle of a
+   cycle; the hut's recap should say so. The win is at the hall, and there are two of them (§10).
+4. **The hall replaces the fourth sanctum's cache.** Same wall, same distance, same gate wanting
+   three shards — a clearing with a conversation in it instead of a hoard. The compass points at it
+   once the third shard is banked.
+5. **The confrontation.** The text panel already types blocks out and takes a callback; this is that
+   plus a dialog whose buttons are the truths you hold. Every word of it goes in `src/text.js` like
+   every other word in the game.
+6. **Remnants.** One per moulded world, in the unique layer (seed-derived, fixed, like the gems),
+   placed near the rim; visible only while carrying three shards; banked at the hut to become a
+   truth. The compass already points at "the nearest unique thing you have not got" — a remnant is
+   exactly that, so targeting is nearly free.
+7. **Terrain thinning past 117.** Rock, boulder and tree thresholds fall off with distance. A band in
+   `src/balance.js`; `pickSeed` gets easier rather than harder, since less is blocked.
+8. **A shrinking rim.** `EDGE_RADIUS` becomes a function of cycles turned, with a floor. Needs
+   tuning against the walk to a remnant, which is the longest walk in the game and the one thing
+   this could make impossible.
+9. **Somewhere to read what you know.** Truths listed where the gem pips already are, one line each.
+
+## 12. Rules the story must not break
+
+Written down because a good line of dialogue will happily walk into every one of them.
+
+- **No combat, no enemies, nothing that chases.** He is a threat in the fiction and never once a
+  threat in the mechanics. Losing a cycle costs you the world, never the run and never your life.
+- **Water is the only thing that kills.** Not the dark, not the far dark, not him.
+- **The character can never be permanently stuck**, in any world he moulds. He needs you walking; he
+  does not build traps, and the seed validation is that fact expressed as code.
+- **Nothing is shown in a colour the campaign has not brought back**, which dates every visual beat
+  in this story to the shard that unlocks it — remnants included.
+- **Colour names are jobs, not hues.** "The shard that lets water back in", never "the green one".
+- **He is never written as evil, and the wizard is never written as a hero.** Two people and a sun.
+- **The story stays thin.** It has to justify why light is scarce, why you walk back home, why the
+  world is new every time, and why you would do it again. It should not grow a cosmology, a second
+  villain, or a third character. Nobody else is alive; that is the point.
+
+## 13. Roads not taken, and open questions
+
+- **He takes your tools and coins too.** Cleaner as a rule, worse as a game: a cycle that opens with
+  nothing is a cycle that replays the tutorial, and the whole promise of the loop is that each turn
+  round is faster than the last. He takes the shards and the ground, and that is enough.
+- **A remnant per sanctum instead of one at the rim.** Puts the meta progression on the route you are
+  already walking and makes the far dark pointless again. The remnant is out past his wall precisely
+  so that going for it is a decision with a price.
+- **He kills you when you refuse.** Rejected outright: it makes him a boss, it makes the encounter a
+  fail state, and it breaks the one promise the whole game is built on — that only water kills you.
+- **Open: does the first cycle end differently?** There is a case for the first meeting being
+  wordless, so the player's first re-mould is a shock rather than a scene. There is a better case for
+  him being courteous and talkative from the first second, because a villain who explains himself in
+  cycle one and is still unanswerable in cycle three is far more frightening than one who does not
+  speak.
+- **Open: how much does the rim shrink?** It is the one number in this story that can make the game
+  unplayable, and it wants the same treatment `MIN_SEPARATION` got — measured, with the curve written
+  down next to it.
+- **Open: the vault** (`DESIGN.md` §12) fits this story better than it fitted the last one — a place
+  in the hut where things are safe *because the hut is the tile he does not touch*. Still a mechanic
+  looking for a home rather than a story beat, and still left where it is.

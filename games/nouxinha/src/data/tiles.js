@@ -126,9 +126,95 @@ export const TILES = {
   'arrow-left': [31, 20],
 };
 
-// How many tiles a key alternates between; 1 for the single-tile ones.
-export function variantCount(key) {
-  const tile = TILES[key];
+// --- Biomes ------------------------------------------------------------------
+//
+// A world is all one biome (`src/data/biomes.js`), and a biome draws the ground
+// its own way: the same wizard walks into a frozen world and finds different
+// rock in it. A biome names only the keys it wants to change, and everything it
+// leaves out is the tile above — so this table stays a list of differences
+// rather than four copies of the sheet map.
+//
+// **All four are empty today**: the four biomes are the same art in four
+// colours, and this is where that stops being true, one pair of numbers at a
+// time. Repointing `rock` for `frozen` here is the whole of giving frozen
+// worlds their own stone — the sprites get cut (`src/data/sprites.js`), the
+// paint follows the tile they were cut from (`src/data/paint.js`), and the map
+// draws them (`src/ui/MapView.js`) without anything else being touched.
+//
+// Only the *world's* own tiles can be repointed, the ones in `BIOME_KEYS`
+// below. Items, the character and the HUD are the same everywhere: they belong
+// to the campaign that carries them from world to world, not to the ground
+// under them — and they are drawn by screens (the HUD, the item card, the
+// shop) that have no world to ask.
+export const BIOME_TILES = {
+  temperate: {},
+  frozen: {},
+  desert: {},
+  mystic: {},
+};
+
+// What a biome is allowed to draw differently: terrain, the masonry and gates
+// built into it, and the structures standing on it.
+export const BIOME_KEYS = [
+  'floor',
+  'rock',
+  'tree',
+  'gate',
+  'gate-open',
+  'chest',
+  'chest-open',
+  'wall-tl',
+  'wall-t',
+  'wall-tr',
+  'wall-l',
+  'wall',
+  'wall-r',
+  'wall-bl',
+  'wall-b',
+  'wall-br',
+  'base',
+  'merchant',
+];
+
+// Tiles are numbers and lists of numbers, so this is the whole of comparing two.
+const sameTile = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// Whether a biome actually draws this key differently. A biome that names a key
+// and gives it the tile it already had repoints nothing — which is what lets a
+// biome spell its terrain out in full without paying for a second copy of it.
+//
+// `biomes` is the table to read, and is only ever passed by the tests: the
+// derivation is pure so it can be exercised on a biome that does repoint
+// something while the real four still don't.
+function repoints(key, biome, biomes = BIOME_TILES) {
+  const own = biome && biomes[biome] ? biomes[biome][key] : undefined;
+  return own !== undefined && !sameTile(own, TILES[key]);
+}
+
+// The tile a key draws in a biome: the biome's own, or the shared one.
+export function tileFor(key, biome, biomes = BIOME_TILES) {
+  const own = biome && biomes[biome] ? biomes[biome][key] : undefined;
+  return own === undefined ? TILES[key] : own;
+}
+
+// The sprite key a biome draws `key` with. A biome that repoints the tile gets
+// a key of its own, `rock@frozen`; every other biome shares the one texture, so
+// four biomes drawing the same art cost exactly what one does.
+export function biomeKey(key, biome, biomes = BIOME_TILES) {
+  return repoints(key, biome, biomes) ? `${key}@${biome}` : key;
+}
+
+// The other direction: the tile a biome's sprite key is a version of, so
+// anything keyed by the shared name — the paint table, above all — can be found
+// from it. `rock@frozen-1` is `rock-1` seen in a frozen world.
+export function baseKey(key) {
+  return key.replace(/@[^-]*/, '');
+}
+
+// How many tiles a key alternates between; 1 for the single-tile ones. A biome
+// can alternate between a different number of them than the shared tile does.
+export function variantCount(key, biome, biomes = BIOME_TILES) {
+  const tile = tileFor(key, biome, biomes);
   if (!tile) return 0;
   return Array.isArray(tile[0]) ? tile.length : 1;
 }
@@ -136,10 +222,11 @@ export function variantCount(key) {
 // The texture key for one of a terrain's tiles, given a roll in [0, 1) — which
 // the caller derives from the world (`variantAt` in src/core/world.js), so the
 // same tile always draws the same way.
-export function variantKey(key, roll) {
-  const count = variantCount(key);
-  if (count <= 1) return key;
-  return `${key}-${Math.min(count - 1, Math.floor(roll * count))}`;
+export function variantKey(key, roll, biome, biomes = BIOME_TILES) {
+  const count = variantCount(key, biome, biomes);
+  const base = biomeKey(key, biome, biomes);
+  if (count <= 1) return base;
+  return `${base}-${Math.min(count - 1, Math.floor(roll * count))}`;
 }
 
 // Which piece of the wall nine-slice a ring tile needs. `dx`/`dy` are the

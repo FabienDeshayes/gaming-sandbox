@@ -11,6 +11,7 @@
 import { test as browserTest } from './harness.js';
 import { tileKey } from '../src/core/light.js';
 import {
+  biomeOf,
   blocksSight,
   canEnter,
   chestApproach,
@@ -25,8 +26,20 @@ import {
   terrainAt,
 } from '../src/core/world.js';
 import { KEYS } from '../src/data/items.js';
+import { biomeDef } from '../src/data/biomes.js';
+import { setDefaultPalette } from '../src/config.js';
 
 export const SEED = pickSeed(DEFAULT_SEED);
+
+// Which kind of world that is, and so which colour a page walking it draws
+// itself in (src/data/biomes.js). A browser test opens on a browser that has
+// never picked a palette in Settings, so the world's own colour is what it
+// gets — and a test that says what colour something should be works that out
+// from `gemColour` here, in Node. So Node is put into the same world's colours
+// on the way past: the suite asserts against the palette the page is actually
+// in, whichever world the seed turns out to name.
+export const BIOME = biomeOf(SEED);
+setDefaultPalette(biomeDef(BIOME).palette);
 
 // Consumables are salted with a nonce a run draws at the start, so the pure
 // tests fix one and the browser tests ask the page for its own.

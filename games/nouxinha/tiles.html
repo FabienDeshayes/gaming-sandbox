@@ -88,7 +88,7 @@
   <div id="claimed"></div>
 
 <script type="module">
-import { TILES, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import { BIOME_TILES, TILES, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
 import { paintOf } from './src/data/paint.js';
 import { PALETTES, gemColour, getPalette, setPalette } from './src/config.js';
 
@@ -98,13 +98,17 @@ const GUTTER = { left: 30, top: 16 };
 const CELL_GAP = 2;
 
 // The table flattened to one row per tile, since a key can name several — the
-// terrains that alternate between tiles list each one as `key #n`.
+// terrains that alternate between tiles list each one as `key #n`. A tile a
+// biome draws differently is claimed under its own name (`rock@frozen`), so the
+// sheet shows every tile the game draws whichever world it is drawing.
 const entries = [];
-for (const [key, tile] of Object.entries(TILES)) {
-  if (Array.isArray(tile[0]))
-    tile.forEach(([col, row], n) => entries.push([`${key}-${n}`, col, row]));
+const flatten = (key, tile) => {
+  if (Array.isArray(tile[0])) tile.forEach(([col, row], n) => entries.push([`${key}-${n}`, col, row]));
   else entries.push([key, tile[0], tile[1]]);
-}
+};
+for (const [key, tile] of Object.entries(TILES)) flatten(key, tile);
+for (const [biome, own] of Object.entries(BIOME_TILES))
+  for (const [key, tile] of Object.entries(own)) flatten(`${key}@${biome}`, tile);
 
 // Which sprite keys sit on a given tile — more than one key can share a tile.
 const claims = new Map();

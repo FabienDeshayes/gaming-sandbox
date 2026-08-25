@@ -36,6 +36,8 @@
 // Nothing is authored by hand: open `paint.html` through a server, pick a tile,
 // paint its zones, and copy the entry it writes into the table below.
 
+import { baseKey } from './tiles.js';
+
 // Zone 0 plus the three a map can name.
 export const PAINT_ZONES = 4;
 
@@ -693,8 +695,14 @@ function resolve(key, seen = new Set()) {
 
 // The zones a sprite key is painted in, or null for the vast majority of tiles
 // that are drawn in one colour like they always were.
+//
+// A biome's own version of a tile (`rock@frozen-1`, src/data/tiles.js) follows
+// the paint of the tile it is a version of unless it names zones of its own, so
+// a world drawn in different stone keeps its veins without the map being
+// re-authored four times. Repointing a tile far enough that the zones no longer
+// fit it is what an entry of its own is for.
 export function paintOf(key) {
-  return resolve(key);
+  return resolve(key) || resolve(baseKey(key));
 }
 
 // The texture one zone of a painted key is baked into. Zone 0 is everything the

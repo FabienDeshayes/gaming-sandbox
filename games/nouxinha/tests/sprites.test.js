@@ -5,7 +5,19 @@
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import { DIM, buildSprites } from '../src/data/sprites.js';
-import { SHEET_COLS, SHEET_ROWS, TILES, variantCount, variantKey, wallSprite } from '../src/data/tiles.js';
+import {
+  BIOME_KEYS,
+  BIOME_TILES,
+  SHEET_COLS,
+  SHEET_ROWS,
+  TILES,
+  baseKey,
+  biomeKey,
+  variantCount,
+  variantKey,
+  wallSprite,
+} from '../src/data/tiles.js';
+import { BIOME_IDS } from '../src/data/biomes.js';
 import { PAINT, PAINT_ZONES, ZONE_INK, paintOf, zoneAt, zoneKey } from '../src/data/paint.js';
 import { zoneTints } from '../src/ui/painted.js';
 import { MAX_MOVE_SPEED, MIN_MOVE_SPEED, gemColour, getMoveSpeed, setMoveSpeed } from '../src/config.js';
@@ -71,6 +83,85 @@ unit('a terrain that alternates gets one sprite per tile, and the bare key is th
 
   // A single-tile key is left alone: no suffix, no second texture.
   assertEqual(variantKey('coin', 0.99), 'coin', 'a single-tile key keeps its name');
+});
+
+// --- Biomes ------------------------------------------------------------------
+
+unit('every biome names tiles that are on the sheet, and only terrain', () => {
+  assertEqual(
+    Object.keys(BIOME_TILES).sort(),
+    BIOME_IDS.slice().sort(),
+    'the tile table covers the four biomes and nothing else'
+  );
+
+  for (const [biome, own] of Object.entries(BIOME_TILES))
+    for (const [key, tile] of Object.entries(own)) {
+      assert(BIOME_KEYS.includes(key), `${biome} repoints "${key}", one of the world's own tiles`);
+      const pairs = Array.isArray(tile[0]) ? tile : [tile];
+      for (const [col, row] of pairs) {
+        assert(Number.isInteger(col) && col >= 0 && col < SHEET_COLS, `${biome}/${key}: column ${col} is on the sheet`);
+        assert(Number.isInteger(row) && row >= 0 && row < SHEET_ROWS, `${biome}/${key}: row ${row} is on the sheet`);
+      }
+    }
+
+  // And what a biome may repoint is a tile the game actually draws.
+  for (const key of BIOME_KEYS) assert(TILES[key], `${key} is a sprite the sheet gives`);
+});
+
+unit('four biomes drawing the same art cost what one does', () => {
+  // Today every biome draws the shared tiles, so nothing is cut twice and
+  // nothing on screen is keyed to a biome at all.
+  for (const biome of BIOME_IDS)
+    for (const key of BIOME_KEYS)
+      assertEqual(biomeKey(key, biome), key, `${biome} shares the ${key} sprite`);
+  assertEqual(
+    Object.keys(sprites).filter((key) => key.includes('@')),
+    [],
+    'and no biome has a sprite of its own'
+  );
+});
+
+unit('a biome that repoints a tile gets its own sprite, painted like the tile it came from', () => {
+  // The one thing the real table cannot exercise while all four biomes draw the
+  // same art: a biome with stone of its own, and a floor of its own that
+  // alternates where the shared one does not.
+  const biomes = { ...BIOME_TILES, frozen: { rock: [[0, 0], [1, 0]], floor: [2, 3] } };
+  const cold = buildSprites(fakeSheet, biomes);
+
+  assertEqual(biomeKey('rock', 'frozen', biomes), 'rock@frozen', 'the repointed key belongs to the biome');
+  assertEqual(biomeKey('tree', 'frozen', biomes), 'tree', 'and everything it left alone is shared');
+  assertEqual(biomeKey('rock', 'desert', biomes), 'rock', 'as is what every other biome draws');
+
+  assertEqual(variantCount('rock', 'frozen', biomes), 2, 'a biome can alternate between its own number of tiles');
+  assertEqual(variantKey('rock', 0.9, 'frozen', biomes), 'rock@frozen-1', 'and the roll picks one of those');
+  assertEqual(variantKey('rock', 0.9, 'desert', biomes), 'rock-2', 'while another biome rolls the shared three');
+
+  assertEqual(cold['rock@frozen-0'], fakeSheet(0, 0), 'the first tile of the biome is the one it names');
+  assertEqual(cold['rock@frozen'], cold['rock@frozen-0'], 'the bare key is the first of them');
+  assertEqual(cold['rock-0'], sprites['rock-0'], 'and the shared rock is untouched by any of it');
+
+  // Ground is ground in every world: a biome's floor is still drawn at half
+  // strength, or it would stop reading as a surface.
+  assert(cold['floor@frozen'].join('').includes(DIM), 'the floor of a biome is ground texture');
+
+  // Paint follows the tile a biome's sprite is a version of, so a world drawn
+  // in different stone keeps the veins a gem lights up in it.
+  assertEqual(baseKey('rock@frozen-1'), 'rock-1', 'a biome sprite knows the tile it is a version of');
+  const zones = paintOf('rock@frozen-1');
+  assertEqual(zones, paintOf('rock-1'), 'and is painted the way that tile is');
+  for (let zone = 0; zone <= zones.hues.length; zone++)
+    assert(cold[zoneKey('rock@frozen-1', zone)], `zone ${zone} of the frozen rock was cut`);
+});
+
+unit('a biome cannot repoint anything but terrain', () => {
+  let thrown = null;
+  try {
+    buildSprites(fakeSheet, { ...BIOME_TILES, desert: { coin: [0, 0] } });
+  } catch (e) {
+    thrown = e;
+  }
+  assert(thrown, 'a biome that repoints an item is refused');
+  assert(/coin/.test(thrown.message), 'and the error names it');
 });
 
 unit('a sanctum ring draws corners on its corners and runs down its sides', () => {
@@ -200,7 +291,11 @@ unit('a place-dependent hue waits for the gem it names', () => {
   );
 
   // An unpainted tile is one colour, whatever it is handed.
-  assertEqual(zoneTints('base', { gems: 3, roles: { gem: 1 } }), [fg, fg, fg, fg], 'the hut is one colour');
+  assertEqual(
+    zoneTints('merchant', { gems: 3, roles: { gem: 1 } }),
+    [fg, fg, fg, fg],
+    'the stall is one colour'
+  );
 });
 
 unit('the move-speed setting clamps to its slider range', () => {

@@ -9,7 +9,6 @@ import { decodeExplored } from '../src/core/cartography.js';
 import { compassTarget } from '../src/core/compass.js';
 import { PRICES } from '../src/balance.js';
 import { PALETTES, gemColour } from '../src/config.js';
-import { PALETTE_NAMES } from '../src/text.js';
 import {
   DEATH,
   FLASH,
@@ -28,7 +27,9 @@ import {
   WORLD_MAP,
   progressLine,
 } from '../src/text.js';
+import { biomeDef } from '../src/data/biomes.js';
 import {
+  BIOME,
   FIRST_GEM,
   GEM_ROUTE,
   KEY_CHEST,
@@ -344,9 +345,13 @@ test('settings mid-run comes back to the same tile, in the new palette', async (
   await game.tapMenuButton();
   await game.clickText(UI.settings);
   await game.waitForScene('SettingsScene');
+  // A palette this world is not already drawn in: each biome has a default
+  // colour of its own (src/data/biomes.js), so picking the one the world would
+  // have chosen anyway would prove nothing.
+  const picked = PALETTES.find((option) => option.id !== biomeDef(BIOME).palette);
   // Picking a palette re-enters Settings to repaint it, which is the step that
   // has to carry the run along with it.
-  await game.clickText(PALETTE_NAMES.amber);
+  await game.clickText(picked.name);
   await game.waitForScene('SettingsScene');
   assert(await game.hasText(SETTINGS.heading), 'still on the settings screen, repainted');
 
@@ -359,8 +364,7 @@ test('settings mid-run comes back to the same tile, in the new palette', async (
   assertEqual(back.water, walking.water, 'nor a drop of water');
   // Ground is drawn in the palette's own foreground (src/ui/MapView.js), so the
   // tint on a tile is how a test sees which palette the page is actually in.
-  const amber = PALETTES.find((option) => option.name === 'AMBER');
-  assertEqual((await game.visibleTiles())[0].tint, amber.fg, 'the world is drawn in the palette just picked');
+  assertEqual((await game.visibleTiles())[0].tint, picked.fg, 'the world is drawn in the palette just picked');
 });
 
 // Deliberately opened on no seed: the only test that wants whatever world

@@ -23,7 +23,7 @@ import {
 import { isBase, isMerchant, sanctumAt, terrainAt, variantAt } from '../core/world.js';
 import { chestOnTile, gateOnTile, isBlackout, itemOnTile, litTiles, tileKey } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
-import { variantKey, wallSprite } from '../data/tiles.js';
+import { biomeKey, variantKey, wallSprite } from '../data/tiles.js';
 import { makePainted, paintTile } from './painted.js';
 import { makeWizard, paintWizard } from './wizard.js';
 
@@ -98,6 +98,13 @@ export class MapView {
     const lit = new Set(litTiles(run).map((t) => tileKey(t.x, t.y)));
     const fg = getPalette().fg;
     const blackout = isBlackout(run);
+    // Which world this is, and so which tiles the ground under it is drawn with
+    // (`BIOME_TILES` in src/data/tiles.js). Every key the world's own layers ask
+    // for goes through `biomeKey`, which hands back the shared sprite wherever
+    // the biome draws the same tile as everyone else — which, today, is
+    // everywhere. Items don't: they belong to the campaign carrying them from
+    // world to world, and the HUD has to draw them with no world to ask.
+    const biome = run.biome;
 
     for (const cell of this.cells) {
       const wx = run.x + cell.dx;
@@ -155,18 +162,14 @@ export class MapView {
       // A gate fills its tile the way rock and wall do — it *is* the ring it
       // stands in, not something lying on the floor.
       const ground = showGate
-        ? gate.open
-          ? 'gate-open'
-          : 'gate'
+        ? biomeKey(gate.open ? 'gate-open' : 'gate', biome)
         : chest
-          ? chest.opened
-            ? 'chest-open'
-            : 'chest'
+          ? biomeKey(chest.opened ? 'chest-open' : 'chest', biome)
           : terrain === 'rock' || terrain === 'tree'
-            ? variantKey(terrain, variantAt(wx, wy, run.seed))
+            ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
             : terrain === 'wall'
-              ? wallPiece(site, wx, wy)
-              : 'floor';
+              ? biomeKey(wallPiece(site, wx, wy), biome)
+              : biomeKey('floor', biome);
 
       // The two hues a tile can only get from where it stands: the gem the
       // sanctum around it keeps, and the gem whose colour opened its gate. Both
@@ -197,7 +200,7 @@ export class MapView {
           ? 'merchant'
           : null;
       cell.overlay.setVisible(!!structure && !underCharacter).setAlpha(alpha);
-      paintTile(cell.overlay, structure || 'base', { gems: run.gems, base: fg });
+      paintTile(cell.overlay, biomeKey(structure || 'base', biome), { gems: run.gems, base: fg });
 
       const item = itemOnTile(run, wx, wy);
       if (item) {

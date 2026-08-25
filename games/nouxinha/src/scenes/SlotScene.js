@@ -18,6 +18,8 @@
 
 import { FONT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { loadSlot, MAX_GEMS, slots, startSlot } from '../core/save.js';
+import { DEFAULT_SEED, biomeOf } from '../core/world.js';
+import { biomeDef } from '../data/biomes.js';
 import { progressLine, SLOTS } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
@@ -93,6 +95,20 @@ export class SlotScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5)
       .setAlpha(alpha);
+
+    // Which world this campaign walks, by name. A slot's seed says which kind of
+    // world it is (`biomeOf`), so this is the one thing on the row that is about
+    // the ground rather than about the walking — and it is what makes three
+    // slots read as three places instead of three numbers.
+    if (entry.used)
+      this.add
+        .text(left + ROW_W - 20, y + 26, worldOf(entry), {
+          fontFamily: FONT,
+          fontSize: '12px',
+          color: hex(pal.fg),
+        })
+        .setOrigin(1, 0.5)
+        .setAlpha(usable ? 0.7 : 0.3);
 
     const status = this.add
       .text(left + 20, y + 58, summaryOf(entry), {
@@ -184,6 +200,13 @@ function summaryOf(entry) {
 function gemsOf(entry) {
   const { save } = entry;
   return save.run ? Math.max(save.gems, save.run.gems) : save.gems;
+}
+
+// The kind of world a slot was given. A campaign started before slots had worlds
+// of their own has no seed of its own either, and walks the world every campaign
+// used to (`createRun` in core/rules.js), so it is named the same way.
+function worldOf(entry) {
+  return biomeDef(biomeOf(entry.save.seed || DEFAULT_SEED)).name;
 }
 
 // The ground a slot has drawn is the half of it that survives a bad walk home

@@ -58,12 +58,21 @@ export const PALETTES = [
 const STORAGE_KEY = 'nouxinha.palette';
 
 let activeId = PALETTES[0].id;
+// Whether the player has ever picked a palette themselves. Until they have,
+// the world chooses: each biome is drawn in a colour of its own (`biomes.js`),
+// so a frozen world reads cold and a desert warm without anyone touching
+// Settings. The moment one is picked in Settings it is theirs, in every world,
+// and nothing overrides it again.
+let chosen = false;
 
 // localStorage throws in some embedded/private contexts; a palette preference
 // is never worth taking the game down for.
 try {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && PALETTES.some((p) => p.id === saved)) activeId = saved;
+  if (saved && PALETTES.some((p) => p.id === saved)) {
+    activeId = saved;
+    chosen = true;
+  }
 } catch (e) {
   /* keep the default */
 }
@@ -72,14 +81,25 @@ export function getPalette() {
   return PALETTES.find((p) => p.id === activeId) || PALETTES[0];
 }
 
+// The player's own choice: persisted, and from here on it outranks whatever
+// world they walk into.
 export function setPalette(id) {
   if (!PALETTES.some((p) => p.id === id)) return;
   activeId = id;
+  chosen = true;
   try {
     localStorage.setItem(STORAGE_KEY, id);
   } catch (e) {
     /* preference just won't persist */
   }
+}
+
+// The colour a world is drawn in for a player who has not asked for another
+// one. Not persisted: it is re-read off whichever world is being walked
+// (`ExploreScene`), so it can never outlive the run it came from.
+export function setDefaultPalette(id) {
+  if (!chosen && PALETTES.some((p) => p.id === id)) activeId = id;
+  return getPalette();
 }
 
 // --- Music -------------------------------------------------------------------

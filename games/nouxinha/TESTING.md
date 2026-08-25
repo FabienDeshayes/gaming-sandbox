@@ -26,11 +26,11 @@ at all, which is the quick way to work on the rules.
 |---|---|
 | `light.test.js` | Light shapes, and what the dark at the edge leaves of them |
 | `rules.test.js` | A step's costs, burnout and auto-swap, pickup, the inventory, the recap, cheats |
-| `terrain.test.js` | What the noise grows, where the world stops, and that every bit of it can be walked to |
+| `terrain.test.js` | What the noise grows, where the world stops, which biome the seed makes it, and that every bit of it can be walked to |
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
 | `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the water ladder, the landmarks, the merchant, the compass |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume |
-| `sprites.test.js` | The tile sheet table, the derived sprites, the wall nine-slice, the palette rules |
+| `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | Title screen, Settings, audio, the canvas against a phone, the sheet actually loading |
 | `ui-explore.test.js` | Walking, and the three visibility states the viewport draws |
 | `ui-items.test.js` | The HUD counters, the item card, the inventory panel |
@@ -124,6 +124,21 @@ one expensive route — four chained legs to four copies of the same torch — i
 This keeps the suite honest if the noise is ever retuned: the route moves with the world instead of
 silently pointing at a tile that is now rock. Hardcoding `(-8, 0)` would pass today and rot at the
 next threshold change.
+
+**The world's colour is the world's, so the suite adopts it.** Which biome a seed names decides
+which palette a page walking it draws itself in, for a browser that has never picked one in Settings
+(DESIGN.md §4.3) — which is every test page. So `tests/world.js` puts Node into the same colours on
+the way past:
+
+```js
+export const BIOME = biomeOf(SEED);
+setDefaultPalette(biomeDef(BIOME).palette);
+```
+
+A test that says what colour something should be works it out from `gemColour` in Node, and that
+line is what keeps the two ends in the same world. A test about *picking* a palette should pick one
+the world is not already drawn in (`PALETTES.find((p) => p.id !== biomeDef(BIOME).palette)`), or it
+proves nothing.
 
 **Consumables move; terrain and unique objects don't.** Coins, water and lights are salted with a
 nonce the run draws at the start and re-salted every time the world respawns (DESIGN.md §4.3), so a

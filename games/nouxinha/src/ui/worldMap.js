@@ -17,6 +17,7 @@
 import { FONT, GAME_HEIGHT, GAME_WIDTH, TILE, gemColour, getPalette, hex } from '../config.js';
 import { chests, landmarks, sanctums, terrainAt } from '../core/world.js';
 import { itemDef } from '../data/items.js';
+import { biomeKey } from '../data/tiles.js';
 import { makeButton } from './button.js';
 import { WORLD_MAP } from '../text.js';
 
@@ -213,10 +214,14 @@ export class WorldMap {
     // Markers for the unique objects this run has actually laid eyes on, plus
     // the hut, which you always know the way to, and where you are standing now.
     const tile = (tx, ty) => ({ x: tx - bounds.minX + 0.5, y: ty - bounds.minY + 0.5 });
+    // The world's own furniture is marked with the tile this world draws it
+    // with, so the overview and the viewport are the same world seen twice
+    // (`biomeKey`, src/data/tiles.js). An item marker is not: an item is the
+    // campaign's, the same wherever it is picked up.
     const mark = (tx, ty, sprite, hue) => {
       const at = tile(tx, ty);
       const marker = scene.add
-        .image(at.x, at.y, sprite)
+        .image(at.x, at.y, biomeKey(sprite, run.biome))
         .setScale(MARKER_SCALE)
         .setTint(gemColour(hue || 0));
       this.markers.push({ object: marker, base: MARKER_SCALE });

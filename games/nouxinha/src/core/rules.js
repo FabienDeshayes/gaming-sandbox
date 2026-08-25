@@ -9,6 +9,7 @@ import { DIRECTIONS, chokeShape, visibleTiles, tileKey } from './light.js';
 import {
   DEFAULT_SEED,
   beyondEdge,
+  biomeOf,
   blocksSight,
   canEnter,
   chebyshev,
@@ -109,6 +110,10 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
   const carriesGround = banked.mappedSeed === picked;
   const state = {
     seed: picked,
+    // Which kind of world that seed is (DESIGN.md §4.3). Derived rather than
+    // carried, so it is the world's own answer and not something a save could
+    // disagree with — everything that draws the ground asks the run for it.
+    biome: biomeOf(picked),
     x: 0,
     y: 0,
     facing: 'down',
@@ -769,6 +774,7 @@ export function resumeRun(save = loadSave()) {
   const carriesGround = slot.mappedSeed === suspended.seed;
   const state = {
     seed: suspended.seed,
+    biome: biomeOf(suspended.seed),
     x: suspended.x,
     y: suspended.y,
     facing: suspended.facing,

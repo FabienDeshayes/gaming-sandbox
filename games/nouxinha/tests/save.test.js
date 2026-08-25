@@ -255,6 +255,7 @@ unit('a resumed expedition walks out onto the world it left', () => {
 
   const back = resumeRun(suspendRun(state));
   assertEqual(back.salt, state.salt, 'the same salt, so the same scatter');
+  assertEqual(back.biome, state.biome, 'the same kind of world, which the seed alone decides');
   assertEqual(back.epoch, state.epoch, 'however many times the world has been relaid');
   assertEqual([...back.collected].sort(), [...state.collected].sort(), 'and the tiles it emptied');
 

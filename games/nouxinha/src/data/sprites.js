@@ -14,7 +14,14 @@
 // repointing a sprite (src/data/tiles.js) carries it along.
 
 import { PAINT, paintOf, zoneAt, zoneKey } from './paint.js';
-import { TILES, variantCount } from './tiles.js';
+import {
+  BIOME_KEYS,
+  BIOME_TILES,
+  TILES,
+  baseKey,
+  biomeKey,
+  tileFor,
+} from './tiles.js';
 
 // The two levels a mask pixel can be drawn at. `DIM` is the same colour at
 // FLOOR_TEXTURE_LEVEL (src/config.js) — one texture, two weights, still one
@@ -50,39 +57,64 @@ function zoneMasks(mask, key, entry) {
   return out;
 }
 
+// One key off the sheet, under whatever name it is being cut as. A key naming
+// several tiles becomes `name-0`, `name-1`, ... plus the bare name as an alias
+// for the first, so anything that just wants one of them (a Settings preview,
+// say) can still ask for `rock`.
+function cut(sprites, readTile, name, tile) {
+  if (!Array.isArray(tile[0])) {
+    sprites[name] = readTile(tile[0], tile[1]);
+    return;
+  }
+  tile.forEach(([col, row], n) => {
+    sprites[`${name}-${n}`] = readTile(col, row);
+  });
+  sprites[name] = sprites[`${name}-0`];
+}
+
 // Builds the whole sprite table from a `readTile(col, row) -> mask` cut out of
 // the sheet. Takes the reader rather than the image so the derivation above
 // stays pure and testable, and so nothing in `src/data/` has to know how a PNG
-// is decoded.
-export function buildSprites(readTile) {
+// is decoded. `biomes` is the biome tile table, passed only by the tests, for
+// the same reason.
+export function buildSprites(readTile, biomes = BIOME_TILES) {
   const sprites = {};
 
-  // Everything the table names, straight off the sheet. A key naming several
-  // tiles becomes `key-0`, `key-1`, ... plus the bare key as an alias for the
-  // first, so anything that just wants one of them (a Settings preview, say)
-  // can still ask for `rock`.
-  for (const [key, tile] of Object.entries(TILES)) {
-    if (variantCount(key) === 1) {
-      sprites[key] = readTile(tile[0], tile[1]);
-      continue;
+  // Everything the table names, straight off the sheet.
+  for (const [key, tile] of Object.entries(TILES)) cut(sprites, readTile, key, tile);
+
+  // Then the tiles a biome draws differently, under a key of its own
+  // (`rock@frozen`). A biome that draws the same tile as everyone else gets the
+  // shared key back and so is cut once, not four times — which is why four
+  // biomes of the same art cost nothing (src/data/tiles.js).
+  for (const [biome, own] of Object.entries(biomes)) {
+    for (const key of Object.keys(own)) {
+      if (!BIOME_KEYS.includes(key))
+        throw new Error(
+          `biome "${biome}" repoints "${key}", which is not one of the world's own tiles`
+        );
+      const name = biomeKey(key, biome, biomes);
+      if (name !== key) cut(sprites, readTile, name, tileFor(key, biome, biomes));
     }
-    tile.forEach(([col, row], n) => {
-      sprites[`${key}-${n}`] = readTile(col, row);
-    });
-    sprites[key] = sprites[`${key}-0`];
   }
 
   // Floor: ground texture at half strength, and nothing else drawn on top of
   // it (DESIGN.md §9). Before the zones are cut, so a painted fleck of ground
-  // is drawn at the same half strength as the ground around it.
-  sprites.floor = dimmed(sprites.floor);
+  // is drawn at the same half strength as the ground around it. Every floor
+  // there is — a biome's own, and any tile it alternates between — because what
+  // makes ground ground is the weight it is drawn at, whichever world it is in.
+  for (const key of Object.keys(sprites))
+    if (/^floor(-\d+)?$/.test(baseKey(key))) sprites[key] = dimmed(sprites[key]);
 
   // The colour zones, last: every sprite the sheet and the derivations above
-  // can give is in hand by now, and a zone is a cut of one of them.
-  for (const key of Object.keys(PAINT)) {
-    const entry = paintOf(key);
+  // can give is in hand by now, and a zone is a cut of one of them. Driven off
+  // the sprites rather than off the paint table, so a biome's own tile is cut
+  // into the same zones as the tile it is a version of (`paintOf`).
+  for (const key of Object.keys(PAINT))
     if (!sprites[key]) throw new Error(`paint names "${key}", which is not a sprite`);
-    Object.assign(sprites, zoneMasks(sprites[key], key, entry));
+  for (const key of Object.keys(sprites)) {
+    const entry = paintOf(key);
+    if (entry) Object.assign(sprites, zoneMasks(sprites[key], key, entry));
   }
 
   return sprites;

@@ -27,9 +27,25 @@ function fromItem(id, x, y) {
 export function availableTargets(state) {
   const out = [];
 
+  const built = sanctums(state.seed);
   // A gem is available once this run holds the key to its gate, and stops being
-  // once it's yours.
-  for (const sanctum of sanctums(state.seed)) {
+  // once it's yours. The hall keeps no gem, and is worth pointing at on exactly
+  // the terms the story gives it (DESIGN.md §4.9): once every colour in the
+  // world is in hand, the one tool that says what is worth walking to next
+  // stops saying anything else.
+  const colours = built.filter((sanctum) => sanctum.gem).length;
+  for (const sanctum of built) {
+    if (sanctum.hall) {
+      if (state.gems >= colours && (!sanctum.key || state.keys.has(sanctum.key)))
+        out.push({
+          id: 'hall',
+          sprite: 'sorcerer',
+          hue: 0,
+          x: sanctum.centre.x,
+          y: sanctum.centre.y,
+        });
+      continue;
+    }
     if (!sanctum.gem) continue;
     const def = itemDef(sanctum.gem);
     if (def.gem <= state.gems) continue;

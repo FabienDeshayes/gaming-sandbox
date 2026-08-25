@@ -3,10 +3,11 @@
 > The fiction the game is told in: why the world is dark, why a wizard walks into it for shards of a
 > sun, who is waiting at the end of the walk, and why the world is different every time.
 
-> **Status:** none of this is implemented. `DESIGN.md` describes the game as it is; this describes
-> the story it is being pointed at, so the late game can be built towards something rather than
-> towards more tiles. Everything here is arranged to sit on mechanics that already exist — where it
-> asks for something new, §11 says so plainly, and §11 is where the real work is.
+> **Status:** the **cycle** is built — the hall at 110, the conversation in it, and a new world in
+> the same slot every time you walk into him (`DESIGN.md` §4.9). What is not built is everything
+> that makes losing better each time round: no remnants, no truths, no thinning of the far dark, no
+> shrinking rim, and so no second ending. §11 marks which is which. `DESIGN.md` describes the game
+> as it is; this describes the story it is being pointed at.
 
 > **Doc convention:** this doc describes the story *as it stands now*. When it changes, edit the
 > relevant section in place — no "previously"/"superseded" notes. Git history is the changelog.
@@ -57,7 +58,7 @@ four palettes.
 |---|---|---|
 | First | **water** | Springs that were there all along. The flask replaces the drop and the tank holds 50 more — the first shard is what makes walking out at all possible. |
 | Second | **fire** | How a flame is supposed to burn. The beacon replaces the medium torch, and the third sanctum stops being out of reach. |
-| Third | **the way** | Not a new thing so much as a door. It fills the tank from the vial, and it is what opens the hall at 110. |
+| Third | **the way** | Not a new thing so much as a door. It fills the tank from the vial, which is what makes the 220-step walk out to the hall at 110 a walk anybody could survive. |
 
 **A shard held is a piece of the true world showing through his one.** That is the whole reason
 holding one improves the ground around you: better water, longer fire, and — past the fourth wall —
@@ -119,10 +120,11 @@ Three things about him that the game earns rather than states, and that §9 turn
 
 ## 6. The hall
 
-The fourth walled place, at 110 tiles out, wanting all three shards and holding no shard of its own.
-The compass turns to it the moment you are carrying the third one, which is what "drawn to it"
-means: the one tool in the game that points at what is worth walking to next stops pointing at
-anything else.
+The fourth walled place, at 110 tiles out, holding no shard of its own. Its gate wants the third
+*key*, which is the last lock in the chain the rest of the game is made of (`DESIGN.md` §4.4) — one
+more lock on the same door would only say the same thing twice. The compass turns to it the moment
+you are carrying the third shard, which is what "drawn to it" means: the one tool in the game that
+points at what is worth walking to next stops pointing at anything else.
 
 Inside is a clearing, a hall, and him.
 
@@ -238,25 +240,27 @@ turn back has earned the right to make turning back an ending.
 
 ## 11. What this asks the game for
 
-Ordered by how much of the existing design it moves. Items 1-3 are the restructure; the rest is
-content on top of it.
+Ordered by how much of the existing design it moves. Items 1-5 are the restructure and are **built**
+(`DESIGN.md` §4.9); 6-9 are the content on top of it, and none of them is.
 
-1. **A cycle is a new seed inside the same slot.** Today the seed is drawn at NEW GAME and lives in
-   the slot forever (`save.js`, `createRun`, `bankRun`). It has to become per-cycle: re-drawn when
-   the hall sends you back, with the slot keeping cycles turned, truths learned, tools owned and
-   coins. Everything in `core/` derives from the seed already, so **the world costs nothing to
-   re-mould** — this is a save-shape change, not a world change.
-2. **The explored ground goes with it.** The map is already tied to the seed it was drawn against
-   and already discards a drawing whose world changed underneath it — so the re-mould wipes the map
-   for free, and correctly. What is worth checking is that it wipes rather than mixes.
-3. **The win condition moves.** Banking three shards stops being the win and becomes the middle of a
-   cycle; the hut's recap should say so. The win is at the hall, and there are two of them (§10).
-4. **The hall replaces the fourth sanctum's cache.** Same wall, same distance, same gate wanting
-   three shards — a clearing with a conversation in it instead of a hoard. The compass points at it
-   once the third shard is banked.
-5. **The confrontation.** The text panel already types blocks out and takes a callback; this is that
-   plus a dialog whose buttons are the truths you hold. Every word of it goes in `src/text.js` like
-   every other word in the game.
+1. ~~**A cycle is a new seed inside the same slot.**~~ Built. The seed is re-drawn into the slot when
+   the hall turns a cycle (`turnCycle` in `core/rules.js`), and the slot keeps the coins, the tools,
+   the expeditions walked and the count of worlds ended. Everything in `core/` derives from the seed
+   already, so the world cost nothing to re-mould — it was a save-shape change, not a world change.
+   The one thing to remember when *adding* to a save: `writeDeposit` and `turnCycle` both rebuild
+   the slot from scratch, so anything that has to survive a cycle has to be carried over by hand.
+2. ~~**The explored ground goes with it.**~~ Built, and it wipes rather than mixes: the drawing is
+   tied to the seed it was drawn against, and the cycle writes an empty one anyway.
+3. ~~**The win condition moves.**~~ Built as far as the middle of the cycle goes — banking three
+   shards is what opens the last gate rather than what ends the game. There is still only one ending
+   available, which is to keep going (§10's **STAY**), because there are no truths to say.
+4. ~~**The hall replaces the fourth sanctum's cache.**~~ Built: same wall, same distance, same gate,
+   and the gate still wants the third *key* rather than the three shards — the chain the game has is
+   keys, and a second lock on the same door would say the same thing twice. The compass points at
+   him once all three shards are banked, as asked.
+5. ~~**The confrontation.**~~ Built as the text panel plus the dialog the new world opens on. The
+   dialog's buttons are not yet the truths you hold — there are none — so what it asks is whether to
+   set out again or stop there. Every word of it is in `src/text.js`.
 6. **Remnants.** One per moulded world, in the unique layer (seed-derived, fixed, like the gems),
    placed near the rim; visible only while carrying three shards; banked at the hut to become a
    truth. The compass already points at "the nearest unique thing you have not got" — a remnant is
@@ -267,6 +271,8 @@ content on top of it.
    tuning against the walk to a remnant, which is the longest walk in the game and the one thing
    this could make impossible.
 9. **Somewhere to read what you know.** Truths listed where the gem pips already are, one line each.
+   The worlds-ended counter is already in both places a campaign is read — the HUD's counter row and
+   the slot's row in LOAD GAME — so this goes beside it.
 
 ## 12. Rules the story must not break
 

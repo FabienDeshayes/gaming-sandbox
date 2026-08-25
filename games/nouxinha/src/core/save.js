@@ -63,6 +63,12 @@ export function emptySave() {
     gems: 0,
     coins: 0,
     runs: 0,
+    // How many times this campaign has walked into the hall and had its world
+    // taken off it (DESIGN.md §4.9). The one number here that outlives the
+    // world it was earned in: the seed above is re-drawn every time this goes
+    // up, and everything the sorcerer keeps — the colours, the keys, the
+    // chests, the ground — is emptied with it.
+    cycles: 0,
     furthest: 0,
     compass: false,
     map: false,
@@ -116,6 +122,7 @@ export function normaliseSave(raw, keepRun = true) {
   save.gems = int(raw.gems, 0, MAX_GEMS);
   save.coins = int(raw.coins, 0, Number.MAX_SAFE_INTEGER);
   save.runs = int(raw.runs, 0, Number.MAX_SAFE_INTEGER);
+  save.cycles = int(raw.cycles, 0, Number.MAX_SAFE_INTEGER);
   save.furthest = int(raw.furthest, 0, Number.MAX_SAFE_INTEGER);
   save.compass = !!raw.compass;
   save.map = !!raw.map;
@@ -132,6 +139,7 @@ export function normaliseSave(raw, keepRun = true) {
   save.started =
     !!raw.started ||
     save.runs > 0 ||
+    save.cycles > 0 ||
     save.coins > 0 ||
     save.gems > 0 ||
     save.compass ||
@@ -317,17 +325,19 @@ export function anySlotUsed() {
   return slots().some((entry) => entry.used);
 }
 
-// A campaign's world, drawn once when the slot is claimed. Every run out of
-// this slot walks it, so the three slots are three different worlds and
-// starting over gives a fourth — which is the whole point of a world that is a
-// pure function of a seed (core/world.js).
+// A campaign's world, drawn when the slot is claimed — and drawn again, into
+// the same slot, every time the hall takes the one it was walking (`turnCycle`
+// in core/rules.js). Every run out of this slot walks whichever world is in it,
+// so the three slots are three different worlds and starting over gives a
+// fourth — which is the whole point of a world that is a pure function of a
+// seed (core/world.js).
 //
 // Validated here rather than at every run start: `pickSeed` is what promises
 // the spawn isn't sealed into a pocket and that every gate and landmark can be
 // reached, and the seed it hands back is the one worth writing down. `createRun`
 // still runs it, but on an already-valid seed it is a no-op that returns the
 // same number.
-function drawSeed() {
+export function drawSeed() {
   return pickSeed((Math.random() * 0x100000000) | 0);
 }
 

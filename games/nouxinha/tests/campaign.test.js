@@ -4,10 +4,13 @@
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import {
+  blocksSight,
   canEnter,
   chebyshev,
   chests,
+  entryKey,
   isMerchant,
+  isWalkable,
   itemAt,
   landmarkNamed,
   landmarks,
@@ -23,6 +26,7 @@ import {
   gateOnTile,
   itemOnTile,
   maxWater,
+  resumeRun,
   runSummary,
   spendable,
   step,
@@ -34,16 +38,21 @@ import { ITEMS } from '../src/data/items.js';
 import { gemColour } from '../src/config.js';
 import {
   ALL_KEYS,
+  ALL_KEYS_LIST,
   FIRST_GEM,
   GEM_ROUTE,
+  HALL,
+  HALL_ROUTE,
   KEY_CHEST,
   KEY_CHEST_BUMP,
   KEY_CHEST_ROUTE,
   NONCE,
+  ORTHOGONAL,
   SANCTUMS,
   SEED,
   SHUT_GATE,
   bfs,
+  standingAt,
 } from './world.js';
 
 // --- The sanctums themselves -------------------------------------------------
@@ -57,12 +66,19 @@ unit('every sanctum is a sealed ring with one gate and its prize at the centre',
         const ring = Math.max(Math.abs(dx), Math.abs(dy)) === s.radius;
         if (ring && at !== 'wall') holes.push(`(${dx},${dy})=${at}`);
         // The clearing is forced floor, so the gem is always reachable from the
-        // gate — that's what lets the seed check only test the door.
-        if (!ring) assertEqual(at, 'floor', `inside sanctum ${s.index} at (${dx},${dy})`);
+        // gate — that's what lets the seed check only test the door. The one
+        // tile that isn't is the hall's centre, where the sorcerer is standing
+        // (DESIGN.md §4.9).
+        const centre = !dx && !dy;
+        if (!ring)
+          assertEqual(at, s.hall && centre ? 'sorcerer' : 'floor',
+            `inside sanctum ${s.index} at (${dx},${dy})`);
       }
     assertEqual(holes, [`(${s.gate.x - s.centre.x},${s.gate.y - s.centre.y})=gate`],
       `sanctum ${s.index} ring is solid but for its gate`);
-    assertEqual(itemAt(s.centre.x, s.centre.y, SEED), s.gem || 'spring-vial',
+    // Every sanctum's centre holds what that sanctum is for: a gem, or — in the
+    // hall — nothing to pick up at all, because what is standing there is a man.
+    assertEqual(itemAt(s.centre.x, s.centre.y, SEED), s.gem,
       `sanctum ${s.index} centre holds its prize`);
 
     // The gate is on a wall face, never a corner: there are no diagonal steps,
@@ -219,7 +235,12 @@ unit('every sanctum can be walked to and back on the water its gate implies', ()
   assertEqual(maxWater(3), STARTING_WATER + 3 * WATER_PER_GEM, 'and each gem widens it');
 
   for (const s of SANCTUMS) {
-    const route = bfs(SEED, (x, y) => x === s.centre.x && y === s.centre.y, 200, [0, 0], ALL_KEYS);
+    // The hall's centre can't be stood on — the sorcerer is on it — so the walk
+    // to it ends on the tile you talk to him from (DESIGN.md §4.9).
+    const arrived = s.hall
+      ? (x, y) => ORTHOGONAL.some(([dx, dy]) => x + dx === s.centre.x && y + dy === s.centre.y)
+      : (x, y) => x === s.centre.x && y === s.centre.y;
+    const route = bfs(SEED, arrived, 200, [0, 0], ALL_KEYS);
     const round = route.path.length * 2;
     // The gems the chain has handed out by the time this sanctum is the one
     // being walked to — its own index, since they come in order of distance.
@@ -239,6 +260,61 @@ unit('each gem gets a colour the world did not already have', () => {
   // This is the rule the renderer paints an opened gate with: a gate wanting
   // gem N is drawn in gem N's colour once it opens (MapView.refresh).
   assertEqual(gemColour(SHUT_GATE.colour), colours[0], "the first shut gate wears gem 1's colour");
+});
+
+// --- The hall ----------------------------------------------------------------
+
+unit('the hall holds the sorcerer, and walking into him is a bump, not a step', () => {
+  // The last sanctum keeps no gem and no hoard: what is behind its gate is a
+  // clearing with a man standing in the middle of it (DESIGN.md §4.9). He is
+  // the second thing in the world that stops a step and stops nothing else — a
+  // person standing on the floor, like a chest, rather than a piece of the
+  // world's shape.
+  const { x, y } = HALL.centre;
+  assertEqual(terrainAt(x, y, SEED), 'sorcerer', 'he is his own terrain');
+  assert(!isWalkable(x, y, SEED), 'and cannot be walked onto');
+  assertEqual(entryKey(x, y, SEED), false, 'by any key');
+  assert(!blocksSight(x, y, SEED, ALL_KEYS), 'and he casts no shadow');
+  assertEqual(itemAt(x, y, SEED), null, 'there is nothing on his tile to pick up');
+
+  // A walk that has got as far as his doorstep, which is the only thing the
+  // browser test does not plant for itself.
+  const walk = standingAt(HALL_ROUTE, {
+    save: { ...emptySave(), gems: MAX_GEMS, keys: ALL_KEYS_LIST },
+    run: { gems: MAX_GEMS, keys: ALL_KEYS_LIST, water: 300 },
+  });
+  const state = resumeRun(walk.save);
+  const before = { x: state.x, y: state.y, steps: state.steps, water: state.water };
+  const bumped = step(state, HALL_ROUTE.hit);
+
+  assertEqual(bumped.moved, false, 'the step into him does not happen');
+  assertEqual(bumped.reason, 'sorcerer', 'and says who is standing there');
+  assertEqual({ x: state.x, y: state.y, steps: state.steps, water: state.water }, before,
+    'it costs no step, no water and no facing');
+  // Nothing about the run changes here: what happens next is the conversation,
+  // and `turnCycle` is the only thing that ever takes anything off a run
+  // (save.test.js).
+  assertEqual(state.gems, MAX_GEMS, 'and takes nothing off you on its own');
+});
+
+unit('the compass points at the hall once every colour is in hand', () => {
+  const finished = {
+    ...emptySave(),
+    gems: MAX_GEMS,
+    keys: ALL_KEYS_LIST,
+    chests: chests(SEED).map((c) => c.id),
+    compass: true,
+    map: true,
+  };
+  // Everything else in the world is either found or opened, so the one thing
+  // left worth walking to is the man at 110 — which is what "drawn to it" means
+  // (DESIGN.md §4.9).
+  assertEqual(compassTarget(createRun(SEED, finished, NONCE)).id, 'hall', 'the needle turns to him');
+
+  // And not a step before: a campaign one colour short is still being pointed
+  // at the colour, however many keys it is carrying.
+  const nearly = createRun(SEED, { ...finished, gems: MAX_GEMS - 1 }, NONCE);
+  assertEqual(compassTarget(nearly).id, 'gem-3', 'until then it points at what is missing');
 });
 
 // --- The landmarks -----------------------------------------------------------

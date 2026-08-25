@@ -89,6 +89,12 @@ export const TILES = {
   // --- Structures ----------------------------------------------------------
   base: [1, 20],
   merchant: [19, 10],
+  // Nouxinha, standing at the centre of the hall (DESIGN.md §4.9): a cowled
+  // figure with his hands full and his face inside the hood, and deliberately
+  // not the wizard's own tile — there are two people in this world and they
+  // have to read as two people. Not a biome's to repoint: he is the same man in
+  // every world he makes.
+  sorcerer: [24, 2],
   // The chest, shut and open. Drawn for this game — the sheet is a dungeon set
   // with no chest in it — over two of its interchangeable crates, the same way
   // three of the wizard's four facings were drawn over tiles nothing claimed.

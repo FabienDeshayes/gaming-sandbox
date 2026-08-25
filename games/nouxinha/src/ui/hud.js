@@ -25,6 +25,11 @@ const EXPLORED_ICON_X = PAD;
 const EXPLORED_TEXT_X = PAD + 20;
 const COINS_ICON_X = PAD + 138;
 const COINS_TEXT_X = PAD + 158;
+// The count of worlds the hall has taken off this campaign (DESIGN.md §4.9),
+// right-aligned at the far end of the same row and only on screen once there is
+// one to count — it is a thing that has happened to the campaign rather than a
+// resource, so it sits with the counters and never says anything at zero.
+const CYCLES_RIGHT = GAME_WIDTH - 164;
 
 // Both bars — the active light's and water's — share this width, so water
 // reads as the same kind of thing as light: a resource with a bar, not a
@@ -68,6 +73,8 @@ export class Hud {
         this.onCoins();
       });
 
+    this.cycles = text(CYCLES_RIGHT, COUNTER_Y + 1, 12).setOrigin(1, 0);
+
     this.slots = scene.add.container(0, 0);
     this.lightLabel = text(PAD, SLOT_Y + SLOT + 12, 13);
     this.lightBar = scene.add.graphics();
@@ -90,6 +97,7 @@ export class Hud {
     const pal = getPalette();
     this.explored.setText(HUD.explored(run.explored.size));
     this.coins.setText(HUD.coins(spendable(run)));
+    this.cycles.setText(run.cycles ? HUD.cycles(run.cycles) : '');
 
     this.waterLabel.setText(HUD.water(run.water, maxWater(run.gems)));
     this.waterBar.clear();

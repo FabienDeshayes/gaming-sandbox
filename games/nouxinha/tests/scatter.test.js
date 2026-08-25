@@ -133,7 +133,11 @@ unit('a sanctum clearing is a hoard, not a pile', () => {
       }
     for (const [id, count] of Object.entries(tally))
       assert(count <= HOARD_PER_KIND, `sanctum ${sanctum.index} holds ${count} of ${id}`);
-    assert(Object.keys(tally).length >= 3, `sanctum ${sanctum.index} should hold a cache`);
+    // The hall is the one clearing that is not a hoard at all: what is in it is
+    // the sorcerer, and a conversation is the whole of what it pays (DESIGN.md
+    // §4.9).
+    if (sanctum.hall) assertEqual(Object.keys(tally), [], 'the hall holds nothing to pick up');
+    else assert(Object.keys(tally).length >= 3, `sanctum ${sanctum.index} should hold a cache`);
   }
 });
 

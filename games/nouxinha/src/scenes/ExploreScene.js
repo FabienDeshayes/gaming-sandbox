@@ -24,6 +24,7 @@ import {
   spendable,
   step,
   suspendRun,
+  turnCycle,
 } from '../core/rules.js';
 import { activeSlot, loadSave, MAX_GEMS } from '../core/save.js';
 import { biomeDef } from '../data/biomes.js';
@@ -33,6 +34,7 @@ import {
   DEATH,
   EDGE,
   FLASH,
+  HALL,
   HUT,
   LEAVING,
   MENU,
@@ -152,6 +154,11 @@ export class ExploreScene extends Phaser.Scene {
     // Which of the three it was, because only the third is a character walking
     // out of the door for the first time — and that is the one the text panel
     // has something to say about (`show` at the end of `create`).
+    //
+    // A run handed over by the hall is the one exception on the other side: it
+    // is a fresh walk out of the hut door, but its world is one the sorcerer
+    // has just moulded, and what it opens on is the question about that rather
+    // than the usual three blocks (`moulded` below).
     const settingOut = !handed && !carriedOn;
 
     // The colour this world is drawn in, now that there is a world to ask. Each
@@ -199,7 +206,8 @@ export class ExploreScene extends Phaser.Scene {
 
     // Last, over a screen that is already drawn: the panel leaves the viewport
     // showing, so what it covers has to be there to be covered.
-    if (settingOut) this.textPanel.show(SAY.expeditionStart);
+    if (asked.moulded) this.showMoulded();
+    else if (settingOut) this.textPanel.show(SAY.expeditionStart);
   }
 
   // The compass badge and the map button, both built once and shown only for the
@@ -450,6 +458,10 @@ export class ExploreScene extends Phaser.Scene {
       // whether the lid moved, and a lid that moved is the game's own voice
       // rather than a line in the HUD.
       if (result.reason === 'chest') this.openedChest(result);
+      // And walking into the sorcerer is how you talk to him (DESIGN.md §4.9).
+      // The bump still plays — he is standing in the way like anything else —
+      // and then he has his say and takes the world off you.
+      if (result.reason === 'sorcerer') this.meetSorcerer();
       // A shut gate bumps like rock, but says what it wants — otherwise it
       // reads as a wall with a pattern on it and the player walks away.
       if (result.reason === 'locked')
@@ -522,6 +534,43 @@ export class ExploreScene extends Phaser.Scene {
     }
     this.hud.flash(FLASH.chestCoins(result.coins));
     this.textPanel.show(SAY.chestCoins(result.coins));
+  }
+
+  // The hall, and the only conversation in the game (DESIGN.md §4.9).
+  //
+  // He gets the text panel rather than a dialog because the panel leaves the
+  // world on screen: he is visibly standing there while he talks, the way the
+  // chest's lid is visibly up. Only when the last block has been read does the
+  // world actually turn over — so the ground going is something the player
+  // reads about and *then* sees.
+  //
+  // The new run is handed to a fresh ExploreScene rather than swapped in under
+  // this one: the world he moulds is a world of its own, and its biome decides
+  // the colour every single thing on this screen is drawn in (`create`).
+  meetSorcerer() {
+    if (this.card.isOpen()) this.card.hide();
+    if (this.inventory.isOpen()) this.inventory.hide();
+    this.textPanel.show(SAY.hall(this.run.gems, MAX_GEMS), () => {
+      const next = turnCycle(this.run);
+      this.scene.start('ExploreScene', { run: next, moulded: true });
+    });
+  }
+
+  // What the new world opens on: the same two answers the hut asks for, over
+  // ground nobody has lit a tile of. Neither of them risks anything — the walk
+  // that ended in the hall is already written down — so this is a place to stop
+  // as much as it is a place to start.
+  showMoulded() {
+    const cheats = this.run.cheats;
+    this.dialog.show({
+      title: HALL.title,
+      lines: cheats ? [HALL.cheats] : [HALL.moulded(this.run.cycles), HALL.kept],
+      rows: cheats ? [] : [[HALL.rowWorlds, this.run.cycles]],
+      buttons: [
+        { label: HALL.setOut, onClick: () => this.dialog.hide() },
+        { label: HALL.endHere, onClick: () => this.scene.start('TitleScene') },
+      ],
+    });
   }
 
   // Reaching the hut is what banks a run (DESIGN.md §6.1), so arriving writes

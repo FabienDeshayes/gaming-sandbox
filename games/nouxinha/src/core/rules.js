@@ -21,8 +21,10 @@ import {
   coinValue,
   consumableAt,
   entryKey,
+  hall,
   isBase,
   isMerchant,
+  isSorcerer,
   landmarks,
   pickSeed,
   saltOf,
@@ -39,7 +41,7 @@ import {
   WATER_PER_GEM,
   WATER_PER_STEP,
 } from '../balance.js';
-import { loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
+import { drawSeed, emptySave, loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
 import { ITEMS, itemDef, KEYS, TOOLS } from '../data/items.js';
 import { isOneOff, priceOf } from '../data/shop.js';
 
@@ -84,6 +86,11 @@ export function restockLight(state) {
 // field of its own in the save.
 export const EDGE_SEEN = 'edge';
 
+// And what it files "I have laid eyes on the sorcerer" under, on the same
+// shelf: the map marks him once a light has actually reached him, the way it
+// marks every other unique thing in the world (DESIGN.md §4.9).
+export const HALL_SEEN = 'hall';
+
 // A run's consumables are salted with a nonce so no two expeditions walk the
 // same scatter (DESIGN.md §4.3). Tests pass one in to get a world they can
 // route through; play draws one.
@@ -127,6 +134,10 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // Gems held, as a count — the sanctum chain hands them out in order, so
     // this doubles as which gates open and how much colour is back (save.js).
     gems,
+    // How many worlds this campaign has already had taken off it in the hall
+    // (DESIGN.md §4.9). Carried on the run so the HUD can say so without going
+    // back to the slot every frame; the slot is where it actually lives.
+    cycles: banked.cycles,
     // What was already banked before this run, so the recap can report what
     // this expedition added rather than the running total.
     banked,
@@ -371,6 +382,9 @@ function noteSeen(state, lit) {
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
   for (const chest of chests(state.seed))
     if (litKeys.has(tileKey(chest.x, chest.y))) state.seenUnique.add(chest.id);
+  const hallOf = hall(state.seed);
+  if (hallOf && litKeys.has(tileKey(hallOf.centre.x, hallOf.centre.y)))
+    state.seenUnique.add(HALL_SEEN);
 }
 
 // What the light actually shows: the shape it reaches, narrowed by the dark at
@@ -501,6 +515,12 @@ export function step(state, direction) {
   const nx = state.x + dir.dx;
   const ny = state.y + dir.dy;
   if (!canStepOnto(state, nx, ny)) {
+    // Walking into the sorcerer is how you talk to him (DESIGN.md §4.9), and
+    // like a chest it is a bump rather than a step: no water, no durability, no
+    // facing. What happens next is not this function's business — the run is
+    // over as a run, and `turnCycle` is what the scene calls once he has had
+    // his say.
+    if (isSorcerer(nx, ny, state.seed)) return { moved: false, reason: 'sorcerer' };
     // Walking into a chest is what opens it (DESIGN.md §4.8). The step is still
     // a step that didn't happen — no water, no durability, no facing change —
     // because what moved was the lid.
@@ -639,6 +659,10 @@ function writeDeposit(state, closing) {
     // Runs are counted by expeditions finished, not by visits home: a walk that
     // crosses the hut and carries on is still one walk.
     runs: state.banked.runs + (closing ? 1 : 0),
+    // Carried over by hand for the same reason the seed above is: this rebuilds
+    // the slot from scratch, and the count of worlds the hall has taken is the
+    // one number that has to survive every one of them (`turnCycle`).
+    cycles: state.banked.cycles,
     furthest: Math.max(state.furthest, state.banked.furthest),
     compass: state.tools.has('compass'),
     map: state.tools.has('map'),
@@ -667,6 +691,46 @@ function writeDeposit(state, closing) {
   // before it. Written again rather than dropped, so LOAD GAME still has the
   // walk to carry on with — and from the hut, which is where it now is.
   return !closing && suspended ? suspendRun(state) : written;
+}
+
+// --- The hall ----------------------------------------------------------------
+//
+// What the fourth sanctum holds instead of a hoard (DESIGN.md §4.9). Walking
+// into the sorcerer is a conversation, and the end of the conversation is this:
+// he takes the shards out of your hands, and he moulds the world again.
+//
+// So a cycle is **a new seed inside the same slot**. Everything derived from the
+// seed costs nothing to remake — the ground, the sanctums, the chests, the
+// stall — and everything the campaign was holding *of that world* goes with it:
+// the colours, the keys, the lids you left up, and the map you drew. What stays
+// is what was yours rather than his: the coins, the compass and the map you
+// carried home, the expeditions you have walked, and the count of times you
+// have stood here.
+//
+// Nothing about it is a death. The expedition is over and counted like any
+// other, the slot is written, and the run this hands back is a fresh walk out
+// of the hut door — in a world nobody has ever lit a tile of.
+export function turnCycle(state) {
+  const seed = drawSeed();
+  // A cheat run is a sandbox and writes nothing at all, here as everywhere else
+  // (DESIGN.md §6.2) — it still gets its new world, because looking at what the
+  // hall does is exactly what the switch is for.
+  if (state.cheats) return createRun(seed, emptySave(), undefined, { cheats: true });
+  const written = writeSave({
+    ...emptySave(),
+    seed,
+    cycles: state.banked.cycles + 1,
+    // The walk to the hall was an expedition, and it ended here rather than at
+    // the hut — but it ended, so it counts like every other one.
+    runs: state.banked.runs + 1,
+    // The purse is yours: banked, plus whatever was still in your pocket when
+    // he took everything else off you.
+    coins: state.banked.coins + state.coins,
+    furthest: Math.max(state.furthest, state.banked.furthest),
+    compass: state.tools.has('compass'),
+    map: state.tools.has('map'),
+  });
+  return createRun(undefined, written, undefined, { cheats: false });
 }
 
 // Writes the ground this run lit back into the slot, and nothing else.
@@ -787,6 +851,7 @@ export function resumeRun(save = loadSave()) {
     coins: suspended.coins,
     coinsFound: suspended.coinsFound,
     gems: suspended.gems,
+    cycles: banked.cycles,
     banked,
     tools: new Set(suspended.tools),
     keys: new Set(suspended.keys),

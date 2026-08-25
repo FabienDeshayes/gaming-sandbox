@@ -430,6 +430,9 @@ export class ExploreScene extends Phaser.Scene {
     // The dark equipping a light for you: the torch that took over is the same
     // event as one you chose off the item card, and it sounds the same.
     if (result.burnedOut && !result.blackout) playTorch();
+    // The hut handing back a light out of blackout is the same catching sound
+    // as buying one out of blackout at the merchant (core/rules.js `restockLight`).
+    if (result.relit) playTorch();
 
     this.animating = true;
     this.map.slide(this, DIRECTIONS[direction], () => {

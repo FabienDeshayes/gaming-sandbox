@@ -21,10 +21,10 @@ const VIEW_CX = 240;
 const VIEW_CY = 312;
 const DPAD = { cx: 361, cy: 737, offset: 74 };
 
-// Mirrored from src/ui/itemCard.js and src/ui/inventoryPanel.js.
+// Mirrored from src/ui/inventoryPanel.js, which centres itself on the same
+// point the item card does (src/ui/itemCard.js).
 const CARD_CX = 240;
 const CARD_CY = 854 / 2 - 40;
-const CARD_MULTI_LIST = { x: CARD_CX - (380 - 64) / 2, y: CARD_CY + 88, h: 120, rowH: 40 };
 
 // Mirrored from src/ui/shop.js and src/scenes/ExploreScene.js's navigation rail.
 const SHOP = { left: 240 - 420 / 2, rowH: 52, pad: 22, titleH: 40, purseH: 30 };
@@ -81,6 +81,7 @@ export function assertEqual(actual, expected, msg) {
 }
 
 export async function run() {
+  const startedAt = Date.now();
   const { server, port } = await startServer();
   // Only paid for if something asks: a pure suite run on its own never starts
   // a browser, which is what makes `npm run test:rules` instant.
@@ -92,15 +93,20 @@ export async function run() {
   let failed = 0;
 
   for (const { name, fn, browser: needsBrowser, opts } of suite) {
+    // Timed, and the time printed: a browser test is two orders of magnitude
+    // dearer than a pure one, and a suite nobody can see the cost of is a suite
+    // that quietly grows into a coffee break.
+    const started = Date.now();
     const game = needsBrowser ? await browserFor(opts) : null;
+    const took = () => `${String(Date.now() - started).padStart(6)}ms`;
     try {
       await fn(game);
       const stray = game ? game.pageErrors() : [];
       if (stray.length) throw new Error('page errors: ' + stray.join(' | '));
-      console.log(`  PASS  ${name}`);
+      console.log(`  PASS ${took()}  ${name}`);
     } catch (err) {
       failed += 1;
-      console.log(`  FAIL  ${name}`);
+      console.log(`  FAIL ${took()}  ${name}`);
       console.log(`        ${err.message}`);
     } finally {
       if (game) await game.close();
@@ -111,10 +117,11 @@ export async function run() {
   server.close();
 
   const total = suite.length;
+  const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
   console.log(
     failed === 0
-      ? `\n${total}/${total} passed`
-      : `\n${total - failed}/${total} passed, ${failed} failed`
+      ? `\n${total}/${total} passed in ${secs}s`
+      : `\n${total - failed}/${total} passed, ${failed} failed, in ${secs}s`
   );
   process.exit(failed === 0 ? 0 : 1);
 }
@@ -204,9 +211,7 @@ export function launchBrowser() {
 // then takes that slot up through LOAD GAME instead of NEW GAME.
 //
 // `cheats` turns the Settings switch on before the page loads, the same way.
-//
-// `hasTouch` makes the page a touchscreen, which is what `pinch` needs: two
-// fingers is the one input Playwright's mouse can't send.
+
 export async function openGame(
   browser,
   port,
@@ -215,12 +220,11 @@ export async function openGame(
     query = '',
     save = null,
     cheats = false,
-    hasTouch = false,
   } = {}
 ) {
   const errors = [];
   const spawned = [];
-  const page = await browser.newPage({ viewport, hasTouch });
+  const page = await browser.newPage({ viewport });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   // The browser asks for /favicon.ico on its own and this server has none —
   // that 404 comes from the browser, not the game.
@@ -271,10 +275,20 @@ export async function openGame(
     });
   });
 
+  // Navigation waits for nothing more than the document; what a test actually
+  // needs is a scene it can tap, and that is waited for directly. `isBooted`
+  // alone is not it — Phaser is booted before the first scene has run its
+  // `create`, and a tap into a screen with nothing on it yet is the kind of
+  // once-in-twenty flake that makes a suite untrustworthy.
   await page.goto(`http://localhost:${port}/${query ? `?${query}` : ''}`, {
-    waitUntil: 'networkidle',
+    waitUntil: 'domcontentloaded',
   });
-  await page.waitForFunction(() => window.__game && window.__game.isBooted);
+  await page.waitForFunction(() => {
+    const g = window.__game;
+    if (!g || !g.isBooted) return false;
+    const scene = g.scene.getScenes(true).slice(-1)[0];
+    return !!scene && scene.children.list.length > 0;
+  });
 
   // Design space is 480x854 but the canvas is scaled with Phaser.Scale.FIT, so
   // every click has to convert design coords -> screen coords.
@@ -289,6 +303,20 @@ export async function openGame(
     const R = await rect();
     await page.mouse.click(R.left + px * R.sx, R.top + py * R.sy);
     await page.waitForTimeout(140);
+  };
+
+  // The same tap, but waited on rather than slept off. Phaser queues DOM input
+  // and dispatches it inside its own game step, so a click is only *seen* a
+  // frame or two later — waiting for the frame counter to move is the shortest
+  // wait that is still certain the press landed, where a fixed sleep is both
+  // slower and, on a loaded machine, not certain at all. Walking is the one
+  // input a suite sends hundreds of, so it is the one worth waiting on
+  // properly: everything else is a button, and a button is tapped once.
+  const tapAt = async (px, py) => {
+    const R = await rect();
+    const before = await page.evaluate(() => window.__game.loop.frame);
+    await page.mouse.click(R.left + px * R.sx, R.top + py * R.sy);
+    await page.waitForFunction((f) => window.__game.loop.frame > f + 1, before);
   };
 
   const game = {
@@ -325,20 +353,11 @@ export async function openGame(
 
     shot: (file) => page.screenshot({ path: file }),
 
-    // Whether the music loop's scheduler is running, and which of the two loops
-    // it is playing. Read out of the module the game itself imported — a dynamic
-    // import of the same URL is the same module instance — because there is
-    // nothing about a loop of square waves that a headless browser can be asked
-    // to listen to.
-    music: () =>
-      page.evaluate(() => import('/src/ui/music.js').then((m) => m.isMusicPlaying())),
-
-    musicTrack: () =>
-      page.evaluate(() => import('/src/ui/music.js').then((m) => m.musicTrack())),
-
     // Every sound played so far, in order ('tap', 'text', 'coin', 'pickup',
-    // 'gem', 'torch', 'death'). Same trick as `music()`, and the only way to assert
-    // that a button makes a noise and the D-pad doesn't.
+    // 'gem', 'chest', 'unlock', 'torch', 'death'). Read out of the module the
+    // game itself imported — a dynamic import of the same URL is the same
+    // module instance — because there is nothing about a square wave that a
+    // headless browser can be asked to listen to.
     sounds: () => page.evaluate(() => import('/src/ui/sfx.js').then((m) => m.soundLog())),
 
     activeScene: () =>
@@ -394,8 +413,6 @@ export async function openGame(
       await clickAt(pos.x, pos.y);
     },
 
-    clickAt,
-
     // What the text panel is showing: which block of how many, the characters of
     // it on screen so far, and whether that block has finished typing itself out.
     // Null while the panel is closed (src/ui/textPanel.js).
@@ -406,8 +423,10 @@ export async function openGame(
       }),
 
     // Taps the panel, which is the only thing a player can do to it: finish the
-    // block, or move on to the next one.
-    tapPanel: () => clickAt(TEXT_PANEL.x, TEXT_PANEL.y),
+    // block, or move on to the next one. Waited on rather than slept off, like
+    // the D-pad — every run that sets out is read a panel on the way past, so
+    // this one is tapped as often as a step.
+    tapPanel: () => tapAt(TEXT_PANEL.x, TEXT_PANEL.y),
 
     // Reads the panel to the end, the way a player who has seen it before does:
     // two taps a block, one to fill it and one to move on. `startRun` calls it,
@@ -437,11 +456,14 @@ export async function openGame(
       await game.readPanel();
     },
 
-    // Taps a D-pad arrow, the way a thumb would.
+    // Taps a D-pad arrow, the way a thumb would. Pair it with `settle()` to
+    // wait out the step's slide; on its own it waits only long enough for the
+    // press to have been seen, which is what a test asserting a tap did
+    // *nothing* wants.
     tapDpad: (dir) => {
       const o = DPAD.offset;
       const at = { up: [0, -o], down: [0, o], left: [-o, 0], right: [o, 0] }[dir];
-      return clickAt(DPAD.cx + at[0], DPAD.cy + at[1]);
+      return tapAt(DPAD.cx + at[0], DPAD.cy + at[1]);
     },
 
     // Holds a D-pad arrow down for `ms`, the way a resting thumb would, so a
@@ -488,71 +510,8 @@ export async function openGame(
       await clickAt(RAIL.x + RAIL.w / 2, y + RAIL.mapH / 2);
     },
 
-    // Taps the i-th row (0-based) of a multi-copy item card's instance list.
-    tapCardInstance: (i) =>
-      clickAt(CARD_MULTI_LIST.x + 20, CARD_MULTI_LIST.y + i * CARD_MULTI_LIST.rowH + CARD_MULTI_LIST.rowH / 2),
-
     // Taps the i-th row (0-based) of the open inventory panel's stack list.
     tapInventoryRow: (i) => clickAt(INV_LIST.x + 20, INV_LIST.y + i * INV_LIST.rowH + INV_LIST.rowH / 2),
-
-    // A press-move-release drag from one point to another, for exercising
-    // scrollable lists (the item card's instance list, the inventory panel) —
-    // unlike `swipe`, this holds at the destination instead of releasing with
-    // momentum, and takes design-space coordinates directly since these
-    // overlays aren't inside the tile viewport `swipe` converts for.
-    dragAt: async (x0, y0, x1, y1) => {
-      const R = await rect();
-      await page.mouse.move(R.left + x0 * R.sx, R.top + y0 * R.sy);
-      await page.mouse.down();
-      await page.mouse.move(R.left + x1 * R.sx, R.top + y1 * R.sy, { steps: 6 });
-      await page.mouse.up();
-      await page.waitForTimeout(140);
-    },
-
-    // A wheel notch over a point, which is how a mouse zooms the map.
-    wheelAt: async (x, y, dy) => {
-      const R = await rect();
-      await page.mouse.move(R.left + x * R.sx, R.top + y * R.sy);
-      await page.mouse.wheel(0, dy);
-      await page.waitForTimeout(140);
-    },
-
-    // A two-finger pinch centred on (x, y), the fingers going from `from` to
-    // `to` pixels apart along the horizontal. Multi-touch is the one thing
-    // Playwright's mouse can't send, so this goes down to CDP's raw touch
-    // events — which is what a phone sends anyway. Needs `hasTouch`.
-    pinch: async (x, y, from, to) => {
-      const R = await rect();
-      const cdp = await page.context().newCDPSession(page);
-      const points = (gap) =>
-        [-gap / 2, gap / 2].map((dx, i) => ({
-          x: R.left + (x + dx) * R.sx,
-          y: R.top + y * R.sy,
-          id: i + 1,
-          radiusX: 4,
-          radiusY: 4,
-          force: 1,
-        }));
-      const send = (type, gap) =>
-        cdp.send('Input.dispatchTouchEvent', {
-          type,
-          touchPoints: type === 'touchEnd' ? [] : points(gap),
-        });
-      await send('touchStart', from);
-      const steps = 6;
-      for (let i = 1; i <= steps; i++) await send('touchMove', from + ((to - from) * i) / steps);
-      await send('touchEnd', to);
-      await cdp.detach();
-      await page.waitForTimeout(140);
-    },
-
-    // Drags inside an open multi-copy item card's instance list by `dy`
-    // pixels (negative scrolls down through the list).
-    dragCardList: (dy) => {
-      const x = CARD_MULTI_LIST.x + 20;
-      const y = CARD_MULTI_LIST.y + CARD_MULTI_LIST.h / 2;
-      return game.dragAt(x, y, x, y + dy);
-    },
 
     // Swipes across the map area from its centre.
     swipe: async (dir) => {
@@ -664,17 +623,6 @@ export async function openGame(
         }
       }, slot),
 
-    // The y position of whichever scrollable list is currently open (the item
-    // card's instance list or the inventory panel's stack list) — moves as the
-    // player drags, which is how a scroll is told apart from a tap that just
-    // didn't move anything.
-    scrollContentY: () =>
-      page.evaluate(() => {
-        const s = window.__game.scene.getScene('ExploreScene');
-        const handle = s.card.isOpen() ? s.card.scrollHandle : s.inventory.scrollHandle;
-        return handle && handle.content ? handle.content.y : null;
-      }),
-
     wizardTexture: () =>
       page.evaluate(
         () => `wizard-${window.__game.scene.getScene('ExploreScene').map.wizard.facing}`
@@ -688,42 +636,6 @@ export async function openGame(
       page.evaluate(() =>
         window.__game.scene.getScene('ExploreScene').map.wizard.layers.map((l) => l.tintTopLeft)
       ),
-
-    // The title screen's decorative wizard (a static colour preview, not the
-    // live character) and its name text, both coloured fresh on every visit —
-    // there is no gem-pip row here any more (src/scenes/TitleScene.js). Worked
-    // out entirely inside the page so it reads the same palette the screen was
-    // actually drawn in, whatever world (if any) this page was opened on.
-    titleScreen: () =>
-      page.evaluate(async () => {
-        const { TITLE } = await import('/src/text.js');
-        const { gemColour } = await import('/src/config.js');
-        const s = window.__game.scene.getScene('TitleScene');
-        const wizard = s.children.list.find((c) => c.layers);
-        const name = s.children.list.find((c) => c.text === TITLE.name);
-        const toHex = (n) => '#' + n.toString(16).padStart(6, '0');
-        const hues = [1, 2, 3].map(gemColour);
-        const wizardTint = wizard.layers[0].tintTopLeft;
-        return {
-          gemImages: s.children.list.filter((c) => c.texture && c.texture.key === 'gem').length,
-          wizardIsGemHue: hues.includes(wizardTint),
-          nameIsGemHue: hues.map(toHex).includes(name.style.color),
-          distinct: name.style.color !== toHex(wizardTint),
-        };
-      }),
-
-    // Drives the run forward without the test having to care about terrain:
-    // tries directions until one actually moves, up to `steps` times.
-    walk: async (steps) => {
-      for (let i = 0; i < steps; i++) {
-        for (const dir of ['up', 'right', 'down', 'left']) {
-          const before = await game.state();
-          await game.tapDpad(dir);
-          const after = await game.state();
-          if (after.steps > before.steps) break;
-        }
-      }
-    },
 
     settle: async () => {
       await page.waitForFunction(() => {

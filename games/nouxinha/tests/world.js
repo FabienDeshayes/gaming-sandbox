@@ -4,9 +4,8 @@
 // route is BFSed out of the real world at load time, which is what keeps the
 // tests honest if the noise is ever retuned. See TESTING.md.
 //
-// Shared by every suite, and imported once — a `*.test.js` file that only needs
-// the seed pays for the seed, and the one expensive derivation (four chained
-// legs to four copies of the same torch) is worked out on request.
+// Shared by every suite, and imported once, so the searches below are paid for
+// once however many suites run.
 
 import { test as browserTest } from './harness.js';
 import { tileKey } from '../src/core/light.js';
@@ -26,10 +25,11 @@ import {
   pickSeed,
   saltOf,
   sanctums,
-  terrainAt,
 } from '../src/core/world.js';
 import { KEYS } from '../src/data/items.js';
 import { biomeDef } from '../src/data/biomes.js';
+import { emptySave } from '../src/core/save.js';
+import { LIGHTS, STARTING_LIGHT, STARTING_WATER } from '../src/balance.js';
 import { setDefaultPalette } from '../src/config.js';
 
 export const SEED = pickSeed(DEFAULT_SEED);
@@ -103,37 +103,6 @@ export function bfs(seed, isGoal, maxDepth = 24, start = START, keys = null) {
   throw new Error('no route found in the test world');
 }
 
-// A chain of `count` routes to distinct copies of `wantId`, each leg starting
-// where the previous one left off — for tests that need to actually collect
-// several of the same item by playing, rather than one.
-//
-// Every tile a leg *walks over* is struck off, not just the one it stops on: a
-// later leg aimed at an item an earlier leg already picked up in passing would
-// walk to an empty tile, which is a flake rather than a failure.
-function bfsChain(seed, wantId, count, maxDepth = 24) {
-  const used = new Set();
-  let start = START;
-  const legs = [];
-  for (let i = 0; i < count; i++) {
-    const found = bfs(
-      seed,
-      (x, y) => scatter(x, y) === wantId && !used.has(tileKey(x, y)),
-      maxDepth,
-      start
-    );
-    let [x, y] = start;
-    for (const dir of found.path) {
-      const [dx, dy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[dir];
-      x += dx;
-      y += dy;
-      used.add(tileKey(x, y));
-    }
-    legs.push(found.path);
-    start = [found.x, found.y];
-  }
-  return legs;
-}
-
 // The nearest medium torch and the nearest water drop in the pinned world, and
 // the nearest spot with a rock to walk into. Terrain doesn't move with the
 // nonce; the item routes only hold for a page opened on NONCE (`WORLD` below).
@@ -158,27 +127,6 @@ export const SHADOW_ROUTE = bfs(SEED, (x, y) => {
   );
   return found ? { dx: found[0], dy: found[1] } : null;
 });
-
-// The nearest spot with a tree next to it, for the test that a grove is drawn as
-// foliage rather than as more rock.
-export const TREE_ROUTE = bfs(SEED, (x, y) =>
-  ORTHOGONAL.some(([dx, dy]) => terrainAt(x + dx, y + dy, SEED) === 'tree')
-);
-
-// Four copies of the same light, chained leg to leg — one more than the item
-// card's instance list shows at once, so it has to scroll. Four rather than
-// more because the world spreads its items out (balance.js MIN_SEPARATION),
-// and every extra copy is another twenty taps through a real browser. Only
-// valid for a page opened on NONCE, which is what `WORLD` below pins.
-//
-// Worked out on request rather than at load: it is four chained searches, and
-// only the inventory suite walks it.
-export const MEDIUM_TORCH_COPIES = 4;
-let chain = null;
-export function mediumTorchChain() {
-  if (!chain) chain = bfsChain(SEED, 'torch-medium', MEDIUM_TORCH_COPIES, 60);
-  return chain;
-}
 
 // The four sanctums of this world, and the walk to the first gem. Sanctum 1's
 // arch is the one that stands open, so this route is walkable carrying nothing
@@ -220,4 +168,111 @@ export async function walkPath(game, path) {
     await game.tapDpad(dir);
     await game.settle();
   }
+}
+
+// --- Standing where a route ends --------------------------------------------
+//
+// A tap through a real browser costs a couple of hundred milliseconds, and the
+// routes above are twenty to forty of them. A test whose claim is what happens
+// *at* the far end of a route — a chest's lid, a sanctum's colour, the
+// merchant's counter — has no business paying for the walk there: it plants a
+// suspended expedition already standing on the doorstep and walks only the last
+// leg, which is the input actually under test.
+//
+// That is prior state, the same as any other planted save (TESTING.md), and it
+// costs no coverage: that the whole route is walkable at all is a pure claim,
+// asserted for every sanctum and every chest by `campaign.test.js` and
+// `terrain.test.js` without a browser in sight.
+
+const STEPS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+
+// Where a path leaves the walker, and looking which way.
+function follow(path, start = START) {
+  let [x, y] = start;
+  let facing = 'down';
+  for (const dir of path) {
+    const [dx, dy] = STEPS[dir];
+    x += dx;
+    y += dy;
+    facing = dir;
+  }
+  return { x, y, facing };
+}
+
+// A fresh walk's own numbers, in the shape `suspendRun` writes (core/rules.js).
+// Anything a planted run wants different it names.
+const FRESH_RUN = {
+  seed: SEED,
+  facing: 'down',
+  water: STARTING_WATER,
+  coins: 0,
+  coinsFound: 0,
+  gems: 0,
+  nonce: NONCE,
+  epoch: 0,
+  tools: [],
+  keys: [],
+  chests: [],
+  inventory: [{ id: STARTING_LIGHT, durability: LIGHTS[STARTING_LIGHT].maxDurability }],
+  activeIndex: 0,
+  found: {},
+  collected: '',
+  startExplored: 0,
+};
+
+// How many steps of a route are still to come once it has stood on `tile` — so
+// a test can say "start me one step outside the arch" without counting taps.
+// What a planted run has *not* got is explored ground: masonry it never walked
+// past is masonry the viewport does not draw, so a test about what a sanctum
+// looks like has to be planted outside its own gate, not next to its prize.
+export function stepsAfter(route, tile, start = START) {
+  let [x, y] = start;
+  for (let i = 0; i < route.path.length; i++) {
+    const [dx, dy] = STEPS[route.path[i]];
+    x += dx;
+    y += dy;
+    if (x === tile.x && y === tile.y) return route.path.length - (i + 1);
+  }
+  throw new Error('the route never stands on that tile');
+}
+
+// A slot holding a walk that has already come `route.path.length - back` steps
+// along `route`. Returns the save to plant and the legs still to be walked, so
+// a test reads:
+//
+//   const walk = standingAt(CHEST_ROUTE);
+//   test('...', async (game) => { await walkPath(game, walk.path); ... },
+//     { save: walk.save });
+//
+// Nothing about the world is stored, so the scatter the run walks out onto is
+// the one the seed and salt derive — which is why the nonce here is the same
+// NONCE every route above was BFSed against.
+export function standingAt(route, { back = 0, save = {}, run = {} } = {}) {
+  const walked = back ? route.path.slice(0, route.path.length - back) : route.path;
+  const at = follow(walked);
+  const steps = walked.length;
+  return {
+    path: route.path.slice(walked.length),
+    save: {
+      ...emptySave(),
+      ...save,
+      started: true,
+      seed: SEED,
+      run: {
+        ...FRESH_RUN,
+        ...at,
+        steps,
+        furthest: Math.max(Math.abs(at.x - BASE_X), Math.abs(at.y - BASE_Y)),
+        // A light burns a durability a step, so a run that has walked this far
+        // has burned that much of it — planting a full torch on a forty-step
+        // walk would be a run that could not exist.
+        inventory: [
+          { id: STARTING_LIGHT, durability: LIGHTS[STARTING_LIGHT].maxDurability - steps },
+        ],
+        water: STARTING_WATER - steps,
+        ...run,
+        banked: { ...emptySave(), ...save, run: null },
+      },
+    },
+  };
 }

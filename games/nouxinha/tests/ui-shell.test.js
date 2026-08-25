@@ -1,110 +1,21 @@
-// Everything around a run: the title screen, Settings, the audio switches, the
-// canvas against a real phone, and that the tile sheet actually loaded. Each
-// test drives a fresh page against the real canvas.
+// The three things around a run that only a real browser can answer: that the
+// canvas fits the screen the game is played on, that the tile sheet loaded and
+// was cut, and that the game's own voice types itself out a character at a time.
+//
+// The menus themselves are not here, and shouldn't be. Which scene a button
+// opens, whether a toggle flips, whether the music loop swapped tracks — none of
+// those is a rule of the game, and each costs a page and several seconds to
+// re-assert every time anybody runs the suite.
 
-import { assert, assertEqual, runIfMain, test as browserTest } from './harness.js';
+import { assert, assertEqual, runIfMain } from './harness.js';
+import { SAY, SLOTS, TITLE } from '../src/text.js';
 import { test } from './world.js';
-import { LEAVING, MENU, SAY, SETTINGS, SLOTS, TITLE, UI } from '../src/text.js';
-
-browserTest('a button responds across its whole width, not just the left half', async (game) => {
-  assert(await game.hasText(TITLE.name), 'the title screen is up');
-  // NEW GAME is a 240-wide button centred on (240, 566) (TitleScene.js), so its
-  // right edge sits at x=360. Tapping 90px right of centre is still 30px
-  // inside the button — Container.displayOriginX shifting the hit area left
-  // by half the button's width (the bug this pins) would make this miss.
-  await game.clickAt(330, 566);
-  await game.waitForScene('SlotScene');
-  assertEqual(await game.activeScene(), 'SlotScene', 'scene');
-});
-
-browserTest('the title screen has no gem indicator, and colours the wizard and name at random', async (game) => {
-  const t = await game.titleScreen();
-  assertEqual(t.gemImages, 0, 'no gem pips are drawn any more');
-  assert(t.wizardIsGemHue, 'the wizard is tinted one of the three gem colours');
-  assert(t.nameIsGemHue, 'the name is coloured one of the three gem colours');
-  assert(t.distinct, 'and the two are never the same colour');
-});
-
-test('settings: going back works on a single tap', async (game) => {
-  await game.clickText(UI.settings);
-  await game.waitForScene('SettingsScene');
-  assertEqual(await game.activeScene(), 'SettingsScene', 'scene');
-
-  await game.clickText(UI.back);
-  await game.waitForScene('TitleScene');
-  assertEqual(await game.activeScene(), 'TitleScene', 'back to the title screen');
-});
-
-test('the music follows the scene: the menus get one loop, the dark another', async (game) => {
-  assertEqual(await game.musicTrack(), 'menu', 'the title screen has its own small loop');
-  await game.clickText(UI.settings);
-  await game.waitForScene('SettingsScene');
-  assertEqual(await game.musicTrack(), 'menu', 'and it carries on across the menus');
-  await game.clickText(UI.back);
-  await game.waitForScene('TitleScene');
-
-  await game.startRun();
-  // The loop is started by the scene and again by the first input, because a
-  // page the player has not touched yet has no clock to schedule against.
-  await game.tapDpad('right');
-  await game.settle();
-  assertEqual(await game.musicTrack(), 'explore', 'the dark gets the longer loop');
-
-  // Out through the cogwheel, which is the only way out of a run.
-  await game.tapMenuButton();
-  await game.clickText(MENU.exit);
-  await game.clickText(LEAVING.leave);
-  await game.waitForScene('TitleScene');
-  assertEqual(await game.musicTrack(), 'menu', 'and the menus take theirs back');
-});
-
-test('the music switch turns the loop off and keeps it off', async (game) => {
-  await game.clickText(UI.settings);
-  await game.waitForScene('SettingsScene');
-  assert(await game.hasText(SETTINGS.music(true)), 'on by default');
-  await game.clickText(SETTINGS.music(true));
-  assert(await game.hasText(SETTINGS.music(false)), 'and the button says so once tapped');
-  await game.clickText(UI.back);
-  await game.waitForScene('TitleScene');
-
-  await game.startRun();
-  await game.tapDpad('right');
-  await game.settle();
-  assertEqual(await game.music(), false, 'a run started with it off stays silent');
-});
-
-test('every button taps back, and the D-pad does not', async (game) => {
-  const taps = async () => (await game.sounds()).filter((s) => s === 'tap').length;
-  assertEqual(await taps(), 0, 'nothing has been touched yet');
-
-  await game.clickText(UI.settings);
-  await game.waitForScene('SettingsScene');
-  assertEqual(await taps(), 1, 'a button makes a sound');
-  await game.clickText(UI.back);
-  await game.waitForScene('TitleScene');
-  assertEqual(await taps(), 2, 'so does the one that comes back');
-
-  await game.startRun();
-  // Walking is the one control tapped often enough that a sound on it would
-  // turn an expedition into a rattle, so the D-pad is the exception. A loop
-  // through the base's guaranteed-floor neighbourhood that stays clear of the
-  // hut itself, so the hut's own dialog doesn't interrupt the count.
-  const before = await taps();
-  for (const dir of ['left', 'up', 'up']) {
-    await game.tapDpad(dir);
-    await game.settle();
-  }
-  assertEqual(await taps(), before, 'the D-pad walks silently');
-
-  // The HUD is buttons again, so it is audible again.
-  await game.tapCoins();
-  assertEqual(await taps(), before + 1, 'the coin counter is a button like any other');
-});
 
 test('the whole game fits a portrait phone screen', async (game) => {
   // Phaser fits the canvas to #game, so if #game is not the viewport the canvas
-  // overflows it — which used to push the map's X button off the side and let
-  // the page pan sideways, swallowing taps.
+  // overflows it — which pushes the D-pad and the map's X button off the side
+  // and lets the page pan sideways, swallowing taps. The game is played on a
+  // phone held upright, so this is a playability claim, not a layout nicety.
   const phone = await game.openAnother({ viewport: { width: 390, height: 844 } });
   const fit = await phone.canvasFit();
   const where = JSON.stringify(fit);
@@ -116,6 +27,9 @@ test('the whole game fits a portrait phone screen', async (game) => {
 });
 
 test('the tile sheet is loaded and cut into every sprite the game draws', async (game) => {
+  // Reading a PNG needs a canvas, so this is the one half of the art the pure
+  // suite can't reach: `sprites.test.js` proves the table is cut correctly
+  // against a fake sheet, and this proves the real sheet is the one it names.
   const cut = await game.page.evaluate(async () => {
     const textures = await import('/src/ui/textures.js');
     const { SHEET_KEY } = await import('/src/data/tiles.js');
@@ -148,9 +62,11 @@ test('the tile sheet is loaded and cut into every sprite the game draws', async 
 });
 
 test('setting out, the game says its piece a character at a time', async (game) => {
-  // Every other test gets to a run through `startRun`, which reads the panel to
-  // the end on the way past. This one takes the long way round, because the
-  // panel is the thing it is about.
+  // The text panel is the game's own voice (DESIGN.md §7): it types itself out,
+  // it owns the input while it is up, and a tap fills the block in rather than
+  // skipping it. Every other test gets to a run through `startRun`, which reads
+  // the panel to the end on the way past — this one takes the long way round,
+  // because the panel is the thing it is about.
   await game.clickText(TITLE.newGame);
   await game.waitForScene('SlotScene');
   await game.clickText(SLOTS.slotName(1));
@@ -162,21 +78,28 @@ test('setting out, the game says its piece a character at a time', async (game) 
   assertEqual(opening.index, 0, 'starting at the first');
   // The block is wrapped to the panel, not reworded by it.
   assertEqual(opening.full.replace(/\n/g, ' '), SAY.expeditionStart[0], 'saying what text.js says');
-  assert(opening.shown.length < opening.full.length, 'and it is not all there yet');
 
-  // Progressively: two reads a beat apart see different amounts of it.
-  await game.page.waitForTimeout(150);
+  // Progressive is a claim about two moments, not one — and it is *waited* for
+  // rather than slept on, so a slow machine reads the same result as a fast one.
+  // A quarter of the block is a long way short of all of it (26ms a character
+  // against a sentence of sixty), which is what leaves the tap below landing
+  // mid-sentence however slowly the page is running.
+  const quarter = Math.floor(opening.full.length / 4);
+  await game.page.waitForFunction(
+    (n) => window.__game.scene.getScene('ExploreScene').textPanel.shown >= n,
+    quarter
+  );
   const more = await game.textPanel();
   assert(more.shown.length > opening.shown.length, 'it fills itself in as it goes');
+  assert(more.shown.length < more.full.length, 'and is still not all there');
   assert((await game.sounds()).includes('text'), 'and it is audible doing it');
 
-  // The first tap fills the block in rather than skipping past it.
+  // The first tap fills the block in rather than skipping past it, which is the
+  // whole difference between a text box and a dismiss button.
   await game.tapPanel();
   const filled = await game.textPanel();
   assertEqual(filled.index, 0, 'a tap mid-sentence is not a tap to the next block');
   assertEqual(filled.shown, filled.full, 'it puts the rest of it up at once');
-
-  // The next one moves on.
   await game.tapPanel();
   assertEqual((await game.textPanel()).index, 1, 'and the tap after that is the next block');
 

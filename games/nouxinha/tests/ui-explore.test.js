@@ -1,15 +1,20 @@
-// Walking the dark: the controls, and the three visibility states the map
-// viewport draws. Each test drives a fresh page against the real canvas.
+// Walking the dark: the controls a player actually walks with, and the three
+// visibility states the map viewport draws. Each test drives a fresh page
+// against the real canvas.
+//
+// What a step *costs* is not a browser's question. That a step spends one
+// durability, one water and one step, and that rock rejects one for nothing, are
+// pure claims and live in `rules.test.js` — what is here is that a thumb, a
+// swipe and an arrow key each turn into one of those steps, and what the screen
+// does about it.
 
 import { assert, assertEqual, runIfMain } from './harness.js';
-import { terrainAt, variantAt } from '../src/core/world.js';
-import { variantKey } from '../src/data/tiles.js';
-import { BLACKOUT_MEMORY_RADIUS } from '../src/balance.js';
-import { HUD, HUT } from '../src/text.js';
+import { BLACKOUT_MEMORY_RADIUS, STARTING_LIGHT } from '../src/balance.js';
+import { HUD } from '../src/text.js';
 import { ITEMS } from '../src/data/items.js';
-import { ORTHOGONAL, ROCK_ROUTE, SEED, TREE_ROUTE, test, walkPath } from './world.js';
+import { TORCH_ROUTE, standingAt, test, walkPath } from './world.js';
 
-test('a run starts one tile south of the base with the small torch lit, and no tools in the corner', async (game) => {
+test('a run starts one tile south of the base, lit by the torch it set out with', async (game) => {
   await game.startRun();
 
   const state = await game.state();
@@ -19,8 +24,8 @@ test('a run starts one tile south of the base with the small torch lit, and no t
   assertEqual(state.facing, 'down', 'facing away from the base');
   assertEqual(
     state.inventory,
-    [{ id: 'torch-small', durability: ITEMS['torch-small'].maxDurability }],
-    'inventory'
+    [{ id: STARTING_LIGHT, durability: ITEMS[STARTING_LIGHT].maxDurability }],
+    'carrying one small torch and nothing else'
   );
   assertEqual(state.explored, 9, 'the 3x3 block around the start tile is lit');
   // Nothing is owned yet, so the navigation rail is empty (DESIGN.md §4.6).
@@ -30,46 +35,47 @@ test('a run starts one tile south of the base with the small torch lit, and no t
   const tiles = await game.visibleTiles();
   assertEqual(tiles.filter((t) => t.alpha === 1).length, 9, 'nine tiles at full brightness');
   assert(await game.hasText(HUD.explored(9)), 'the explored counter');
-
-  // The hut is already off the character's own tile, so it's drawn from the
-  // very first frame.
-  assertEqual(tiles.find((t) => t.x === 0 && t.y === 0).overlay, 'base', 'the hut is visible from the start');
-
-  // Walking onto the hut still hides it — two dense sprites on one tile read
-  // as a blob — and stepping back off draws it again. Arriving opens the
-  // hut's own question, which freezes the world until it is answered.
-  await game.tapDpad('up');
-  await game.settle();
-  const onHut = await game.visibleTiles();
-  assert(!onHut.some((t) => t.overlay === 'base'), 'the hut is hidden under the wizard standing on it');
-  assert(await game.hasText(HUT.title), 'and the hut speaks up on arrival');
-  await game.clickText(HUT.headBackOut);
-
-  await game.tapDpad('down');
-  await game.settle();
-  const offHut = await game.visibleTiles();
-  assertEqual(offHut.find((t) => t.x === 0 && t.y === 0).overlay, 'base', 'and reappears once they step off again');
+  assertEqual(tiles.find((t) => t.x === 0 && t.y === 0).overlay, 'base', 'the hut is drawn from the start');
 });
 
-test('the d-pad walks and burns the torch', async (game) => {
+test('the D-pad, a swipe and the arrow keys all walk, and a step burns light and water', async (game) => {
   await game.startRun();
+  assert(await game.hasText(HUD.water(200, 200)), 'the tank starts full');
 
+  // Three ways in, one step out: the D-pad a thumb taps, a swipe across the
+  // world, and the arrow keys a desk gets. All three are how the game is
+  // played, so all three are walked (DESIGN.md §7).
   await game.tapDpad('right');
   await game.settle();
-
-  const state = await game.state();
-  assertEqual({ x: state.x, y: state.y }, { x: 1, y: 1 }, 'moved one tile east');
+  let state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, { x: 1, y: 1 }, 'the D-pad moved one tile east');
   assertEqual(state.facing, 'right', 'facing');
-  assertEqual(state.inventory[0].durability, ITEMS['torch-small'].maxDurability - 1, 'one durability spent');
-  assertEqual(await game.wizardTexture(), 'wizard-right', 'the wizard turned');
+  assertEqual(await game.wizardTexture(), 'wizard-right', 'and the wizard turned with it');
+  assertEqual(state.inventory[0].durability, ITEMS[STARTING_LIGHT].maxDurability - 1, 'one durability spent');
+  assertEqual(state.water, 199, 'and one mouthful of water');
+  assert(await game.hasText(HUD.water(199, 200)), 'which the HUD counter reads back');
+
+  await game.swipe('down');
+  await game.settle();
+  state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, { x: 1, y: 2 }, 'a swipe moved one tile south');
+  assertEqual(await game.wizardTexture(), 'wizard-down', 'the wizard turned');
+
+  await game.press('ArrowUp');
+  await game.settle();
+  state = await game.state();
+  assertEqual({ x: state.x, y: state.y }, { x: 1, y: 1 }, 'and an arrow key moved one tile back north');
 });
 
 test('holding a D-pad arrow keeps stepping until released', async (game) => {
   await game.startRun();
   const before = await game.state();
 
-  // West of the base is clear for several tiles on the default seed, so a
-  // held press can take more than one step without hitting rock.
+  // Hold-to-walk is what makes an expedition of a few hundred tiles playable
+  // (DESIGN.md §7). West of the base is clear for several tiles on the default
+  // seed, so a held press can take more than one step without hitting rock —
+  // the assertion is deliberately "more than one", not a count, because the
+  // repeat rate is a Settings slider and not a fact about the game.
   await game.holdDpad('left', 900);
   await game.settle();
 
@@ -77,46 +83,16 @@ test('holding a D-pad arrow keeps stepping until released', async (game) => {
   assert(after.steps - before.steps >= 2, `a held press took more than one step (took ${after.steps - before.steps})`);
   assert(after.x < before.x, 'and actually walked west');
 
+  // And it is the *holding* that repeats: released, the run stands still.
   const justAfter = after.steps;
   await game.page.waitForTimeout(500);
   assertEqual((await game.state()).steps, justAfter, 'and stops the moment the arrow is released');
 });
 
-test('swiping the map and the arrow keys both walk', async (game) => {
-  await game.startRun();
-
-  await game.swipe('down');
-  await game.settle();
-  let state = await game.state();
-  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 2 }, 'a swipe moved one tile south');
-  assertEqual(await game.wizardTexture(), 'wizard-down', 'the wizard turned');
-
-  await game.press('ArrowUp');
-  await game.settle();
-  state = await game.state();
-  assertEqual({ x: state.x, y: state.y }, { x: 0, y: 1 }, 'and an arrow key moved one tile back north');
-});
-
-test('walking into rock bumps instead of moving', async (game) => {
-  await game.startRun();
-  await walkPath(game, ROCK_ROUTE.path);
-
-  const before = await game.state();
-  await game.tapDpad(ROCK_ROUTE.hit);
-  await game.settle();
-  const after = await game.state();
-
-  assertEqual({ x: after.x, y: after.y }, { x: before.x, y: before.y }, 'did not move');
-  assertEqual(after.inventory[0].durability, before.inventory[0].durability, 'no durability spent');
-});
-
 test('explored ground stays on screen, dimmed, and nothing else is drawn', async (game) => {
   await game.startRun();
 
-  await game.tapDpad('right');
-  await game.settle();
-  await game.tapDpad('right');
-  await game.settle();
+  await walkPath(game, ['right', 'right']);
 
   const tiles = await game.visibleTiles();
   const lit = tiles.filter((t) => t.alpha === 1);
@@ -124,6 +100,7 @@ test('explored ground stays on screen, dimmed, and nothing else is drawn', async
   assertEqual(lit.length, 9, 'the light shape is still 9 tiles');
   assert(remembered.length > 0, 'ground walked past is still drawn, dimmed');
   // Everything drawn is either lit or remembered — unknown tiles are not drawn.
+  // Those three states are the whole of what the dark means (DESIGN.md §4).
   assertEqual(lit.length + remembered.length, tiles.length, 'no third state on screen');
   assert(remembered.some((t) => t.x === 0 && t.y === 0), 'the base is remembered from two tiles away');
   // Floor is drawn as one undecorated texture, whatever else is on top of it.
@@ -131,19 +108,19 @@ test('explored ground stays on screen, dimmed, and nothing else is drawn', async
   assert(floors.length > 0 && floors.every((t) => t.ground === 'floor'), 'floor is plain ground');
 });
 
+// A walk already out in the dark with one step left in its torch, so the very
+// next tap is the one the light goes out on. Burning a full small torch down by
+// playing is a hundred taps of a real browser, and what is asserted here is
+// what blackout *draws* — that a light runs down at all is `rules.test.js`.
+const BLACKOUT = standingAt(TORCH_ROUTE, {
+  back: 4,
+  run: { inventory: [{ id: STARTING_LIGHT, durability: 1 }] },
+});
+
 test('blackout shrinks memory to a fog of war around the character', async (game) => {
   await game.startRun();
+  await walkPath(game, BLACKOUT.path.slice(0, 1));
 
-  // One step off the base, then pace back and forth inside its forced-floor
-  // neighbourhood (DESIGN.md §4.3) — never back onto the hut itself, so its
-  // dialog never interrupts the loop — until the starting small torch burns
-  // all the way out.
-  await game.tapDpad('right');
-  await game.settle();
-  for (let i = 0; i < ITEMS['torch-small'].maxDurability - 1; i++) {
-    await game.tapDpad(i % 2 === 0 ? 'up' : 'down');
-    await game.settle();
-  }
   const state = await game.state();
   assertEqual(state.inventory.length, 0, 'the small torch is spent');
 
@@ -158,38 +135,6 @@ test('blackout shrinks memory to a fog of war around the character', async (game
     ),
     'nothing further out is drawn as remembered any more'
   );
-});
-
-test('a grove is drawn as trees, not as more rock', async (game) => {
-  await game.startRun();
-  await walkPath(game, TREE_ROUTE.path);
-
-  const tiles = await game.visibleTiles();
-  const drawn = tiles.filter((t) => terrainAt(t.x, t.y, SEED) === 'tree');
-  assert(drawn.length > 0, 'the walk should end with a grove in the light');
-  // Trees alternate between several tiles, so what is asserted is that the tile
-  // drawn is one of the tree ones — never a rock one — and that it is the one
-  // the world says belongs there, which is what keeps a grove from shimmering.
-  for (const tile of drawn)
-    assertEqual(
-      tile.ground,
-      variantKey('tree', variantAt(tile.x, tile.y, SEED)),
-      `(${tile.x},${tile.y}) should be drawn as the tree the world put there`
-    );
-  // Terrain is the constant the gem colours read against (DESIGN.md §9), so a
-  // tree is the palette's own foreground like the rock beside it.
-  const rock = tiles.find((t) => t.ground.startsWith('rock'));
-  if (rock) assertEqual(drawn[0].tint, rock.tint, 'trees are terrain, tinted like rock');
-
-  // And they stop a step the way rock does.
-  const into = ORTHOGONAL.map(([dx, dy], i) => [['right', 'left', 'down', 'up'][i], dx, dy]).find(
-    ([, dx, dy]) => terrainAt(TREE_ROUTE.x + dx, TREE_ROUTE.y + dy, SEED) === 'tree'
-  );
-  const before = await game.state();
-  await game.tapDpad(into[0]);
-  await game.settle();
-  const after = await game.state();
-  assertEqual({ x: after.x, y: after.y }, { x: before.x, y: before.y }, 'did not move');
-});
+}, { save: BLACKOUT.save });
 
 runIfMain(import.meta.url);

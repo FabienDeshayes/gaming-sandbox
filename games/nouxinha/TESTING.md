@@ -8,9 +8,22 @@
 ```bash
 cd games/nouxinha
 npm install       # playwright-core + phaser, from the allowed npm registry — do NOT run `playwright install`
-npm test          # every suite, one server and one browser: about three minutes
-npm run test:pure # the seven pure suites only, no browser: about a second
+npm test          # every suite, one server and one browser: about a minute
+npm run test:pure # the seven pure suites only, no browser: under ten seconds
 ```
+
+The runner prints what each test cost and what the whole run cost, because a
+suite nobody can see the price of is a suite that grows into a coffee break.
+Ninety-odd pure tests account for a couple of seconds of that minute; the twenty
+browser tests account for the rest. Two numbers are the ones to watch when adding to it:
+
+- **A browser test over about five seconds** is a walk that should have been
+  planted rather than taken — see **Standing where a route ends** below.
+- **A pure test over about half a second** is almost always a loop calling
+  something expensive when it meant to call something cheap. `pickSeed`
+  flood-fills a window every time it is asked, so sampling anything a thousand
+  times *through* it costs a minute; sample the cheap function directly and let
+  `pickSeed`'s own promise have its own test.
 
 `node_modules/` is gitignored. `package.json` is test-only: the game itself has no build step and
 runs straight from `index.html` through any static server.
@@ -31,14 +44,14 @@ at all, which is the quick way to work on the rules.
 | `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the water ladder, the landmarks, the merchant, the compass |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
-| `ui-shell.test.js` | Title screen, Settings, audio, the canvas against a phone, the sheet actually loading |
-| `ui-explore.test.js` | Walking, and the three visibility states the viewport draws |
-| `ui-items.test.js` | The HUD counters, the item card, the inventory panel |
-| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, cheats, the merchant, the map, opening a chest |
+| `ui-shell.test.js` | The canvas against a phone, the sheet actually loading, the game's own voice |
+| `ui-explore.test.js` | The controls that walk, and the three visibility states the viewport draws |
+| `ui-items.test.js` | The HUD counters, the item card, and finding a light and burning it |
+| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, the merchant, the map, a sanctum's colour, a chest's key |
 
 Suites share `tests/world.js` — the seed, the pinned nonce, and every route BFSed out of the real
-world (see below). Pure suites run first in `all.test.js`, so a broken rule fails in a second rather
-than after three minutes of driving a canvas that was never going to agree with it.
+world (see below). Pure suites run first in `all.test.js`, so a broken rule fails in a couple of seconds
+rather than after a minute of driving a canvas that was never going to agree with it.
 
 ## The two kinds of test
 
@@ -53,9 +66,29 @@ Both register against the same runner (`tests/harness.js`):
   equipping a torch and seeing the lit area grow.
 
 Every browser test gets its own page, so no test inherits another's run. Any uncaught page error or
-console error fails the test that provoked it. A page costs a couple of seconds to open, which is
-why a browser test that would only re-assert what a neighbouring one already walked to should be
-folded into it rather than added beside it.
+console error fails the test that provoked it. A page costs a second to open and a step costs a
+sixth of one, which is why a browser test that would only re-assert what a neighbouring one already
+walked to should be folded into it rather than added beside it.
+
+### What earns a browser test
+
+A `test(...)` has to be paying for something a `unit(...)` cannot say. In practice that is one of
+three things, and nothing else:
+
+- **What is drawn** — the three visibility states, a gem's colour reaching the masonry and the
+  wizard's robe, a chest's lid, the real tile sheet.
+- **What an input does** — the D-pad, a swipe, the arrow keys, a bump that opens a chest, a tap that
+  fills a block of text in rather than skipping it.
+- **What crosses the boundary between a run and a slot** — banking at the hut, SAVE GAME and LOAD
+  GAME, death taking the walk with it, three slots being three campaigns.
+
+What does *not* earn one, however easy it is to write: that a button opens the scene it says it
+does, that a toggle toggles, that a panel's text does not overlap its own buttons, that a list
+scrolls and clamps, that the music swapped loops. Those are fixes pinned in place rather than rules
+of the game — they pass forever, they cost seconds each, and when the layout is next reworked they
+fail for reasons that have nothing to do with the game being wrong. Delete rather than keep, and if
+the underlying rule is worth holding on to, hold on to it in the pure suite where it costs
+milliseconds.
 
 ## Sandbox gotcha
 
@@ -76,7 +109,7 @@ reaches in to *set* game state.
 |---|---|
 | `clickText(label, nth)` | Taps an on-screen label, searching inside containers (buttons and the item card build their text into one) |
 | `startRun(slot)` | Title screen to a walking run the way a player gets there: **NEW GAME** or **LOAD GAME**, then a slot, then reading the opening text panel out. Loads slot 1 when a save was planted there, starts a fresh campaign in it otherwise |
-| `tapDpad(dir)` | Taps a D-pad arrow |
+| `tapDpad(dir)` | Taps a D-pad arrow. Waits for the press to have been *seen* (two of Phaser's own frames) rather than sleeping a fixed span — walking is the input a suite sends hundreds of, so it is the one worth waiting on properly. Pair it with `settle()` to wait out the slide as well |
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
@@ -84,15 +117,11 @@ reaches in to *set* game state.
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground sprite, alpha, **tint**, **paint**, overlay, item and item tint. Every tile on screen is a stack of colour zones (`src/ui/painted.js`), so `tint` is the colour the bulk of the tile is in and `paint` the colours of the zones over it — a sanctum wearing its own gem's colour shows up there, not in `tint`. This is the render, not the model: it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its colour-zone layers — the silhouette the character set out in, plus the hood, robe and staff that turn the colours of gems one, two and three |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
-| `dragAt(x0, y0, x1, y1)` | A press-move-release drag in design coordinates, for a scrollable list or for panning the map — unlike `swipe`, it holds at the destination instead of releasing with momentum |
-| `wheelAt(x, y, dy)` | A wheel notch over a point, which is how a mouse zooms the map |
-| `pinch(x, y, from, to)` | Two fingers centred on a point, going from `from` to `to` pixels apart. Multi-touch is the one input Playwright's mouse can't send, so this goes down to CDP's raw touch events — which is what a phone sends anyway. Needs the page opened with `{ hasTouch: true }` |
 | `tapMenuButton()` | Taps the **cogwheel** in the top right, which opens the in-run menu (SETTINGS, SAVE GAME, EXIT GAME, KEEP PLAYING) |
 | `textPanel()` | What the text panel is showing: which block of how many, the characters of it on screen so far, and whether that block has finished typing — `null` while the panel is closed |
 | `tapPanel()` / `readPanel()` | One tap on the panel, or as many as it takes to read it out and close it |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run carried it back to the hut, so asserting that has to read the save rather than the run that found it — and since arriving is what banks, the slot is worth reading *before* the hut's dialog is answered as well as after |
-| `music()` / `musicTrack()` | Whether the music loop's scheduler is running, and which of the two loops it is playing (`'menu'`, `'explore'`, or `null`) — read out of `src/ui/music.js` itself, since a headless browser can't be asked to listen |
-| `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'chest'`, `'unlock'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` the same way, and the only way to assert that a button makes a noise and the D-pad doesn't. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
+| `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'chest'`, `'unlock'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` itself, since a headless browser can't be asked to listen, and the only way to assert that a gem gets the fanfare and a torch is heard catching. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |
 | `openAnother(opts)` | A second page on the same server, for the few things only testable at another screen size. Closed with its parent, and its page errors count as the parent's |
@@ -108,18 +137,16 @@ which pushes controls off the edge and lets a tap turn into a sideways pan inste
 ## Writing a test against a world with no authored levels
 
 The world has no hand-authored level to write coordinates against, so **derive the route instead of
-hardcoding it**. `tests/world.js` runs a BFS over the real world at load time to find the
-nearest medium torch, the nearest spot with a rock to walk into and the nearest one with a tree,
-then replays those paths in the browser:
+hardcoding it**. `tests/world.js` runs a BFS over the real world at load time to find the nearest
+medium torch, the nearest spot with a rock to walk into, the first sanctum's gem, the chest holding
+the first key and the merchant's stall, then replays those paths in the browser:
 
 ```js
 const SEED = pickSeed(DEFAULT_SEED);
 export const TORCH_ROUTE = bfs(SEED, (x, y) => scatter(x, y) === 'torch-medium', 60);
 ```
 
-That derivation lives in `tests/world.js` and every suite imports it, so it is paid for once. The
-one expensive route — four chained legs to four copies of the same torch — is worked out on request
-(`mediumTorchChain()`) rather than at load, so a suite that doesn't walk it doesn't pay for it.
+That derivation lives in `tests/world.js` and every suite imports it, so it is paid for once.
 
 This keeps the suite honest if the noise is ever retuned: the route moves with the world instead of
 silently pointing at a tile that is now rock. Hardcoding `(-8, 0)` would pass today and rot at the
@@ -264,14 +291,49 @@ test('the compass sits in the corner', async (game) => { ... },
 That is prior state, not live state — the browser's version of handing `createRun` a save. Nothing in
 the harness ever reaches into a running scene to change it, which is still the rule.
 
-The `cheats` page option is the same idea for the Settings switch (DESIGN.md §6.2): it turns cheats on
-before the page loads, so a test can open straight onto a run holding everything. The test that pins
-the switch itself does it the player's way instead, through Settings. It is also how the map's zoom
-and pan are tested: a cheat run's revealed world is the biggest drawing the game makes, and a map
-that already fits the window has nothing to zoom out of and nowhere to pan to.
+The `cheats` page option is the same idea for the Settings switch (DESIGN.md §6.2): it turns cheats
+on before the page loads, so a test can open straight onto a run holding everything. What cheats
+actually do to a run — the whole map revealed, one of everything, and a slot that is never written
+to — is pure, and is asserted in `rules.test.js` and `save.test.js` rather than driven.
 
-`hasTouch` makes the page a touchscreen, which is what `pinch` needs — the only test that asks for
-one, since everything else a finger does is a tap or a drag the mouse can stand in for.
+## Standing where a route ends
+
+The routes above are twenty to forty taps long, and a tap through a real browser costs about a sixth
+of a second. A test whose claim is what happens *at* the far end of one — a chest's lid, a sanctum's
+colour, the merchant's counter — has no business paying for the walk there, so it plants a suspended
+expedition already standing on the doorstep and walks only the last leg. `standingAt(route, opts)`
+in `tests/world.js` builds both halves of that:
+
+```js
+const AT_CHEST = standingAt(KEY_CHEST_ROUTE);
+
+test('walking into a chest opens it', async (game) => {
+  await game.startRun();       // LOAD GAME resumes the planted walk
+  await game.tapDpad(KEY_CHEST_BUMP);
+  ...
+}, { save: AT_CHEST.save });
+```
+
+`back` is how many steps short of the end to stand (`AT_CHEST.path` is what is left to walk), `save`
+is what the campaign behind the run has banked, and `run` overrides anything about the walk itself —
+which is how the blackout test gets a torch with one step left in it instead of tapping a hundred
+times to burn a full one down.
+
+It costs no coverage. That a route exists and is walkable at all is a pure claim, asserted for every
+sanctum and every chest by `campaign.test.js` and `terrain.test.js` without a browser in sight; what
+the browser is being paid for is the last step and what it draws.
+
+Two things to know before planting one:
+
+- **A planted run has lit nothing.** The viewport only draws ground the run has explored, so
+  masonry it never walked past is masonry that is not on screen. A test about what a sanctum *looks*
+  like has to be planted outside the sanctum's own gate, not next to its prize —
+  `stepsAfter(route, tile)` says how many steps of a route remain once it has stood on a given tile,
+  so `back: stepsAfter(GEM_ROUTE, FIRST_GEM.gate) + 1` reads as "one step outside the arch" without
+  counting taps.
+- **The salt has to match.** `standingAt` writes the suite's own `NONCE` and epoch 0 into the run,
+  which is the salt every consumable route above was BFSed against — plant a different one and the
+  torch the route was aimed at is somewhere else.
 
 ## Testing the world's three layers
 
@@ -292,9 +354,10 @@ The other two invariants worth keeping honest:
   (`state.collected.add(...)`), call `respawn(state)`, and assert the window refills, that some of it
   landed on tiles that were empty before, and that nothing is under the character.
 
-Walking a browser test to a sanctum costs roughly 200ms a step, so only the first (20 tiles out) is
-driven through the real canvas. Gates further out are covered by the pure tests, which reach them
-for free.
+Every one of those is pure, and none of them needs a browser. A sanctum further out than the first
+is never driven through the canvas at all: the pure tests reach every gate in the world for free,
+and the one browser test about a sanctum is planted outside the first one's arch and walked in from
+there (**Standing where a route ends** above).
 
 ## Testing the tile sheet
 
@@ -327,17 +390,45 @@ instead (**NEW GAME**, a slot, then straight into `textPanel()`), because `start
 dismissed the thing it came to look at.
 
 Two things about it are worth asserting and easy to get wrong. **Progressive** is a claim about two
-moments, not one: read `textPanel()`, wait a beat, read it again, and the same block has more of
-itself on screen. And a tap **fills the block in rather than skipping it** — the assertion is that
-the index has *not* moved and `shown` now equals `full`, which is the whole difference between a
-text box and a dismiss button.
+moments, not one: read `textPanel()`, let it type on, read it again, and the same block has more of
+itself on screen. *Wait* for the second moment rather than sleeping through it — the test waits for
+the panel's own character count to reach a quarter of the block, which arrives when it arrives and
+is still a long way short of the whole sentence, where a fixed sleep is a bet on how fast the
+machine is. And a tap **fills the block in rather than skipping it** — the assertion is that the
+index has *not* moved and `shown` now equals `full`, which is the whole difference between a text
+box and a dismiss button.
 
 `full` is the block after wrapping, with real newlines in it, so a test comparing against
 `src/text.js` has to put the newlines back to spaces rather than expect the raw string.
 
 ## Adding a test
 
-Add one to the suite it belongs to, whenever a fix covers something a player could hit by just
-playing. Prefer a `unit(...)` test if the behaviour is expressible in the pure core — `src/core/rules.js`, `src/core/light.js`,
-and `src/core/world.js` have no Phaser in them precisely so that most of the game can be tested
-without a browser. Reach for a `test(...)` when the bug lives in what's rendered or what a tap does.
+Add one to the suite it belongs to when it says something about how the game is *designed* — a rule
+of the world, a number the balance rests on, a thing the player does or sees. Prefer a `unit(...)`
+test wherever the behaviour is expressible in the pure core: `src/core/rules.js`,
+`src/core/light.js` and `src/core/world.js` have no Phaser in them precisely so that most of the
+game can be tested without a browser. Reach for a `test(...)` only when the claim is one of the
+three in **What earns a browser test** above, and keep it under five seconds — plant the walk rather
+than take it.
+
+And don't add one for every fix. A test that only pins a fix in place passes forever, costs its
+seconds forever, and fails one day for a reason that has nothing to do with the game being wrong. If
+a fix is worth holding on to, hold on to it as a rule in the pure suite; if it can't be stated as a
+rule, let git history be the record of it.
+
+## Keeping it deterministic
+
+Nothing in this suite may depend on how fast the machine is. Three rules keep it that way, and every
+flake this suite has ever had broke one of them:
+
+- **Wait for the condition, never for a duration.** `settle()` waits for the step's tween to be
+  over, `tapDpad` waits for the press to have been seen, `waitForScene` waits for the scene, and a
+  page is ready when a scene has actually drawn something — not when Phaser says it booted, which is
+  earlier. `page.waitForTimeout` is a bet, and a bet in a test suite is a flake with a delay on it.
+- **Derive the world, never write it down.** Every route is BFSed at load (above), and every number
+  a test compares against comes from `src/balance.js`, `src/text.js` or `src/config.js` rather than
+  being restated — so retuning the game moves the tests with it instead of breaking them.
+- **Never assert on pixel geometry.** Where a label sits relative to a button is a layout that is
+  meant to be reworked; a test that pins it fails on the rework rather than on a bug. Assert what is
+  drawn (`visibleTiles`, `wizardZoneTints`) and what is said (`hasText` against `src/text.js`), not
+  where it is.

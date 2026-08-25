@@ -85,10 +85,17 @@ unit('a world is one biome, and which one is the seed the world is', () => {
 
   // Every kind of world turns up, and roughly as often as the others: a player
   // starting over should not have to draw ten campaigns to see a desert.
+  //
+  // Sampled straight off `biomeOf`, not off `pickSeed`: what is being measured
+  // is how the four are spread across the seeds, and `pickSeed`'s own promise —
+  // that the seed it hands back is one nobody is sealed into — is a separate
+  // claim with its own test below. Flood-filling a window eight hundred times to
+  // measure a hash would be forty-five seconds for a distribution that is the
+  // same either way.
   const tally = {};
-  const worlds = 800;
+  const worlds = 2000;
   for (let i = 0; i < worlds; i++) {
-    const biome = biomeOf(pickSeed((i * 2654435761) | 0));
+    const biome = biomeOf((i * 2654435761) | 0);
     tally[biome] = (tally[biome] || 0) + 1;
   }
   for (const id of BIOME_IDS) {

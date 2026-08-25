@@ -109,7 +109,7 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     seed: picked,
     x: 0,
     y: 0,
-    facing: 'up',
+    facing: 'down',
     steps: 0,
     coins: 0,
     // Gems held, as a count — the sanctum chain hands them out in order, so

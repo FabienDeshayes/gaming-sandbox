@@ -5,6 +5,7 @@ import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import {
   DEFAULT_SEED,
   beyondEdge,
+  biomeOf,
   blocksSight,
   chestAt,
   chests,
@@ -24,6 +25,7 @@ import {
 import { activeShape, createRun, litTiles, reveal, step, EDGE_SEEN } from '../src/core/rules.js';
 import { emptySave, normaliseSave } from '../src/core/save.js';
 import { CHEST_COIN_VALUES, EDGE_RADIUS, SEED_MIN_FRACTION } from '../src/balance.js';
+import { BIOME_IDS } from '../src/data/biomes.js';
 import { ALL_KEYS, ALL_KEYS_LIST, NONCE, ORTHOGONAL, SEED, SHUT_GATE } from './world.js';
 
 // One window, walked once, for the three distribution tests below — the whole
@@ -71,6 +73,35 @@ unit('the world is derived, so walking through it never changes it', () => {
   for (let i = 0; i < 200; i++)
     if (terrainAt(i, 3, SEED) !== terrainAt(i, 3, SEED + 1)) differences++;
   assert(differences > 20, `seeds should differ, got ${differences} differing tiles`);
+});
+
+unit('a world is one biome, and which one is the seed the world is', () => {
+  // A biome is a property of the world rather than of any tile in it — a
+  // campaign never walks from one into another (DESIGN.md §4.3) — so the only
+  // thing there is to check about *where* it applies is that it takes a seed
+  // and nothing else.
+  assert(BIOME_IDS.includes(biomeOf(SEED)), 'the suite walks one of the four');
+  assertEqual(biomeOf(SEED), biomeOf(SEED), 'and the answer never moves');
+
+  // Every kind of world turns up, and roughly as often as the others: a player
+  // starting over should not have to draw ten campaigns to see a desert.
+  const tally = {};
+  const worlds = 800;
+  for (let i = 0; i < worlds; i++) {
+    const biome = biomeOf(pickSeed((i * 2654435761) | 0));
+    tally[biome] = (tally[biome] || 0) + 1;
+  }
+  for (const id of BIOME_IDS) {
+    const share = (tally[id] || 0) / worlds;
+    assert(share > 0.15, `${id} comes up about as often as the rest (${(share * 100).toFixed(0)}%)`);
+  }
+
+  // A run is walking that world, and says so — which is what the renderer asks
+  // to know which tiles to draw the ground with (src/data/tiles.js).
+  const state = createRun(SEED, emptySave(), NONCE);
+  assertEqual(state.biome, biomeOf(SEED), 'the run knows what kind of world it is in');
+  const elsewhere = createRun(SEED + 1, emptySave(), NONCE);
+  assertEqual(elsewhere.biome, biomeOf(elsewhere.seed), 'and so does a run in another world');
 });
 
 unit('the base clearing is always walkable', () => {

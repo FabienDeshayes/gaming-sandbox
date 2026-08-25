@@ -87,6 +87,14 @@ export const PALETTE_NAMES = {
   magenta: 'MAGENTA',
 };
 
+// The biomes' display names (data/biomes.js holds what a biome actually is).
+export const BIOME_NAMES = {
+  temperate: 'TEMPERATE',
+  frozen: 'FROZEN',
+  desert: 'DESERT',
+  mystic: 'MYSTICAL REALM',
+};
+
 // --- HUD ---------------------------------------------------------------------
 
 export const HUD = {

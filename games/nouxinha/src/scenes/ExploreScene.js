@@ -1,6 +1,13 @@
 // The game: a wizard, a torch burning down a step at a time, and a lot of dark.
 
-import { FONT, GAME_WIDTH, VIEW_H, getCheats, getPalette, hex } from '../config.js';
+import {
+  FONT,
+  GAME_WIDTH,
+  VIEW_H,
+  getCheats,
+  hex,
+  setDefaultPalette,
+} from '../config.js';
 import {
   DIRECTIONS,
   abandonRun,
@@ -19,6 +26,7 @@ import {
   suspendRun,
 } from '../core/rules.js';
 import { activeSlot, loadSave, MAX_GEMS } from '../core/save.js';
+import { biomeDef } from '../data/biomes.js';
 import { itemDef } from '../data/items.js';
 import {
   CARRIED,
@@ -112,8 +120,6 @@ export class ExploreScene extends Phaser.Scene {
 
   create(data) {
     ensureTextures(this);
-    const pal = getPalette();
-    this.cameras.main.setBackgroundColor(pal.bg);
 
     // The expedition's own loop, in place of the menus' (ui/music.js). Started
     // here so a run entered with the audio already unlocked picks it straight
@@ -147,6 +153,16 @@ export class ExploreScene extends Phaser.Scene {
     // out of the door for the first time — and that is the one the text panel
     // has something to say about (`show` at the end of `create`).
     const settingOut = !handed && !carriedOn;
+
+    // The colour this world is drawn in, now that there is a world to ask. Each
+    // biome has one of its own (src/data/biomes.js) and it only ever applies to
+    // a player who has not picked a palette in Settings — so walking into a
+    // frozen world turns the dark cold, and a player who chose amber keeps
+    // amber wherever they walk. Before anything reads the palette: every colour
+    // on this screen comes out of the next line.
+    const pal = setDefaultPalette(biomeDef(this.run.biome).palette);
+    this.cameras.main.setBackgroundColor(pal.bg);
+
     // Blocks input while the world is sliding, so a fast tapper can't queue
     // steps the renderer hasn't caught up with.
     this.animating = false;

@@ -44,6 +44,7 @@ import {
   SEED_WINDOW,
   SPAWN_CHANCE,
 } from '../balance.js';
+import { BIOME_IDS } from '../data/biomes.js';
 
 export const DEFAULT_SEED = 0x6e6f7578; // "noux"
 
@@ -59,6 +60,7 @@ const CH_COIN = 7;
 const CH_BOULDER = 8;
 const CH_VARIANT = 9;
 const CH_CHEST = 10;
+const CH_BIOME = 11;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
@@ -112,6 +114,18 @@ export function randomAt(x, y, seed, channel) {
 // the world is stored. Rock and trees share the channel — no tile is ever both.
 export function variantAt(x, y, seed = DEFAULT_SEED) {
   return hash(x | 0, y | 0, seed | 0, CH_VARIANT);
+}
+
+// Which kind of world this is (`src/data/biomes.js`). Derived from the seed
+// like everything else here rather than written into the save: a slot's seed is
+// the whole of its world's identity, so a campaign can no more drift into
+// another biome than it can drift onto other ground, and a world named by
+// `?seed=` in the URL is the same one every time it is opened. Hashed on the
+// origin tile, because a biome is a property of the whole world and not of any
+// tile in it — there is never a border between two inside one world.
+export function biomeOf(seed = DEFAULT_SEED) {
+  const roll = hash(0, 0, seed | 0, CH_BIOME);
+  return BIOME_IDS[Math.min(BIOME_IDS.length - 1, Math.floor(roll * BIOME_IDS.length))];
 }
 
 const lerp = (a, b, t) => a + (b - a) * t;

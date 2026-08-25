@@ -119,7 +119,7 @@
   </section>
 
 <script type="module">
-import { TILES, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import { BIOME_TILES, TILES, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
 import { HUES, PAINT, PAINT_ZONES, ZONE_INK, paintOf } from './src/data/paint.js';
 import { buildSprites } from './src/data/sprites.js';
 import { hueColour } from './src/ui/painted.js';
@@ -131,13 +131,17 @@ const PX = 22; // one sprite pixel, in the painter's grid
 const STEP_PX = 4; // ...and in the previews of the tile as the game draws it
 
 // The table flattened to one row per tile, since a key can name several — the
-// terrains that alternate between tiles list each one as `key #n`. Only used
+// terrains that alternate between tiles list each one as `key #n`, and a tile a
+// biome draws differently comes under its own name (`rock@frozen`). Only used
 // here to show which sheet coordinate the selected sprite comes from.
 const coordOf = new Map();
-for (const [key, tile] of Object.entries(TILES)) {
+const flatten = (key, tile) => {
   if (Array.isArray(tile[0])) tile.forEach(([col, row], n) => coordOf.set(`${key}-${n}`, [col, row]));
   else coordOf.set(key, tile);
-}
+};
+for (const [key, tile] of Object.entries(TILES)) flatten(key, tile);
+for (const [biome, own] of Object.entries(BIOME_TILES))
+  for (const [key, tile] of Object.entries(own)) flatten(`${key}@${biome}`, tile);
 
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 const el = (id) => document.getElementById(id);

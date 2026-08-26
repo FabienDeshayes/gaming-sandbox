@@ -9,11 +9,12 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   const width = opts.width || 200;
   const height = opts.height || 48;
   const fontSize = opts.fontSize || 18;
+  const color = opts.color !== undefined ? opts.color : pal.fg;
 
   const container = scene.add.container(x, y);
   const border = scene.add.graphics();
   const text = scene.add
-    .text(0, 0, label, { fontFamily: FONT, fontSize: `${fontSize}px`, color: hex(pal.fg) })
+    .text(0, 0, label, { fontFamily: FONT, fontSize: `${fontSize}px`, color: hex(color) })
     .setOrigin(0.5);
 
   container.add([border, text]);
@@ -23,10 +24,10 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
 
   const draw = (filled) => {
     border.clear();
-    border.lineStyle(2, pal.fg, enabled ? 1 : 0.35);
+    border.lineStyle(2, color, enabled ? 1 : 0.35);
     border.strokeRect(-width / 2, -height / 2, width, height);
     if (filled) {
-      border.fillStyle(pal.fg, 0.2);
+      border.fillStyle(color, 0.2);
       border.fillRect(-width / 2, -height / 2, width, height);
     }
     text.setAlpha(enabled ? 1 : 0.35);

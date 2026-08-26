@@ -22,9 +22,9 @@ You step out of your base onto a vast dark grid with a small torch that shows on
 
 And at the far end of it, behind the last gate, there is somebody waiting. Bringing the three
 colours home is the middle of the game rather than the end of it: the walk that finishes it is the
-walk out to the hall at 110, where a sorcerer called Nouxinha takes what you found off you and
-moulds the world again — a new dark, in the same save slot, with your coins and your tools still in
-hand (§4.9).
+walk out to the hall at 110, where a sorcerer called Nouxinha takes everything you found and
+carried off you and moulds the world again — a new dark, in the same save slot, with nothing left in
+hand but the tally of how far the campaign has come (§4.9).
 
 Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Reach it and it is yours; the walk is the whole of the risk. Three of the four sanctums they sit in are locked, and what opens them is out in the dark too: chests, standing on their own tiles, holding a key apiece in the colour of the gate it fits. Twenty tiles out there is also a merchant, who will sell you a compass for fifty coins and a map for a hundred, on the same terms as everything else: only yours once you've walked it back.
 
@@ -445,10 +445,12 @@ save slot:
 
 | He takes | He leaves |
 |---|---|
-| The three colours, banked and carried alike | The purse, banked and pocketed alike |
-| The keys, and every lid you left up | The compass and the map, if you own them |
-| The ground the campaign drew, and the unique things it had laid eyes on | The expeditions you have walked, and how far out you got |
-| The expedition you were on, and any walk suspended in the slot | The count of worlds he has taken, which is the one number that survives every one of them |
+| The three colours, banked and carried alike | The expeditions you have walked, and how far out you got |
+| The keys, and every lid you left up | The count of worlds he has taken, which is the one number that survives every one of them |
+| The purse, banked and pocketed alike | |
+| The compass and the map, if you own them | |
+| The ground the campaign drew, and the unique things it had laid eyes on | |
+| The expedition you were on, and any walk suspended in the slot | |
 
 What comes back is a **fresh expedition out of the hut door**: a full tank, a candle, no colours,
 and a world nobody has lit a tile of — which is generally a different **biome**, so the whole game

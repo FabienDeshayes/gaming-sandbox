@@ -281,16 +281,16 @@ test('walking into the sorcerer ends the world and hands you a new one', async (
   assert(await game.hasText(HUD.cycles(1)), 'and the HUD keeps the count from here on');
 
   // The slot is the campaign, and this is the one thing that rewrites the whole
-  // of it: a new world, no colours, no keys, no drawing — and the purse and the
-  // compass still yours (DESIGN.md §4.9).
+  // of it: a new world, no colours, no keys, no drawing, no purse and no tools
+  // (DESIGN.md §4.9).
   const saved = await game.save();
   assertEqual(saved.seed, after.seed, 'the slot walks the new world from now on');
   assertEqual(saved.cycles, 1, 'with a world behind it');
   assertEqual(saved.gems, 0, 'no colours');
   assertEqual(saved.keys, [], 'no keys');
   assertEqual(saved.mapped, '', 'and no ground drawn yet');
-  assertEqual(saved.coins, 40, 'the purse is still yours');
-  assertEqual(saved.compass, true, 'and so is the compass');
+  assertEqual(saved.coins, 0, 'the purse is gone with everything else');
+  assertEqual(saved.compass, false, 'and so is the compass');
 
   // And stopping here is one of the two answers, since the walk that ended in
   // the hall is already written down.

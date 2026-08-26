@@ -222,7 +222,7 @@ export const HALL = {
   title: 'A NEW WORLD',
   moulded: (n) =>
     `He has moulded the world ${n === 1 ? 'again' : `${n} times now`}. You are at your door with a candle and a full tank.`,
-  kept: 'Your coins and your tools are still yours. The colours are not, and neither is the ground you drew.',
+  kept: 'He has taken everything you carried — your coins, your tools, your colours — and the ground you drew with them.',
   cheats: 'CHEATS ON — nothing was stored, and this world is a sandbox like the last one.',
   rowWorlds: 'WORLDS ENDED',
   setOut: 'SET OUT AGAIN',

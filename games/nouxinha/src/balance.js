@@ -156,12 +156,14 @@ export const CHEST_PLAN = [
   { id: 'chest-coin-5', key: null, near: 104, span: 14 },
 ];
 
-// What a coin chest is worth, picked per chest from the seed. Two orders of
+// What a coin chest is worth, picked per chest from the seed. An order of
 // magnitude above a coin pile on the ground (COIN_VALUE_MIN/MAX below) because a
-// chest is opened once per campaign and never comes back: 50 is the compass, 100
-// is the map, and 75 is most of the way to either. The merchant's prices are the
-// scale these are set against — retune PRICES and these want a second look.
-export const CHEST_COIN_VALUES = [50, 75, 100];
+// chest is opened once per campaign and never comes back: 30 is most of the way
+// to the map, 50 buys it outright, and 75 is a third of the way to the compass —
+// which stays a long walk away even with every chest found. The merchant's
+// prices are the scale these are set against — retune PRICES and these want a
+// second look.
+export const CHEST_COIN_VALUES = [30, 50, 75];
 
 // --- Landmarks ----------------------------------------------------------------
 //
@@ -172,9 +174,10 @@ export const LANDMARK_PLAN = [
   // far side of the hut from the first sanctum, so an early run has two
   // directions worth walking rather than one.
   { id: 'merchant', item: null, near: 20, span: 6, opposite: 0 },
-  // Past the second sanctum: the compass is either 50 coins or a long walk.
+  // Past the second sanctum: the compass is either 250 coins or a long walk.
   { id: 'compass', item: 'compass', near: 55, span: 16, opposite: null },
-  // Past the third: the map is the longest walk in the game that isn't a gem.
+  // Past the third: the map is the longest walk in the game that isn't a gem,
+  // though at 50 coins it's also the cheaper of the two to just buy.
   { id: 'map', item: 'map', near: 90, span: 16, opposite: null },
 ];
 
@@ -365,14 +368,16 @@ export const WATER_VALUE = {
 // (DESIGN.md §4.5). Lights and water are stock: buy as many as you can carry.
 // The compass and the map are one-offs — you own one or you don't — and each
 // can also be found lying in the dark, so buying one is paying to skip a very
-// long walk.
+// long walk. The compass is priced well above the map on purpose: it turns
+// every walk into a follow-the-needle exercise the moment it's in hand, so it
+// should cost most of a campaign's early coin rather than a couple of chests.
 export const PRICES = {
   'torch-small': 10,
   'torch-medium': 25,
   'torch-lamp': 40,
   'water-drop': 5,
-  compass: 50,
-  map: 100,
+  compass: 250,
+  map: 50,
 };
 
 // --- Cheats -------------------------------------------------------------------

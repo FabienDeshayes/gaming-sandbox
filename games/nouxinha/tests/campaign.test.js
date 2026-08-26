@@ -364,14 +364,14 @@ unit('the merchant spends banked coins before the ones you are carrying', () => 
 });
 
 unit('the merchant refuses what you cannot afford and sells one compass', () => {
-  const state = createRun(SEED, { ...emptySave(), coins: PRICES.compass }, NONCE);
-  assertEqual(canBuy(state, 'map'), false, 'the map is out of reach');
-  assertEqual(buy(state, 'map'), null, 'and refuses to sell');
+  const state = createRun(SEED, { ...emptySave(), coins: PRICES.map }, NONCE);
+  assertEqual(canBuy(state, 'compass'), false, 'the compass is out of reach');
+  assertEqual(buy(state, 'compass'), null, 'and refuses to sell');
 
-  assertEqual(buy(state, 'compass'), 'compass', 'the compass is affordable');
-  assertEqual(state.tools.has('compass'), true, 'and owned');
-  assertEqual(canBuy(state, 'compass'), false, 'there is only one');
-  assertEqual(buy(state, 'compass'), null, 'so it will not sell a second');
+  assertEqual(buy(state, 'map'), 'map', 'the map is affordable');
+  assertEqual(state.tools.has('map'), true, 'and owned');
+  assertEqual(canBuy(state, 'map'), false, 'there is only one');
+  assertEqual(buy(state, 'map'), null, 'so it will not sell a second');
 
   // Water and lights have no such limit.
   const rich = createRun(SEED, { ...emptySave(), coins: 1000 }, NONCE);
@@ -383,16 +383,16 @@ unit('the merchant refuses what you cannot afford and sells one compass', () => 
 });
 
 unit('a tool is only kept if the run banks it at the hut', () => {
-  const bought = createRun(SEED, { ...emptySave(), coins: 200 }, NONCE);
+  const bought = createRun(SEED, { ...emptySave(), coins: 300 }, NONCE);
   buy(bought, 'compass');
   assertEqual(runSummary(bought).toolsCarried, ['compass'], 'carrying it home is the risk');
 
-  const banked = bankRun(createRun(SEED, { ...emptySave(), coins: 200 }, NONCE));
+  const banked = bankRun(createRun(SEED, { ...emptySave(), coins: 300 }, NONCE));
   assertEqual(banked.compass, false, 'a run that never bought one banks none');
 
   const kept = bankRun(bought);
   assertEqual(kept.compass, true, 'stopping at the hut keeps it');
-  assertEqual(kept.coins, 200 - PRICES.compass, 'and the coins really were spent');
+  assertEqual(kept.coins, 300 - PRICES.compass, 'and the coins really were spent');
   assertEqual(createRun(SEED, kept, NONCE).tools.has('compass'), true, 'yours from now on');
 });
 

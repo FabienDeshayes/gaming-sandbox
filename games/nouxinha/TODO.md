@@ -6,7 +6,6 @@ small tweaks:
 * floor variety 
 * biomes design
 * new tiles design
-* balance the compass, it's too strong
 
 Later:
 * late game area

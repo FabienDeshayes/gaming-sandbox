@@ -7,9 +7,17 @@
   <style>
     /* A development page, not part of the game. It paints a tile's colour
        zones, so which part of a tile turns which gem's colour can be drawn
-       rather than typed (src/data/paint.js). Browsing the whole tile sheet is a
-       separate tool, tiles.html, and drawing a tile's own pixels another,
-       draw.html. */
+       rather than typed (src/data/paint.js).
+
+       A tile can be painted once for every world — the default — or for one
+       biome, where that biome draws a tile of its own; the biome select at the
+       top is which of the two is being painted, and it draws the page in that
+       world's colour besides. There is no palette to pick, in here or in the
+       game: a world's colour is its biome's (src/data/biomes.js).
+
+       Browsing the whole tile sheet is a separate tool, tiles.html; drawing a
+       tile's own pixels is draw.html, and giving a biome a tile of its own is
+       biomes.html. */
     :root { --bg: #0b1a0b; --fg: #33ff66; }
     * { box-sizing: border-box; }
     body {
@@ -82,11 +90,12 @@
       <h1>NOUXINHA TILE PAINTER</h1>
       <a class="navlink" href="tiles.html">← browse tile sheet</a>
       <a class="navlink" href="draw.html">draw a tile's pixels →</a>
+      <a class="navlink" href="biomes.html">assign tiles to biomes →</a>
     </div>
     <div class="controls">
-      <label>biome <select id="biome"></select></label>
-      <label>palette <select id="palette"></select></label>
+      <label>painting for <select id="biome"></select></label>
       <span id="coord" class="dim"></span>
+      <span id="version" class="dim"></span>
     </div>
   </header>
 
@@ -120,12 +129,20 @@
   </section>
 
 <script type="module">
-import { BIOME_TILES, TILES, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import {
+  BIOME_TILES,
+  TILES,
+  SHEET_GAP,
+  SHEET_PATH,
+  baseKey,
+  biomeKey,
+  variantCount,
+} from './src/data/tiles.js';
 import { HUES, PAINT, PAINT_ZONES, ZONE_INK, paintOf } from './src/data/paint.js';
 import { buildSprites } from './src/data/sprites.js';
 import { hueColour } from './src/ui/painted.js';
 import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
-import { FLOOR_TEXTURE_LEVEL, PALETTES, gemColour, getPalette, setDefaultPalette } from './src/config.js';
+import { FLOOR_TEXTURE_LEVEL, gemColour, getPalette, setDefaultPalette } from './src/config.js';
 
 const TILE = 16;
 const STRIDE = TILE + SHEET_GAP;
@@ -142,25 +159,33 @@ const flatten = (key, tile) => {
   else coordOf.set(key, tile);
 };
 for (const [key, tile] of Object.entries(TILES)) flatten(key, tile);
+// A biome only appears here where it actually draws something different: one
+// that names the tiles every world already draws is handed the shared sprite,
+// so there is no `rock@frozen` for the sheet to claim (`biomeKey`).
 for (const [biome, own] of Object.entries(BIOME_TILES))
-  for (const [key, tile] of Object.entries(own)) flatten(`${key}@${biome}`, tile);
+  for (const [key, tile] of Object.entries(own))
+    if (biomeKey(key, biome) !== key) flatten(`${key}@${biome}`, tile);
 
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 const el = (id) => document.getElementById(id);
 
+// Painting for ALL BIOMES paints the tile every world falls back on; picking
+// one world paints *its* version of the tile, where it draws one of its own
+// (`BIOME_TILES` in src/data/tiles.js). A biome that draws the shared tile has
+// no version of its own to paint, and says so.
+const ALL_BIOMES = '*';
+
 const biomeSel = el('biome');
+biomeSel.add(new Option('ALL BIOMES', ALL_BIOMES));
 BIOMES.forEach((b) => biomeSel.add(new Option(b.name, b.id)));
-biomeSel.value = DEFAULT_BIOME;
+biomeSel.value = ALL_BIOMES;
 
-const paletteSel = el('palette');
-PALETTES.forEach((p) => paletteSel.add(new Option(p.name, p.id)));
-
-// The page opens tinted for a biome, not an arbitrary palette (src/data/biomes.js);
-// the palette select stays free underneath for previewing a zone against any
-// of the four regardless of which biome you're painting for.
-setDefaultPalette(biomeDef(biomeSel.value).palette);
+// The page is drawn in the colour of the world being painted for, since that is
+// what the zone has to read against; the default is drawn in the green a page
+// opened cold is drawn in (src/data/biomes.js).
+const tintFor = (biome) => biomeDef(biome === ALL_BIOMES ? DEFAULT_BIOME : biome).palette;
+setDefaultPalette(tintFor(biomeSel.value));
 let palette = getPalette();
-paletteSel.value = palette.id;
 let sprites = {}; // every sprite the game cuts out of the sheet, as masks
 
 // The same `readTile(col, row) -> mask` the game builds its sprites from
@@ -196,9 +221,51 @@ const zoneAt = (map, x, y) => (map[y] && map[y][x]) || 0;
 const blankMap = () => Array.from({ length: TILE }, () => Array(TILE).fill(0));
 const zonesUsed = (map) => Math.max(0, ...map.flat());
 
-// Editable keys: everything the game cut, minus the zone textures cut *from*
-// them — painting a zone of a zone is not a thing.
-const spriteKeys = () => Object.keys(sprites).filter((k) => !/-z\d+$/.test(k));
+// The tiles a world draws, in the order the sheet map names them — which is
+// what the sprite select lists. A terrain that alternates contributes its bare
+// key and one entry per tile, counted *for that world*: a biome that draws six
+// floors where the shared table draws one has six to paint, and they are
+// reached by picking the world rather than by typing `floor@frozen-4`. Zone
+// textures are not in it — painting a zone of a zone is not a thing.
+function spriteKeys(biome = biomeSel.value) {
+  const out = [];
+  for (const key of Object.keys(TILES)) {
+    out.push(key);
+    const count = variantCount(key, biome === ALL_BIOMES ? undefined : biome);
+    if (count > 1) for (let n = 0; n < count; n++) out.push(`${key}-${n}`);
+  }
+  return out;
+}
+
+// ...and the select rebuilt from it, since which world is being painted for
+// changes how many tiles there are to paint.
+function fillSprites(keep) {
+  const select = el('sprite');
+  select.replaceChildren();
+  const keys = spriteKeys();
+  for (const key of keys) select.add(new Option(key, key));
+  return keys.includes(keep) ? keep : keys[0];
+}
+
+// The sprite a world draws where the shared table draws `key`: `rock-1` in a
+// frozen world is `rock@frozen-1`, but only where frozen actually repoints its
+// rock — everywhere else the world draws the shared tile, and painting it is
+// painting it for everyone.
+function versionOf(key, biome) {
+  if (biome === ALL_BIOMES) return key;
+  const [, terrain, index] = key.match(/^(.*?)(-\d+)?$/);
+  const own = `${terrain}@${biome}${index || ''}`;
+  return sprites[own] ? own : key;
+}
+
+// What the tile being painted is a version of, for the note under the select:
+// the world's own tile, the shared one, or the shared one seen from a world
+// that doesn't have its own.
+function versionNote(key, biome) {
+  if (biome === ALL_BIOMES) return 'the tile every world falls back on';
+  if (versionOf(key, biome) !== key) return `${biomeDef(biome).name}'s own tile`;
+  return `${biomeDef(biome).name} draws the shared tile — painting it paints every world`;
+}
 
 // The colour a zone is *drawn* in, which is the game's own rule: a hue naming a
 // gem you don't hold yet falls back to the base colour.
@@ -224,11 +291,21 @@ function readMap(map) {
   );
 }
 
+// Opens one tile for painting. `key` is the shared name the dropdown lists, and
+// which *version* of it is painted comes from the world selected above — so
+// picking a world is picking whether this session's work lands on the tile
+// every biome falls back on or on that one biome's own.
 function loadSprite(key, { keepEdit = true } = {}) {
-  // An alias shares another key's paint, so painting it means painting that one.
+  // An alias shares another key's paint, so painting it means painting that
+  // one: the bare `tree` is the first of the trees, wherever it is being drawn.
   const aliasOf = typeof PAINT[key] === 'string' ? PAINT[key] : null;
-  const real = aliasOf || key;
+  const shared = aliasOf || key;
+  const biome = biomeSel.value;
+  const real = versionOf(shared, biome);
   const saved = keepEdit ? edits.get(real) : null;
+  // A version with no zones of its own opens on the ones it inherits
+  // (`paintOf`), so giving a world its own paint starts from what it is
+  // already drawn with rather than from an empty tile.
   const entry = paintOf(real);
   const hueOf = (zone) => {
     if (saved) return saved.hues[zone];
@@ -237,14 +314,20 @@ function loadSprite(key, { keepEdit = true } = {}) {
   };
   work = {
     key: real,
+    shared,
     hues: Array.from({ length: PAINT_ZONES - 1 }, (_, zone) => hueOf(zone)),
     map: saved ? saved.map.map((r) => r.slice()) : entry ? readMap(entry.map) : blankMap(),
   };
-  el('sprite').value = real;
+  el('sprite').value = shared;
   el('alias').textContent = aliasOf ? `${key} shares ${aliasOf}'s paint` : '';
   const co = coordOf.get(real);
   el('coord').textContent = co ? `at (${co[0]}, ${co[1]}) on the sheet` : '';
-  history.replaceState(null, '', `?key=${encodeURIComponent(real)}`);
+  el('version').textContent = versionNote(shared, biome);
+  history.replaceState(
+    null,
+    '',
+    `?key=${encodeURIComponent(shared)}&biome=${encodeURIComponent(biome)}`
+  );
   paintUI();
 }
 
@@ -432,7 +515,7 @@ el('clear').addEventListener('click', () => {
 });
 el('revert').addEventListener('click', () => {
   edits.delete(work.key);
-  loadSprite(work.key, { keepEdit: false });
+  loadSprite(work.shared, { keepEdit: false });
 });
 el('copyEntry').addEventListener('click', () => copy(entryText(work.key, work), 'entry copied'));
 el('copyEdits').addEventListener('click', () =>
@@ -451,27 +534,38 @@ for (const id of ['placeGem', 'openedBy']) {
 }
 
 biomeSel.addEventListener('change', () => {
-  paletteSel.value = biomeDef(biomeSel.value).palette;
-  paletteSel.dispatchEvent(new Event('change'));
-});
-paletteSel.addEventListener('change', () => {
-  // The game reads its palette from the same place, so picking one here is
+  // The game reads its palette from the same place, so picking a world here is
   // picking one there — which is the point: a zone has to read against the
-  // background of whichever palette the player is in.
-  setDefaultPalette(paletteSel.value);
+  // background of the world it is going to be seen in. The tile is reopened
+  // under that world, since which version is being painted has just changed.
+  setDefaultPalette(tintFor(biomeSel.value));
   palette = getPalette();
-  paintUI();
+  document.documentElement.style.setProperty('--bg', hex(palette.bg));
+  document.documentElement.style.setProperty('--fg', hex(palette.fg));
+  loadSprite(fillSprites(work.shared));
 });
 
 const source = new Image();
 source.src = SHEET_PATH;
 await source.decode();
 sprites = buildSprites(sheetReader(source));
-const spriteSel = el('sprite');
-for (const key of spriteKeys()) spriteSel.add(new Option(key, key));
 
-const wantedKey = new URLSearchParams(location.search).get('key');
-loadSprite(wantedKey && spriteKeys().includes(wantedKey) ? wantedKey : 'wizard-down');
+// Arriving from another tool with ?key=..., which may name a biome's own
+// version of a tile (`rock@frozen-1`) — that is a world and a shared key said
+// in one word, so it is read back apart.
+const params = new URLSearchParams(location.search);
+const asked = params.get('key') || '';
+const [sharedKey, biomeOfKey] = asked.includes('@')
+  ? [baseKey(asked), asked.match(/@([^-]*)/)[1]]
+  : [asked, params.get('biome')];
+if (biomeOfKey && [ALL_BIOMES, ...BIOMES.map((b) => b.id)].includes(biomeOfKey)) {
+  biomeSel.value = biomeOfKey;
+  setDefaultPalette(tintFor(biomeOfKey));
+  palette = getPalette();
+}
+document.documentElement.style.setProperty('--bg', hex(palette.bg));
+document.documentElement.style.setProperty('--fg', hex(palette.fg));
+loadSprite(fillSprites(spriteKeys().includes(sharedKey) ? sharedKey : 'wizard-down'));
 </script>
 </body>
 </html>

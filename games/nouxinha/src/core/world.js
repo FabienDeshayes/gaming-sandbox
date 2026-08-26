@@ -111,7 +111,8 @@ export function randomAt(x, y, seed, channel) {
 // Which of a terrain's several tiles this one draws, as a roll in [0, 1). Part
 // of the world rather than of the renderer for the reason everything else here
 // is: it has to be the same every time you walk back past it, and nothing about
-// the world is stored. Rock and trees share the channel — no tile is ever both.
+// the world is stored. Floor, rock and trees share the channel — a tile is only
+// ever one of the three.
 export function variantAt(x, y, seed = DEFAULT_SEED) {
   return hash(x | 0, y | 0, seed | 0, CH_VARIANT);
 }

@@ -26,7 +26,7 @@ walk out to the hall at 110, where a sorcerer called Nouxinha takes everything y
 carried off you and moulds the world again — a new dark, in the same save slot, with nothing left in
 hand but the tally of how far the campaign has come (§4.9).
 
-Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Reach it and it is yours; the walk is the whole of the risk. Three of the four sanctums they sit in are locked, and what opens them is out in the dark too: chests, standing on their own tiles, holding a key apiece in the colour of the gate it fits. Twenty tiles out there is also a merchant, who will sell you a compass for fifty coins and a map for a hundred, on the same terms as everything else: only yours once you've walked it back.
+Somewhere out there are three gems, and each one gives the world back a colour it lost. Finding one is not the hard part — carrying it home is, because the hut is the only place a run is ever written down. Reach it and it is yours; the walk is the whole of the risk. Three of the four sanctums they sit in are locked, and what opens them is out in the dark too: chests, standing on their own tiles, holding a key apiece in the colour of the gate it fits. Twenty tiles out there is also a merchant, who will sell you a map for fifty coins and a compass for two hundred and fifty, on the same terms as everything else: only yours once you've walked it back.
 
 ## 3. Core loops
 
@@ -131,8 +131,8 @@ The compass and the map are **tools** rather than items: one of each exists, nei
 | Spring vial | 3 | Refills water to the ceiling, wherever you are. |
 | Gem | — | One per sanctum, three in all. Gives a colour back to the world, widens the water ceiling and upgrades what is lying about (§4.4). |
 | Key | — | One per shut gate, three in all, each found in a chest (§4.8) and drawn in the colour of the gate it opens. Held rather than carried: never consumed, never stacked, and only the campaign's once the hut has written it down. |
-| Compass | — | Points at the next unique object worth walking to (§4.6). Bought for 50 or found. |
-| Map | — | Draws everywhere the campaign has walked, all at once (§4.6). Bought for 100 or found. |
+| Compass | — | Points at the next unique object worth walking to (§4.6). Bought for 250 or found. |
+| Map | — | Draws everywhere the campaign has walked, all at once (§4.6). Bought for 50 or found. |
 
 ### 4.3 The world
 
@@ -299,8 +299,8 @@ Stepping onto the stall opens the counter. It is the only thing coins are for.
 | Small torch | 10 | Unlimited |
 | Medium torch | 25 | Unlimited |
 | Lamp torch | 40 | Unlimited |
-| Compass | 50 | One, ever |
-| Map | 100 | One, ever |
+| Map | 50 | One, ever |
+| Compass | 250 | One, ever |
 
 All six prices live in one table (`PRICES` in `src/balance.js`) so retuning the economy never means reading the
 shop's code.
@@ -324,8 +324,10 @@ kept by walking it home.
 
 The two lying in the world are placed like the merchant: seed-derived, forced-floor clearing,
 reachability checked at run start. The compass sits past the second sanctum's distance and the map
-past the third's, so finding either is a proper walk — which is what makes 50 and 100 coins a
-shortcut rather than a tax.
+past the third's, so finding either is a proper walk — which is what makes 250 and 50 coins a
+shortcut rather than a tax. The compass costs five times the map on purpose: it is the tool that
+turns the rest of the campaign into following a needle, so it should take most of an early
+campaign's coin to afford outright, where the map is cheap enough that a couple of chests cover it.
 
 **The compass** shows an arrow and the icon of what the arrow is pointing at, because "that way" on
 its own is useless and "that way, and it's a gem" is a decision. The needle snaps to the four
@@ -415,11 +417,11 @@ The one thing in the world you interact with by **failing to walk onto it**. A c
 | Holds | How many | Distance from the hut |
 |---|---|---|
 | The three keys | 3 | 26-35, 52-63, 86-99 — each one well inside the gate it opens |
-| A hoard of coins: 50, 75 or 100, picked from the seed | 5 | 12-19, 32-41, 58-69, 84-97, 104-117 |
+| A hoard of coins: 30, 50 or 75, picked from the seed | 5 | 12-19, 32-41, 58-69, 84-97, 104-117 |
 
 - **A key is what a gate wants** (§4.4). Try to walk through a shut gate without it and the HUD says which key it wants, by name and therefore by colour; walk through with it and the lock turns, with a sound of its own. A key is never consumed — once it is yours, that gate is simply a doorway.
 - **A key is held on a gem's terms, not a torch's.** It doesn't stack, doesn't burn down, and takes no inventory slot: it shows as a pip beside the gem pips in the inventory panel, in the colour of the gate it opens. And like a gem it is only the campaign's once the hut has written it down — die on the way home and the key goes back in its chest, *with the lid shut again*, because the set of opened chests is banked at the hut exactly like the set of keys. There is no way to lose a key and leave its chest empty.
-- **A coin chest is worth two orders of magnitude more than a coin pile**, because it is opened once per campaign and never comes back: 50 is the compass, 100 is the map, and 75 is most of the way to either. Those three numbers live in `CHEST_COIN_VALUES` in `src/balance.js`, next to the prices they were set against.
+- **A coin chest is worth an order of magnitude more than a coin pile**, because it is opened once per campaign and never comes back: 30 is most of the way to the map, 50 buys it outright, and 75 is a third of the way to the compass. Those three numbers live in `CHEST_COIN_VALUES` in `src/balance.js`, next to the prices they were set against.
 - **The compass points at shut chests** (§4.6), which is what stops the chain dead-ending: a key you have to stumble on would leave a campaign standing at a gate with nowhere to go. An opened chest drops off the needle immediately. Chests are on the map too, drawn with the lid the way you left it — the one marker on that map that says what you have *done* rather than what is there.
 - **Opening one earns the text panel** (§7) rather than a line in the HUD, because the panel leaves the world on screen: the lid is visibly up behind the words while they are read.
 

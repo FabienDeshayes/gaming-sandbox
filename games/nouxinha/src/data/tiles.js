@@ -116,7 +116,7 @@ export const TILES = {
   gem: [23, 4],
   // One key tile for all three, tinted by the gate it opens — the same economy
   // the three gems are drawn with.
-  key: [32, 3],
+  key: [33, 11],
   compass: [24, 14],
   map: [47, 6],
 

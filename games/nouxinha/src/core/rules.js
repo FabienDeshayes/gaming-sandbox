@@ -701,11 +701,11 @@ function writeDeposit(state, closing) {
 //
 // So a cycle is **a new seed inside the same slot**. Everything derived from the
 // seed costs nothing to remake — the ground, the sanctums, the chests, the
-// stall — and everything the campaign was holding *of that world* goes with it:
-// the colours, the keys, the lids you left up, and the map you drew. What stays
-// is what was yours rather than his: the coins, the compass and the map you
-// carried home, the expeditions you have walked, and the count of times you
-// have stood here.
+// stall — and he takes everything the campaign was holding, not just what was
+// of that world: the colours, the keys, the lids you left up, the map you
+// drew, and the coins and tools you carried home too. What stays is only the
+// tally of the campaign itself: the expeditions you have walked, and the
+// count of times you have stood here.
 //
 // Nothing about it is a death. The expedition is over and counted like any
 // other, the slot is written, and the run this hands back is a fresh walk out
@@ -723,12 +723,7 @@ export function turnCycle(state) {
     // The walk to the hall was an expedition, and it ended here rather than at
     // the hut — but it ended, so it counts like every other one.
     runs: state.banked.runs + 1,
-    // The purse is yours: banked, plus whatever was still in your pocket when
-    // he took everything else off you.
-    coins: state.banked.coins + state.coins,
     furthest: Math.max(state.furthest, state.banked.furthest),
-    compass: state.tools.has('compass'),
-    map: state.tools.has('map'),
   });
   return createRun(undefined, written, undefined, { cheats: false });
 }

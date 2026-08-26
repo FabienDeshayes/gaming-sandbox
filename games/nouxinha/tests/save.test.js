@@ -309,7 +309,7 @@ const finishedCampaign = () => ({
   seen: [KEY_CHEST.id],
 });
 
-unit('the hall takes the world and leaves what was yours', () => {
+unit('the hall takes everything you carried and leaves only the tally', () => {
   const state = createRun(SEED, finishedCampaign(), NONCE);
   state.coins = 30; // still in the pocket when he took everything else
   const walked = state.explored.size;
@@ -323,7 +323,8 @@ unit('the hall takes the world and leaves what was yours', () => {
   assertEqual(next.banked.cycles, 1, 'and the slot counts it');
   assertEqual(next.cycles, 1, 'so the run can say so');
 
-  // What he takes: the colours, the keys, the lids you left up, and the ground.
+  // What he takes: the colours, the keys, the lids you left up, the ground,
+  // and now the purse and both tools with them.
   assertEqual(next.gems, 0, 'the colours are his');
   assertEqual([...next.keys], [], 'and the keys with them');
   assertEqual([...next.chests], [], 'and every chest is shut again');
@@ -331,10 +332,10 @@ unit('the hall takes the world and leaves what was yours', () => {
   assertEqual([...next.seenUnique].filter((id) => id === KEY_CHEST.id), [],
     'and nothing in the old world is still marked');
   assert(next.explored.size < walked, 'the new world opens black but for the light in hand');
+  assertEqual(next.banked.coins, 0, 'the purse, banked and pocketed alike, is gone');
+  assertEqual([...next.tools], [], 'and so are both tools');
 
-  // What he leaves: everything that was yours rather than his.
-  assertEqual(next.banked.coins, 150, 'the purse, banked and pocketed alike');
-  assertEqual([...next.tools].sort(), ['compass', 'map'], 'and both tools');
+  // What he leaves: only the tally of the campaign itself.
   assertEqual(next.banked.runs, 8, 'the walk into the hall counted as an expedition');
 
   // And it is a fresh walk out of the hut door, not a death: full tank, a

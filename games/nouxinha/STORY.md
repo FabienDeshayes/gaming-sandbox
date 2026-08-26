@@ -244,9 +244,10 @@ Ordered by how much of the existing design it moves. Items 1-5 are the restructu
 (`DESIGN.md` §4.9); 6-9 are the content on top of it, and none of them is.
 
 1. ~~**A cycle is a new seed inside the same slot.**~~ Built. The seed is re-drawn into the slot when
-   the hall turns a cycle (`turnCycle` in `core/rules.js`), and the slot keeps the coins, the tools,
-   the expeditions walked and the count of worlds ended. Everything in `core/` derives from the seed
-   already, so the world cost nothing to re-mould — it was a save-shape change, not a world change.
+   the hall turns a cycle (`turnCycle` in `core/rules.js`), and the slot keeps only the expeditions
+   walked and the count of worlds ended — the coins and the tools go with everything else the world
+   is moulded away from. Everything in `core/` derives from the seed already, so the world cost
+   nothing to re-mould — it was a save-shape change, not a world change.
    The one thing to remember when *adding* to a save: `writeDeposit` and `turnCycle` both rebuild
    the slot from scratch, so anything that has to survive a cycle has to be carried over by hand.
 2. ~~**The explored ground goes with it.**~~ Built, and it wipes rather than mixes: the drawing is

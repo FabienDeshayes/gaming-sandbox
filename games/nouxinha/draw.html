@@ -92,6 +92,7 @@
       <a class="navlink" href="paint.html">paint a tile's zones →</a>
     </div>
     <div class="controls">
+      <label>biome <select id="biome"></select></label>
       <label>palette <select id="palette"></select></label>
       <label>tile <select id="sprite"></select></label>
       <span id="coord" class="dim"></span>
@@ -130,8 +131,9 @@
   </section>
 
 <script type="module">
-import { TILES, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
-import { PALETTES, getPalette, setPalette } from './src/config.js';
+import { BIOME_TILES, TILES, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
+import { PALETTES, getPalette, setDefaultPalette } from './src/config.js';
 
 const TILE = 16;
 const STRIDE = TILE + SHEET_GAP;
@@ -149,18 +151,33 @@ const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 const el = (id) => document.getElementById(id);
 
 // The table flattened to one row per tile, since a key can name several — the
-// terrains that alternate between tiles list each one as `key #n`.
+// terrains that alternate between tiles list each one as `key #n`. A tile a
+// biome draws differently comes under its own name (`rock@frozen`), same as
+// tiles.html and paint.html, so a biome's own tile can be opened and drawn
+// here too.
 const entries = [];
-for (const [key, tile] of Object.entries(TILES)) {
+const flatten = (key, tile) => {
   if (Array.isArray(tile[0])) tile.forEach(([col, row], n) => entries.push([`${key}-${n}`, col, row]));
   else entries.push([key, tile[0], tile[1]]);
-}
+};
+for (const [key, tile] of Object.entries(TILES)) flatten(key, tile);
+for (const [biome, own] of Object.entries(BIOME_TILES))
+  for (const [key, tile] of Object.entries(own)) flatten(`${key}@${biome}`, tile);
 const claims = new Map(); // "col,row" -> the sprite keys drawn from that tile
 for (const [key, col, row] of entries)
   claims.set(`${col},${row}`, (claims.get(`${col},${row}`) || []).concat(key));
 
+const biomeSel = el('biome');
+BIOMES.forEach((b) => biomeSel.add(new Option(b.name, b.id)));
+biomeSel.value = DEFAULT_BIOME;
+
 const paletteSel = el('palette');
 PALETTES.forEach((p) => paletteSel.add(new Option(p.name, p.id)));
+
+// The page opens tinted for a biome, not an arbitrary palette (src/data/biomes.js);
+// the palette select stays free underneath for previewing a tile against any
+// of the four regardless of which biome you're drawing for.
+setDefaultPalette(biomeDef(biomeSel.value).palette);
 let palette = getPalette();
 paletteSel.value = palette.id;
 
@@ -484,11 +501,15 @@ window.addEventListener('beforeunload', (e) => {
   e.returnValue = '';
 });
 
+biomeSel.addEventListener('change', () => {
+  paletteSel.value = biomeDef(biomeSel.value).palette;
+  paletteSel.dispatchEvent(new Event('change'));
+});
 paletteSel.addEventListener('change', () => {
   // The game reads its palette from the same place, so picking one here is
   // picking one there — which is the point: a tile has to read against the
   // background of whichever palette the player is in.
-  setPalette(paletteSel.value);
+  setDefaultPalette(paletteSel.value);
   palette = getPalette();
   document.documentElement.style.setProperty('--bg', hex(palette.bg));
   document.documentElement.style.setProperty('--fg', hex(palette.fg));

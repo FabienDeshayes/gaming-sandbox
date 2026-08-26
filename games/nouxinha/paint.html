@@ -84,6 +84,7 @@
       <a class="navlink" href="draw.html">draw a tile's pixels →</a>
     </div>
     <div class="controls">
+      <label>biome <select id="biome"></select></label>
       <label>palette <select id="palette"></select></label>
       <span id="coord" class="dim"></span>
     </div>
@@ -123,7 +124,8 @@ import { BIOME_TILES, TILES, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
 import { HUES, PAINT, PAINT_ZONES, ZONE_INK, paintOf } from './src/data/paint.js';
 import { buildSprites } from './src/data/sprites.js';
 import { hueColour } from './src/ui/painted.js';
-import { FLOOR_TEXTURE_LEVEL, PALETTES, gemColour, getPalette, setPalette } from './src/config.js';
+import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
+import { FLOOR_TEXTURE_LEVEL, PALETTES, gemColour, getPalette, setDefaultPalette } from './src/config.js';
 
 const TILE = 16;
 const STRIDE = TILE + SHEET_GAP;
@@ -146,9 +148,17 @@ for (const [biome, own] of Object.entries(BIOME_TILES))
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 const el = (id) => document.getElementById(id);
 
+const biomeSel = el('biome');
+BIOMES.forEach((b) => biomeSel.add(new Option(b.name, b.id)));
+biomeSel.value = DEFAULT_BIOME;
+
 const paletteSel = el('palette');
 PALETTES.forEach((p) => paletteSel.add(new Option(p.name, p.id)));
 
+// The page opens tinted for a biome, not an arbitrary palette (src/data/biomes.js);
+// the palette select stays free underneath for previewing a zone against any
+// of the four regardless of which biome you're painting for.
+setDefaultPalette(biomeDef(biomeSel.value).palette);
 let palette = getPalette();
 paletteSel.value = palette.id;
 let sprites = {}; // every sprite the game cuts out of the sheet, as masks
@@ -440,11 +450,15 @@ for (const id of ['placeGem', 'openedBy']) {
   select.addEventListener('change', paintUI);
 }
 
+biomeSel.addEventListener('change', () => {
+  paletteSel.value = biomeDef(biomeSel.value).palette;
+  paletteSel.dispatchEvent(new Event('change'));
+});
 paletteSel.addEventListener('change', () => {
   // The game reads its palette from the same place, so picking one here is
   // picking one there — which is the point: a zone has to read against the
   // background of whichever palette the player is in.
-  setPalette(paletteSel.value);
+  setDefaultPalette(paletteSel.value);
   palette = getPalette();
   paintUI();
 });

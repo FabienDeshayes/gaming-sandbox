@@ -60,15 +60,7 @@ export class TitleScene extends Phaser.Scene {
     // them in.
     paintWizard(makeWizard(this, cx, 380, 'down', 7), 'down', 0, gemColour(wizardHue));
 
-    if (save.runs)
-      this.add
-        .text(cx, 496, progressLine(save.gems, MAX_GEMS, save.coins, save.runs), {
-          fontFamily: FONT,
-          fontSize: '12px',
-          color: hex(pal.fg),
-        })
-        .setOrigin(0.5)
-        .setAlpha(0.6);
+    const buttonColor = gemColour(textHue);
 
     // Cheats are loud on purpose: a run started under them banks nothing, and a
     // player who forgot the toggle was on should find that out here rather than
@@ -87,6 +79,7 @@ export class TitleScene extends Phaser.Scene {
     // this is has to be answered before a run can start (DESIGN.md §6.1).
     makeButton(this, cx, 566, TITLE.newGame, () => this.scene.start('SlotScene', { mode: 'new' }), {
       width: 240,
+      color: buttonColor,
     });
     makeButton(
       this,
@@ -94,8 +87,11 @@ export class TitleScene extends Phaser.Scene {
       632,
       TITLE.loadGame,
       () => canLoad && this.scene.start('SlotScene', { mode: 'load' }),
-      { width: 240, enabled: canLoad }
+      { width: 240, enabled: canLoad, color: buttonColor }
     );
-    makeButton(this, cx, 698, TITLE.settings, () => this.scene.start('SettingsScene'), { width: 240 });
+    makeButton(this, cx, 698, TITLE.settings, () => this.scene.start('SettingsScene'), {
+      width: 240,
+      color: buttonColor,
+    });
   }
 }

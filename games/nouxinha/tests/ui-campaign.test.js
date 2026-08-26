@@ -126,7 +126,6 @@ test('stopping at the hut recaps the run and writes the slot; leaving keeps only
 
   await game.clickText(RECAP.home);
   await game.waitForScene('TitleScene');
-  assert(await game.hasText(progressLine(0, 3, 0, 1)), 'the title screen reads it back');
 
   // Leaving by the cogwheel banks nothing — only the hut does (DESIGN.md §6) —
   // but the dark this run lit stays lit for the next one (§6.1). It asks first,

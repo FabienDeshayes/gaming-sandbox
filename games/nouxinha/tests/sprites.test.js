@@ -11,8 +11,10 @@ import {
   SHEET_COLS,
   SHEET_ROWS,
   TILES,
+  VARIANT_KEYS,
   baseKey,
   biomeKey,
+  tileList,
   variantCount,
   variantKey,
   wallSprite,
@@ -87,6 +89,38 @@ unit('a terrain that alternates gets one sprite per tile, and the bare key is th
 
 // --- Biomes ------------------------------------------------------------------
 
+unit('only the terrains a world alternates between name more than one tile', () => {
+  // Everything else is drawn through `biomeKey`, which hands back one sprite —
+  // a list on a gate would quietly draw the first of them and lose the rest.
+  const tables = [['TILES', TILES], ...Object.entries(BIOME_TILES).map(([b, own]) => [b, own])];
+  for (const [where, table] of tables)
+    for (const [key, tile] of Object.entries(table))
+      if (tileList(tile).length > 1)
+        assert(VARIANT_KEYS.includes(key), `${where} gives "${key}" several tiles, so it alternates`);
+});
+
+unit('every biome names its own floors, rock and trees', () => {
+  // The three each world is mostly made of are spelled out per biome rather
+  // than left to the fallback, because those are the ones a world is meant to
+  // own. What they name today is what every world draws.
+  for (const biome of BIOME_IDS)
+    for (const key of VARIANT_KEYS) {
+      const own = BIOME_TILES[biome][key];
+      assert(own, `${biome} names its ${key}`);
+      assert(Array.isArray(own[0]), `${biome}'s ${key} is a list, even holding one`);
+    }
+});
+
+unit('a list of one tile and that tile are the same thing said twice', () => {
+  // Which is what lets a biome write `floor: [[5, 0]]` — a list of floors that
+  // happens to hold one — without that counting as drawing its own.
+  const biomes = { ...BIOME_TILES, desert: { ...BIOME_TILES.desert, gate: [TILES.gate] } };
+  assertEqual(biomeKey('gate', 'desert', biomes), 'gate', 'the shared sprite comes back');
+  assertEqual(variantCount('gate', 'desert', biomes), 1, 'and it is still the one tile');
+  assertEqual(variantKey('gate', 0.9, 'desert', biomes), 'gate', 'so nothing is suffixed');
+  assertEqual(tileList(TILES.gate), [TILES.gate], 'a bare tile reads as a list of one');
+});
+
 unit('every biome names tiles that are on the sheet, and only terrain', () => {
   assertEqual(
     Object.keys(BIOME_TILES).sort(),
@@ -151,6 +185,17 @@ unit('a biome that repoints a tile gets its own sprite, painted like the tile it
   assertEqual(zones, paintOf('rock-1'), 'and is painted the way that tile is');
   for (let zone = 0; zone <= zones.hues.length; zone++)
     assert(cold[zoneKey('rock@frozen-1', zone)], `zone ${zone} of the frozen rock was cut`);
+});
+
+unit('a tile past the end of the shared list is painted like the terrain', () => {
+  // A world that alternates between six floors where the shared table names one
+  // keeps the ground's flecks on all six: past the tile it is a version of, a
+  // variant falls back on its terrain rather than on nothing. Painting it for
+  // that world (`paint.html`) is what says otherwise.
+  assertEqual(paintOf('floor@frozen-3'), paintOf('floor'), 'the fourth frozen floor is ground');
+  assertEqual(paintOf('tree@desert-9'), paintOf('tree'), 'and a tenth desert tree is a tree');
+  assertEqual(paintOf('rock-1'), PAINT['rock-1'], 'while a tile with zones of its own keeps them');
+  assertEqual(paintOf('coin'), null, 'and a tile with none still has none');
 });
 
 unit('a biome cannot repoint anything but terrain', () => {

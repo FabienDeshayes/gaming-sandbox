@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nouxinha — biome tiles</title>
+  <style>
+    /* A development page, not part of the game. It says which tile of
+       assets/tiles.png each of the world's own sprites is drawn from, and lets
+       one biome say otherwise — the two tables in src/data/tiles.js, edited by
+       clicking the sheet instead of typing pairs of numbers.
+
+       The rule the page is built around: a tile assigned to ALL BIOMES is the
+       default every world falls back on, and a tile assigned to one biome is
+       that world's exception. Floors, rock and trees are lists rather than
+       single tiles, so a world alternates between its own.
+
+       Browsing the sheet is tiles.html, a tile's pixels are draw.html, and its
+       colour zones paint.html. */
+    :root { --bg: #0b1a0b; --fg: #33ff66; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 monospace;
+      -webkit-font-smoothing: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+    }
+    .title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    h1 { font-size: 15px; margin: 0; letter-spacing: 2px; }
+    h2 { font-size: 13px; margin: 0 0 8px; letter-spacing: 2px; }
+    a { color: var(--fg); }
+    .navlink { opacity: 0.65; text-decoration: none; }
+    .navlink:hover { opacity: 1; text-decoration: underline; }
+    p { margin: 0; opacity: 0.65; max-width: 74ch; }
+    .controls { display: flex; gap: 18px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    label { opacity: 0.65; }
+    select, button {
+      font: inherit; color: var(--fg); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+      padding: 6px 10px; cursor: pointer;
+      min-height: 34px;
+    }
+    button:hover, select:hover { background: color-mix(in srgb, var(--fg) 14%, transparent); }
+    button[disabled] { opacity: 0.35; cursor: default; }
+    button.go { border-width: 2px; }
+    .dim { opacity: 0.4; }
+
+    #tool { display: flex; gap: 26px; flex-wrap: wrap; padding: 16px; }
+    .pane { display: flex; flex-direction: column; gap: 10px; }
+    .pane.wide { flex: 1 1 460px; min-width: 0; }
+
+    /* WHO DRAWS WHAT: one row per world that can have an opinion — the default
+       every biome falls back on, then the four biomes. The row being edited is
+       boxed, so which table an assignment lands in is never a guess. */
+    .target {
+      display: flex; gap: 12px; align-items: center;
+      padding: 6px 8px; cursor: pointer;
+      border: 1px solid transparent;
+    }
+    .target:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+    .target.on { border-color: var(--fg); }
+    .target b { font-style: normal; font-weight: normal; width: 11em; letter-spacing: 1px; }
+    .target .tiles { display: flex; gap: 3px; }
+    .target canvas { image-rendering: pixelated; display: block; }
+    .target .note { margin-left: auto; opacity: 0.45; font-size: 11px; white-space: nowrap; }
+    .target .note.own { opacity: 0.9; }
+
+    /* The list being edited: one slot per tile, in the order the world
+       alternates between them, plus the empty slot a click appends into. */
+    .slots { display: flex; gap: 8px; flex-wrap: wrap; }
+    .slot {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 4px; cursor: pointer;
+      border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+    }
+    .slot.on { border-color: var(--fg); border-width: 2px; padding: 3px; }
+    .slot canvas { image-rendering: pixelated; display: block; }
+    .slot span { font-size: 10px; opacity: 0.6; }
+    .slot.add { justify-content: center; width: 42px; height: 56px; opacity: 0.6; }
+    .slot.add:hover { opacity: 1; }
+    .slot.add b { font-style: normal; font-size: 20px; }
+
+    /* The sheet is taller than a screen, so it scrolls in its own box rather
+       than pushing the list off the page. Same picker draw.html uses. */
+    #sheetBox {
+      max-height: 58vh; overflow: auto;
+      border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+    }
+    #sheet { image-rendering: pixelated; display: block; cursor: crosshair; }
+    pre {
+      margin: 0; padding: 8px; max-height: 260px; overflow: auto;
+      border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+      background: color-mix(in srgb, var(--fg) 6%, transparent);
+      font: 11px/1.45 monospace; white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>NOUXINHA BIOME TILES</h1>
+      <a class="navlink" href="tiles.html">← browse tile sheet</a>
+      <a class="navlink" href="draw.html">draw a tile's pixels →</a>
+      <a class="navlink" href="paint.html">paint a tile's zones →</a>
+    </div>
+    <div class="controls">
+      <label>tile <select id="key"></select></label>
+      <span id="picked" class="dim"></span>
+      <button id="reset">DRAW THE DEFAULT</button>
+      <button id="copyAll" class="go">COPY BOTH TABLES</button>
+      <span id="status" class="dim"></span>
+    </div>
+  </header>
+
+  <section id="tool">
+    <div class="pane">
+      <h2>DRAWN BY</h2>
+      <div id="targets"></div>
+      <h2 id="editing">—</h2>
+      <div class="slots" id="slots"></div>
+      <p id="hint"></p>
+    </div>
+    <div class="pane wide">
+      <h2>SHEET</h2>
+      <div id="sheetBox"><canvas id="sheet"></canvas></div>
+      <pre id="out"></pre>
+    </div>
+  </section>
+
+<script type="module">
+import {
+  BIOME_KEYS,
+  BIOME_TILES,
+  SHEET_COLS,
+  SHEET_GAP,
+  SHEET_PATH,
+  SHEET_ROWS,
+  TILES,
+  VARIANT_KEYS,
+  tileList,
+} from './src/data/tiles.js';
+import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
+import { getPalette, setDefaultPalette } from './src/config.js';
+
+const TILE = 16;
+const STRIDE = TILE + SHEET_GAP;
+const PICK = 2;   // the sheet's scale in the picker
+const SLOT = 40;  // a tile's, in the list being edited
+const ROW = 20;   // ...and in the row of targets above it
+const GUTTER = { left: 26, top: 14 };
+
+// The default row is a target like any other, and the one every biome falls
+// back on: assigning a tile to it assigns it in all four worlds at once.
+const DEFAULT_TARGET = '*';
+
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+const el = (id) => document.getElementById(id);
+
+// A working copy of both tables, deep enough that editing it can't reach back
+// into the imported tables — what the page compares against to know what
+// actually moved. Nothing here writes to a file: the page hands back the two
+// tables to paste into src/data/tiles.js, the way every other tool in this
+// folder hands back its entry.
+const copy = (tile) => tileList(tile).map((pair) => pair.slice());
+const shared = Object.fromEntries(BIOME_KEYS.map((key) => [key, copy(TILES[key])]));
+const own = Object.fromEntries(
+  BIOMES.map((biome) => [
+    biome.id,
+    Object.fromEntries(
+      Object.entries(BIOME_TILES[biome.id] || {}).map(([key, tile]) => [key, copy(tile)])
+    ),
+  ])
+);
+
+let key = VARIANT_KEYS[0];
+let target = DEFAULT_TARGET;
+let slot = null;  // which tile of the list a click off the sheet replaces; null appends
+let palette = getPalette();
+let tinted = null;
+
+const isList = (k) => VARIANT_KEYS.includes(k);
+const targetName = (t) => (t === DEFAULT_TARGET ? 'ALL BIOMES' : biomeDef(t).name.toUpperCase());
+
+// What a target draws a key with: its own tiles, or — for a biome that has no
+// opinion about this key — the default every world falls back on.
+function tilesOf(t, k = key) {
+  if (t === DEFAULT_TARGET) return shared[k];
+  return own[t][k] || shared[k];
+}
+
+// Whether a biome has said anything about this key at all, and whether what it
+// said differs from the default. A biome may name the default's own tiles —
+// spelling its ground out in full — and that costs nothing: the game hands it
+// back the shared sprite (`biomeKey` in src/data/tiles.js).
+const hasOwn = (t, k = key) => t !== DEFAULT_TARGET && !!own[t][k];
+const sameAsDefault = (t, k = key) =>
+  JSON.stringify(tilesOf(t, k)) === JSON.stringify(shared[k]);
+
+// An edit to a biome's row starts that biome's own entry from whatever it was
+// drawing, so the first click changes one tile rather than clearing the list.
+function editable() {
+  if (target === DEFAULT_TARGET) return shared[key];
+  if (!own[target][key]) own[target][key] = tilesOf(target).map((tile) => tile.slice());
+  return own[target][key];
+}
+
+// --- the sheet --------------------------------------------------------------
+
+// The picker draws the sheet the way the game does: flooded with the palette's
+// foreground through its own alpha, so a tile picked here reads as it will read
+// in the world it is being assigned to.
+function retint(image) {
+  const off = document.createElement('canvas');
+  off.width = image.width;
+  off.height = image.height;
+  const c = off.getContext('2d');
+  c.drawImage(image, 0, 0);
+  c.globalCompositeOperation = 'source-in';
+  c.fillStyle = hex(palette.fg);
+  c.fillRect(0, 0, off.width, off.height);
+  return off;
+}
+
+// One tile of the sheet, drawn into a canvas of its own — every tile on this
+// page but the sheet itself.
+function tileCanvas([col, row], size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const c = canvas.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  c.drawImage(tinted, col * STRIDE, row * STRIDE, TILE, TILE, 0, 0, size, size);
+  return canvas;
+}
+
+const cellX = (col) => GUTTER.left + col * STRIDE * PICK;
+const cellY = (row) => GUTTER.top + row * STRIDE * PICK;
+
+function drawSheet() {
+  const canvas = el('sheet');
+  canvas.width = GUTTER.left + SHEET_COLS * STRIDE * PICK;
+  canvas.height = GUTTER.top + SHEET_ROWS * STRIDE * PICK;
+  const c = canvas.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  c.fillStyle = hex(palette.bg);
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  // The sheet's own one-pixel gaps do the ruling, so it goes down in one draw.
+  c.drawImage(tinted, GUTTER.left, GUTTER.top, tinted.width * PICK, tinted.height * PICK);
+
+  c.font = '9px monospace';
+  c.textBaseline = 'middle';
+  c.fillStyle = hex(palette.fg);
+  c.globalAlpha = 0.55;
+  c.textAlign = 'center';
+  for (let col = 0; col < SHEET_COLS; col++)
+    c.fillText(String(col), cellX(col) + (TILE * PICK) / 2, GUTTER.top / 2);
+  c.textAlign = 'right';
+  for (let row = 0; row < SHEET_ROWS; row++)
+    c.fillText(String(row), GUTTER.left - 4, cellY(row) + (TILE * PICK) / 2);
+  c.globalAlpha = 1;
+
+  // What the target being edited already draws is boxed on the sheet, so a list
+  // of eight trees can be read off the art rather than off eight coordinates.
+  const size = TILE * PICK;
+  c.strokeStyle = hex(palette.fg);
+  tilesOf(target).forEach(([col, row], n) => {
+    c.globalAlpha = 1;
+    c.lineWidth = n === slot ? 2 : 1;
+    const grow = n === slot ? 2 : 0;
+    c.strokeRect(cellX(col) - grow, cellY(row) - grow, size + grow * 2, size + grow * 2);
+  });
+  c.lineWidth = 1;
+}
+
+// --- the page ---------------------------------------------------------------
+
+function drawTargets() {
+  const host = el('targets');
+  host.replaceChildren();
+  for (const t of [DEFAULT_TARGET, ...BIOMES.map((b) => b.id)]) {
+    const row = document.createElement('div');
+    row.className = 'target' + (t === target ? ' on' : '');
+    const name = document.createElement('b');
+    name.textContent = targetName(t);
+    const tiles = document.createElement('div');
+    tiles.className = 'tiles';
+    for (const tile of tilesOf(t)) tiles.append(tileCanvas(tile, ROW));
+    const note = document.createElement('span');
+    note.className = 'note';
+    if (t === DEFAULT_TARGET) note.textContent = 'what every world falls back on';
+    else if (!hasOwn(t)) note.textContent = 'falls back on the default';
+    else if (sameAsDefault(t)) note.textContent = 'names the default tiles';
+    else {
+      note.textContent = 'draws its own';
+      note.className = 'note own';
+    }
+    row.append(name, tiles, note);
+    row.addEventListener('click', () => {
+      target = t;
+      slot = null;
+      refresh();
+    });
+    host.append(row);
+  }
+}
+
+function drawSlots() {
+  const host = el('slots');
+  host.replaceChildren();
+  const list = tilesOf(target);
+  list.forEach((tile, n) => {
+    const box = document.createElement('div');
+    box.className = 'slot' + (n === slot ? ' on' : '');
+    const co = document.createElement('span');
+    co.textContent = `${tile[0]}, ${tile[1]}`;
+    box.append(tileCanvas(tile, SLOT), co);
+    box.addEventListener('click', () => {
+      slot = slot === n ? null : n;
+      refresh();
+    });
+    // A right-click drops a tile out of the list — a list of one is as far down
+    // as it goes, since a world has to draw its ground with something.
+    box.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (list.length < 2) return say('a tile has to be drawn with something');
+      editable().splice(n, 1);
+      slot = null;
+      refresh();
+    });
+    host.append(box);
+  });
+
+  // Only the terrains the world alternates between take more than one tile:
+  // everything else is drawn with exactly the one, so there is nothing to
+  // append to (`VARIANT_KEYS` in src/data/tiles.js).
+  if (!isList(key)) return;
+  const add = document.createElement('div');
+  add.className = 'slot add' + (slot === null ? ' on' : '');
+  const plus = document.createElement('b');
+  plus.textContent = '+';
+  add.append(plus);
+  add.addEventListener('click', () => {
+    slot = null;
+    refresh();
+  });
+  host.append(add);
+}
+
+// The page is drawn in the colour of the world being edited, since that is the
+// world the tile is going to be seen in; the default row keeps the temperate
+// green a page opened cold is drawn in (src/data/biomes.js). Rebuilt only when
+// that world changes — retinting the whole sheet on every click would be a lot
+// of work to arrive at the same pixels.
+let tintedFor = null;
+function tint() {
+  if (tintedFor === target) return;
+  tintedFor = target;
+  setDefaultPalette(biomeDef(target === DEFAULT_TARGET ? DEFAULT_BIOME : target).palette);
+  palette = getPalette();
+  document.documentElement.style.setProperty('--bg', hex(palette.bg));
+  document.documentElement.style.setProperty('--fg', hex(palette.fg));
+  tinted = retint(source);
+}
+
+function refresh() {
+  tint();
+  el('key').value = key;
+  el('editing').textContent = `${key.toUpperCase()} — ${targetName(target)}`;
+  el('hint').textContent = isList(key)
+    ? 'click a tile on the sheet to add one · click a slot first to replace it · right-click a slot to drop it'
+    : 'click a tile on the sheet to draw this with it';
+  el('reset').disabled = !hasOwn(target);
+  el('reset').textContent =
+    target === DEFAULT_TARGET ? 'THE DEFAULT ITSELF' : `${targetName(target)} DRAWS THE DEFAULT`;
+  drawTargets();
+  drawSlots();
+  drawSheet();
+  el('out').textContent = `${defaultsText()}\n\n${biomeTableText()}`;
+}
+
+function say(text) {
+  el('status').textContent = text;
+  clearTimeout(say.timer);
+  say.timer = setTimeout(() => (el('status').textContent = ''), 3000);
+}
+
+// --- picking a tile ---------------------------------------------------------
+
+el('sheet').addEventListener('click', (e) => {
+  const r = el('sheet').getBoundingClientRect();
+  const col = Math.floor((e.clientX - r.left - GUTTER.left) / (STRIDE * PICK));
+  const row = Math.floor((e.clientY - r.top - GUTTER.top) / (STRIDE * PICK));
+  if (col < 0 || row < 0 || col >= SHEET_COLS || row >= SHEET_ROWS) return;
+  const list = editable();
+  if (slot !== null) list[slot] = [col, row];
+  else if (isList(key)) list.push([col, row]);
+  else list[0] = [col, row];
+  el('picked').textContent = `picked (${col}, ${row})`;
+  refresh();
+});
+
+// A biome that says nothing about a key draws the default, and dropping its
+// entry is how it goes back to doing that — the difference between "the same
+// tiles as everyone else" and "whatever everyone else is drawing".
+el('reset').addEventListener('click', () => {
+  if (target === DEFAULT_TARGET) return;
+  delete own[target][key];
+  slot = null;
+  say(`${targetName(target)} falls back on the default ${key}`);
+  refresh();
+});
+
+const keySel = el('key');
+// The three the world is mostly made of first, then everything else a biome is
+// allowed to repoint, in the order src/data/tiles.js lists them.
+for (const k of [...VARIANT_KEYS, ...BIOME_KEYS.filter((k) => !VARIANT_KEYS.includes(k))])
+  keySel.add(new Option(isList(k) ? `${k} (a list)` : k, k));
+keySel.addEventListener('change', () => {
+  key = keySel.value;
+  slot = null;
+  refresh();
+});
+
+// --- the tables, as they go back into src/data/tiles.js ----------------------
+
+// Prettier's own quoting: a key that reads as an identifier goes in bare.
+const name = (k) => (/^[A-Za-z_$][\w$]*$/.test(k) ? k : `'${k}'`);
+const pair = ([col, row]) => `[${col}, ${row}]`;
+
+// One entry, written the way the file already writes them — which is to say the
+// way Prettier would, so a pasted table is a diff of what actually changed
+// rather than a reformat of the whole file. A key that alternates is a list even
+// when it holds one tile, since a world's floors read as the list they are; a
+// list of two or more goes one tile per line.
+function entryText(k, list, indent) {
+  const tiles = list.map(pair);
+  const text =
+    list.length > 1
+      ? `[\n${tiles.map((tile) => `${indent}  ${tile},`).join('\n')}\n${indent}]`
+      : isList(k)
+        ? `[${tiles[0]}]`
+        : tiles[0];
+  return `${indent}${name(k)}: ${text},`;
+}
+
+// The default tiles, but only the keys actually moved — the rest of `TILES` is
+// items and the character, which a biome has no say over anyway.
+function defaultsText() {
+  const moved = BIOME_KEYS.filter(
+    (k) => JSON.stringify(shared[k]) !== JSON.stringify(tileList(TILES[k]))
+  );
+  if (!moved.length) return '// TILES: nothing moved — the defaults are as the file has them.';
+  return [
+    '// in TILES (src/data/tiles.js), what every world draws:',
+    ...moved.map((k) => entryText(k, shared[k], '  ')),
+  ].join('\n');
+}
+
+// The whole biome table, ready to replace the one in the file: partial pastes
+// are how a biome ends up with a key it was meant to have given back.
+function biomeTableText() {
+  const body = BIOMES.map((biome) => {
+    const keys = BIOME_KEYS.filter((k) => own[biome.id][k]);
+    if (!keys.length) return `  ${biome.id}: {},`;
+    const lines = keys.map((k) => entryText(k, own[biome.id][k], '    '));
+    return `  ${biome.id}: {\n${lines.join('\n')}\n  },`;
+  }).join('\n');
+  return `export const BIOME_TILES = {\n${body}\n};`;
+}
+
+el('copyAll').addEventListener('click', () => {
+  navigator.clipboard?.writeText(el('out').textContent).catch(() => {});
+  say('copied — paste both into src/data/tiles.js');
+});
+
+const source = new Image();
+source.src = SHEET_PATH;
+await source.decode();
+if (source.width !== SHEET_COLS * STRIDE - SHEET_GAP || source.height !== SHEET_ROWS * STRIDE - SHEET_GAP)
+  throw new Error(`tile sheet is ${source.width}x${source.height}, not the size src/data/tiles.js declares`);
+
+// Arriving from another tool with ?key=... opens on that tile, and ?biome=...
+// on that world's row.
+const params = new URLSearchParams(location.search);
+const wantedKey = params.get('key');
+if (wantedKey && BIOME_KEYS.includes(wantedKey)) key = wantedKey;
+const wantedBiome = params.get('biome');
+if (wantedBiome && BIOMES.some((b) => b.id === wantedBiome)) target = wantedBiome;
+
+refresh();
+</script>
+</body>
+</html>

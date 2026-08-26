@@ -38,6 +38,10 @@
 
 import { baseKey } from './tiles.js';
 
+// A variant's terrain: `tree-5` is one of the trees, `tree` is the tree. What a
+// tile falls back on when it has no zones of its own.
+const terrainOf = (key) => key.replace(/-\d+$/, '');
+
 // Zone 0 plus the three a map can name.
 export const PAINT_ZONES = 4;
 
@@ -700,9 +704,18 @@ function resolve(key, seen = new Set()) {
 // the paint of the tile it is a version of unless it names zones of its own, so
 // a world drawn in different stone keeps its veins without the map being
 // re-authored four times. Repointing a tile far enough that the zones no longer
-// fit it is what an entry of its own is for.
+// fit it is what an entry of its own is for — `paint.html` writes one keyed to
+// the biome.
+//
+// One tile short of that, a terrain's *nth* tile falls back on the terrain: a
+// world that alternates between six floors where the shared table names one
+// keeps the ground's flecks on all six. A zone only ever claims pixels the
+// sheet actually draws, so an inherited map is a handful of pixels in roughly
+// the right place rather than a wrong one — and painting that tile for that
+// biome is what says otherwise.
 export function paintOf(key) {
-  return resolve(key) || resolve(baseKey(key));
+  const own = baseKey(key);
+  return resolve(key) || resolve(own) || resolve(terrainOf(own));
 }
 
 // The texture one zone of a painted key is baked into. Zone 0 is everything the

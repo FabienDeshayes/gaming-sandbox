@@ -19,6 +19,12 @@
 // isn't the same rock stamped fifty times and the choice never changes as you
 // walk back past it. Those become `key-0`, `key-1`, ... with the bare `key`
 // staying as an alias for the first, for anything that just wants one of them.
+// A list of one and a single tile are the same thing written two ways.
+//
+// What this table says is what *every* world draws, and `BIOME_TILES` below is
+// where one world says otherwise — so assigning a tile here is assigning it in
+// all four biomes at once, and overriding it there is a per-world exception.
+// `biomes.html` is the tool for both.
 
 export const SHEET_KEY = 'tiles';
 export const SHEET_PATH = 'assets/tiles.png';
@@ -136,16 +142,24 @@ export const TILES = {
 //
 // A world is all one biome (`src/data/biomes.js`), and a biome draws the ground
 // its own way: the same wizard walks into a frozen world and finds different
-// rock in it. A biome names only the keys it wants to change, and everything it
-// leaves out is the tile above — so this table stays a list of differences
-// rather than four copies of the sheet map.
+// rock in it. `TILES` above is the default every biome falls back on, and a
+// biome names only the keys it wants to change — so this table stays a list of
+// differences rather than four copies of the sheet map, and assigning a tile
+// up there is assigning it in all four worlds at once.
 //
-// **All four are empty today**: the four biomes are the same art in four
-// colours, and this is where that stops being true, one pair of numbers at a
-// time. Repointing `rock` for `frozen` here is the whole of giving frozen
-// worlds their own stone — the sprites get cut (`src/data/sprites.js`), the
-// paint follows the tile they were cut from (`src/data/paint.js`), and the map
-// draws them (`src/ui/MapView.js`) without anything else being touched.
+// The three terrains a world is mostly made of get spelled out in full below,
+// one list per biome, because those are the ones each world is meant to own:
+// its floors, its rock and its trees. They all name the shared tiles today —
+// a biome that names the tile a key already had repoints nothing, so four
+// biomes can spell their ground out without paying for a second copy of it —
+// and repointing one of those lists is the whole of giving a world stone of
+// its own. The sprites get cut (`src/data/sprites.js`), the paint follows the
+// tile they were cut from (`src/data/paint.js`), and the map draws them
+// (`src/ui/MapView.js`) without anything else being touched.
+//
+// Nothing here is authored by hand either: open `biomes.html` through a server,
+// pick a key and a biome, click the tiles off the sheet, and paste back what it
+// writes.
 //
 // Only the *world's* own tiles can be repointed, the ones in `BIOME_KEYS`
 // below. Items, the character and the HUD are the same everywhere: they belong
@@ -153,10 +167,78 @@ export const TILES = {
 // under them — and they are drawn by screens (the HUD, the item card, the
 // shop) that have no world to ask.
 export const BIOME_TILES = {
-  temperate: {},
-  frozen: {},
-  desert: {},
-  mystic: {},
+  temperate: {
+    floor: [[5, 0]],
+    rock: [
+      [12, 4],
+      [12, 1],
+      [5, 2],
+    ],
+    tree: [
+      [0, 1],
+      [2, 1],
+      [3, 1],
+      [5, 1],
+      [4, 1],
+      [3, 2],
+      [1, 1],
+      [4, 2],
+    ],
+  },
+  frozen: {
+    floor: [[5, 0]],
+    rock: [
+      [12, 4],
+      [12, 1],
+      [5, 2],
+    ],
+    tree: [
+      [0, 1],
+      [2, 1],
+      [3, 1],
+      [5, 1],
+      [4, 1],
+      [3, 2],
+      [1, 1],
+      [4, 2],
+    ],
+  },
+  desert: {
+    floor: [[5, 0]],
+    rock: [
+      [12, 4],
+      [12, 1],
+      [5, 2],
+    ],
+    tree: [
+      [0, 1],
+      [2, 1],
+      [3, 1],
+      [5, 1],
+      [4, 1],
+      [3, 2],
+      [1, 1],
+      [4, 2],
+    ],
+  },
+  mystic: {
+    floor: [[5, 0]],
+    rock: [
+      [12, 4],
+      [12, 1],
+      [5, 2],
+    ],
+    tree: [
+      [0, 1],
+      [2, 1],
+      [3, 1],
+      [5, 1],
+      [4, 1],
+      [3, 2],
+      [1, 1],
+      [4, 2],
+    ],
+  },
 };
 
 // What a biome is allowed to draw differently: terrain, the masonry and gates
@@ -182,8 +264,23 @@ export const BIOME_KEYS = [
   'merchant',
 ];
 
+// The terrains a world draws several tiles for and alternates between, which
+// are the three each biome is expected to spell out in full: what it walks on,
+// the stone in its way and the trees on it. Everything else a biome can repoint
+// is one tile — a hut is a hut.
+export const VARIANT_KEYS = ['floor', 'rock', 'tree'];
+
+// A key's tiles, always as a list. One tile and a list of one are the same
+// thing said twice, which is what lets a biome write `floor: [[5, 0]]` — a list
+// of floors that happens to hold one — without that counting as repointing the
+// shared `floor: [5, 0]`.
+export function tileList(tile) {
+  if (!tile) return [];
+  return Array.isArray(tile[0]) ? tile : [tile];
+}
+
 // Tiles are numbers and lists of numbers, so this is the whole of comparing two.
-const sameTile = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const sameTile = (a, b) => JSON.stringify(tileList(a)) === JSON.stringify(tileList(b));
 
 // Whether a biome actually draws this key differently. A biome that names a key
 // and gives it the tile it already had repoints nothing — which is what lets a
@@ -220,9 +317,7 @@ export function baseKey(key) {
 // How many tiles a key alternates between; 1 for the single-tile ones. A biome
 // can alternate between a different number of them than the shared tile does.
 export function variantCount(key, biome, biomes = BIOME_TILES) {
-  const tile = tileFor(key, biome, biomes);
-  if (!tile) return 0;
-  return Array.isArray(tile[0]) ? tile.length : 1;
+  return tileList(tileFor(key, biome, biomes)).length;
 }
 
 // The texture key for one of a terrain's tiles, given a roll in [0, 1) — which

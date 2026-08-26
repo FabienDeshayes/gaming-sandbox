@@ -162,6 +162,9 @@ export class MapView {
 
       // A gate fills its tile the way rock and wall do — it *is* the ring it
       // stands in, not something lying on the floor.
+      // Ground alternates like rock and trees do wherever the world it is in
+      // gives it more than one tile to alternate between (`VARIANT_KEYS` in
+      // src/data/tiles.js); a world with the one floor draws that one.
       const ground = showGate
         ? biomeKey(gate.open ? 'gate-open' : 'gate', biome)
         : chest
@@ -172,7 +175,7 @@ export class MapView {
               ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
               : terrain === 'wall'
                 ? biomeKey(wallPiece(site, wx, wy), biome)
-                : biomeKey('floor', biome);
+                : variantKey('floor', variantAt(wx, wy, run.seed), biome);
 
       // The two hues a tile can only get from where it stands: the gem the
       // sanctum around it keeps, and the gem whose colour opened its gate. Both

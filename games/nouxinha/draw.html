@@ -8,9 +8,12 @@
     /* A development page, not part of the game. It draws the pixels of one
        tile of assets/tiles.png, so a sprite can be redrawn in place rather
        than round-tripped through an image editor. The sheet is 1-bit — a
-       pixel is ink or it is nothing — so there is one brush and no palette to
-       pick from. Browsing the sheet is tiles.html; a tile's colour zones are
-       paint.html. */
+       pixel is ink or it is nothing — so there is one brush and no colour to
+       pick. The page is drawn in a biome's colour, since that is what the tile
+       will be seen in; there is no palette to pick either, in here or in the
+       game (src/data/biomes.js). Browsing the sheet is tiles.html, a tile's
+       colour zones are paint.html, and which tile a world draws a sprite from
+       is biomes.html. */
     :root { --bg: #0b1a0b; --fg: #33ff66; }
     * { box-sizing: border-box; }
     body {
@@ -90,10 +93,10 @@
       <h1>NOUXINHA TILE EDITOR</h1>
       <a class="navlink" href="tiles.html">← browse tile sheet</a>
       <a class="navlink" href="paint.html">paint a tile's zones →</a>
+      <a class="navlink" href="biomes.html">assign tiles to biomes →</a>
     </div>
     <div class="controls">
       <label>biome <select id="biome"></select></label>
-      <label>palette <select id="palette"></select></label>
       <label>tile <select id="sprite"></select></label>
       <span id="coord" class="dim"></span>
     </div>
@@ -131,9 +134,17 @@
   </section>
 
 <script type="module">
-import { BIOME_TILES, TILES, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import {
+  BIOME_TILES,
+  TILES,
+  SHEET_COLS,
+  SHEET_ROWS,
+  SHEET_GAP,
+  SHEET_PATH,
+  biomeKey,
+} from './src/data/tiles.js';
 import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
-import { PALETTES, getPalette, setDefaultPalette } from './src/config.js';
+import { getPalette, setDefaultPalette } from './src/config.js';
 
 const TILE = 16;
 const STRIDE = TILE + SHEET_GAP;
@@ -161,8 +172,12 @@ const flatten = (key, tile) => {
   else entries.push([key, tile[0], tile[1]]);
 };
 for (const [key, tile] of Object.entries(TILES)) flatten(key, tile);
+// A biome only appears here where it actually draws something different: one
+// that names the tiles every world already draws is handed the shared sprite,
+// so there is no `rock@frozen` for the sheet to claim (`biomeKey`).
 for (const [biome, own] of Object.entries(BIOME_TILES))
-  for (const [key, tile] of Object.entries(own)) flatten(`${key}@${biome}`, tile);
+  for (const [key, tile] of Object.entries(own))
+    if (biomeKey(key, biome) !== key) flatten(`${key}@${biome}`, tile);
 const claims = new Map(); // "col,row" -> the sprite keys drawn from that tile
 for (const [key, col, row] of entries)
   claims.set(`${col},${row}`, (claims.get(`${col},${row}`) || []).concat(key));
@@ -171,15 +186,10 @@ const biomeSel = el('biome');
 BIOMES.forEach((b) => biomeSel.add(new Option(b.name, b.id)));
 biomeSel.value = DEFAULT_BIOME;
 
-const paletteSel = el('palette');
-PALETTES.forEach((p) => paletteSel.add(new Option(p.name, p.id)));
-
-// The page opens tinted for a biome, not an arbitrary palette (src/data/biomes.js);
-// the palette select stays free underneath for previewing a tile against any
-// of the four regardless of which biome you're drawing for.
+// The page is drawn in the colour of the world being drawn for, which is the
+// whole of what the biome select does here (src/data/biomes.js).
 setDefaultPalette(biomeDef(biomeSel.value).palette);
 let palette = getPalette();
-paletteSel.value = palette.id;
 
 let master = null;   // the whole sheet's pixels: what CONFIRM writes to and EXPORT writes out
 let tinted = null;   // ...that sheet recoloured to the palette, for the picker
@@ -502,14 +512,10 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 biomeSel.addEventListener('change', () => {
-  paletteSel.value = biomeDef(biomeSel.value).palette;
-  paletteSel.dispatchEvent(new Event('change'));
-});
-paletteSel.addEventListener('change', () => {
-  // The game reads its palette from the same place, so picking one here is
+  // The game reads its palette from the same place, so picking a world here is
   // picking one there — which is the point: a tile has to read against the
-  // background of whichever palette the player is in.
-  setDefaultPalette(paletteSel.value);
+  // background of the world it is going to be drawn in.
+  setDefaultPalette(biomeDef(biomeSel.value).palette);
   palette = getPalette();
   document.documentElement.style.setProperty('--bg', hex(palette.bg));
   document.documentElement.style.setProperty('--fg', hex(palette.fg));

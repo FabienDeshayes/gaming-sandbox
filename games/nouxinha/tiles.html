@@ -6,10 +6,14 @@
   <title>Nouxinha — tile sheet</title>
   <style>
     /* A development page, not part of the game. It draws assets/tiles.png with
-       its coordinates on it, so a sprite can be repointed by reading a label
-       off the screen and editing one pair of numbers in src/data/tiles.js.
-       Drawing a tile's pixels and colouring its zones are separate tools:
-       draw.html and paint.html. */
+       its coordinates on it, so a tile can be found by looking at it rather
+       than by counting rows. It is the way *in* to the other three: drawing a
+       tile's pixels is draw.html, colouring its zones paint.html, and saying
+       which sprite a world draws it as biomes.html.
+
+       The page is drawn in a biome's colour, since that is what the tile will
+       be seen in; there is no palette to pick, in here or in the game — a
+       world's colour is its biome's (src/data/biomes.js). */
     :root { --bg: #0b1a0b; --fg: #33ff66; }
     * { box-sizing: border-box; }
     body {
@@ -76,12 +80,10 @@
       <h1>NOUXINHA TILE SHEET</h1>
       <a class="navlink" href="draw.html">draw a tile's pixels →</a>
       <a class="navlink" href="paint.html">paint a tile's zones →</a>
+      <a class="navlink" href="biomes.html">assign tiles to biomes →</a>
     </div>
     <div class="controls">
       <label>biome <select id="biome"></select></label>
-      <label>palette <select id="palette"></select></label>
-      <label>zoom <select id="zoom"></select></label>
-      <label><input type="checkbox" id="labels" checked /> coordinates</label>
     </div>
     <div class="readout">
       <div class="swatch"><canvas id="hoverPix" width="64" height="64"></canvas>
@@ -90,28 +92,33 @@
         <div><b id="pickCo">—</b><div class="key" id="pickKey">click to copy</div>
           <div class="paintLinks" id="pickPaint"></div></div></div>
     </div>
-    <div class="controls">
-      <label>assign picked tile to <select id="assignKey"></select> for</label>
-      <button id="assignBtn" disabled>this biome</button>
-      <span id="assignStatus" class="dim"></span>
-      <button id="copyBiome" disabled>COPY BIOME_TILES (0)</button>
-    </div>
-    <pre id="biomeOut"></pre>
   </header>
 
   <main><canvas id="sheet"></canvas></main>
   <div id="claimed"></div>
 
 <script type="module">
-import { BIOME_KEYS, BIOME_TILES, TILES, SHEET_COLS, SHEET_ROWS, SHEET_GAP, SHEET_PATH } from './src/data/tiles.js';
+import {
+  BIOME_KEYS,
+  BIOME_TILES,
+  TILES,
+  SHEET_COLS,
+  SHEET_ROWS,
+  SHEET_GAP,
+  SHEET_PATH,
+  biomeKey,
+} from './src/data/tiles.js';
 import { paintOf } from './src/data/paint.js';
 import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
-import { PALETTES, gemColour, getPalette, setDefaultPalette } from './src/config.js';
+import { gemColour, getPalette, setDefaultPalette } from './src/config.js';
 
 const TILE = 16;
 const STRIDE = TILE + SHEET_GAP;
 const GUTTER = { left: 30, top: 16 };
 const CELL_GAP = 2;
+// The sheet is 49 tiles across, which at 2x is about as wide as a page can be
+// and still be scanned; there is nothing to choose here.
+const SCALE = 2;
 
 // The table flattened to one row per tile, since a key can name several — the
 // terrains that alternate between tiles list each one as `key #n`. A tile a
@@ -123,8 +130,12 @@ const flatten = (key, tile) => {
   else entries.push([key, tile[0], tile[1]]);
 };
 for (const [key, tile] of Object.entries(TILES)) flatten(key, tile);
+// A biome only appears here where it actually draws something different: one
+// that names the tiles every world already draws is handed the shared sprite,
+// so there is no `rock@frozen` for the sheet to claim (`biomeKey`).
 for (const [biome, own] of Object.entries(BIOME_TILES))
-  for (const [key, tile] of Object.entries(own)) flatten(`${key}@${biome}`, tile);
+  for (const [key, tile] of Object.entries(own))
+    if (biomeKey(key, biome) !== key) flatten(`${key}@${biome}`, tile);
 
 // Which sprite keys sit on a given tile — more than one key can share a tile.
 const claims = new Map();
@@ -142,33 +153,13 @@ const biomeSel = el('biome');
 BIOMES.forEach((b) => biomeSel.add(new Option(b.name, b.id)));
 biomeSel.value = DEFAULT_BIOME;
 
-const paletteSel = el('palette');
-PALETTES.forEach((p) => paletteSel.add(new Option(p.name, p.id)));
-const zoomSel = el('zoom');
-[1, 2].forEach((z) => zoomSel.add(new Option(`${z}x`, String(z))));
-zoomSel.value = '2';
-const labelsBox = el('labels');
-
-const assignKeySel = el('assignKey');
-BIOME_KEYS.forEach((k) => assignKeySel.add(new Option(k, k)));
-
-let scale = 2;
-// The page opens tinted for a biome, not an arbitrary palette — picking a
-// biome sets the palette to what that world is drawn in (src/data/biomes.js);
-// the palette select stays free underneath for previewing a tile in any of
-// the four regardless of which biome you're authoring tiles for.
+// The page is drawn in the colour of the world being looked at, which is the
+// whole of what the biome select does here: a world's colour is its biome's
+// (src/data/biomes.js), so there is nothing else to pick.
 setDefaultPalette(biomeDef(biomeSel.value).palette);
 let palette = getPalette();
-paletteSel.value = palette.id;
 let tinted = null; // the sheet, recoloured to the palette's foreground
 let picked = null;
-
-// The tiles being assigned to a biome this session, keyed `biome|key` — what
-// COPY BIOME_TILES turns into an entry to paste into src/data/tiles.js. Only
-// single-tile assignments are supported here; a key that wants to alternate
-// between several tiles in a biome (the way `rock`/`tree` do) is still typed
-// in by hand.
-const biomeEdits = new Map();
 
 // Recolours the whole sheet in one pass: draw it, then flood the foreground
 // through its own alpha. Same trick the game plays with a tint, so this page
@@ -185,7 +176,7 @@ function retint(image) {
   return off;
 }
 
-const cellPitch = () => TILE * scale + CELL_GAP;
+const cellPitch = () => TILE * SCALE + CELL_GAP;
 const cellX = (col) => GUTTER.left + col * cellPitch();
 const cellY = (row) => GUTTER.top + row * cellPitch();
 
@@ -211,23 +202,22 @@ function draw() {
   ctx.font = '9px monospace';
   ctx.textBaseline = 'middle';
 
-  if (labelsBox.checked) {
-    ctx.fillStyle = hex(palette.fg);
-    ctx.globalAlpha = 0.55;
-    ctx.textAlign = 'center';
-    for (let col = 0; col < SHEET_COLS; col++)
-      ctx.fillText(String(col), cellX(col) + (TILE * scale) / 2, GUTTER.top / 2);
-    ctx.textAlign = 'right';
-    for (let row = 0; row < SHEET_ROWS; row++)
-      ctx.fillText(String(row), GUTTER.left - 6, cellY(row) + (TILE * scale) / 2);
-    ctx.globalAlpha = 1;
-  }
+  // The coordinates are the point of the page, so they are always on.
+  ctx.fillStyle = hex(palette.fg);
+  ctx.globalAlpha = 0.55;
+  ctx.textAlign = 'center';
+  for (let col = 0; col < SHEET_COLS; col++)
+    ctx.fillText(String(col), cellX(col) + (TILE * SCALE) / 2, GUTTER.top / 2);
+  ctx.textAlign = 'right';
+  for (let row = 0; row < SHEET_ROWS; row++)
+    ctx.fillText(String(row), GUTTER.left - 6, cellY(row) + (TILE * SCALE) / 2);
+  ctx.globalAlpha = 1;
 
   for (let row = 0; row < SHEET_ROWS; row++) {
     for (let col = 0; col < SHEET_COLS; col++) {
       const x = cellX(col);
       const y = cellY(row);
-      const size = TILE * scale;
+      const size = TILE * SCALE;
       ctx.fillStyle = hex(palette.fg);
       ctx.globalAlpha = 0.07;
       ctx.fillRect(x, y, size, size);
@@ -279,13 +269,27 @@ function showIn(canvasId, coId, keyId, tile, { paintLinksId } = {}) {
   const keys = claims.get(tile.join(','));
   key.textContent = keys ? keys.join(', ') : 'unused';
   key.className = keys ? 'key' : 'key dim';
-  if (paintLinks && keys)
-    for (const k of keys) {
+  if (paintLinks) {
+    const link = (href, text) => {
       const a = document.createElement('a');
-      a.href = `paint.html?key=${encodeURIComponent(k)}`;
-      a.textContent = `paint ${k} →`;
+      a.href = href;
+      a.textContent = text;
       paintLinks.append(a);
-    }
+    };
+    for (const k of keys || []) link(`paint.html?key=${encodeURIComponent(k)}`, `paint ${k} →`);
+    link(`draw.html?col=${tile[0]}&row=${tile[1]}`, 'draw this tile →');
+    // Which sprite a world draws this tile as is the biome tool's question, and
+    // the answer is a list rather than a coordinate — so the link hands it the
+    // key and the world being looked at rather than the tile.
+    const world =
+      keys &&
+      keys.map((k) => k.split('@')[0].replace(/-\d+$/, '')).find((k) => BIOME_KEYS.includes(k));
+    if (world)
+      link(
+        `biomes.html?key=${encodeURIComponent(world)}&biome=${encodeURIComponent(biomeSel.value)}`,
+        `assign ${world} →`
+      );
+  }
 }
 
 sheetEl.addEventListener('mousemove', (e) => {
@@ -306,49 +310,8 @@ function pick(tile) {
   // Best-effort: a page opened without a secure context has no clipboard, and
   // the coordinate is on screen either way.
   navigator.clipboard?.writeText(`[${tile[0]}, ${tile[1]}]`).catch(() => {});
-  el('assignBtn').disabled = false;
   draw();
 }
-
-// --- assigning a tile to a biome --------------------------------------------
-//
-// Repointing a key for a biome is the same act as reading a coordinate off
-// this sheet and editing one pair of numbers in `BIOME_TILES` — this just
-// saves the typing and the tab-switching. Nothing here writes to a file;
-// COPY BIOME_TILES hands back the entries to paste in by hand.
-
-function biomeEntryText() {
-  const byBiome = new Map();
-  for (const [k, [col, row]] of biomeEdits) {
-    const [biome, key] = k.split('|');
-    if (!byBiome.has(biome)) byBiome.set(biome, []);
-    byBiome.get(biome).push(`    '${key}': [${col}, ${row}],`);
-  }
-  return [...byBiome.entries()]
-    .map(([biome, lines]) => `  ${biome}: {\n${lines.join('\n')}\n  },`)
-    .join('\n');
-}
-
-function refreshAssign() {
-  el('copyBiome').disabled = biomeEdits.size === 0;
-  el('copyBiome').textContent = `COPY BIOME_TILES (${biomeEdits.size})`;
-  el('biomeOut').textContent = biomeEntryText();
-}
-
-el('assignBtn').addEventListener('click', () => {
-  if (!picked) return;
-  const key = assignKeySel.value;
-  biomeEdits.set(`${biomeSel.value}|${key}`, picked);
-  el('assignStatus').textContent = `${key} → (${picked[0]}, ${picked[1]}) for ${biomeSel.value}`;
-  refreshAssign();
-});
-el('copyBiome').addEventListener('click', () => {
-  navigator.clipboard?.writeText(biomeEntryText()).catch(() => {});
-  const said = el('assignStatus');
-  said.textContent = 'copied';
-  setTimeout(() => (said.textContent === 'copied' ? (said.textContent = '') : null), 2000);
-});
-refreshAssign();
 
 // The table as it stands, so what the game currently draws is readable without
 // hunting for the boxes on the sheet. Each row opens straight into the paint
@@ -396,22 +359,14 @@ function repaint() {
 }
 
 biomeSel.addEventListener('change', () => {
-  paletteSel.value = biomeDef(biomeSel.value).palette;
-  paletteSel.dispatchEvent(new Event('change'));
-});
-paletteSel.addEventListener('change', () => {
-  // The game reads its palette from the same place, so picking one here is
-  // picking one there — which is the point.
-  setDefaultPalette(paletteSel.value);
+  // The game reads its palette from the same place, so picking a world here is
+  // picking one there — which is the point: a tile has to read against the
+  // background of the world it is going to be drawn in.
+  setDefaultPalette(biomeDef(biomeSel.value).palette);
   palette = getPalette();
   tinted = retint(source);
   repaint();
 });
-zoomSel.addEventListener('change', () => {
-  scale = Number(zoomSel.value);
-  draw();
-});
-labelsBox.addEventListener('change', draw);
 
 const source = new Image();
 source.src = SHEET_PATH;
@@ -421,10 +376,7 @@ tinted = retint(source);
 // Arriving from the paint tool with ?key=... jumps straight to that tile.
 const wantedKey = new URLSearchParams(location.search).get('key');
 const wanted = wantedKey && entries.find(([key]) => key === wantedKey);
-if (wanted) {
-  picked = [wanted[1], wanted[2]];
-  el('assignBtn').disabled = false;
-}
+if (wanted) picked = [wanted[1], wanted[2]];
 
 repaint();
 if (wanted) window.scrollTo({ top: cellY(wanted[2]) });

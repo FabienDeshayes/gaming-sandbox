@@ -3,7 +3,6 @@
 Agents, do not use this file as a list of things to implement, ignore it unless explicitly asked to add or remove something from it.
 
 small tweaks:
-* lose map and compass when starting a new run on the same save
 * floor variety 
 * biomes design
 * new tiles design
@@ -16,7 +15,6 @@ Later:
 * Nouxinha real ending
 
 ideas to explore:
-* biomes 
 * signposts
 * ambient sources of light
 * landmarks 

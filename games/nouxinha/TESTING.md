@@ -228,8 +228,8 @@ one whose colour nothing on screen could tell from the foreground.
 The split to keep straight is the one the feature is about:
 
 - **Pure, in `landmarks.test.js`:** where the four stand and that no two share a quarter or a colour;
-  that a landmark blocks a step, casts no shadow and has a walkable court; that a **gift** lands once
-  per world and a **standing** once per campaign; and above all the round trip — bank, then
+  that a landmark blocks a step, casts no shadow and has a walkable court; that a **gift** lands on
+  every fresh touch and a **standing** once per campaign; and above all the round trip — bank, then
   `turnCycle`, and check that the standing survived and the world's own record of it did not. That
   last one is the assertion the whole feature rests on, because forgetting it would look exactly like
   the game working.

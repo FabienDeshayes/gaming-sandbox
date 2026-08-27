@@ -92,7 +92,7 @@ const SWIPE_MIN = 24;
 // How many steps apart the Drowned Bell tolls while you are inside its reach
 // (`tollBell`). Not balance — nothing about it changes how hard the game is —
 // so it lives here with the rest of the feel.
-const BELL_TOLL = 8;
+const BELL_TOLL = 18;
 
 // The list of things a run is carrying, joined and capitalised into the opening
 // of a sentence. The words themselves — and the joining — are copy (text.js);
@@ -575,17 +575,16 @@ export class ExploreScene extends Phaser.Scene {
   // itself, and the panel leaves the place on screen while it is read — and the
   // status line for the gift, which is the half worth having as a shout.
   //
-  // A landmark this world has already had off you gives nothing a second
-  // time, but still gets the panel rather than the status line as long as the
-  // player walked a step since the last time it was bumped — a status line for
-  // a direction key held against it, the panel for an actual return visit.
+  // The gift lands on every fresh touch (DESIGN.md §4.10) — a direction key
+  // held against the same bump pays nothing twice and gets the status line
+  // rather than the panel, but an actual return visit, in this world or the
+  // next, pays again and gets the panel.
   touchedLandmark(result) {
     const def = landmarkDef(result.landmark);
     this.map.refresh(this.run);
     this.hud.update(this.run);
-    if (result.already) {
-      if (result.fresh) this.textPanel.show(SAY.landmark(def.id, true));
-      else this.hud.flash(FLASH.landmarkAgain(def.name));
+    if (!result.fresh) {
+      this.hud.flash(FLASH.landmarkAgain(def.name));
       return;
     }
     playLandmark();
@@ -594,8 +593,9 @@ export class ExploreScene extends Phaser.Scene {
     if (result.landmark === 'bell') playBell(1);
     this.hud.flash(this.giftLine(result.gift));
     // `firstEver` is the standing: the first time this campaign has ever stood
-    // here, in any world. Every world after that reads the shorter blocks.
-    this.textPanel.show(SAY.landmark(def.id, !result.firstEver));
+    // here, in any world. Every world after that, and every return visit
+    // within this one, reads the shorter blocks.
+    this.textPanel.show(SAY.landmark(def.id, result.already || !result.firstEver));
   }
 
   // What the gift just did, in one line. Every landmark has one, so this always

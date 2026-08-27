@@ -170,13 +170,15 @@ export const TILES = {
 //
 // The three terrains a world is mostly made of get spelled out in full below,
 // one list per biome, because those are the ones each world is meant to own:
-// its floors, its rock and its trees. They all name the shared tiles today —
-// a biome that names the tile a key already had repoints nothing, so four
-// biomes can spell their ground out without paying for a second copy of it —
-// and repointing one of those lists is the whole of giving a world stone of
-// its own. The sprites get cut (`src/data/sprites.js`), the paint follows the
-// tile they were cut from (`src/data/paint.js`), and the map draws them
-// (`src/ui/MapView.js`) without anything else being touched.
+// its floors, its rock and its trees. A biome that names the tile a key
+// already had repoints nothing, so a biome can spell its ground out without
+// paying for a second copy of it — today rock is that shared stone in all
+// four, temperate's floor is too, and everything else (every other floor,
+// every biome's trees) is a world's own — and repointing one of those lists
+// is the whole of giving a world stone of its own. The sprites get cut
+// (`src/data/sprites.js`), the paint follows the tile they were cut from
+// (`src/data/paint.js`), and the map draws them (`src/ui/MapView.js`)
+// without anything else being touched.
 //
 // Nothing here is authored by hand either: open `biomes.html` through a server,
 // pick a key and a biome, click the tiles off the sheet, and paste back what it
@@ -196,18 +198,13 @@ export const BIOME_TILES = {
       [5, 2],
     ],
     tree: [
-      [0, 1],
-      [2, 1],
       [3, 1],
       [5, 1],
-      [4, 1],
-      [3, 2],
-      [1, 1],
       [4, 2],
     ],
   },
   frozen: {
-    floor: [[5, 0]],
+    floor: [[7, 0]],
     rock: [
       [12, 4],
       [12, 1],
@@ -215,49 +212,33 @@ export const BIOME_TILES = {
     ],
     tree: [
       [0, 1],
-      [2, 1],
-      [3, 1],
-      [5, 1],
-      [4, 1],
       [3, 2],
       [1, 1],
-      [4, 2],
     ],
   },
   desert: {
-    floor: [[5, 0]],
+    floor: [[1, 0]],
     rock: [
       [12, 4],
       [12, 1],
       [5, 2],
     ],
     tree: [
-      [0, 1],
-      [2, 1],
-      [3, 1],
-      [5, 1],
-      [4, 1],
-      [3, 2],
-      [1, 1],
-      [4, 2],
+      [7, 1],
+      [6, 1],
+      [7, 2],
     ],
   },
   mystic: {
-    floor: [[5, 0]],
+    floor: [[2, 0]],
     rock: [
       [12, 4],
       [12, 1],
       [5, 2],
     ],
     tree: [
-      [0, 1],
       [2, 1],
-      [3, 1],
-      [5, 1],
       [4, 1],
-      [3, 2],
-      [1, 1],
-      [4, 2],
     ],
   },
 };

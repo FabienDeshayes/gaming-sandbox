@@ -7,7 +7,7 @@ import {
   chebyshev,
   consumableAt,
   itemAt,
-  landmarks,
+  sites,
   sanctumAt,
   sanctums,
   saltOf,
@@ -160,8 +160,8 @@ unit('a new run relays the consumables and leaves the unique objects alone', () 
   for (const sanctum of sanctums(SEED))
     if (sanctum.gem)
       assertEqual(uniqueAt(sanctum.centre.x, sanctum.centre.y, SEED), sanctum.gem, 'the gem');
-  for (const landmark of landmarks(SEED))
-    assertEqual(uniqueAt(landmark.x, landmark.y, SEED), landmark.item, `the ${landmark.id}`);
+  for (const site of sites(SEED))
+    assertEqual(uniqueAt(site.x, site.y, SEED), site.item, `the ${site.id}`);
 });
 
 unit('everything on the ground comes back when the world respawns', () => {

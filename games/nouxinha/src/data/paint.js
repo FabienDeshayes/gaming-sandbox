@@ -26,6 +26,14 @@
 // | `1` `2` `3` | the colour gem 1, 2 or 3 gave back — **once that gem is held** |
 // | `'gem'` | the colour of the gem the *place* belongs to: a sanctum's own gem, an item's tier |
 // | `'opened'` | the colour of the gem that opened this gate |
+// | `'landmark'` | the colour a landmark keeps, once this campaign has stood at it |
+//
+// The last of those is the one that is not a gem: a landmark's colour is
+// absolute rather than relative to the world (src/data/landmarks.js), so the
+// role resolves to a colour outright rather than to a gem number, and what
+// gates it is whether the campaign holds that landmark's standing rather than
+// how many gems are in hand. The rule it is keeping is the same one either
+// way — nothing is ever shown in a colour the campaign has not brought back.
 //
 // A hue naming a gem you are not carrying draws in the base colour instead, so
 // a tile *gains* colour as gems come home and no colour is ever on screen
@@ -53,6 +61,7 @@ export const HUES = [
   { hue: 3, label: 'GEM 3' },
   { hue: 'gem', label: "THIS PLACE'S GEM" },
   { hue: 'opened', label: 'THE GEM THAT OPENED IT' },
+  { hue: 'landmark', label: "THE LANDMARK'S OWN COLOUR" },
 ];
 
 // The characters a zone map is written in. Anything else is zone 0.
@@ -684,6 +693,125 @@ export const PAINT = {
     ],
   },
   tree: 'tree-0',
+
+  // --- The landmarks -------------------------------------------------------
+  //
+  // One zone apiece, and the hue is the role rather than a gem: whichever
+  // landmark's tile is being drawn resolves it to the colour that landmark
+  // keeps, and to the plain foreground until this campaign has stood at it
+  // (DESIGN.md §4.10). What each map claims is the part of the thing that is
+  // *doing* something — the die and the bed of the press, the bell's mouth, the
+  // lanterns still burning in the tree, the shaft that would throw a shadow if
+  // there were a sun — so a landmark that is not yet yours reads as a shape,
+  // and one that is reads as a shape with a light in it.
+  mint: {
+    hues: ['landmark'],
+    map: [
+      '................',
+      '................',
+      '................',
+      '......1111......',
+      '................',
+      '................',
+      '................',
+      '................',
+      '.....111111.....',
+      '.....111111.....',
+      '.....111111.....',
+      '....11111111....',
+      '................',
+      '.......11.......',
+      '................',
+      '................',
+    ],
+  },
+  bell: {
+    hues: ['landmark'],
+    map: [
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '.11111111111111.',
+      '.11111111111111.',
+      '.11111111111111.',
+      '.11111111111111.',
+      '................',
+    ],
+  },
+  'lantern-tree': {
+    hues: ['landmark'],
+    map: [
+      '................',
+      '....1...........',
+      '................',
+      '.......1...1..1.',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '...........1....',
+      '....1...........',
+      '................',
+      '................',
+      '................',
+    ],
+  },
+  gnomon: {
+    hues: ['landmark'],
+    map: [
+      '................',
+      '................',
+      '......1111......',
+      '......1111......',
+      '......1111......',
+      '......1111......',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+    ],
+  },
+  // The signpost's arm, painted in the colour of the landmark it names — so a
+  // post is legible from inside a torch without reading a word of it, and grey
+  // until the campaign has been where it points.
+  signpost: {
+    hues: ['landmark'],
+    map: [
+      '................',
+      '....1111111111..',
+      '....1111111111..',
+      '....1111111111..',
+      '....1111111111..',
+      '....1111111111..',
+      '....1111111111..',
+      '....1111111111..',
+      '....1111111111..',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+    ],
+  },
 };
 
 // A key that names another shares its zones — the four wizard facings are the

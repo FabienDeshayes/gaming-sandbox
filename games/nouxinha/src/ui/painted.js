@@ -34,12 +34,18 @@ export function makePainted(scene, x, y, scale) {
 // The colour one hue resolves to. A hue naming a gem draws in that gem's colour
 // once it is held and in the base colour until then, which is what makes a tile
 // gain colour as the campaign goes on rather than showing a colour the world
-// has not been given back yet. `roles` supplies the two hues that depend on
-// where the tile is rather than on what it is — see src/data/paint.js.
+// has not been given back yet. `roles` supplies the hues that depend on where
+// the tile is rather than on what it is — see src/data/paint.js.
+//
+// A role can resolve two ways. A number is a gem, and the gems in hand decide
+// whether it is drawn. `{ colour }` is a colour outright — a landmark's own,
+// which is not a gem's and so is not gated on one; the caller has already
+// decided whether the campaign has earned it, and passes 0 where it hasn't.
 export function hueColour(hue, { gems = 0, base, roles = {} } = {}) {
   const fallback = base === undefined ? getPalette().fg : base;
-  const gem = typeof hue === 'string' ? roles[hue] || 0 : hue;
-  return gem && gems >= gem ? gemColour(gem) : fallback;
+  const value = typeof hue === 'string' ? roles[hue] || 0 : hue;
+  if (value && typeof value === 'object') return value.colour || fallback;
+  return value && gems >= value ? gemColour(value) : fallback;
 }
 
 // The colour each of a key's zones is drawn in, longest-first so a caller can

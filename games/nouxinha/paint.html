@@ -141,8 +141,9 @@ import {
 import { HUES, PAINT, PAINT_ZONES, ZONE_INK, paintOf } from './src/data/paint.js';
 import { buildSprites } from './src/data/sprites.js';
 import { hueColour } from './src/ui/painted.js';
+import { LANDMARKS, LANDMARK_IDS } from './src/data/landmarks.js';
 import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
-import { FLOOR_TEXTURE_LEVEL, gemColour, getPalette, setDefaultPalette } from './src/config.js';
+import { FLOOR_TEXTURE_LEVEL, gemColour, getPalette, paletteColour, setDefaultPalette } from './src/config.js';
 
 const TILE = 16;
 const STRIDE = TILE + SHEET_GAP;
@@ -275,8 +276,23 @@ function zoneColour(zone, gems) {
   return hueColour(hue, {
     gems,
     base: palette.fg,
-    roles: { gem: Number(el('placeGem').value), opened: Number(el('openedBy').value) },
+    roles: {
+      gem: Number(el('placeGem').value),
+      opened: Number(el('openedBy').value),
+      landmark: landmarkPreview(work.key),
+    },
   });
+}
+
+// A landmark's own colour is not a gem's — it is absolute, and what gates it is
+// having stood there rather than how many gems are in hand (src/data/landmarks.js).
+// The preview shows it lit: this page is for seeing what a tile *can* look like,
+// and the four gem previews below already cover what it looks like before.
+// A tile that isn't a landmark's borrows the first one's colour, so a signpost's
+// arm can be painted against a colour rather than against the foreground.
+function landmarkPreview(key) {
+  const def = LANDMARKS[baseKey(key)] || LANDMARKS[LANDMARK_IDS[0]];
+  return { colour: paletteColour(def.palette) };
 }
 
 // ...and the colour it is *labelled* in while painting, which is a fixed one

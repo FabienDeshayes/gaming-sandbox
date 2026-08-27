@@ -25,17 +25,23 @@ import {
   isBase,
   isMerchant,
   isSorcerer,
+  landmarkAt,
   landmarks,
   pickSeed,
   saltOf,
   sanctumAt,
   sanctums,
+  signpostAt,
+  signpostReading,
+  signposts,
+  sites,
   uniqueAt,
 } from './world.js';
 import { decodeExplored, encodeExplored } from './cartography.js';
 import {
   CHEAT_COINS,
   CHEAT_REVEAL_RADIUS,
+  LANDMARK_GIFTS,
   STARTING_LIGHT,
   STARTING_WATER,
   WATER_PER_GEM,
@@ -43,6 +49,7 @@ import {
 } from '../balance.js';
 import { drawSeed, emptySave, loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
 import { ITEMS, itemDef, KEYS, TOOLS } from '../data/items.js';
+import { LANDMARK_IDS, landmarkDef, STANDINGS } from '../data/landmarks.js';
 import { isOneOff, priceOf } from '../data/shop.js';
 
 export { DIRECTIONS, tileKey };
@@ -156,6 +163,13 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // run that opened a chest and then died walks back out to a shut one — the
     // same rule the gem in your pocket lives under.
     chests: new Set(banked.chests),
+    // The landmarks stood at in **this** world and the signposts read in it,
+    // banked on the same terms as the chests (DESIGN.md §4.10) — and the
+    // standings, which are not: those are what the campaign keeps out of a
+    // landmark, and the one thing besides `cycles` that survives the hall.
+    landmarks: new Set(banked.landmarks),
+    posts: new Set(banked.posts),
+    standings: new Set(banked.standings),
     // The salt the consumable layer is hashed against. `nonce` is this
     // expedition's, `epoch` counts the times the world has respawned under it.
     nonce: salted,
@@ -172,8 +186,13 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // Everything picked up this run, by item id, including lights that have
     // since burned out. The inventory alone can't tell that story.
     found: {},
-    // Lights, in pickup order. Auto-swap on burnout walks this order.
-    inventory: [newLight(STARTING_LIGHT)],
+    // Lights, in pickup order. Auto-swap on burnout walks this order. Two of
+    // them for a campaign that has stood at the Lantern Tree: that standing is
+    // exactly "you never set out with one light again" (DESIGN.md §4.10), and
+    // it is the only thing in the game that changes what a run walks out with.
+    inventory: banked.standings.includes(standingOf('lantern-tree'))
+      ? [newLight(STARTING_LIGHT), newLight(STARTING_LIGHT)]
+      : [newLight(STARTING_LIGHT)],
     activeIndex: 0,
     // Tiles ever lit. The only thing about the world a run has to remember —
     // terrain and items are both re-derived from the seed. A run opens with
@@ -230,8 +249,14 @@ function applyCheats(state) {
     for (let x = -CHEAT_REVEAL_RADIUS; x <= CHEAT_REVEAL_RADIUS; x++)
       state.explored.add(tileKey(x, y));
   for (const sanctum of sanctums(state.seed)) if (sanctum.gem) state.seenUnique.add(sanctum.gem);
-  for (const landmark of landmarks(state.seed)) state.seenUnique.add(landmark.id);
+  for (const site of sites(state.seed)) state.seenUnique.add(site.id);
   for (const chest of chests(state.seed)) state.seenUnique.add(chest.id);
+  // Every landmark laid eyes on and every standing in hand, so a sandbox run
+  // sees the world the way a campaign four cycles in would — coloured. The
+  // landmarks themselves are left untouched, for the same reason the chests are
+  // left shut: there should still be something to walk to.
+  for (const landmark of landmarks(state.seed)) state.seenUnique.add(landmark.id);
+  for (const standing of STANDINGS) state.standings.add(standing);
 }
 
 // Everything on the ground goes back, in new places. This is what a gem and a
@@ -359,6 +384,136 @@ export function openChest(state, chest) {
   return { already: false, key: null, coins: chest.coins };
 }
 
+// --- Landmarks and signposts --------------------------------------------------
+//
+// A landmark is walked into rather than onto, exactly like a chest, and what it
+// hands over comes in two tiers that are easy to confuse and must not be
+// (DESIGN.md §4.10):
+//
+//   a **gift**    — once per world, the first time you touch it there. An
+//                   in-run effect like a pickup: coins, water, a relit torch,
+//                   ground revealed. Lost with the run, like any pickup.
+//   a **standing** — once per *campaign*, the first time you ever touch it.
+//                   Banked at the hut with everything else that is real, and
+//                   then kept through every world the hall moulds after.
+//
+// Which is why both sets are banked rather than held: a landmark walked to on a
+// run that dies is a landmark you have not been to, and the campaign has to
+// walk back out to it.
+
+// The standing a landmark hands over, by landmark id — the two tables meeting.
+function standingOf(id) {
+  const def = landmarkDef(id);
+  return def ? def.standing : null;
+}
+
+// Whether this campaign holds a landmark's standing. Takes the landmark's id
+// rather than the standing's, because everything that asks is asking about a
+// place: does the map know the stall, does the bell carry, is there a second
+// candle in the pack, does the HUD count how far out you are.
+export function hasStanding(state, id) {
+  const standing = standingOf(id);
+  return !!standing && state.standings.has(standing);
+}
+
+// Every standing the campaign holds, for the screens that list what it knows.
+export function standings(state) {
+  return LANDMARK_IDS.filter((id) => hasStanding(state, id));
+}
+
+// The landmark standing on a tile and whether this run has already touched it
+// **in this world**, or null where there is no landmark there.
+export function landmarkOnTile(state, x, y) {
+  const at = landmarkAt(x, y, state.seed);
+  if (!at || at.part !== 'site') return null;
+  return { landmark: at.landmark, touched: state.landmarks.has(at.landmark.id) };
+}
+
+// What a landmark hands over on the touch itself (balance.js `LANDMARK_GIFTS`).
+// Applied to the run and reported back, so the scene can say what happened
+// without working it out a second time.
+function giveGift(state, id) {
+  const gift = LANDMARK_GIFTS[id] || {};
+  const given = { coins: 0, water: false, relit: false, revealed: 0 };
+
+  if (gift.coins) {
+    state.coins += gift.coins;
+    state.coinsFound += gift.coins;
+    given.coins = gift.coins;
+  }
+  if (gift.water) {
+    state.water = Math.min(maxWater(state.gems), state.water + gift.water);
+    given.water = true;
+  }
+  if (gift.relight) {
+    // In blackout there is nothing to relight, so it hands one over instead —
+    // the same mercy the hut does, for the same reason (`restockLight`).
+    const light = activeLight(state);
+    if (light) light.durability = itemDef(light.id).maxDurability;
+    else restockLight(state);
+    given.relit = true;
+  }
+  if (gift.reveal) {
+    const mark = landmarkAt(state.x, state.y, state.seed);
+    const centre = mark ? mark.landmark : { x: state.x, y: state.y };
+    for (let dy = -gift.reveal; dy <= gift.reveal; dy++)
+      for (let dx = -gift.reveal; dx <= gift.reveal; dx++) {
+        const x = centre.x + dx;
+        const y = centre.y + dy;
+        // Nothing outside the world is ever drawn, here as everywhere else.
+        if (beyondEdge(x, y)) continue;
+        state.explored.add(tileKey(x, y));
+        given.revealed += 1;
+      }
+  }
+  return given;
+}
+
+// Putting a hand on a landmark. Returns what happened: whether this world had
+// already had it off you, whether this is the first time the *campaign* has
+// ever stood here — which is the standing, and the only part of it that
+// outlives the world — and what the gift was.
+export function touchLandmark(state, landmark) {
+  if (state.landmarks.has(landmark.id))
+    return { already: true, firstEver: false, gift: null };
+  state.landmarks.add(landmark.id);
+  const standing = standingOf(landmark.id);
+  const firstEver = !!standing && !state.standings.has(standing);
+  if (firstEver) state.standings.add(standing);
+  return { already: false, firstEver, gift: giveGift(state, landmark.id) };
+}
+
+// The signpost standing on a tile, and whether this world has already been read
+// it — the first read gets the panel, every one after it a line in the status
+// bar (DESIGN.md §4.10).
+export function signpostOnTile(state, x, y) {
+  const at = signpostAt(x, y, state.seed);
+  if (!at || at.part !== 'site') return null;
+  return { post: at.post, read: state.posts.has(at.post.id) };
+}
+
+// Reading a post. Nothing about what it says is stored — the heading and the
+// distance are worked out from where it stands (`signpostReading` in
+// core/world.js) — so all this writes down is that it has been read, which is
+// what pins the landmark it names on the map for the rest of this world.
+export function readSignpost(state, post) {
+  const first = !state.posts.has(post.id);
+  state.posts.add(post.id);
+  return { first, ...signpostReading(post, state.seed) };
+}
+
+// Which landmarks the map is allowed to mark: the ones a light has actually
+// reached, plus any a signpost has pointed the way to. A post is somebody's
+// directions, and directions are worth exactly as much as a mark on a map.
+export function markedLandmarks(state) {
+  const marked = new Set();
+  for (const landmark of landmarks(state.seed))
+    if (state.seenUnique.has(landmark.id)) marked.add(landmark.id);
+  for (const post of signposts(state.seed))
+    if (state.posts.has(post.id)) marked.add(post.target);
+  return marked;
+}
+
 // Lights everything the active shape covers from where the character stands and
 // files it into `explored`. Returns the lit tiles so the renderer can tell
 // "lit right now" from "seen once".
@@ -378,6 +533,10 @@ function noteSeen(state, lit) {
   for (const sanctum of sanctums(state.seed))
     if (sanctum.gem && litKeys.has(tileKey(sanctum.centre.x, sanctum.centre.y)))
       state.seenUnique.add(sanctum.gem);
+  for (const site of sites(state.seed))
+    if (litKeys.has(tileKey(site.x, site.y))) state.seenUnique.add(site.id);
+  // A landmark is marked the same way, and is the one marker on that map whose
+  // *colour* the campaign had to earn (DESIGN.md §4.10).
   for (const landmark of landmarks(state.seed))
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
   for (const chest of chests(state.seed))
@@ -521,6 +680,26 @@ export function step(state, direction) {
     // over as a run, and `turnCycle` is what the scene calls once he has had
     // his say.
     if (isSorcerer(nx, ny, state.seed)) return { moved: false, reason: 'sorcerer' };
+    // Walking into a landmark is how you touch it (DESIGN.md §4.10) — a bump
+    // like the chest's and the sorcerer's, costing nothing, because what the
+    // step is for is standing here rather than getting anywhere.
+    const mark = landmarkOnTile(state, nx, ny);
+    if (mark)
+      return {
+        moved: false,
+        reason: 'landmark',
+        landmark: mark.landmark.id,
+        ...touchLandmark(state, mark.landmark),
+      };
+    // And walking into a post is how you read it.
+    const post = signpostOnTile(state, nx, ny);
+    if (post)
+      return {
+        moved: false,
+        reason: 'signpost',
+        post: post.post.id,
+        ...readSignpost(state, post.post),
+      };
     // Walking into a chest is what opens it (DESIGN.md §4.8). The step is still
     // a step that didn't happen — no water, no durability, no facing change —
     // because what moved was the lid.
@@ -671,6 +850,13 @@ function writeDeposit(state, closing) {
     // its key back inside it — exactly like a gem left in its sanctum.
     keys: [...state.keys],
     chests: [...state.chests],
+    // The landmarks stood at in this world and the posts read in it, banked on
+    // exactly the chests' terms — walk to one and die on the way home and you
+    // have not been there. The standings are banked here too and taken from
+    // here by nothing at all: `turnCycle` carries them over by hand.
+    landmarks: [...state.landmarks],
+    posts: [...state.posts],
+    standings: [...state.standings],
     // Ground is written whichever way a run ends, so this is the same drawing
     // `rememberGround` would have left — banking simply gets there first.
     mapped: encodeExplored(state.explored),
@@ -720,6 +906,12 @@ export function turnCycle(state) {
     ...emptySave(),
     seed,
     cycles: state.banked.cycles + 1,
+    // What the campaign keeps out of the four landmarks: he can unmake the
+    // ground one was standing in, and he has never found a way to unmake the
+    // fact that you have stood there (DESIGN.md §4.10). The landmarks
+    // *witnessed* go with the world, like the keys and the lids — the new one
+    // has its own four, in new places, to be found again.
+    standings: state.banked.standings,
     // The walk to the hall was an expedition, and it ended here rather than at
     // the hut — but it ended, so it counts like every other one.
     runs: state.banked.runs + 1,
@@ -807,6 +999,9 @@ export function suspendRun(state) {
       tools: [...state.tools],
       keys: [...state.keys],
       chests: [...state.chests],
+      landmarks: [...state.landmarks],
+      posts: [...state.posts],
+      standings: [...state.standings],
       inventory: state.inventory.map((light) => ({ ...light })),
       activeIndex: state.activeIndex,
       found: { ...state.found },
@@ -851,6 +1046,9 @@ export function resumeRun(save = loadSave()) {
     tools: new Set(suspended.tools),
     keys: new Set(suspended.keys),
     chests: new Set(suspended.chests),
+    landmarks: new Set(suspended.landmarks),
+    posts: new Set(suspended.posts),
+    standings: new Set(suspended.standings),
     nonce: suspended.nonce,
     epoch: suspended.epoch,
     salt: saltOf(suspended.nonce, suspended.epoch),
@@ -910,6 +1108,11 @@ export function runSummary(state) {
     // here would put back in its chest.
     keys: [...state.keys],
     keysCarried: [...state.keys].filter((id) => !state.banked.keys.includes(id)),
+    // And for the landmarks: which of them this world knows, and which of those
+    // this walk would put back by not making it home (DESIGN.md §4.10).
+    landmarks: [...state.landmarks],
+    landmarksCarried: [...state.landmarks].filter((id) => !state.banked.landmarks.includes(id)),
+    standings: [...state.standings],
     // Coins and gems are counted separately, so "found" here means lights only.
     lightsFound: Object.entries(state.found)
       .filter(([id]) => itemDef(id) && itemDef(id).isLight)

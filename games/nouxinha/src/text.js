@@ -97,6 +97,9 @@ export const HUD = {
   // How many worlds the hall has taken off this campaign (DESIGN.md §4.9).
   // Only on screen once there is one to count.
   cycles: (n) => `WORLDS ${n}`,
+  // How far from the hut you are standing *now* — the Gnomon's standing, and so
+  // only on screen for a campaign that has put a hand on it (DESIGN.md §4.10).
+  distance: (n) => `OUT ${n}`,
   light: (name, durability, max) => `${name}  ${durability}/${max}`,
   noLight: 'NO LIGHT',
   blackout: 'BLACKOUT. ONLY WHAT IS RIGHT AROUND YOU IS VISIBLE.',
@@ -125,6 +128,15 @@ export const FLASH = {
   keyFound: (name) => `FOUND THE ${name}. CARRY IT HOME TO KEEP IT.`,
   chestCoins: (n) => `THE CHEST HELD ${n} COINS.`,
   chestEmpty: 'THE CHEST IS ALREADY OPEN.',
+  // A landmark, walked into. The panel says what it is; the status line says
+  // what it just did for you, which is the half worth having in a shout.
+  landmarkAgain: (name) => `${name}. NOTHING MORE TO TAKE FROM IT THIS WORLD.`,
+  landmarkCoins: (n) => `THE PRESS STRIKES YOU ${n} BLANKS.`,
+  landmarkWater: 'THE WELL UNDER IT IS DEEP. YOUR WATER IS FULL.',
+  landmarkRelit: (name) => `${name} BURNS LIKE NEW.`,
+  landmarkReveal: 'THE DIAL SHOWS YOU THE GROUND YOU CAME OVER.',
+  // A signpost, read again. The first read gets the panel.
+  signpost: (line) => line,
   // The edge, every time after the first — the first bump earns the EDGE dialog.
   edge: 'THE DARK IS BLOCKING YOU.',
   bought: (name, coinsLeft) => `BOUGHT ${name}. ${coinsLeft} COINS LEFT.`,
@@ -145,6 +157,11 @@ export const CARRIED = {
   manyGems: (n) => `all ${n} colours`,
   tool: (name) => `the ${name.toLowerCase()}`,
   key: (name) => `the ${name.toLowerCase()}`,
+  // A landmark is not a thing in your hands, so it never joins the sentence
+  // above — a place you have been gets one of its own (DESIGN.md §4.10).
+  landmarkStored: (what) => `You have stood at ${what}. That is written down too.`,
+  landmarkLost: (what) =>
+    `You will have to walk back to ${what}: standing somewhere counts for nothing until you get home.`,
   coins: (n) => `${n} coins`,
 };
 
@@ -293,6 +310,21 @@ export const SAY = {
     `Inside is a hoard of ${coins} coins, counted out and left for nobody.`,
     'The merchant will not ask where you got them.',
   ],
+  // A landmark, walked into (DESIGN.md §4.10). The panel rather than a line in
+  // the HUD for the same reason a chest gets it: this is the world telling you
+  // something about itself, and the panel leaves the place on screen while it
+  // is read. `again` is a landmark this campaign already knows from an earlier
+  // world — shorter, because the second time you are not discovering it, you
+  // are recognising it.
+  landmark: (id, again) => LANDMARK_TEXT[id][again ? 'again' : 'met'],
+  // A signpost, read for the first time. Two blocks and then the directions,
+  // which are the only thing worth re-reading — every read after this one is a
+  // line in the status bar.
+  signpost: (line) => [
+    'A post, leaning, with the ground trodden down around it.',
+    'Two of its arms are gone. The one still on it has a name burned into the wood.',
+    line,
+  ],
   // The hall (DESIGN.md §4.9). He introduces himself, he is courteous, he takes
   // what you brought, and he moulds the world again. What he says about the
   // shards is the one part of it that depends on the walk you actually had, so
@@ -309,6 +341,97 @@ export const SAY = {
     '"The sun went out because I caught it," he says. "I am not sorry, and I am not finished. Go home and rest."',
     'The ground goes. When it comes back it is not the ground you learned — and your own door is behind you.',
   ],
+};
+
+// --- The landmarks -----------------------------------------------------------
+//
+// The four named places, one per world, the same four in every world the hall
+// moulds (DESIGN.md §4.10). A name, and what the panel reads out the first time
+// this campaign touches it — and the shorter thing it reads out in every world
+// after, once the place is one you recognise rather than one you are finding.
+//
+// `standing` is the line the campaign keeps: what putting a hand on this one
+// changed for good. It is copy rather than a rule — the rule is in
+// `src/core/rules.js` — but the two are written to say the same thing.
+
+export const LANDMARK_TEXT = {
+  mint: {
+    name: 'THE MINT',
+    standing: 'THE STALL IS ON YOUR MAP',
+    met: [
+      'A stone press, with the die still set in it.',
+      'Around its foot are coins: struck blank, thousands of them, not one of them worth anything.',
+      'Somebody built a mint for a world with one person in it, and then minted the money as well.',
+      'You take a handful of blanks. You will know where the stall is, in every world after this one.',
+    ],
+    again: [
+      'The press again, in ground it was not standing in yesterday, in the same drift of blanks.',
+      'It strikes you a handful, the way it did before.',
+    ],
+  },
+  bell: {
+    name: 'THE DROWNED BELL',
+    standing: 'YOU HEAR IT WHEREVER IT STANDS',
+    met: [
+      'A bell bigger than the hut, mouth-down in ground that is wet for no reason this world can account for.',
+      'You put a hand on it. It answers — one note, so low it is more felt than heard, and it is still going when you take your hand away.',
+      'You drink until you cannot drink any more. You will hear that note again, wherever it is standing.',
+    ],
+    again: [
+      'The bell again, humming before you have touched it.',
+      'The water under it is as deep as it ever was.',
+    ],
+  },
+  'lantern-tree': {
+    name: 'THE LANTERN TREE',
+    standing: 'YOU NEVER SET OUT WITH ONE LIGHT AGAIN',
+    met: [
+      'A dead tree with lanterns hung all through it, lit a very long time ago and still, faintly, going.',
+      'The glass underfoot says most of them fell. Somebody stood here with a light, and it was not you.',
+      'You take a flame off the lowest one. You will not walk out of the hut with a single candle again.',
+    ],
+    again: [
+      'The tree again, still burning, in a world that has never seen it.',
+      'You hold your light up to it and it comes back to full.',
+    ],
+  },
+  gnomon: {
+    name: 'THE GNOMON',
+    standing: 'YOU KNOW HOW FAR OUT YOU ARE',
+    met: [
+      'A shaft on a stepped base, standing at the centre of a dial cut into the ground.',
+      'It has never once cast a shadow. There has been no sun since it was raised, and it was raised anyway, by somebody who expected to need it.',
+      'You read what is left of the dial. From here on you know how far out you are standing.',
+    ],
+    again: [
+      'The dial again, in ground it was not cut into yesterday, still keeping a time this world does not have.',
+      'It shows you the ground you came over.',
+    ],
+  },
+};
+
+// --- Signposts ---------------------------------------------------------------
+//
+// What a post says: a name, a heading and how far, in that order and in that
+// many words. Eight headings because the post is somebody's directions rather
+// than an instrument — the compass is the instrument, and it draws four.
+
+export const SIGNPOST = {
+  // North first, then clockwise (`signpostBearing` in src/core/world.js).
+  bearings: [
+    'NORTH',
+    'NORTH-EAST',
+    'EAST',
+    'SOUTH-EAST',
+    'SOUTH',
+    'SOUTH-WEST',
+    'WEST',
+    'NORTH-WEST',
+  ],
+  // How far, in bands (balance.js SIGNPOST_BANDS): near, a walk, a long walk,
+  // and further than any of those.
+  far: ['NEARBY', 'A WALK', 'A LONG WALK', 'FAR'],
+  line: (name, bearing, far) => `${name} — ${bearing} — ${far}`,
 };
 
 // --- Panels ------------------------------------------------------------------

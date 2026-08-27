@@ -178,6 +178,16 @@ export function gemColour(hue) {
   return other ? other.fg : active.fg;
 }
 
+// A palette's foreground by name, for the one thing in the game whose colour is
+// absolute rather than relative to the world it is standing in: a landmark
+// (src/data/landmarks.js). Everything else asks `gemColour`, which deliberately
+// hands back a colour the world it is in does *not* draw itself in; a landmark
+// is the same object in every world, so it keeps the same colour in all four.
+export function paletteColour(id) {
+  const found = PALETTES.find((p) => p.id === id);
+  return found ? found.fg : getPalette().fg;
+}
+
 // Phaser wants '#rrggbb' for text colours, the palette stores numbers.
 export function hex(colour) {
   return '#' + colour.toString(16).padStart(6, '0');

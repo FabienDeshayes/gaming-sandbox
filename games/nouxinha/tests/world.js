@@ -22,12 +22,15 @@ import {
   isMerchant,
   isWalkable,
   itemAt,
+  landmarks,
   pickSeed,
   saltOf,
   sanctums,
+  signposts,
 } from '../src/core/world.js';
 import { KEYS } from '../src/data/items.js';
 import { biomeDef } from '../src/data/biomes.js';
+import { landmarkDef } from '../src/data/landmarks.js';
 import { emptySave } from '../src/core/save.js';
 import { LIGHTS, STARTING_LIGHT, STARTING_WATER } from '../src/balance.js';
 import { setDefaultPalette } from '../src/config.js';
@@ -134,7 +137,7 @@ export const SHADOW_ROUTE = bfs(SEED, (x, y) => {
 export const SANCTUMS = sanctums(SEED);
 export const FIRST_GEM = SANCTUMS[0];
 export const GEM_ROUTE = bfs(SEED, (x, y) => x === FIRST_GEM.centre.x && y === FIRST_GEM.centre.y, 90);
-// The walk to the merchant. Landmarks don't move with the nonce, so this route
+// The walk to the merchant. The sites don't move with the nonce, so this route
 // holds for any page — but it is 20-odd taps, so only one test walks it.
 export const MERCHANT_ROUTE = bfs(SEED, (x, y) => isMerchant(x, y, SEED), 60);
 
@@ -156,6 +159,44 @@ export const HALL_ROUTE = bfs(
   200,
   START,
   ALL_KEYS
+);
+
+// The four landmarks of this world, the nearest of them, and the walk to its
+// doorstep. A landmark's own tile can't be stepped on — it is walked *into*,
+// like a chest — so the route stops on its court and `hit` is the direction the
+// last input bumps in (DESIGN.md §4.10).
+export const LANDMARKS_HERE = landmarks(SEED);
+// Which one the browser tests walk to: the nearest whose own colour is *not*
+// the colour this world is drawn in. Every world has exactly one landmark at
+// home in it (src/data/landmarks.js), and that is the one whose colour nothing
+// on screen could tell apart from the foreground — so a test about a landmark
+// gaining its colour has no business being pointed at it.
+export const NEAREST_LANDMARK =
+  LANDMARKS_HERE.find((l) => landmarkDef(l.id).palette !== biomeDef(BIOME).palette) ||
+  LANDMARKS_HERE[0];
+export const LANDMARK_ROUTE = bfs(
+  SEED,
+  (x, y) => {
+    const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
+      ([, dx, dy]) => x + dx === NEAREST_LANDMARK.x && y + dy === NEAREST_LANDMARK.y
+    );
+    return into ? into[0] : null;
+  },
+  90
+);
+
+// And the post that stands five tiles from the hut, which is the one every
+// campaign meets on its first expedition. Read the same way: a bump.
+export const FIRST_POST = signposts(SEED).find((post) => post.id === 'post-1');
+export const POST_ROUTE = bfs(
+  SEED,
+  (x, y) => {
+    const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
+      ([, dx, dy]) => x + dx === FIRST_POST.x && y + dy === FIRST_POST.y
+    );
+    return into ? into[0] : null;
+  },
+  40
 );
 
 // The nearest sanctum whose gate is still shut, and the chest holding the key

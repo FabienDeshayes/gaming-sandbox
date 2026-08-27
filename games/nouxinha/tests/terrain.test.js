@@ -15,11 +15,14 @@ import {
   itemAt,
   landmarkAt,
   landmarks,
-  landmarksReachable,
   pickSeed,
   reachableFraction,
   sanctumAt,
   sanctums,
+  signpostAt,
+  signposts,
+  siteAt,
+  sitesReachable,
   terrainAt,
 } from '../src/core/world.js';
 import { activeShape, createRun, litTiles, reveal, step, EDGE_SEEN } from '../src/core/rules.js';
@@ -39,7 +42,15 @@ const survey = (() => {
   let treesInAStand = 0;
   for (let y = -SPAN; y <= SPAN; y++)
     for (let x = -SPAN; x <= SPAN; x++) {
-      if (sanctumAt(x, y, SEED) || landmarkAt(x, y, SEED)) continue;
+      // Everything built into the world is skipped: what this survey is about
+      // is the ground the noise grew, not the places set into it.
+      if (
+        sanctumAt(x, y, SEED) ||
+        siteAt(x, y, SEED) ||
+        landmarkAt(x, y, SEED) ||
+        signpostAt(x, y, SEED)
+      )
+        continue;
       open += 1;
       const at = terrainAt(x, y, SEED);
       counts[at] += 1;
@@ -364,8 +375,9 @@ unit('the whole world is one place, out to the rim', () => {
 
 unit('pickSeed rejects a world nobody could explore', () => {
   // Two bars, and a seed has to clear both: the spawn must not be sealed into a
-  // pocket, and every sanctum door and landmark must be walkable-to with
-  // nothing in hand (DESIGN.md §5). Seed 5 fails the first outright.
+  // pocket, and every sanctum door, site, landmark, chest and post must be
+  // walkable-to with nothing in hand (DESIGN.md §5). Seed 5 fails the first
+  // outright.
   assert(reachableFraction(5) < SEED_MIN_FRACTION, 'seed 5 should be a stranding seed');
   const replacement = pickSeed(5);
   assert(replacement !== 5, 'a stranding seed should be rejected');
@@ -373,15 +385,23 @@ unit('pickSeed rejects a world nobody could explore', () => {
   for (const preferred of [5, 1, 77, 12345, DEFAULT_SEED, (DEFAULT_SEED + 7919) | 0]) {
     const picked = pickSeed(preferred);
     assert(reachableFraction(picked) >= SEED_MIN_FRACTION, `seed picked from ${preferred} is a pocket`);
-    assert(landmarksReachable(picked), `seed picked from ${preferred} seals a door or a landmark off`);
-    // And every landmark sits on ground, with a clearing around it.
+    assert(sitesReachable(picked), `seed picked from ${preferred} seals a door or a landmark off`);
+    // And every landmark stands in a court you can walk right round, whatever
+    // the noise did — its own tile is the one you cannot stand on, because that
+    // is the tile you walk *into* (DESIGN.md §4.10).
     for (const landmark of landmarks(picked))
       for (let dy = -1; dy <= 1; dy++)
         for (let dx = -1; dx <= 1; dx++)
           assert(
-            isWalkable(landmark.x + dx, landmark.y + dy, picked),
-            `${landmark.id}'s apron is walkable on the seed picked from ${preferred}`
+            (!dx && !dy) || isWalkable(landmark.x + dx, landmark.y + dy, picked),
+            `${landmark.id}'s court is walkable on the seed picked from ${preferred}`
           );
+    // A post is the one placed thing the world may go without rather than
+    // force, so what is asserted is that most of them stood up (core/world.js).
+    assert(
+      signposts(picked).length >= 6,
+      `the seed picked from ${preferred} stands up its signposts (${signposts(picked).length}/8)`
+    );
   }
 });
 

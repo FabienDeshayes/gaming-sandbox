@@ -1,6 +1,7 @@
 // The chain the campaign is: four sanctums, three gems, the leash each one
-// widens, and the landmarks — the merchant, the compass and the map — standing
-// out in the dark between them. Pure — no browser.
+// widens, and the sites — the merchant, the compass and the map — standing out
+// in the dark between them. The four landmarks are `landmarks.test.js`. Pure —
+// no browser.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import {
@@ -12,8 +13,8 @@ import {
   isMerchant,
   isWalkable,
   itemAt,
-  landmarkNamed,
-  landmarks,
+  siteNamed,
+  sites,
   sanctums,
   terrainAt,
 } from '../src/core/world.js';
@@ -317,10 +318,10 @@ unit('the compass points at the hall once every colour is in hand', () => {
   assertEqual(compassTarget(nearly).id, 'gem-3', 'until then it points at what is missing');
 });
 
-// --- The landmarks -----------------------------------------------------------
+// --- The sites ---------------------------------------------------------------
 
 unit('the merchant stands one walk from the hut, and there is only one', () => {
-  const found = landmarks(SEED).filter((l) => l.id === 'merchant');
+  const found = sites(SEED).filter((site) => site.id === 'merchant');
   assertEqual(found.length, 1, 'exactly one merchant');
   const distance = chebyshev(found[0].x, found[0].y);
   assert(distance >= 20 && distance <= 25, `the merchant sits ${distance} tiles out`);
@@ -330,14 +331,14 @@ unit('the merchant stands one walk from the hut, and there is only one', () => {
 
 unit('the compass and the map lie out in the dark, one of each', () => {
   for (const id of ['compass', 'map']) {
-    const landmark = landmarkNamed(id, SEED);
-    assert(landmark, `the world places a ${id}`);
-    assertEqual(landmarks(SEED).filter((l) => l.item === id).length, 1, `exactly one ${id}`);
-    assert(chebyshev(landmark.x, landmark.y) > 25, `the ${id} is a proper walk out`);
+    const site = siteNamed(id, SEED);
+    assert(site, `the world places a ${id}`);
+    assertEqual(sites(SEED).filter((one) => one.item === id).length, 1, `exactly one ${id}`);
+    assert(chebyshev(site.x, site.y) > 25, `the ${id} is a proper walk out`);
   }
 
   // Owning one takes it off the ground: it was the same object.
-  const compass = landmarkNamed('compass', SEED);
+  const compass = siteNamed('compass', SEED);
   const without = createRun(SEED, emptySave(), NONCE);
   assertEqual(itemOnTile(without, compass.x, compass.y), 'compass', 'there for a run without one');
   const owned = createRun(SEED, { ...emptySave(), compass: true }, NONCE);
@@ -406,7 +407,7 @@ unit('the compass points at the nearest thing this run could actually reach', ()
   const reachable = sanctums(SEED)
     .filter((s) => s.gem && !s.key)
     .map((s) => s.centre)
-    .concat(landmarks(SEED).map((l) => ({ x: l.x, y: l.y })))
+    .concat(sites(SEED).map((site) => ({ x: site.x, y: site.y })))
     .concat(chests(SEED).map((c) => ({ x: c.x, y: c.y })));
   const nearest = Math.min(...reachable.map((t) => chebyshev(t.x, t.y, state.x, state.y)));
   assertEqual(compassTarget(state).distance, nearest, 'it points at the nearest of them');

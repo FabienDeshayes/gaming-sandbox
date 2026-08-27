@@ -15,6 +15,7 @@ import './rules.test.js';
 import './terrain.test.js';
 import './scatter.test.js';
 import './campaign.test.js';
+import './landmarks.test.js';
 import './save.test.js';
 import './sprites.test.js';
 
@@ -22,5 +23,6 @@ import './ui-shell.test.js';
 import './ui-explore.test.js';
 import './ui-items.test.js';
 import './ui-campaign.test.js';
+import './ui-landmarks.test.js';
 
 run();

@@ -562,6 +562,12 @@ export async function openGame(
           // the two halves of what a chest changes (DESIGN.md §4.8).
           keys: [...r.keys],
           chests: [...r.chests],
+          // The three sets a landmark is remembered in (DESIGN.md §4.10): the
+          // ones stood at in this world, the posts read in it, and the
+          // standings — which are the only one of the three that outlives it.
+          landmarks: [...r.landmarks],
+          posts: [...r.posts],
+          standings: [...r.standings],
           seenUnique: [...r.seenUnique],
           banked: { ...r.banked },
           animating: s.animating,

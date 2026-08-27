@@ -205,7 +205,7 @@ function atLandmark(id, save = emptySave()) {
   return { state, landmark };
 }
 
-unit('a landmark pays a gift the first time each world, and nothing after', () => {
+unit('a landmark pays its gift on every fresh touch, not just the first', () => {
   const { state, landmark } = atLandmark('mint');
   assertEqual(landmarkOnTile(state, landmark.x, landmark.y).touched, false, 'not been here yet');
 
@@ -214,10 +214,17 @@ unit('a landmark pays a gift the first time each world, and nothing after', () =
   assertEqual(first.gift.coins, LANDMARK_GIFTS.mint.coins, 'and it strikes you blanks');
   assertEqual(state.coins, LANDMARK_GIFTS.mint.coins, 'which go in the pocket');
 
+  // A real return visit — fresh, the default — pays again.
   const again = touchLandmark(state, landmark);
-  assertEqual(again.already, true, 'the second does nothing');
-  assertEqual(again.gift, null, 'and pays nothing');
-  assertEqual(state.coins, LANDMARK_GIFTS.mint.coins, 'the purse is where it was');
+  assertEqual(again.already, true, 'this world has had it off you before');
+  assertEqual(again.gift.coins, LANDMARK_GIFTS.mint.coins, 'but the gift lands again anyway');
+  assertEqual(state.coins, LANDMARK_GIFTS.mint.coins * 2, 'and pays into the same purse');
+
+  // What does not repeat is a direction key held against the same bump — no
+  // step landed in between, so it is not a fresh touch.
+  const held = touchLandmark(state, landmark, false);
+  assertEqual(held.gift, null, 'held against it again pays nothing');
+  assertEqual(state.coins, LANDMARK_GIFTS.mint.coins * 2, 'the purse is where it was');
 });
 
 unit('a landmark bumped again reads as fresh once a step has landed', () => {

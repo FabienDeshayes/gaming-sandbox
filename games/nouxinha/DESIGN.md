@@ -618,8 +618,8 @@ what you *know*. A sound, a spare candle, a number on the HUD and a pin on the m
 wearing four different coats. If playtesting says the ladder is too thin, the place to add a number
 is this table and nowhere else.
 
-**A gift — once per world, the first time you touch it there.** So the fourth world still has four
-reasons to walk in four directions:
+**A gift — every fresh touch, in this world or any world after.** Not just the first time: a landmark
+already found is still worth the detour, because walking up to it again pays out the same gift again.
 
 | Landmark | Gift |
 |---|---|
@@ -628,10 +628,12 @@ reasons to walk in four directions:
 | The Lantern Tree | Your equipped light burns back up to full. |
 | The Gnomon | The ground reveals in a radius around it — you get to see how far you have come. |
 
-A gift is an in-run effect like a pickup, so a run that dies loses what it was given; the standing
-goes with it, and the landmark is one this campaign has never stood at again — exactly the rule the
-keys and the chest lids already live under (§4.8). Walking to a landmark and dying on the way home
-means walking back to it.
+A gift is an in-run effect like a pickup, so a run that dies loses what it was given, along with the
+world's own record of having stood there — exactly the rule the keys and the chest lids already live
+under (§4.8). Walking to a landmark and dying on the way home means walking back to it, and the walk
+pays out again when you do. What does not repeat is only what is held against the same bump with no
+step in between — a direction key held down pays nothing twice — and the standing, which is the
+campaign's and lands once ever, on the first touch of any world.
 
 **The flavour text is the text panel** (§7) — its fourth and fifth callers, after setting out, the
 chest and the hall, in the same voice:

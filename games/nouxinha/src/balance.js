@@ -222,9 +222,9 @@ export const LANDMARK_PLAN = [
 // reason arriving at one fills your light.
 export const LANDMARK_COURT = 1;
 
-// What a landmark hands the run the first time it is touched **in a world**: a
-// gift, not a standing (DESIGN.md §4.10). Small, one-off and per world, so the
-// fourth world still has four reasons to walk in four directions.
+// What a landmark hands the run on every fresh touch: a gift, not a standing
+// (DESIGN.md §4.10). Small and repeatable — a walk back to one pays again, in
+// this world or the next — so a landmark is worth the detour every time.
 //
 //   coins    — a handful of blanks, struck on the spot
 //   water    — Infinity is a full tank, the same as the spring vial's

@@ -394,16 +394,17 @@ export function openChest(state, chest) {
 // hands over comes in two tiers that are easy to confuse and must not be
 // (DESIGN.md §4.10):
 //
-//   a **gift**    — once per world, the first time you touch it there. An
-//                   in-run effect like a pickup: coins, water, a relit torch,
-//                   ground revealed. Lost with the run, like any pickup.
+//   a **gift**    — every fresh touch, in this world or any other. An in-run
+//                   effect like a pickup: coins, water, a relit torch, ground
+//                   revealed. Lost with the run, like any pickup, but earned
+//                   back the moment you walk up to the landmark again.
 //   a **standing** — once per *campaign*, the first time you ever touch it.
 //                   Banked at the hut with everything else that is real, and
 //                   then kept through every world the hall moulds after.
 //
-// Which is why both sets are banked rather than held: a landmark walked to on a
-// run that dies is a landmark you have not been to, and the campaign has to
-// walk back out to it.
+// The standing is banked rather than held: a landmark walked to on a run that
+// dies is a landmark the campaign has not been to, and it has to walk back out
+// to it.
 
 // The standing a landmark hands over, by landmark id — the two tables meeting.
 function standingOf(id) {
@@ -485,17 +486,19 @@ function bumpAgain(state, kind, id) {
 }
 
 // Putting a hand on a landmark. Returns what happened: whether this world had
-// already had it off you, whether this is the first time the *campaign* has
-// ever stood here — which is the standing, and the only part of it that
-// outlives the world — and what the gift was.
-export function touchLandmark(state, landmark) {
-  if (state.landmarks.has(landmark.id))
-    return { already: true, firstEver: false, gift: null };
+// already had it off you before, whether this is the first time the
+// *campaign* has ever stood here — which is the standing, and the only part
+// of it that outlives the world — and what the gift was. The gift lands on
+// every fresh touch (`fresh`, from `bumpAgain`) — a direction key held against
+// the same bump pays nothing twice, but a real return visit, in this world or
+// the next, pays again.
+export function touchLandmark(state, landmark, fresh = true) {
+  const already = state.landmarks.has(landmark.id);
   state.landmarks.add(landmark.id);
   const standing = standingOf(landmark.id);
   const firstEver = !!standing && !state.standings.has(standing);
   if (firstEver) state.standings.add(standing);
-  return { already: false, firstEver, gift: giveGift(state, landmark.id) };
+  return { already, firstEver, gift: fresh ? giveGift(state, landmark.id) : null };
 }
 
 // The signpost standing on a tile, and whether this world has already been read
@@ -699,14 +702,16 @@ export function step(state, direction) {
     // like the chest's and the sorcerer's, costing nothing, because what the
     // step is for is standing here rather than getting anywhere.
     const mark = landmarkOnTile(state, nx, ny);
-    if (mark)
+    if (mark) {
+      const fresh = bumpAgain(state, 'landmark', mark.landmark.id);
       return {
         moved: false,
         reason: 'landmark',
         landmark: mark.landmark.id,
-        fresh: bumpAgain(state, 'landmark', mark.landmark.id),
-        ...touchLandmark(state, mark.landmark),
+        fresh,
+        ...touchLandmark(state, mark.landmark, fresh),
       };
+    }
     // And walking into a post is how you read it.
     const post = signpostOnTile(state, nx, ny);
     if (post)

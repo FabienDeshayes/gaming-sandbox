@@ -85,10 +85,17 @@ test('walking into a landmark stands you at it, says its piece, and gives it a c
   await game.settle();
   await game.tapDpad(back);
   await game.settle();
+  const heardSoFar = await game.sounds();
   await game.tapDpad(LANDMARK_ROUTE.hit);
   await game.settle();
   assert((await game.state()).textPanelOpen, 'and the panel is up again');
   await game.readPanel();
+
+  // And the gift lands again too — a landmark pays out on every fresh touch,
+  // not just the first (DESIGN.md §4.10).
+  const newSounds = (await game.sounds()).slice(heardSoFar.length);
+  assert(newSounds.length > 0, 'heard again, on the real return visit');
+  assertEqual(newSounds[0], 'landmark', 'the same sound as the first touch');
 }, { save: AT_LANDMARK.save });
 
 // The post five tiles from the hut: the one every campaign meets on its first

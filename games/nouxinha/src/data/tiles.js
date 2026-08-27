@@ -126,7 +126,7 @@ export const TILES = {
   'court-bell': [3, 0],
   'court-tree': [4, 0],
   'court-gnomon': [22, 14],
-  signpost: [17, 8],
+  signpost: [0, 7],
 
   // --- Items ---------------------------------------------------------------
   // The four lights climb a silhouette: candle, lantern, candelabra, and a

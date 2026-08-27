@@ -125,6 +125,7 @@
       <div id="targets"></div>
       <h2 id="editing">—</h2>
       <div class="slots" id="slots"></div>
+      <button id="deleteSlot" disabled>DELETE SELECTED TILE</button>
       <p id="hint"></p>
     </div>
     <div class="pane wide">
@@ -310,6 +311,17 @@ function drawTargets() {
   }
 }
 
+// Drops a tile out of the list being edited — a list of one is as far down as
+// it goes, since a world has to draw its ground with something. Reachable by
+// right-click (desktop) and by selecting a slot then tapping DELETE SELECTED
+// TILE (there is no right-click on mobile).
+function dropSlot(n) {
+  if (tilesOf(target).length < 2) return say('a tile has to be drawn with something');
+  editable().splice(n, 1);
+  slot = null;
+  refresh();
+}
+
 function drawSlots() {
   const host = el('slots');
   host.replaceChildren();
@@ -324,14 +336,9 @@ function drawSlots() {
       slot = slot === n ? null : n;
       refresh();
     });
-    // A right-click drops a tile out of the list — a list of one is as far down
-    // as it goes, since a world has to draw its ground with something.
     box.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      if (list.length < 2) return say('a tile has to be drawn with something');
-      editable().splice(n, 1);
-      slot = null;
-      refresh();
+      dropSlot(n);
     });
     host.append(box);
   });
@@ -373,11 +380,12 @@ function refresh() {
   el('key').value = key;
   el('editing').textContent = `${key.toUpperCase()} — ${targetName(target)}`;
   el('hint').textContent = isList(key)
-    ? 'click a tile on the sheet to add one · click a slot first to replace it · right-click a slot to drop it'
+    ? 'click a tile on the sheet to add one · click a slot first to replace it · right-click a slot (or select it and tap DELETE SELECTED TILE) to drop it'
     : 'click a tile on the sheet to draw this with it';
   el('reset').disabled = !hasOwn(target);
   el('reset').textContent =
     target === DEFAULT_TARGET ? 'THE DEFAULT ITSELF' : `${targetName(target)} DRAWS THE DEFAULT`;
+  el('deleteSlot').disabled = slot === null || tilesOf(target).length < 2;
   drawTargets();
   drawSlots();
   drawSheet();
@@ -403,6 +411,10 @@ el('sheet').addEventListener('click', (e) => {
   else list[0] = [col, row];
   el('picked').textContent = `picked (${col}, ${row})`;
   refresh();
+});
+
+el('deleteSlot').addEventListener('click', () => {
+  if (slot !== null) dropSlot(slot);
 });
 
 // A biome that says nothing about a key draws the default, and dropping its

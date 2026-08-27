@@ -207,6 +207,10 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // off from the save slots: nothing it does is ever written (`bankRun`,
     // `rememberGround`), because a run handed three gems is not a campaign.
     cheats: !!options.cheats,
+    // The landmark or post last bumped with no successful step since, so a
+    // second bump on the same one while still standing against it reads as the
+    // same visit — never saved, and reset by `resumeRun` losing it for free.
+    lastBump: null,
   };
   if (state.cheats) applyCheats(state);
   // How much ground the slot had already drawn before this expedition took a
@@ -469,6 +473,17 @@ function giveGift(state, id) {
   return given;
 }
 
+// Whether this bump is a fresh visit rather than the player still standing
+// against the same landmark or post: fresh the first time anything is bumped,
+// and again the moment a step actually lands somewhere, but not for a second
+// bump on the same one before that — which is what keeps a held direction key
+// from reopening the text panel once a step for every frame it's held.
+function bumpAgain(state, kind, id) {
+  const fresh = !(state.lastBump && state.lastBump.kind === kind && state.lastBump.id === id);
+  state.lastBump = { kind, id };
+  return fresh;
+}
+
 // Putting a hand on a landmark. Returns what happened: whether this world had
 // already had it off you, whether this is the first time the *campaign* has
 // ever stood here — which is the standing, and the only part of it that
@@ -689,6 +704,7 @@ export function step(state, direction) {
         moved: false,
         reason: 'landmark',
         landmark: mark.landmark.id,
+        fresh: bumpAgain(state, 'landmark', mark.landmark.id),
         ...touchLandmark(state, mark.landmark),
       };
     // And walking into a post is how you read it.
@@ -698,6 +714,7 @@ export function step(state, direction) {
         moved: false,
         reason: 'signpost',
         post: post.post.id,
+        fresh: bumpAgain(state, 'signpost', post.post.id),
         ...readSignpost(state, post.post),
       };
     // Walking into a chest is what opens it (DESIGN.md §4.8). The step is still
@@ -732,6 +749,9 @@ export function step(state, direction) {
   state.facing = direction;
   state.steps += 1;
   state.furthest = Math.max(state.furthest, chebyshev(nx, ny));
+  // A step landing anywhere clears the debounce above: the next bump on a
+  // landmark or post is a fresh visit, wherever it is.
+  state.lastBump = null;
 
   // Order matters: burn first (so the step you take on your last durability is
   // the one that plunges you into the dark), then pick up — a water-drop
@@ -1065,6 +1085,9 @@ export function resumeRun(save = loadSave()) {
     // on the ground comes back off the seed and the salt.
     collected: decodeExplored(suspended.collected),
     cheats: false,
+    // Not part of what was saved (see `createRun`) — a resumed expedition
+    // starts as if it had just stepped, so the next bump reads as a fresh one.
+    lastBump: null,
   };
   // How much ground the campaign had drawn when the expedition set out, so the
   // recap still reports what this walk added rather than what the slot holds.

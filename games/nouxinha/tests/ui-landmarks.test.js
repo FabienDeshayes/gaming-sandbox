@@ -69,11 +69,26 @@ test('walking into a landmark stands you at it, says its piece, and gives it a c
   assertEqual(lit.paint[0], paletteColour(DEF.palette), 'its own colour reached the screen');
   assertEqual(lit.tint, getPalette().fg, 'and the rest of it is still the world it stands in');
 
-  // A second visit does nothing at all, exactly like a chest with its lid up.
+  // A second visit does nothing at all, exactly like a chest with its lid up —
+  // as long as no step has landed between the two bumps.
   await game.tapDpad(LANDMARK_ROUTE.hit);
   await game.settle();
   assert(await game.hasText(FLASH.landmarkAgain(DEF.name)), 'walking back into it says so');
   assertEqual((await game.state()).water, maxWater(0), 'and hands over nothing twice');
+
+  // Step off the landmark's own tile and back onto the court — a corner of it,
+  // guaranteed walkable — and the panel opens again: a real return visit reads
+  // differently from a direction key just held against it.
+  const perp = LANDMARK_ROUTE.hit === 'left' || LANDMARK_ROUTE.hit === 'right' ? 'up' : 'left';
+  const back = perp === 'up' ? 'down' : 'right';
+  await game.tapDpad(perp);
+  await game.settle();
+  await game.tapDpad(back);
+  await game.settle();
+  await game.tapDpad(LANDMARK_ROUTE.hit);
+  await game.settle();
+  assert((await game.state()).textPanelOpen, 'and the panel is up again');
+  await game.readPanel();
 }, { save: AT_LANDMARK.save });
 
 // The post five tiles from the hut: the one every campaign meets on its first
@@ -109,12 +124,27 @@ test('a signpost is read by walking into it, and says which way and how far', as
   assertEqual(last, line, 'and it ends on the directions');
 
   // Read again, it is the same directions as a line in the status bar — by then
-  // the player is checking rather than finding out.
+  // the player is checking rather than finding out, as long as no step has
+  // landed since the last time it was read.
   await game.tapDpad(POST_ROUTE.hit);
   await game.settle();
   const twice = await game.state();
   assertEqual(twice.textPanelOpen, false, 'no second reading of the whole post');
   assert(await game.hasText(line), 'just the directions, in the status line');
+
+  // Retrace the route's last leg and back — ground already proven walkable —
+  // and reading it again opens the panel: a real return visit, not a direction
+  // key held against it.
+  const lastLeg = POST_ROUTE.path[POST_ROUTE.path.length - 1];
+  const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
+  await game.tapDpad(OPPOSITE[lastLeg]);
+  await game.settle();
+  await game.tapDpad(lastLeg);
+  await game.settle();
+  await game.tapDpad(POST_ROUTE.hit);
+  await game.settle();
+  assert((await game.state()).textPanelOpen, 'and the panel is up again');
+  await game.readPanel();
 
   // The arm is drawn in the colour of the landmark it names, and that colour is
   // the plain foreground until the campaign has been there.

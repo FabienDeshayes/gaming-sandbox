@@ -575,14 +575,17 @@ export class ExploreScene extends Phaser.Scene {
   // itself, and the panel leaves the place on screen while it is read — and the
   // status line for the gift, which is the half worth having as a shout.
   //
-  // A landmark this world has already had off you does nothing at all, exactly
-  // like a chest with its lid already up.
+  // A landmark this world has already had off you gives nothing a second
+  // time, but still gets the panel rather than the status line as long as the
+  // player walked a step since the last time it was bumped — a status line for
+  // a direction key held against it, the panel for an actual return visit.
   touchedLandmark(result) {
     const def = landmarkDef(result.landmark);
     this.map.refresh(this.run);
     this.hud.update(this.run);
     if (result.already) {
-      this.hud.flash(FLASH.landmarkAgain(def.name));
+      if (result.fresh) this.textPanel.show(SAY.landmark(def.id, true));
+      else this.hud.flash(FLASH.landmarkAgain(def.name));
       return;
     }
     playLandmark();
@@ -609,8 +612,10 @@ export class ExploreScene extends Phaser.Scene {
   }
 
   // A signpost, read by walking into it. The first read in a world gets the
-  // panel; every one after it is the same directions as a line in the status
-  // bar, because by then the player is checking rather than finding out.
+  // panel, and so does every read after it that comes after an actual step
+  // away and back; one bumped again with no step in between — a direction key
+  // held against it — is the same directions as a line in the status bar,
+  // because nothing has changed since the panel was last read out.
   readPost(result) {
     this.map.refresh(this.run);
     this.hud.update(this.run);
@@ -620,7 +625,7 @@ export class ExploreScene extends Phaser.Scene {
       SIGNPOST.bearings[result.bearing],
       SIGNPOST.far[result.band]
     );
-    if (result.first) this.textPanel.show(SAY.signpost(line));
+    if (result.first || result.fresh) this.textPanel.show(SAY.signpost(line));
     else this.hud.flash(FLASH.signpost(line));
   }
 

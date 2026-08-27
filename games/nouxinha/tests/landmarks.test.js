@@ -31,6 +31,7 @@ import {
   readSignpost,
   respawn,
   runSummary,
+  step,
   touchLandmark,
   turnCycle,
   standings,
@@ -46,7 +47,7 @@ import {
 } from '../src/balance.js';
 import { LANDMARK_IDS, landmarkDef } from '../src/data/landmarks.js';
 import { PALETTES } from '../src/config.js';
-import { NONCE, SEED } from './world.js';
+import { FIRST_POST, NONCE, POST_ROUTE, SEED } from './world.js';
 
 // --- Where they stand --------------------------------------------------------
 
@@ -217,6 +218,37 @@ unit('a landmark pays a gift the first time each world, and nothing after', () =
   assertEqual(again.already, true, 'the second does nothing');
   assertEqual(again.gift, null, 'and pays nothing');
   assertEqual(state.coins, LANDMARK_GIFTS.mint.coins, 'the purse is where it was');
+});
+
+unit('a landmark bumped again reads as fresh once a step has landed', () => {
+  const { state } = atLandmark('mint');
+  assertEqual(step(state, 'left').fresh, true, 'the first bump is a fresh one');
+  assertEqual(step(state, 'left').fresh, false, 'bumping it again with no step between is not');
+
+  assert(step(state, 'up').moved, 'a step lands');
+  assert(step(state, 'down').moved, 'and another back to where it was standing');
+  assertEqual(step(state, 'left').fresh, true, 'so the next bump is a fresh visit again');
+});
+
+const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
+
+unit('a signpost bumped again reads as fresh once a step has landed', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  for (const dir of POST_ROUTE.path) assert(step(state, dir).moved, `route step ${dir}`);
+  assertEqual(step(state, POST_ROUTE.hit).fresh, true, 'the first bump is a fresh one');
+  assertEqual(
+    step(state, POST_ROUTE.hit).fresh,
+    false,
+    'bumping it again with no step between is not'
+  );
+
+  // Retrace the route's last leg and back — ground the BFS already proved
+  // walkable, so the step away and the step back are both guaranteed to land.
+  const last = POST_ROUTE.path[POST_ROUTE.path.length - 1];
+  assert(step(state, OPPOSITE[last]).moved, 'a step lands');
+  assert(step(state, last).moved, 'and another back to where it was standing');
+  assertEqual(step(state, POST_ROUTE.hit).fresh, true, 'so the next bump is a fresh visit again');
+  assertEqual(FIRST_POST.id, 'post-1', 'sanity: this is the post the route was BFSed to');
 });
 
 unit('each landmark gives what it is about', () => {

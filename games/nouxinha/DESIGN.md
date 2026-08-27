@@ -641,9 +641,13 @@ chest and the hall, in the same voice:
 > *You put your hand on it. It answers — one note, so low it is more felt than heard.*
 > *You have stood here before. Not here: the ground is new. But here.*
 
-Two blocks of copy per landmark: the meeting, and the re-meeting in a later world — which is shorter,
-because the second time you are not discovering it, you are recognising it. Every word of it goes in
-`src/text.js` like every other word in the game.
+Two blocks of copy per landmark: the meeting, and the re-meeting — which is shorter, because the
+second time you are not discovering it, you are recognising it. The re-meeting plays on every touch
+after the first, whether that first was this world or an earlier one, as long as a step landed
+somewhere between this bump and the last — the gift is still only ever handed once per world, so a
+touch that doesn't earn one still earns the recognition. Only a bump right after another bump on the
+same landmark, with no step in between, gets the status line instead of the panel. Every word of it
+goes in `src/text.js` like every other word in the game.
 
 #### 4.10.5 Where they stand
 
@@ -676,11 +680,13 @@ Eight of them, and they are the half that makes the other half work. Four named 
   this campaign has never been. The *heading* is in the words rather than in the tile: the post's
   sprite is one of the standing-in tiles off the sheet (§4.10), and drawing four of it, one per
   direction, is the obvious thing to do the day it is drawn properly.
-- **Reading one opens the panel the first time** and echoes a line to the status bar every time
-  after: `THE DROWNED BELL — SOUTH-EAST — A LONG WALK`. Eight-point bearing and a banded distance
-  (`NEARBY` under 15, `A WALK` under 40, `A LONG WALK` under 80, `FAR` beyond), both computed at read
-  time from the post's own tile — so a signpost stores nothing and is as pure as the ground it
-  stands on.
+- **Reading one opens the panel**, and opens it again on every later read too, as long as a step
+  landed somewhere between this bump and the last one — `THE DROWNED BELL — SOUTH-EAST — A LONG
+  WALK`, eight-point bearing and a banded distance (`NEARBY` under 15, `A WALK` under 40, `A LONG
+  WALK` under 80, `FAR` beyond), both computed at read time from the post's own tile, so a signpost
+  stores nothing and is as pure as the ground it stands on. Only a bump on the same post with no
+  step in between — a direction held against it — echoes a line to the status bar instead, since
+  nothing has changed since the panel was last up.
 - **A signpost names a landmark you have never seen**, and that is how you learn the name. The name
   is legible; the colour is not, until you have been.
 - **Reading one pins its landmark on the map** for the rest of this world, in colour if you know it.

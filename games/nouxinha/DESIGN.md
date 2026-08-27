@@ -816,3 +816,266 @@ Not part of the initial implementation, listed here so the MVP doesn't paint the
 
 - **Vault.** The base holds a vault; items and coins you're carrying are only truly *yours* once you've walked back and stored them. That's what turns "how far out can I get" into a decision with a cost, and it's the intended next step after the MVP proves the walk is interesting.
 - **A reason to carry a light home.** Lights bank nowhere: the recap says what you were holding and then it's gone. The vault above is one answer; selling them back to the merchant is another.
+
+## 13. Landmarks and signposts — designed, not built
+
+> **Status:** this section is a specification, not a description. Nothing in it exists yet. When it
+> ships it moves up into §4 as §4.10, this banner goes, and the rest of the doc stops describing a
+> world with only sanctums and chests in it. Until then, §1-12 are the game and this is the plan.
+
+### 13.1 What a landmark is
+
+**Four of them per world, one per colour, and the same four in every world he moulds.** They are the
+only things in the game that are neither terrain nor a pickup: places, with names, that you walk to
+in order to have stood there.
+
+The fiction is in `STORY.md` §11.10 and it is one sentence: **the landmarks are the pins he pushes
+into the map before the ground goes on.** He re-moulds terrain, sanctums, stall and scatter every
+cycle, but he anchors each new world to the same four points, because nobody can mould a world out
+of nothing without something to measure from. They are the second thing in this game he cannot make
+from scratch; the first is the fact that you have been here before.
+
+They are mute. They never speak, never move, never open, and nothing is ever standing next to one —
+this world has one person in it and that has to stay true (`STORY.md` §12). What changes cycle over
+cycle is what *you* recognise, which is the only kind of progress this story allows.
+
+**The footprint is one shape, used four times**, so it is one piece of code and eight sprites:
+
+- a **centrepiece**: one tile, impassable, **bumped into rather than stepped on** — the chest
+  contract exactly (§4.8). No water, no durability, no facing, and it never stops a light, because a
+  monument you could hide behind would be a wall with a name.
+- a **court**: the eight tiles around it, forced walkable and drawn in the landmark's own ground
+  tile rather than plain floor. Whatever the noise did, there is always a way in and a way round.
+
+A landmark is therefore 3x3 — and a small torch shows a 3x3 block, so **arriving at one fills your
+light**. Nothing else in the world does that. That is the whole of what makes them read as special,
+and it costs no new mechanic.
+
+### 13.2 The four
+
+Ring order is Mint, Bell, Lantern Tree, Gnomon — nearest to furthest — and that is also the order of
+what they are about: coin, water, light, distance, which is every currency the game has.
+
+| | Name | Colour | Ring | The chest beside it |
+|---|---|---|---|---|
+| 1 | **THE MINT** | magenta | 12-17 | a hoard of coins |
+| 2 | **THE DROWNED BELL** | cathode blue | 28-35 | key 1 |
+| 3 | **THE LANTERN TREE** | amber | 48-57 | key 2 |
+| 4 | **THE GNOMON** | phosphor green | 66-74 | key 3 |
+
+**THE MINT.** A stone coin press with the die still in it, standing in a drift of **blanks** — coins
+with nothing struck on them. It is the closest landmark to the hut and the first one any campaign
+meets, and it is the game's best beat that nobody has to say out loud: the coins are worthless and
+he minted them anyway, because a world with no money in it does not look like a world (`STORY.md`
+§4). A player who works that out from a drift of blanks has been told something real about him
+without a line of dialogue.
+
+**THE DROWNED BELL.** A bell bigger than the hut, mouth-down in ground that is wet for no reason
+this world can account for, standing water round its lip. Touching it rings it: one low synthesised
+note, so long it is still going when the panel closes. It is the only object in the game that makes
+a sound of its own, and that is what the standing in §13.4 is built on.
+
+**THE LANTERN TREE.** A dead tree hung with lanterns that were lit a very long time ago and are
+still, faintly, going. Its court is a drift of fallen glass. This is the burnt tree `STORY.md` §8
+wanted at the rim, brought in where the campaign can actually reach it — and the one landmark that
+answers the question the whole game is about, which is who else has been out here carrying a light.
+
+**THE GNOMON.** A shaft on a stepped base at the centre of a dial cut into the ground, and it has
+never once cast a shadow, because there has been no sun since it was raised. It is the furthest out
+of the four and the least useful thing in the world, and it is the only object in the game that is
+*evidence*: somebody built a machine for measuring a sun, here, and expected to need it.
+
+**Sprites.** Picked off the existing sheet so this can be built before a pixel is drawn; every one of
+them is provisional and meant to be redrawn through `draw.html`:
+
+| Key | Tile | What it is on the sheet |
+|---|---|---|
+| `mint` | `[23, 10]` | a press: a beam over a bed |
+| `bell` | `[1, 12]` | a bell on a plinth — the sheet already has one |
+| `lantern-tree` | `[1, 2]` | a bare branching tree, unclaimed by the `tree` list |
+| `gnomon` | `[46, 20]` | a shaft on a stepped base |
+| `court-mint` | `[2, 0]` | scattered squares — a drift of blanks |
+| `court-bell` | `[3, 0]` | cobble |
+| `court-tree` | `[4, 0]` | coarser cobble — fallen glass |
+| `court-gnomon` | `[22, 14]` | a marked ring — the dial |
+| `signpost` | `[17, 8]` | a banner on a pole |
+
+The four centrepieces and the signpost each want a `PAINT` zone map (§9) so the colour lands on the
+right part of the tile: the bell's mouth, the tree's lanterns, the blank under the die, the shaft's
+tip, the signpost's arm. Those are drawn in `paint.html`, not by hand.
+
+### 13.3 Colour, and how it is earned
+
+Each landmark is drawn in one of the four palette foregrounds (`src/config.js`), **absolutely** — not
+through `gemColour`, which is relative to the palette you are playing in and reshuffles per biome.
+Absolute is the point: a colour that survives a re-moulding is an identity, and identity is the only
+thing landmarks are for. One consequence, kept deliberately: in each biome exactly one landmark is
+drawn in the world's own foreground and reads plain. That is the one that is at home here.
+
+But `STORY.md` §12 has a rule the whole art direction rests on — **nothing is ever shown in a colour
+the campaign has not brought back** — and painting four landmarks on sight would break it. So the
+colour is the progression:
+
+> A landmark you have never touched is a grey shape with a name you do not know. Touch it, walk it
+> home, and it is drawn in its colour **in every world after, for the rest of the campaign**.
+
+Cycle one is four grey shapes and eight grey arms in a black world. By cycle three the new dark
+arrives with four coloured pins and eight coloured arrows already in it, and is legible from the
+first step. **The colour is the meta progression**, and it costs no new vocabulary: it is the
+existing zone system with one new hue role, `'landmark'`, resolved from which landmark's tile is
+being drawn — the same way `'gem'` and `'opened'` already resolve from where a tile stands.
+
+### 13.4 What a landmark gives
+
+Two tiers, and both are needed: one so that finding a landmark matters to the campaign, one so that
+a landmark is still worth walking to in the fourth world, when you have already found all four.
+
+**A standing — once per campaign, kept through every re-moulding.** Earned by touching the landmark
+and banking it at the hut, like everything else that is real (§4.4).
+
+| Landmark | Standing |
+|---|---|
+| The Mint | The stall is on your map from the first step of every world after. |
+| The Drowned Bell | You hear it. In every world after, the bell sounds when you are within 20 tiles, and closer is louder. |
+| The Lantern Tree | You never set out with one light again: every expedition starts with a second small torch in the pack. |
+| The Gnomon | The HUD's counter row gains your distance from the hut — not how far you have ever been, how far you are *now*. |
+
+**None of them is a number the balance rests on**, and that is the rule rather than an accident.
+Four permanent, stacking boons — `+20` max water apiece, say — would flatten the water leash the
+whole game is about by the second cycle, and `STORY.md` §7 is explicit that what survives a cycle is
+what you *know*. A sound, a spare candle, a number on the HUD and a pin on the map are knowledge
+wearing four different coats. If playtesting says the ladder is too thin, the place to add a number
+is this table and nowhere else.
+
+**A gift — once per world, the first time you touch it there.** So the fourth world still has four
+reasons to walk in four directions:
+
+| Landmark | Gift |
+|---|---|
+| The Mint | It strikes you a handful of blanks: a small purse, on the spot. |
+| The Drowned Bell | Your tank fills. It is drowned; there is water here. |
+| The Lantern Tree | Your equipped light burns back up to full. |
+| The Gnomon | The ground reveals in a radius around it — you get to see how far you have come. |
+
+A gift is an in-run effect like a pickup, so it is lost with the run if you die; a standing is banked
+at the hut, so it is lost with the run *and its chest is still open*, exactly as keys already work.
+
+**The flavour text is the text panel** (§7) — its fourth caller, after setting out, the chest and the
+hall, in the same voice:
+
+> *The bell is bigger than the hut. It is mouth-down in the wet, and it has been here longer than the
+> dark has.*
+> *You put your hand on it. It answers — one note, so low it is more felt than heard.*
+> *You have stood here before. Not here: the ground is new. But here.*
+
+Two blocks of copy per landmark: the meeting, and the re-meeting in a later world — which is shorter,
+because the second time you are not discovering it, you are recognising it. Every word of it goes in
+`src/text.js` like every other word in the game.
+
+### 13.5 Where they stand
+
+- **Rings** 12-17, 28-35, 48-57 and 66-74, seeded within the band like every other placed thing.
+  The first two are inside a first or second expedition; the fourth is 74 at the outside, which is
+  nearer than the third sanctum and a long way inside the hall.
+- **One per quarter, and the rose is rotated by the seed.** Every world has a landmark in each
+  quadrant; *which* quarter holds which changes every time. "There is one in every direction" is
+  knowledge that survives a re-moulding, and it is what makes them orient you at all.
+- **The key chests move to them** (§4.8). The three key chests stop being placed on a ring of their
+  own and become landmark-bound: on the court's edge, three to five tiles out, so the landmark is
+  what you see and the chest is what you came for. Their distances go from 26/52/86 to roughly
+  31/52/70 — every one still well inside the gate it opens, and key 3 stops being an 86-tile walk to
+  enable a 110-tile one. The Mint's chest is a coin hoard, and the five loose coin chests are
+  untouched.
+- **`pickSeed` gets four more sites to validate** (§4.3), each with a 3x3 court rather than a single
+  apron. That is the one placement risk worth watching: a bad seed is rejected and bumped, and four
+  more clearances means a few more bumps.
+
+### 13.6 Signposts
+
+Eight of them, and they are the half that makes the other half work. Four named places in a
+200-tile dark are four rumours without them.
+
+- **A post with an arm**, one tile, blocking a step and never a light, bumped into like a chest and
+  costing nothing.
+- **The arm points**, in one of the four directions the compass needle already draws — so the coarse
+  heading is readable off the tile without opening anything.
+- **The arm is painted in its landmark's colour**, grey until that landmark is known. A blue arm
+  pointing east means the Drowned Bell is that way, read at a glance from inside a torch.
+- **Reading one opens the panel the first time** and echoes a line to the status bar every time
+  after: `THE DROWNED BELL — SOUTH-EAST — A LONG WALK`. Eight-point bearing and a banded distance
+  (`NEARBY` under 15, `A WALK` under 40, `A LONG WALK` under 80, `FAR` beyond), both computed at read
+  time from the post's own tile — so a signpost stores nothing and is as pure as the ground it
+  stands on.
+- **A signpost names a landmark you have never seen**, and that is how you learn the name. The name
+  is legible; the colour is not, until you have been.
+- **Reading one pins its landmark on the map** for the rest of this world, in colour if you know it.
+  That is the payoff that makes the map item better rather than redundant: the map draws where you
+  have been, and a read signpost draws where you have not.
+
+**Where the eight stand**, and what each one names:
+
+| Ring | Names |
+|---|---|
+| 5 | The Mint |
+| 12 | The Drowned Bell |
+| 20 | The Mint |
+| 28 | The Lantern Tree |
+| 38 | The Drowned Bell |
+| 50 | The Gnomon |
+| 62 | The Lantern Tree |
+| 75 | The Gnomon |
+
+Two posts per landmark, one nearer than it and one about level with it, so no post is more than
+about 25 tiles from the thing it points at and every heading is worth trusting. **The post at 5 tiles
+is the one every campaign meets on its first expedition** — near enough that the opening walk cannot
+miss it, far enough to be outside the hut's clearing — and it points at the Mint, which is the
+nearest landmark there is. It teaches the system and pulls the first walk in a direction in the same
+bump.
+
+Each post takes a heading of its own from the seed, and has to stand at least eight tiles clear of
+any landmark court and ten from another post — a signpost next to the thing it points at is a joke
+the player has to walk to get to.
+
+### 13.7 What is remembered
+
+Four sets, and the difference between them is the whole design:
+
+| Where | What | Survives |
+|---|---|---|
+| the run | landmarks touched this expedition, signposts read | until you bank or die |
+| the slot | landmarks witnessed **in this world** | the world; cleared by `turnCycle` |
+| the slot | **standings** — landmarks known campaign-wide | everything, including `turnCycle` |
+| the slot | opened chests, keys — as today | the world |
+
+`bankRun`, `depositRun` and `turnCycle` all rebuild a slot from scratch (§6.1), so the standings have
+to be carried across by hand in `turnCycle` alongside `cycles`, the purse and the tools. Forgetting
+that is the one bug in this feature that would not look like a bug — it would look like the game
+working, one cycle at a time.
+
+The standings want somewhere to be read, and `STORY.md` §11.9 already wants a "what you know" list
+beside the gem pips. Four coloured landmark pips are its first tenant.
+
+### 13.8 What it asks of the code
+
+Roughly in the order it would be built:
+
+1. **A rename.** `LANDMARK_PLAN` / `landmarks()` / `landmarkAt()` currently mean the merchant, the
+   compass and the map — single-tile unique sites with an apron. They become `SITE_PLAN` / `sites()`
+   / `siteAt()`, which is what `siteIsClear` already calls them, and the word is free for this.
+2. **`src/balance.js`**: the new `LANDMARK_PLAN` (four entries: id, colour, ring, span, the chest it
+   carries) and `SIGNPOST_PLAN` (eight entries: ring, target), plus the reshaped `CHEST_PLAN` where
+   the three key chests name a landmark instead of a ring.
+3. **`src/core/world.js`**: two more placed things through the machinery `buildLandmarks` and
+   `buildChests` already share, two new terrain values (`'landmark'`, `'signpost'` — blocking a step,
+   never a light), and a ground-key hook so the court draws its own floor while `terrainAt` still
+   says `'floor'`. Everything that switches on terrain goes from five kinds to seven, `pickSeed`
+   validates twelve more sites, and `CLAUDE.md`'s terrain bullet needs the same edit.
+4. **`src/data/tiles.js` / `paint.js` / the sheet**: nine sprites and five zone maps, per §13.2.
+   Landmarks are **not** in `BIOME_KEYS` — a landmark is the same object in every world, which is the
+   entire point of it.
+5. **`src/core/rules.js`**: touching, reading, the gifts, the standings, and the four save shapes.
+6. **`src/text.js`**: four names, eight blocks of panel copy, the signpost line and its bands.
+7. **`src/core/compass.js` and the map**: known landmarks as targets, pins from read signposts.
+8. **`tests/`**: routes to a landmark and to a signpost derived like every other route (`tests/world.js`),
+   a pure suite for placement and bearings, and browser tests for the bump, the panel and the one
+   thing that crosses a cycle — that a standing survives `turnCycle` and a witnessing does not.

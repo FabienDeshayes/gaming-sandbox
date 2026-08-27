@@ -241,7 +241,7 @@ turn back has earned the right to make turning back an ending.
 ## 11. What this asks the game for
 
 Ordered by how much of the existing design it moves. Items 1-5 are the restructure and are **built**
-(`DESIGN.md` §4.9); 6-9 are the content on top of it, and none of them is.
+(`DESIGN.md` §4.9); 6-10 are the content on top of it, and none of them is.
 
 1. ~~**A cycle is a new seed inside the same slot.**~~ Built. The seed is re-drawn into the slot when
    the hall turns a cycle (`turnCycle` in `core/rules.js`), and the slot keeps only the expeditions
@@ -274,6 +274,19 @@ Ordered by how much of the existing design it moves. Items 1-5 are the restructu
 9. **Somewhere to read what you know.** Truths listed where the gem pips already are, one line each.
    The worlds-ended counter is already in both places a campaign is read — the HUD's counter row and
    the slot's row in LOAD GAME — so this goes beside it.
+10. **Landmarks.** Four named places per world — the Mint, the Drowned Bell, the Lantern Tree, the
+    Gnomon — specified in full in `DESIGN.md` §13 and not built. The fiction they need is one line
+    and it belongs to him: **they are the pins he pushes into the map before the ground goes on.**
+    He re-moulds terrain, sanctums, stall and scatter every cycle and anchors every new world to the
+    same four points, because nobody moulds a world out of nothing without something to measure
+    from. So they recur, they keep their names and their colours across worlds, and touching one is
+    a thing you keep — which makes them the second thing in this world he cannot make from scratch,
+    after the fact that you have been here before.
+    Two of them say something about him that no line of dialogue has to: the Mint is where the
+    worthless coins are struck, in a drift of blanks (§4), and the Gnomon is a machine for measuring
+    a sun, built here, by somebody who expected to need it. They are mute, nobody stands at them,
+    and none of them is a remnant: a remnant is a piece of the world from *before* and lives at the
+    rim (§8), where going for it is a decision with a price. A landmark is his, and it is on the way.
 
 ## 12. Rules the story must not break
 

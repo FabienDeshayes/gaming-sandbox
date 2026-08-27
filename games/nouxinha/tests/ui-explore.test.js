@@ -103,9 +103,14 @@ test('explored ground stays on screen, dimmed, and nothing else is drawn', async
   // Those three states are the whole of what the dark means (DESIGN.md §4).
   assertEqual(lit.length + remembered.length, tiles.length, 'no third state on screen');
   assert(remembered.some((t) => t.x === 0 && t.y === 0), 'the base is remembered from two tiles away');
-  // Floor is drawn as one undecorated texture, whatever else is on top of it.
+  // Floor is drawn as one undecorated texture, whatever else is on top of it —
+  // the world's own floor tile, or a biome's own version of it, and nothing
+  // more (no variant or zone suffix riding along).
   const floors = tiles.filter((t) => t.ground.startsWith('floor'));
-  assert(floors.length > 0 && floors.every((t) => t.ground === 'floor'), 'floor is plain ground');
+  assert(
+    floors.length > 0 && floors.every((t) => /^floor(@[a-z]+)?(-\d+)?$/.test(t.ground)),
+    'floor is plain ground'
+  );
 });
 
 // A walk already out in the dark with one step left in its torch, so the very

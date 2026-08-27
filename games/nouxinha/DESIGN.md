@@ -986,8 +986,10 @@ dragging the drawing itself; **CLOSE** is the way out.
     facings were. Shut, it is a domed lid over a hollow body with a lock hanging under the seam;
     open, the lid is tipped back above an empty mouth. The pair has to be told apart at the edge of
     a light and from the map's one-pixel-a-tile drawing, so the difference is the *silhouette* — the
-    lid moving — rather than any detail inside it. Both are plain foreground: what is in a chest is
-    not something the player is allowed to know before opening it.
+    lid moving — rather than any detail inside it. Its bands and lock carry a `PAINT` zone map of
+    their own (§9), in the three gems' own colours rather than a role: what is in a chest is still
+    not something the player is allowed to know before opening it, but the fittings glint in whatever
+    colours this campaign has already brought home.
   - **The sorcerer is a person, and the wizard is the only other one.** A deep cowl over a robe with
     nothing readable inside the hood — where the character is face-on and bearded, with a staff. The
     two are the only figures in the world and they stand a tile apart while he talks, so the whole

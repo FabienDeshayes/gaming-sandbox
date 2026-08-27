@@ -142,17 +142,19 @@ unit('every biome names tiles that are on the sheet, and only terrain', () => {
   for (const key of BIOME_KEYS) assert(TILES[key], `${key} is a sprite the sheet gives`);
 });
 
-unit('four biomes drawing the same art cost what one does', () => {
-  // Today every biome draws the shared tiles, so nothing is cut twice and
-  // nothing on screen is keyed to a biome at all.
+unit('a biome only pays for a sprite of its own where it actually draws differently', () => {
+  // Rock is the same three tiles in every biome today, so it costs one cut,
+  // not four. Floor and tree are where the four worlds actually differ.
+  const sharedKeys = BIOME_KEYS.filter((key) => !['floor', 'tree'].includes(key));
   for (const biome of BIOME_IDS)
-    for (const key of BIOME_KEYS)
-      assertEqual(biomeKey(key, biome), key, `${biome} shares the ${key} sprite`);
-  assertEqual(
-    Object.keys(sprites).filter((key) => key.includes('@')),
-    [],
-    'and no biome has a sprite of its own'
-  );
+    for (const key of sharedKeys) assertEqual(biomeKey(key, biome), key, `${biome} shares the ${key} sprite`);
+
+  // Temperate's floor still happens to land on the default's own tile; every
+  // other floor, and every biome's trees, are a world's own.
+  assertEqual(biomeKey('floor', 'temperate'), 'floor', "temperate's floor is the shared tile");
+  for (const biome of BIOME_IDS.filter((b) => b !== 'temperate'))
+    assertEqual(biomeKey('floor', biome), `floor@${biome}`, `${biome}'s floor is its own`);
+  for (const biome of BIOME_IDS) assertEqual(biomeKey('tree', biome), `tree@${biome}`, `${biome}'s trees are its own`);
 });
 
 unit('a biome that repoints a tile gets its own sprite, painted like the tile it came from', () => {
@@ -305,7 +307,7 @@ unit('floor texture is drawn at half strength, and nothing else is', () => {
   // A dim pixel anywhere but the ground would be a second weight on an object,
   // which the two-colour rule doesn't have. The floor's own colour zones are
   // cut out of the dimmed tile, so they carry the same weight it does.
-  const ground = (key) => /^(floor|court-[a-z-]+)(-\d+)?(-z\d+)?$/.test(key);
+  const ground = (key) => /^(floor|court-[a-z-]+)(-\d+)?(-z\d+)?$/.test(baseKey(key));
   for (const [key, mask] of Object.entries(fromSolid)) {
     if (ground(key)) continue;
     assert(!mask.join('').includes(DIM), `${key} is drawn at one strength`);

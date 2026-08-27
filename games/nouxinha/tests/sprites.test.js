@@ -293,12 +293,21 @@ unit('floor texture is drawn at half strength, and nothing else is', () => {
   const fromSolid = buildSprites(solid);
 
   assertEqual(fromSolid.floor, Array.from({ length: 16 }, () => DIM.repeat(16)), 'the whole tile is dimmed ground');
+  // A landmark's court is its own paving rather than the world's floor, and it
+  // is drawn at the same weight as the ground it interrupts (DESIGN.md §4.10) —
+  // otherwise walking into a court would look like walking onto a wall.
+  assertEqual(
+    fromSolid['court-bell'],
+    Array.from({ length: 16 }, () => DIM.repeat(16)),
+    'and so is a court'
+  );
 
-  // A dim pixel anywhere but the floor would be a second weight on an object,
+  // A dim pixel anywhere but the ground would be a second weight on an object,
   // which the two-colour rule doesn't have. The floor's own colour zones are
   // cut out of the dimmed tile, so they carry the same weight it does.
+  const ground = (key) => /^(floor|court-[a-z-]+)(-\d+)?(-z\d+)?$/.test(key);
   for (const [key, mask] of Object.entries(fromSolid)) {
-    if (key === 'floor' || key.startsWith('floor-z')) continue;
+    if (ground(key)) continue;
     assert(!mask.join('').includes(DIM), `${key} is drawn at one strength`);
   }
 });

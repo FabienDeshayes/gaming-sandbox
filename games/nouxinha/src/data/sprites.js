@@ -103,8 +103,12 @@ export function buildSprites(readTile, biomes = BIOME_TILES) {
   // is drawn at the same half strength as the ground around it. Every floor
   // there is — a biome's own, and any tile it alternates between — because what
   // makes ground ground is the weight it is drawn at, whichever world it is in.
+  // A landmark's court is ground too — its own paving rather than the world's,
+  // but ground, so it is drawn at the same weight as the floor around it
+  // (DESIGN.md §4.10). Anything a landmark *stands* on is dimmed here; the
+  // landmark itself is not.
   for (const key of Object.keys(sprites))
-    if (/^floor(-\d+)?$/.test(baseKey(key))) sprites[key] = dimmed(sprites[key]);
+    if (/^(floor|court-[a-z-]+)(-\d+)?$/.test(baseKey(key))) sprites[key] = dimmed(sprites[key]);
 
   // The colour zones, last: every sprite the sheet and the derivations above
   // can give is in hand by now, and a zone is a cut of one of them. Driven off

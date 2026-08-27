@@ -11,11 +11,13 @@ import {
 import {
   DIRECTIONS,
   abandonRun,
+  activeLight,
   bankRun,
   buy,
   createRun,
   depositRun,
   equip,
+  hasStanding,
   hasSuspendedRun,
   isBlackout,
   rememberGround,
@@ -27,8 +29,11 @@ import {
   turnCycle,
 } from '../core/rules.js';
 import { activeSlot, loadSave, MAX_GEMS } from '../core/save.js';
+import { chebyshev, landmarkNamed } from '../core/world.js';
+import { BELL_HEARING } from '../balance.js';
 import { biomeDef } from '../data/biomes.js';
 import { itemDef } from '../data/items.js';
+import { landmarkDef } from '../data/landmarks.js';
 import {
   CARRIED,
   DEATH,
@@ -41,6 +46,7 @@ import {
   RECAP,
   SAVED,
   SAY,
+  SIGNPOST,
   WORLD_MAP,
 } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
@@ -55,9 +61,12 @@ import { WorldMap } from '../ui/worldMap.js';
 import { CompassBadge, BADGE_H, BADGE_W } from '../ui/compassBadge.js';
 import { makeDpad } from '../ui/dpad.js';
 import {
+  playBell,
   playChest,
   playDeath,
+  playLandmark,
   playPickup,
+  playSignpost,
   playTap,
   playTorch,
   playUnlock,
@@ -80,6 +89,11 @@ const MAP_BUTTON_H = 34;
 // Below this, a drag is a tap that wandered rather than a swipe.
 const SWIPE_MIN = 24;
 
+// How many steps apart the Drowned Bell tolls while you are inside its reach
+// (`tollBell`). Not balance — nothing about it changes how hard the game is —
+// so it lives here with the rest of the feel.
+const BELL_TOLL = 8;
+
 // The list of things a run is carrying, joined and capitalised into the opening
 // of a sentence. The words themselves — and the joining — are copy (text.js);
 // this is only the capital letter.
@@ -99,6 +113,14 @@ function carriedAtRisk(summary) {
     ...summary.keysCarried.map((id) => CARRIED.key(itemDef(id).name)),
     ...summary.toolsCarried.map((id) => CARRIED.tool(itemDef(id).name)),
   ];
+}
+
+// The landmarks this walk has stood at and not yet walked home from. Not part of
+// the sentence above: a landmark is a place you have been rather than a thing in
+// your hands, so it gets a line of its own (DESIGN.md §4.10).
+function landmarksAtRisk(summary) {
+  if (!summary.landmarksCarried.length) return null;
+  return CARRIED.list(summary.landmarksCarried.map((id) => landmarkDef(id).name.toLowerCase()));
 }
 
 // The same list read the other way round, for the hut: what arriving there just
@@ -173,6 +195,10 @@ export class ExploreScene extends Phaser.Scene {
     // Blocks input while the world is sliding, so a fast tapper can't queue
     // steps the renderer hasn't caught up with.
     this.animating = false;
+    // Whether the Drowned Bell is currently in earshot, and the step it last
+    // tolled on (`tollBell`).
+    this.heardBell = false;
+    this.bellStep = 0;
     // Whether the dialog currently showing is the cogwheel menu. The hut's
     // question and the death screen are decisions that have to be answered, so
     // Esc closes this one and leaves those alone.
@@ -341,6 +367,7 @@ export class ExploreScene extends Phaser.Scene {
     this.menuOpen = false;
     const summary = runSummary(this.run);
     const atRisk = carriedAtRisk(summary);
+    const stood = landmarksAtRisk(summary);
     this.dialog.show({
       title: LEAVING.title,
       lines: [
@@ -350,6 +377,7 @@ export class ExploreScene extends Phaser.Scene {
         atRisk.length
           ? LEAVING.atRisk(sentence(CARRIED.list(atRisk)), atRisk.length > 1)
           : LEAVING.groundKept,
+        ...(stood ? [CARRIED.landmarkLost(stood)] : []),
       ],
       buttons: [
         { label: LEAVING.keepPlaying, onClick: () => this.closeMenu() },
@@ -458,6 +486,11 @@ export class ExploreScene extends Phaser.Scene {
       // whether the lid moved, and a lid that moved is the game's own voice
       // rather than a line in the HUD.
       if (result.reason === 'chest') this.openedChest(result);
+      // Walking into a landmark is how you stand at it, and walking into a post
+      // is how you read it (DESIGN.md §4.10). Both bump like a chest, and both
+      // are worth more than a bump.
+      if (result.reason === 'landmark') this.touchedLandmark(result);
+      if (result.reason === 'signpost') this.readPost(result);
       // And walking into the sorcerer is how you talk to him (DESIGN.md §4.9).
       // The bump still plays — he is standing in the way like anything else —
       // and then he has his say and takes the world off you.
@@ -485,6 +518,7 @@ export class ExploreScene extends Phaser.Scene {
     this.hud.update(this.run);
     this.layOutRail();
     this.announce(result);
+    this.tollBell();
     // The key turning under you as you walk through: the one moment a gate is
     // anything other than scenery.
     if (result.unlocked) playUnlock();
@@ -534,6 +568,82 @@ export class ExploreScene extends Phaser.Scene {
     }
     this.hud.flash(FLASH.chestCoins(result.coins));
     this.textPanel.show(SAY.chestCoins(result.coins));
+  }
+
+  // A landmark, stood at by walking into it (DESIGN.md §4.10). The panel for the
+  // same reason the chest gets it — this is the world saying something about
+  // itself, and the panel leaves the place on screen while it is read — and the
+  // status line for the gift, which is the half worth having as a shout.
+  //
+  // A landmark this world has already had off you does nothing at all, exactly
+  // like a chest with its lid already up.
+  touchedLandmark(result) {
+    const def = landmarkDef(result.landmark);
+    this.map.refresh(this.run);
+    this.hud.update(this.run);
+    if (result.already) {
+      this.hud.flash(FLASH.landmarkAgain(def.name));
+      return;
+    }
+    playLandmark();
+    // The bell answers being touched, whether or not this campaign has ever
+    // been here — it is the one landmark that makes a sound of its own.
+    if (result.landmark === 'bell') playBell(1);
+    this.hud.flash(this.giftLine(result.gift));
+    // `firstEver` is the standing: the first time this campaign has ever stood
+    // here, in any world. Every world after that reads the shorter blocks.
+    this.textPanel.show(SAY.landmark(def.id, !result.firstEver));
+  }
+
+  // What the gift just did, in one line. Every landmark has one, so this always
+  // has something to say.
+  giftLine(gift) {
+    if (!gift) return '';
+    if (gift.coins) return FLASH.landmarkCoins(gift.coins);
+    if (gift.water) return FLASH.landmarkWater;
+    if (gift.relit) {
+      const light = activeLight(this.run);
+      return FLASH.landmarkRelit(itemDef(light ? light.id : 'torch-small').name);
+    }
+    return FLASH.landmarkReveal;
+  }
+
+  // A signpost, read by walking into it. The first read in a world gets the
+  // panel; every one after it is the same directions as a line in the status
+  // bar, because by then the player is checking rather than finding out.
+  readPost(result) {
+    this.map.refresh(this.run);
+    this.hud.update(this.run);
+    playSignpost();
+    const line = SIGNPOST.line(
+      landmarkDef(result.target).name,
+      SIGNPOST.bearings[result.bearing],
+      SIGNPOST.far[result.band]
+    );
+    if (result.first) this.textPanel.show(SAY.signpost(line));
+    else this.hud.flash(FLASH.signpost(line));
+  }
+
+  // The Drowned Bell's standing: once a campaign has stood at it, it can be
+  // heard in every world after, from further out than any light could show it
+  // (DESIGN.md §4.10). Tolled rather than droned — a note every few steps while
+  // you are inside its reach, and the moment you walk into it — because the
+  // point of it is a bearing, and a bearing you hear constantly is a noise.
+  tollBell() {
+    if (!hasStanding(this.run, 'bell')) return;
+    const bell = landmarkNamed('bell', this.run.seed);
+    if (!bell) return;
+    const distance = chebyshev(this.run.x, this.run.y, bell.x, bell.y);
+    if (distance > BELL_HEARING) {
+      this.heardBell = false;
+      return;
+    }
+    // On the way in, and then on a slow toll while you stay in earshot.
+    const due = !this.heardBell || this.run.steps - this.bellStep >= BELL_TOLL;
+    if (!due) return;
+    this.heardBell = true;
+    this.bellStep = this.run.steps;
+    playBell(1 - distance / BELL_HEARING);
   }
 
   // The hall, and the only conversation in the game (DESIGN.md §4.9).
@@ -595,6 +705,7 @@ export class ExploreScene extends Phaser.Scene {
     // opposite: that stopping was what saved and walking on was what risked it.
     // Whichever button is tapped, what is written down is already written.
     const both = summary.cheats ? HUT.bothWaysCheats : HUT.bothWays;
+    const stood = summary.cheats ? null : landmarksAtRisk(summary);
     this.dialog.show({
       title: HUT.title,
       lines: [
@@ -603,6 +714,7 @@ export class ExploreScene extends Phaser.Scene {
           : saved.length
             ? HUT.written(sentence(CARRIED.list(saved)))
             : HUT.nothingNew,
+        ...(stood ? [CARRIED.landmarkStored(stood)] : []),
         ...both,
       ],
       buttons: [
@@ -691,6 +803,7 @@ export class ExploreScene extends Phaser.Scene {
     playDeath();
     const summary = runSummary(this.run);
     const atRisk = carriedAtRisk(summary);
+    const stood = landmarksAtRisk(summary);
     // Nothing this run was carrying is banked, but the ground it lit is kept —
     // written here rather than on the way out, so closing the tab on the death
     // screen doesn't cost the walk (DESIGN.md §6.1). Death also takes the slot's
@@ -702,6 +815,7 @@ export class ExploreScene extends Phaser.Scene {
         atRisk.length
           ? DEATH.collapsed(sentence(CARRIED.list(atRisk)), atRisk.length > 1)
           : DEATH.collapsedEmptyHanded,
+        ...(stood ? [CARRIED.landmarkLost(stood)] : []),
         DEATH.groundKept,
       ],
       rows: [

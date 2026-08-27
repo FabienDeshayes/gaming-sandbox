@@ -4,9 +4,11 @@
 > sun, who is waiting at the end of the walk, and why the world is different every time.
 
 > **Status:** the **cycle** is built — the hall at 110, the conversation in it, and a new world in
-> the same slot every time you walk into him (`DESIGN.md` §4.9). What is not built is everything
-> that makes losing better each time round: no remnants, no truths, no thinning of the far dark, no
-> shrinking rim, and so no second ending. §11 marks which is which. `DESIGN.md` describes the game
+> the same slot every time you walk into him (`DESIGN.md` §4.9) — and so are the **landmarks**, the
+> four places he anchors every world to, which are the first thing a campaign keeps through a
+> re-moulding besides the count of them (§11.10). What is not built is everything that makes losing
+> better each time round: no remnants, no truths, no thinning of the far dark, no shrinking rim, and
+> so no second ending. §11 marks which is which. `DESIGN.md` describes the game
 > as it is; this describes the story it is being pointed at.
 
 > **Doc convention:** this doc describes the story *as it stands now*. When it changes, edit the
@@ -87,6 +89,10 @@ Every worked thing in the world is his, and each of them is doing a job:
 - **The scatter.** Water, light and coins thrown across the ground and moved every time you turn your
   back. The status line already says it out loud: *the dark has put everything back somewhere new.*
   That is him, fidgeting.
+- **The landmarks.** Four of them, and they are not furniture: they are the pins he pushes into the
+  map before the ground goes on, the same four in every world, because nobody moulds a world out of
+  nothing without something to measure from (`DESIGN.md` §4.10). The eight signposts pointing at
+  them are the only writing in the world, and the only thing in it that is addressed to somebody.
 - **The hut.** One room, a flag on it so you can find it from the edge of a light, water that never
   runs out and a fresh candle waiting if you come in blind. He leaves it standing every single time.
   It is a kindness and it is a cage, and it is the same object.
@@ -155,8 +161,9 @@ One turn of the game, and the reason a save slot is a campaign rather than a sav
 **What he takes:** the three shards, and the world. Every time.
 
 **What he leaves:** everything that is yours rather than his — the compass and the map if you have
-carried them home, your coins, and above all **what you know**. He can unmake ground. He has never
-found a way to unmake the fact that you have been here before.
+carried them home, your coins, the **standings** you walked back from the four landmarks with
+(`DESIGN.md` §4.10), and above all **what you know**. He can unmake ground. He has never found a way
+to unmake the fact that you have been here before.
 
 So the campaign ramps: cycle one is the whole game learned from nothing, and cycle four opens with
 both tools in hand, a purse, a shorter world (§8) and three things to say.
@@ -241,7 +248,7 @@ turn back has earned the right to make turning back an ending.
 ## 11. What this asks the game for
 
 Ordered by how much of the existing design it moves. Items 1-5 are the restructure and are **built**
-(`DESIGN.md` §4.9); 6-9 are the content on top of it, and none of them is.
+(`DESIGN.md` §4.9), as is 10; 6-9 are the content on top of it, and none of them is.
 
 1. ~~**A cycle is a new seed inside the same slot.**~~ Built. The seed is re-drawn into the slot when
    the hall turns a cycle (`turnCycle` in `core/rules.js`), and the slot keeps only the expeditions
@@ -274,6 +281,21 @@ Ordered by how much of the existing design it moves. Items 1-5 are the restructu
 9. **Somewhere to read what you know.** Truths listed where the gem pips already are, one line each.
    The worlds-ended counter is already in both places a campaign is read — the HUD's counter row and
    the slot's row in LOAD GAME — so this goes beside it.
+10. ~~**Landmarks.**~~ Built (`DESIGN.md` §4.10). Four named places per world — the Mint, the Drowned
+    Bell, the Lantern Tree, the Gnomon — and the fiction they needed was one line, and it is his:
+    **they are the pins he pushes into the map before the ground goes on.** He re-moulds terrain,
+    sanctums, stall and scatter every cycle and anchors every new world to the same four points,
+    because nobody moulds a world out of nothing without something to measure from. So they recur,
+    they keep their names and their colours across worlds, and standing at one is a thing you keep —
+    which makes them the second thing in this world he cannot make from scratch, after the fact that
+    you have been here before.
+    Two of them say something about him that no line of dialogue has to: the Mint is where the
+    worthless coins are struck, in a drift of blanks (§4), and the Gnomon is a machine for measuring
+    a sun, built here, by somebody who expected to need it. They are mute, nobody stands at them,
+    and none of them is a remnant: a remnant is a piece of the world from *before* and lives at the
+    rim (§8), where going for it is a decision with a price. A landmark is his, and it is on the way.
+    What they are not yet is a **truth**: a standing changes what a campaign can do, never what it
+    can *say*, and the dialog at the hall still has nothing on it but the two ways out.
 
 ## 12. Rules the story must not break
 

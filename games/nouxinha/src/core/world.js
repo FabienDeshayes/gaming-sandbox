@@ -2,9 +2,11 @@
 //
 // Three layers sit on top of each other, and they differ in what they depend on:
 //
-//   terrain    — noise plus the built sanctums and landmark clearings. A pure
-//                function of (x, y, seed): the same every run, forever. Floor,
-//                two formations of rock, groves of trees, and the built walls.
+//   terrain    — noise plus everything built into it: the sanctums, the four
+//                landmarks and their courts, the signposts, and the aprons
+//                round the sites and chests. A pure function of (x, y, seed):
+//                the same every run, forever. Floor, two formations of rock,
+//                groves of trees, and the built walls.
 //   unique     — the gems, the merchant, the chests, and the one compass and one
 //                map lying out in the dark. Also pure in (x, y, seed), so a run
 //                always finds them where the last run left them.
@@ -33,6 +35,9 @@ import {
   GEM_DENSITY,
   GROVE_THRESHOLD,
   HOARD_PER_KIND,
+  LANDMARK_CHEST_NEAR,
+  LANDMARK_CHEST_SPAN,
+  LANDMARK_COURT,
   LANDMARK_PLAN,
   MIN_SEPARATION,
   POCKET_PROBE,
@@ -42,6 +47,11 @@ import {
   SEED_MAX_ATTEMPTS,
   SEED_MIN_FRACTION,
   SEED_WINDOW,
+  SIGNPOST_BANDS,
+  SIGNPOST_CLEARANCE,
+  SIGNPOST_PLAN,
+  SIGNPOST_SPACING,
+  SITE_PLAN,
   SPAWN_CHANCE,
 } from '../balance.js';
 import { BIOME_IDS } from '../data/biomes.js';
@@ -55,12 +65,14 @@ const CH_TERRAIN_FINE = 2;
 const CH_GROVE = 3;
 const CH_GROVE_FINE = 4;
 const CH_SANCTUM = 5;
-const CH_LANDMARK = 6;
+const CH_SITE = 6;
 const CH_COIN = 7;
 const CH_BOULDER = 8;
 const CH_VARIANT = 9;
 const CH_CHEST = 10;
 const CH_BIOME = 11;
+const CH_LANDMARK = 12;
+const CH_SIGNPOST = 13;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
@@ -296,51 +308,69 @@ function buildSanctums(seed) {
   });
 }
 
-// --- Landmarks ---------------------------------------------------------------
+// --- Sites -------------------------------------------------------------------
 //
-// The three things in the world that aren't behind a gate and aren't rerolled:
-// the merchant, and the one compass and one map lying out in the dark
-// (balance.js `LANDMARK_PLAN`). Each is a single tile with a forced-floor apron
-// around it, so however the noise fell there is always ground to stand on next
-// to it.
+// The three single-tile things in the world that aren't behind a gate and
+// aren't rerolled: the merchant, and the one compass and one map lying out in
+// the dark (balance.js `SITE_PLAN`). Each is a single tile with a forced-floor
+// apron around it, so however the noise fell there is always ground to stand on
+// next to it.
 //
-// A landmark carrying an `item` is a pickup; the merchant carries none, because
+// A site carrying an `item` is a pickup; the merchant carries none, because
 // what you do at the merchant's tile is trade, not collect.
 
-// Whether a single-tile site with a forced-floor apron can stand here: clear of
-// the sanctums, of everything already placed, and of the base clearing, and
-// opening onto the cave system rather than onto a pocket — the same bar a
-// sanctum door has to clear. Shared by the landmarks and the chests, which are
-// placed the same way and have to stay off each other.
+// Whether a built thing with a forced-floor apron around it can stand here:
+// clear of the sanctums, of everything already placed, and of the base
+// clearing, and opening onto the cave system rather than onto a pocket — the
+// same bar a sanctum door has to clear. Shared by the sites, the landmarks, the
+// chests and the signposts, which are all placed this way and all have to stay
+// off each other.
+//
+// `radius` is how much apron the thing needs: 1 for a single tile with a ring
+// of floor round it, LANDMARK_COURT for a landmark, whose court is the same
+// shape and drawn differently (DESIGN.md §4.10).
+//
+// `apart` says how far this one has to stand from something already placed,
+// given that thing — the default is "their aprons don't touch", and a signpost
+// asks for a great deal more room than that from the landmark it points at.
 //
 // `built` is the sanctums, passed in rather than looked up: this runs *during*
 // `structures`, before the cache exists, so asking `sanctumAt` or `terrainAt`
 // where a landmark can go would ask where the landmarks are.
-function siteIsClear(site, seed, built, taken) {
-  if (chebyshev(site.x, site.y, BASE_X, BASE_Y) <= BASE_CLEARING + 1) return false;
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++) {
-      const x = site.x + dx;
-      const y = site.y + dy;
+function spotIsClear(spot, seed, built, taken, { radius = 1, apart = null } = {}) {
+  if (chebyshev(spot.x, spot.y, BASE_X, BASE_Y) <= BASE_CLEARING + radius) return false;
+  const gap = (t) => Math.max(radius + t.radius + 1, apart ? apart(t) : 0);
+  if (taken.some((t) => chebyshev(spot.x, spot.y, t.x, t.y) <= gap(t))) return false;
+  for (let dy = -radius; dy <= radius; dy++)
+    for (let dx = -radius; dx <= radius; dx++) {
+      const x = spot.x + dx;
+      const y = spot.y + dy;
       if (built.some((s) => chebyshev(x, y, s.centre.x, s.centre.y) <= s.radius + 1)) return false;
-      if (taken.some((t) => chebyshev(x, y, t.x, t.y) <= 2)) return false;
     }
   return opensOntoCaves(
-    site,
+    spot,
     (x, y) =>
-      chebyshev(x, y, site.x, site.y) <= 1 ||
+      chebyshev(x, y, spot.x, spot.y) <= radius ||
       (!built.some((s) => chebyshev(x, y, s.centre.x, s.centre.y) <= s.radius + 1) &&
         noiseTerrain(x, y, seed) === 'floor')
   );
 }
 
-function buildLandmarks(seed, built, taken) {
-  const clear = (site) => siteIsClear(site, seed, built, taken);
+// Where a thing that has been placed ends up on the `taken` list: its tile and
+// how much room it takes, so the next thing placed can keep out of its way.
+function claim(taken, spot, radius, kind) {
+  const at = { x: spot.x, y: spot.y, radius, kind };
+  taken.push(at);
+  return at;
+}
 
-  return LANDMARK_PLAN.map((plan, i) => {
-    const roll = randomAt(i + 1, 0, seed, CH_LANDMARK);
-    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_LANDMARK) * plan.span);
-    // A landmark pinned `opposite` a sanctum takes that sanctum's heading plus
+function buildSites(seed, built, taken) {
+  const clear = (site) => spotIsClear(site, seed, built, taken);
+
+  return SITE_PLAN.map((plan, i) => {
+    const roll = randomAt(i + 1, 0, seed, CH_SITE);
+    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_SITE) * plan.span);
+    // A site pinned `opposite` a sanctum takes that sanctum's heading plus
     // half a turn; the rest take a heading of their own.
     const base =
       plan.opposite === null
@@ -352,20 +382,96 @@ function buildLandmarks(seed, built, taken) {
     for (const delta of HEADING_SEARCH) {
       const site = ringPoint(distance, base + delta * Math.PI * 2);
       if (clear(site)) {
-        taken.push(site);
+        claim(taken, site, 1, 'site');
         return { ...plan, index: i, x: site.x, y: site.y };
       }
     }
     // Nothing in the sweep worked; `pickSeed` is the backstop that rejects it.
     const site = ringPoint(distance, base);
-    taken.push(site);
+    claim(taken, site, 1, 'site');
     return { ...plan, index: i, x: site.x, y: site.y };
   });
 }
 
+// --- Landmarks -----------------------------------------------------------------
+//
+// The four named places, one per world and the same four in every world the
+// hall moulds (DESIGN.md §4.10). Each is a centrepiece you cannot step on —
+// bumped into like a chest, and like a chest it stops no light — standing in a
+// **court**, a ring of its own ground forced walkable so there is always a way
+// in and a way round whatever the noise did.
+//
+// They take a quarter of the compass each, with the whole rose turned by the
+// seed: every world has a landmark in every direction, and which direction
+// holds which changes every time the world is moulded. That is the half of them
+// that orients you — the other half is that they keep their names.
+
+function buildLandmarks(seed, built, taken) {
+  const spread = (Math.PI * 2) / LANDMARK_PLAN.length;
+  const heading = randomAt(0, 0, seed, CH_LANDMARK) * Math.PI * 2;
+
+  return LANDMARK_PLAN.map((plan, i) => {
+    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_LANDMARK) * plan.span);
+    // Jittered inside its own quarter, the way the sanctums are, so the four
+    // never bunch into one direction however the search below wanders.
+    const jitter = (randomAt(i + 1, 0, seed, CH_LANDMARK) - 0.5) * spread * 0.4;
+    const nominal = heading + i * spread + jitter;
+
+    for (const delta of HEADING_SEARCH) {
+      const spot = ringPoint(distance, nominal + delta * spread);
+      if (spotIsClear(spot, seed, built, taken, { radius: LANDMARK_COURT })) {
+        claim(taken, spot, LANDMARK_COURT, 'landmark');
+        return { ...plan, index: i, x: spot.x, y: spot.y };
+      }
+    }
+    // Nothing in the quarter worked; `pickSeed` is the backstop that rejects it.
+    const spot = ringPoint(distance, nominal);
+    claim(taken, spot, LANDMARK_COURT, 'landmark');
+    return { ...plan, index: i, x: spot.x, y: spot.y };
+  });
+}
+
+// --- Signposts -----------------------------------------------------------------
+//
+// Eight posts, each naming one landmark and pointing at it (balance.js
+// `SIGNPOST_PLAN`). Placed like everything else here and differing in what they
+// have to stay away from: a post has to stand well clear of the landmark it
+// names, because directions you can read from the doorstep are not directions,
+// and well clear of the other posts, so the eight of them stay eight bearings.
+//
+// What a post *says* isn't stored: the heading and the distance are worked out
+// from where it stands when it is read (`signpostBearing` below), so a post is
+// as pure as the ground under it.
+
+function buildSignposts(seed, built, taken) {
+  return SIGNPOST_PLAN.map((plan, i) => {
+    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_SIGNPOST) * plan.span);
+    const base = randomAt(i + 1, 0, seed, CH_SIGNPOST) * Math.PI * 2;
+    const apart = (t) =>
+      t.kind === 'landmark'
+        ? SIGNPOST_CLEARANCE
+        : t.kind === 'signpost'
+          ? SIGNPOST_SPACING
+          : 0;
+
+    for (const delta of HEADING_SEARCH) {
+      const spot = ringPoint(distance, base + delta * Math.PI * 2);
+      if (spotIsClear(spot, seed, built, taken, { apart })) {
+        claim(taken, spot, 1, 'signpost');
+        return { ...plan, index: i, x: spot.x, y: spot.y };
+      }
+    }
+    // Nothing in the sweep worked. A post is the one placed thing that may be
+    // dropped rather than forced: eight of them are directions, and seven of
+    // them are still directions, where a landmark nobody can reach is a hole in
+    // the world. `pickSeed` never sees this one.
+    return null;
+  }).filter(Boolean);
+}
+
 // --- Chests -------------------------------------------------------------------
 //
-// A chest is placed exactly like a landmark — seed-derived, a forced-floor apron
+// A chest is placed exactly like a site — seed-derived, a forced-floor apron
 // around it, checked for a way in — and differs in the one thing that matters:
 // its own tile is not walkable. You open it by walking into it, which is why it
 // has to be something you bump against rather than something you stand on, and
@@ -375,11 +481,18 @@ function buildLandmarks(seed, built, taken) {
 // What a chest holds is fixed by the seed too: three of them hold the three
 // keys, in the order the gates want them, and the rest hold a pile of coins
 // picked out of balance.js `CHEST_COIN_VALUES`.
+//
+// Four of them don't take a ring of their own at all: a chest with an `at`
+// stands just outside that landmark's court (DESIGN.md §4.10), so the landmark
+// is what a walk finds and the chest is what it came for.
 
-function buildChests(seed, built, taken) {
+function buildChests(seed, built, taken, marks) {
   return CHEST_PLAN.map((plan, i) => {
     const roll = randomAt(i + 1, 0, seed, CH_CHEST);
-    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_CHEST) * plan.span);
+    const beside = plan.at ? marks.find((mark) => mark.id === plan.at) : null;
+    const distance = beside
+      ? LANDMARK_CHEST_NEAR + Math.floor(randomAt(i + 1, 1, seed, CH_CHEST) * LANDMARK_CHEST_SPAN)
+      : plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_CHEST) * plan.span);
     const base = roll * Math.PI * 2;
     const coins =
       CHEST_COIN_VALUES[
@@ -387,17 +500,22 @@ function buildChests(seed, built, taken) {
           CHEST_COIN_VALUES.length
       ];
     const holds = plan.key ? { key: plan.key } : { coins };
+    // A ring round the hut, or a ring round the landmark it belongs to.
+    const around = (angle) => {
+      const at = ringPoint(distance, angle);
+      return beside ? { x: beside.x + at.x, y: beside.y + at.y } : at;
+    };
 
     for (const delta of HEADING_SEARCH) {
-      const site = ringPoint(distance, base + delta * Math.PI * 2);
-      if (siteIsClear(site, seed, built, taken)) {
-        taken.push(site);
+      const site = around(base + delta * Math.PI * 2);
+      if (spotIsClear(site, seed, built, taken)) {
+        claim(taken, site, 1, 'chest');
         return { ...plan, ...holds, index: i, x: site.x, y: site.y };
       }
     }
     // Nothing in the sweep worked; `pickSeed` is the backstop that rejects it.
-    const site = ringPoint(distance, base);
-    taken.push(site);
+    const site = around(base);
+    claim(taken, site, 1, 'chest');
     return { ...plan, ...holds, index: i, x: site.x, y: site.y };
   });
 }
@@ -413,11 +531,21 @@ function structures(seed = DEFAULT_SEED) {
   const cached = structureCache.get(key);
   if (cached) return cached;
   const built = buildSanctums(key);
-  // Landmarks first, then chests onto the same `taken` list, so a chest can
-  // never land on the merchant's apron — or on another chest.
+  // One `taken` list through the lot, so nothing can land on anything else's
+  // apron. The order is what each one needs to know: the landmarks take their
+  // quarters first, because they are the most constrained thing in the world
+  // and the chests and posts are placed *against* them; then the sites, then
+  // the chests — four of which want a landmark to stand beside — and last the
+  // posts, which have to keep their distance from every landmark there is.
   const taken = [];
   const marks = buildLandmarks(key, built, taken);
-  const world = { sanctums: built, landmarks: marks, chests: buildChests(key, built, taken) };
+  const world = {
+    sanctums: built,
+    landmarks: marks,
+    sites: buildSites(key, built, taken),
+    chests: buildChests(key, built, taken, marks),
+    signposts: buildSignposts(key, built, taken),
+  };
   structureCache.set(key, world);
   return world;
 }
@@ -426,8 +554,16 @@ export function sanctums(seed = DEFAULT_SEED) {
   return structures(seed).sanctums;
 }
 
+export function sites(seed = DEFAULT_SEED) {
+  return structures(seed).sites;
+}
+
 export function landmarks(seed = DEFAULT_SEED) {
   return structures(seed).landmarks;
+}
+
+export function signposts(seed = DEFAULT_SEED) {
+  return structures(seed).signposts;
 }
 
 export function chests(seed = DEFAULT_SEED) {
@@ -436,6 +572,10 @@ export function chests(seed = DEFAULT_SEED) {
 
 export function chestNamed(id, seed = DEFAULT_SEED) {
   return chests(seed).find((c) => c.id === id) || null;
+}
+
+export function siteNamed(id, seed = DEFAULT_SEED) {
+  return sites(seed).find((site) => site.id === id) || null;
 }
 
 export function landmarkNamed(id, seed = DEFAULT_SEED) {
@@ -475,20 +615,82 @@ export function isSorcerer(x, y, seed = DEFAULT_SEED) {
   return !!site && x === site.centre.x && y === site.centre.y;
 }
 
-// Which landmark a tile belongs to: the tile itself, or the forced-floor apron
+// Which site a tile belongs to: the tile itself, or the forced-floor apron
 // around it that keeps it approachable whatever the noise did.
-export function landmarkAt(x, y, seed = DEFAULT_SEED) {
-  for (const landmark of landmarks(seed)) {
-    const d = chebyshev(x, y, landmark.x, landmark.y);
-    if (d === 0) return { landmark, part: 'site' };
-    if (d === 1) return { landmark, part: 'apron' };
+export function siteAt(x, y, seed = DEFAULT_SEED) {
+  for (const site of sites(seed)) {
+    const d = chebyshev(x, y, site.x, site.y);
+    if (d === 0) return { site, part: 'site' };
+    if (d === 1) return { site, part: 'apron' };
   }
   return null;
 }
 
 export function isMerchant(x, y, seed = DEFAULT_SEED) {
-  const site = landmarkAt(x, y, seed);
-  return !!site && site.part === 'site' && site.landmark.id === 'merchant';
+  const at = siteAt(x, y, seed);
+  return !!at && at.part === 'site' && at.site.id === 'merchant';
+}
+
+// Which landmark a tile belongs to: the centrepiece itself, which is walked
+// into rather than onto, or the court around it — its own ground, forced
+// walkable, and the reason there is always a way round (DESIGN.md §4.10).
+export function landmarkAt(x, y, seed = DEFAULT_SEED) {
+  for (const landmark of landmarks(seed)) {
+    const d = chebyshev(x, y, landmark.x, landmark.y);
+    if (d === 0) return { landmark, part: 'site' };
+    if (d <= LANDMARK_COURT) return { landmark, part: 'court' };
+  }
+  return null;
+}
+
+// The tile a landmark is touched from. Its court is floor all the way round, so
+// any of the four would do; this one is what the reachability check aims at.
+export function landmarkApproach(landmark) {
+  return { x: landmark.x + 1, y: landmark.y };
+}
+
+// Which signpost a tile belongs to: the post, or the apron round it.
+export function signpostAt(x, y, seed = DEFAULT_SEED) {
+  for (const post of signposts(seed)) {
+    const d = chebyshev(x, y, post.x, post.y);
+    if (d === 0) return { post, part: 'site' };
+    if (d === 1) return { post, part: 'apron' };
+  }
+  return null;
+}
+
+// What a post says, worked out when it is read rather than stored: which of the
+// eight headings the landmark it names lies on, counted from north and going
+// clockwise (`SIGNPOST.bearings` in src/text.js reads them out), and which band
+// of distance it is in (balance.js `SIGNPOST_BANDS`).
+export const SIGNPOST_SECTORS = 8;
+
+export function signpostBearing(post, target) {
+  const angle = Math.atan2(target.x - post.x, -(target.y - post.y));
+  const turns = Math.round((angle / (Math.PI * 2)) * SIGNPOST_SECTORS);
+  return ((turns % SIGNPOST_SECTORS) + SIGNPOST_SECTORS) % SIGNPOST_SECTORS;
+}
+
+export function signpostBand(distance) {
+  const band = SIGNPOST_BANDS.findIndex((limit) => distance < limit);
+  return band < 0 ? SIGNPOST_BANDS.length : band;
+}
+
+// Everything a post has to say about the landmark it names, from where it
+// stands. Pure, so the panel, the status line and a test all read the same
+// answer off it.
+export function signpostReading(post, seed = DEFAULT_SEED) {
+  const target = landmarkNamed(post.target, seed);
+  if (!target) return null;
+  const distance = chebyshev(post.x, post.y, target.x, target.y);
+  return {
+    target: target.id,
+    x: target.x,
+    y: target.y,
+    bearing: signpostBearing(post, target),
+    band: signpostBand(distance),
+    distance,
+  };
 }
 
 // Which chest a tile belongs to: the chest's own tile, or the forced-floor apron
@@ -520,10 +722,26 @@ export function terrainAt(x, y, seed = DEFAULT_SEED) {
     if (isSorcerer(x, y, seed)) return 'sorcerer';
     return 'floor'; // the clearing inside, and the apron at the door
   }
-  if (landmarkAt(x, y, seed)) return 'floor'; // the landmark and its apron
+  // A landmark: the centrepiece is its own terrain — solid to a step and
+  // transparent to a light, exactly like a chest — and the court around it is
+  // floor, drawn in the landmark's own paving (DESIGN.md §4.10).
+  const mark = landmarkAt(x, y, seed);
+  if (mark) return mark.part === 'site' ? 'landmark' : 'floor';
+  const post = signpostAt(x, y, seed);
+  if (post) return post.part === 'site' ? 'signpost' : 'floor';
+  if (siteAt(x, y, seed)) return 'floor'; // the merchant, a tool on the ground, and their aprons
   const box = chestAt(x, y, seed);
   if (box) return box.part === 'site' ? 'chest' : 'floor';
   return noiseTerrain(x, y, seed);
+}
+
+// The ground a floor tile is drawn with: a landmark's court is paved in its
+// own, which is what makes a landmark 3x3 rather than one tile with a name
+// (DESIGN.md §4.10). Everything else is the world's own floor, and says so by
+// answering null.
+export function courtAt(x, y, seed = DEFAULT_SEED) {
+  const mark = landmarkAt(x, y, seed);
+  return mark && mark.part === 'court' ? mark.landmark.id : null;
 }
 
 // Plain floor: what you can walk on carrying nothing. Rock, trees, sanctum wall,
@@ -543,9 +761,16 @@ export function isWalkable(x, y, seed = DEFAULT_SEED) {
 // which costs nothing: the world is a disc, and a straight line between two
 // points inside a disc never leaves it, so the edge can never shadow ground that
 // is still in play.
+// The terrains a light goes straight past: open ground, and the four things
+// that *stand* on it rather than being part of the world's shape — a chest, the
+// sorcerer, a landmark and a signpost. Every one of them is walked into rather
+// than onto, and every one of them would be a wall with a name on it if it cast
+// a shadow.
+const SEE_PAST = new Set(['floor', 'chest', 'sorcerer', 'landmark', 'signpost']);
+
 export function blocksSight(x, y, seed = DEFAULT_SEED, keys = null) {
   const terrain = terrainAt(x, y, seed);
-  if (terrain === 'floor' || terrain === 'chest' || terrain === 'sorcerer') return false;
+  if (SEE_PAST.has(terrain)) return false;
   if (terrain === 'gate') return !canEnter(x, y, seed, keys);
   return true;
 }
@@ -609,17 +834,23 @@ export function reachableFraction(seed, radius = SEED_WINDOW) {
   return floor === 0 ? 0 : seen.size / floor;
 }
 
-// Every sanctum door, every landmark and every chest has to be walkable-to from
-// the hut with nothing in hand, or a gem is sealed off and the chain stops dead
-// — or the merchant is somewhere no coin can ever reach, or a key is in a box
-// nobody can walk up to. Only the tile *outside* each gate is checked: the
+// Every sanctum door, every site, every landmark and every chest has to be
+// walkable-to from the hut with nothing in hand, or a gem is sealed off and the
+// chain stops dead — or the merchant is somewhere no coin can ever reach, or a
+// key is in a box nobody can walk up to.
+//
+// The signposts are deliberately **not** on this list. A post is directions, and
+// a world with seven sets of directions in it is a world; rejecting a whole seed
+// because the noise closed in around one post would be paying for a promise
+// nothing rests on. Only the tile *outside* each gate is checked: the
 // clearing behind it is forced floor, so once you're through you can always
 // reach the gem. A chest is checked by its apron for the same reason in reverse:
 // its own tile is never walkable, and the apron is where you open it from.
-export function landmarksReachable(seed) {
+export function sitesReachable(seed) {
   const targets = [
     ...sanctums(seed).map((s) => s.approach),
-    ...landmarks(seed).map((l) => ({ x: l.x, y: l.y })),
+    ...sites(seed).map((site) => ({ x: site.x, y: site.y })),
+    ...landmarks(seed).map(landmarkApproach),
     ...chests(seed).map(chestApproach),
   ];
   const radius = Math.max(...targets.map((t) => chebyshev(t.x, t.y))) + 8;
@@ -646,7 +877,7 @@ export function pickSeed(
 ) {
   let seed = preferred | 0;
   for (let i = 0; i < maxAttempts; i++) {
-    if (reachableFraction(seed) >= minFraction && landmarksReachable(seed)) return seed;
+    if (reachableFraction(seed) >= minFraction && sitesReachable(seed)) return seed;
     seed = (Math.imul(seed, 1103515245) + 12345) | 0;
   }
   return seed;
@@ -681,8 +912,8 @@ export function uniqueAt(x, y, seed = DEFAULT_SEED) {
     return site.part === 'inside' && x === site.sanctum.centre.x && y === site.sanctum.centre.y
       ? site.sanctum.gem
       : null;
-  const mark = landmarkAt(x, y, seed);
-  return mark && mark.part === 'site' ? mark.landmark.item : null;
+  const at = siteAt(x, y, seed);
+  return at && at.part === 'site' ? at.site.item : null;
 }
 
 // --- Consumables ---------------------------------------------------------------
@@ -713,12 +944,15 @@ export function coinValue(x, y, seed = DEFAULT_SEED, salt = 0) {
 }
 
 // Ground a consumable can lie on. Sanctum clearings are excluded because they
-// have their own rule below, and the base, landmark and chest clearings because
-// they are places to arrive at, not to loot.
+// have their own rule below, and the base, the sites, the landmark courts and
+// the chest and signpost aprons because they are places to arrive at, not to
+// loot.
 function spawnable(x, y, seed) {
   if (chebyshev(x, y, BASE_X, BASE_Y) <= BASE_CLEARING) return false;
   if (sanctumAt(x, y, seed)) return false;
+  if (siteAt(x, y, seed)) return false;
   if (landmarkAt(x, y, seed)) return false;
+  if (signpostAt(x, y, seed)) return false;
   if (chestAt(x, y, seed)) return false;
   return noiseTerrain(x, y, seed) === 'floor';
 }

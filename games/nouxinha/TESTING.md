@@ -9,7 +9,7 @@
 cd games/nouxinha
 npm install       # playwright-core + phaser, from the allowed npm registry — do NOT run `playwright install`
 npm test          # every suite, one server and one browser: about a minute
-npm run test:pure # the seven pure suites only, no browser: under ten seconds
+npm run test:pure # the eight pure suites only, no browser: under ten seconds
 ```
 
 The runner prints what each test cost and what the whole run cost, because a
@@ -41,13 +41,15 @@ at all, which is the quick way to work on the rules.
 | `rules.test.js` | A step's costs, burnout and auto-swap, pickup, the inventory, the recap, cheats |
 | `terrain.test.js` | What the noise grows, where the world stops, which biome the seed makes it, and that every bit of it can be walked to |
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
-| `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall, the water ladder, the landmarks, the merchant, the compass |
+| `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall, the water ladder, the sites — merchant, compass, map — and the needle |
+| `landmarks.test.js` | The four landmarks and the eight posts: where they stand, what a touch gives, and which of it survives a world |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, and what a cycle in the hall takes and leaves |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | The canvas against a phone, the sheet actually loading, the game's own voice |
 | `ui-explore.test.js` | The controls that walk, and the three visibility states the viewport draws |
 | `ui-items.test.js` | The HUD counters, the item card, and finding a light and burning it |
 | `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, the merchant, the map, a sanctum's colour, a chest's key, the sorcerer and the world he moulds |
+| `ui-landmarks.test.js` | Bumping into a landmark and into a post: the panel, the gift, and the colour a standing turns on |
 
 Suites share `tests/world.js` — the seed, the pinned nonce, and every route BFSed out of the real
 world (see below). Pure suites run first in `all.test.js`, so a broken rule fails in a couple of seconds
@@ -214,9 +216,35 @@ sit 20 to 110 tiles out and the default 24 will never reach one.
 `KEY_CHEST_BUMP` is the direction the last input goes, which is the input that opens it. A test that
 routed to the chest's own tile would never find a path.
 
+## Testing a landmark
+
+The same shape as a chest, one tier up. A landmark can't be stepped on either, so `LANDMARK_ROUTE`
+BFSes to its court and `LANDMARK_ROUTE.hit` is the direction the last input bumps in. Which landmark
+it routes to is **derived, not named**: `NEAREST_LANDMARK` is the nearest one whose own colour is not
+the colour this world is drawn in, because every world has exactly one landmark at home in it
+(`DESIGN.md` §4.10) and a test about a landmark gaining its colour has no business pointing at the
+one whose colour nothing on screen could tell from the foreground.
+
+The split to keep straight is the one the feature is about:
+
+- **Pure, in `landmarks.test.js`:** where the four stand and that no two share a quarter or a colour;
+  that a landmark blocks a step, casts no shadow and has a walkable court; that a **gift** lands once
+  per world and a **standing** once per campaign; and above all the round trip — bank, then
+  `turnCycle`, and check that the standing survived and the world's own record of it did not. That
+  last one is the assertion the whole feature rests on, because forgetting it would look exactly like
+  the game working.
+- **Browser, in `ui-landmarks.test.js`:** two tests, because two things need a canvas. That the bump
+  is a bump, the panel comes up over the world and the landmark's colour actually reaches the screen
+  once the standing is held — read off `visibleTiles()`, where `paint[0]` is the zone the colour
+  lands in. And that a post reads out its directions the first time and flashes them to the status
+  line after.
+
+A run can be handed a standing without walking to one: plant `standings: ['bell-heard']` in the save,
+the way a test plants `keys` or `compass: true`.
+
 ## Testing the chest-and-key chain
 
-Chests are placed like the landmarks — from the seed, never relaid by a respawn — so a test asks
+Chests are placed like the sites and the landmarks — from the seed, never relaid by a respawn — so a test asks
 `chests(SEED)` where they are rather than naming a tile, exactly as it asks `sanctums(SEED)`. Three
 claims are worth keeping separate:
 

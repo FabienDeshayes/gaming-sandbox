@@ -12,11 +12,14 @@
 //
 // Items are deliberately absent. They move every time the world respawns, so a
 // map of them would be a lie by the time it was drawn; what doesn't move is the
-// ground, the hut, the merchant, the chests and the sanctums.
+// ground, the hut, the merchant, the chests, the sanctums, the four landmarks
+// and any post that has been read.
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, TILE, gemColour, getPalette, hex } from '../config.js';
-import { chests, hall, landmarks, sanctums, terrainAt } from '../core/world.js';
-import { HALL_SEEN } from '../core/rules.js';
+import { chests, hall, landmarks, sanctums, signposts, sites, terrainAt } from '../core/world.js';
+import { HALL_SEEN, hasStanding, markedLandmarks } from '../core/rules.js';
+import { landmarkDef } from '../data/landmarks.js';
+import { landmarkRole } from './MapView.js';
 import { itemDef } from '../data/items.js';
 import { biomeKey } from '../data/tiles.js';
 import { makeButton } from './button.js';
@@ -219,23 +222,47 @@ export class WorldMap {
     // with, so the overview and the viewport are the same world seen twice
     // (`biomeKey`, src/data/tiles.js). An item marker is not: an item is the
     // campaign's, the same wherever it is picked up.
-    const mark = (tx, ty, sprite, hue) => {
+    const markIn = (tx, ty, sprite, colour) => {
       const at = tile(tx, ty);
       const marker = scene.add
         .image(at.x, at.y, biomeKey(sprite, run.biome))
         .setScale(MARKER_SCALE)
-        .setTint(gemColour(hue || 0));
+        .setTint(colour);
       this.markers.push({ object: marker, base: MARKER_SCALE });
       view.add(marker);
     };
+    const mark = (tx, ty, sprite, hue) => markIn(tx, ty, sprite, gemColour(hue || 0));
 
     mark(0, 0, 'base', 0);
     for (const sanctum of sanctums(run.seed))
       if (sanctum.gem && run.seenUnique.has(sanctum.gem))
         mark(sanctum.centre.x, sanctum.centre.y, 'gem', itemDef(sanctum.gem).hue);
+    // The stall, the compass and the map. The stall is the one thing on here a
+    // campaign can know without having seen it: standing at the Mint is a
+    // standing, and what it stands for is knowing where the money goes
+    // (DESIGN.md §4.10).
+    for (const site of sites(run.seed))
+      if (run.seenUnique.has(site.id) || (!site.item && hasStanding(run, 'mint')))
+        mark(site.x, site.y, site.item ? itemDef(site.item).sprite : 'merchant', 0);
+    // The four landmarks, each in the colour it keeps — and in the plain
+    // foreground until this campaign has stood at it, like every other colour
+    // in the game. A landmark a signpost has pointed the way to is marked
+    // whether or not a light has reached it: directions are worth exactly as
+    // much as a mark on a map (`markedLandmarks` in core/rules.js).
+    const marked = markedLandmarks(run);
     for (const landmark of landmarks(run.seed))
-      if (run.seenUnique.has(landmark.id))
-        mark(landmark.x, landmark.y, landmark.item ? itemDef(landmark.item).sprite : 'merchant', 0);
+      if (marked.has(landmark.id))
+        markIn(
+          landmark.x,
+          landmark.y,
+          landmarkDef(landmark.id).sprite,
+          landmarkRole(run, landmark.id).colour || pal.fg
+        );
+    // The posts, once read. They are the only marker here that is a *direction*
+    // rather than a place, which is why they are drawn at all: a post you have
+    // read is a corner of the world you can find your way out of.
+    for (const post of signposts(run.seed))
+      if (run.posts.has(post.id)) markIn(post.x, post.y, 'signpost', pal.fg);
     // Chests are marked with their lid the way you left it, which is the one
     // marker on this map that says what you have *done* rather than what is
     // there: a shut one is somewhere still worth the walk.

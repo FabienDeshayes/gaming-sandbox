@@ -8,7 +8,7 @@
 //
 // Pure: no Phaser, no run mutation.
 
-import { BASE_X, BASE_Y, chebyshev, chests, landmarks, sanctums } from './world.js';
+import { BASE_X, BASE_Y, chebyshev, chests, sanctums, sites } from './world.js';
 import { itemDef } from '../data/items.js';
 
 // The hut, which is what the compass falls back to when there is nothing left
@@ -62,17 +62,25 @@ export function availableTargets(state) {
     if (!state.chests.has(chest.id))
       out.push({ id: chest.id, sprite: 'chest', hue: 0, x: chest.x, y: chest.y });
 
-  for (const landmark of landmarks(state.seed)) {
-    if (landmark.item) {
+  for (const site of sites(state.seed)) {
+    if (site.item) {
       // A tool you already own isn't lying there any more.
-      if (!state.tools.has(landmark.item)) out.push(fromItem(landmark.item, landmark.x, landmark.y));
+      if (!state.tools.has(site.item)) out.push(fromItem(site.item, site.x, site.y));
       continue;
     }
     // The merchant is worth pointing at while it still has something you can
     // only get there once — after that it's a shop you know the way to.
     if (state.tools.size < 2)
-      out.push({ id: 'merchant', sprite: 'merchant', hue: 0, x: landmark.x, y: landmark.y });
+      out.push({ id: 'merchant', sprite: 'merchant', hue: 0, x: site.x, y: site.y });
   }
+
+  // Landmarks are deliberately **not** on the needle (DESIGN.md §4.10). They
+  // have a way of being found already, and it is the eight posts standing
+  // around the world with their names on: the compass is the instrument and a
+  // signpost is somebody's directions, and pointing both at the same thing
+  // would spend the instrument on the one thing that doesn't need it. It would
+  // also cost the hall its moment — the Mint stands 12 tiles out, so a needle
+  // that counted landmarks would rarely be pointing anywhere else.
 
   return out;
 }

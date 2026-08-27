@@ -107,6 +107,27 @@ export const TILES = {
   chest: [26, 15],
   'chest-open': [27, 15],
 
+  // --- Landmarks -----------------------------------------------------------
+  // The four named places (DESIGN.md §4.10), each with the ground its court is
+  // paved with. Deliberately *not* in `BIOME_KEYS` below: a biome may repoint
+  // its own rock and its own hut, but a landmark is the same object in every
+  // world the hall moulds, and a world does not get to redraw it.
+  //
+  // Every one of these is a tile the sheet already had, standing in until they
+  // are drawn for this game (`draw.html`): a press, the sheet's own bell, a
+  // bare tree nothing else claims, a shaft on a stepped base, and a banner on a
+  // pole for the signposts. The courts are ground textures off the top row,
+  // drawn at half strength like every other floor (src/data/sprites.js).
+  mint: [23, 10],
+  bell: [1, 12],
+  'lantern-tree': [1, 2],
+  gnomon: [46, 20],
+  'court-mint': [2, 0],
+  'court-bell': [3, 0],
+  'court-tree': [4, 0],
+  'court-gnomon': [22, 14],
+  signpost: [17, 8],
+
   // --- Items ---------------------------------------------------------------
   // The four lights climb a silhouette: candle, lantern, candelabra, and a
   // radiating burst for the beacon, which is the only one that has to read as

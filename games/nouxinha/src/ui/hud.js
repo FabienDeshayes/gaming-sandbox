@@ -5,7 +5,8 @@
 import { FONT, GAME_WIDTH, HUD_Y, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
 import { HUD } from '../text.js';
-import { activeLight, inventoryStacks, maxWater, spendable } from '../core/rules.js';
+import { activeLight, hasStanding, inventoryStacks, maxWater, spendable } from '../core/rules.js';
+import { chebyshev } from '../core/world.js';
 import { playTap } from './sfx.js';
 
 const PAD = 14;
@@ -30,6 +31,11 @@ const COINS_TEXT_X = PAD + 158;
 // one to count — it is a thing that has happened to the campaign rather than a
 // resource, so it sits with the counters and never says anything at zero.
 const CYCLES_RIGHT = GAME_WIDTH - 164;
+// How far out you are standing right now — the Gnomon's standing (DESIGN.md
+// §4.10), and so on screen only for a campaign that has stood at it. At the far
+// end of the counters row, past the count of worlds, because those two are the
+// pair that are about the walk rather than about what is in your hands.
+const DISTANCE_RIGHT = GAME_WIDTH - PAD;
 
 // Both bars — the active light's and water's — share this width, so water
 // reads as the same kind of thing as light: a resource with a bar, not a
@@ -73,6 +79,7 @@ export class Hud {
         this.onCoins();
       });
 
+    this.distance = text(DISTANCE_RIGHT, COUNTER_Y + 1, 12).setOrigin(1, 0);
     this.cycles = text(CYCLES_RIGHT, COUNTER_Y + 1, 12).setOrigin(1, 0);
 
     this.slots = scene.add.container(0, 0);
@@ -98,6 +105,9 @@ export class Hud {
     this.explored.setText(HUD.explored(run.explored.size));
     this.coins.setText(HUD.coins(spendable(run)));
     this.cycles.setText(run.cycles ? HUD.cycles(run.cycles) : '');
+    this.distance.setText(
+      hasStanding(run, 'gnomon') ? HUD.distance(chebyshev(run.x, run.y)) : ''
+    );
 
     this.waterLabel.setText(HUD.water(run.water, maxWater(run.gems)));
     this.waterBar.clear();

@@ -11,6 +11,13 @@
 // scratch. So the explored set is written whichever way a run ends, while
 // everything the run was *holding* still lives or dies on the walk home.
 //
+// The landmarks are stored three ways over, and the difference between them is
+// the whole of what a landmark is (DESIGN.md §4.10): `landmarks` is the ones
+// stood at in *this* world, `posts` the signposts read in it — both of which go
+// when the hall moulds the world again — and `standings` what a campaign keeps
+// out of them, which is the one thing besides the count of worlds that survives
+// every re-moulding.
+//
 // Gems are stored as a *count*, not a list. The sanctum chain hands them out in
 // order, nearest first, so "how many" says everything "which ones" would. Keys
 // are a list, because a chest three days' walk out can be opened before one
@@ -28,9 +35,10 @@
 // here defaults to that one, which is what lets a run bank itself without ever
 // knowing which slot it belongs to.
 
-import { CHEST_PLAN, SANCTUM_PLAN } from '../balance.js';
+import { CHEST_PLAN, SANCTUM_PLAN, SIGNPOST_PLAN } from '../balance.js';
 import { BASE_X, BASE_Y, beyondEdge, pickSeed } from './world.js';
 import { ITEMS, KEYS, TOOLS } from '../data/items.js';
+import { LANDMARK_IDS, STANDINGS } from '../data/landmarks.js';
 
 const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;
 const ACTIVE_KEY = 'nouxinha.slot';
@@ -43,9 +51,11 @@ export const SLOT_COUNT = 3;
 
 export const MAX_GEMS = SANCTUM_PLAN.filter((s) => s.gem).length;
 
-// Every chest id the world can hold, so a save can be checked against the set
-// that actually exists rather than trusting whatever is in the file.
+// Every chest and signpost id the world can hold, so a save can be checked
+// against the set that actually exists rather than trusting whatever is in the
+// file.
 const CHEST_IDS = CHEST_PLAN.map((plan) => plan.id);
+const POST_IDS = SIGNPOST_PLAN.map((plan) => plan.id);
 
 export function emptySave() {
   return {
@@ -76,6 +86,17 @@ export function emptySave() {
     // banked at the hut like everything else a run holds (DESIGN.md §4.8).
     keys: [],
     chests: [],
+    // The landmarks this campaign has stood at **in this world**, and the
+    // signposts it has read here (DESIGN.md §4.10). Both belong to the world:
+    // the hall takes them with the ground, the way it takes the keys and the
+    // lids.
+    landmarks: [],
+    posts: [],
+    // And the standings: what stood at a landmark once and kept it. These are
+    // the one thing besides `cycles` that survives a world being moulded away —
+    // he can unmake the ground a landmark stood in, and he has never found a
+    // way to unmake the fact that you have stood there.
+    standings: [],
     // Run-length encoded explored ground, and the seed it belongs to.
     mapped: '',
     mappedSeed: 0,
@@ -128,6 +149,9 @@ export function normaliseSave(raw, keepRun = true) {
   save.map = !!raw.map;
   save.keys = ids(raw.keys, KEYS);
   save.chests = ids(raw.chests, CHEST_IDS);
+  save.landmarks = ids(raw.landmarks, LANDMARK_IDS);
+  save.posts = ids(raw.posts, POST_IDS);
+  save.standings = ids(raw.standings, STANDINGS);
   save.mapped = typeof raw.mapped === 'string' ? raw.mapped : '';
   save.mappedSeed = Number.isFinite(raw.mappedSeed) ? raw.mappedSeed | 0 : 0;
   save.seen = Array.isArray(raw.seen)
@@ -146,6 +170,8 @@ export function normaliseSave(raw, keepRun = true) {
     save.map ||
     save.keys.length > 0 ||
     save.chests.length > 0 ||
+    save.landmarks.length > 0 ||
+    save.standings.length > 0 ||
     !!save.mapped ||
     !!save.run;
   return save;
@@ -207,6 +233,9 @@ function normaliseRun(raw) {
     tools: Array.isArray(raw.tools) ? raw.tools.filter((id) => TOOLS.includes(id)) : [],
     keys: ids(raw.keys, KEYS),
     chests: ids(raw.chests, CHEST_IDS),
+    landmarks: ids(raw.landmarks, LANDMARK_IDS),
+    posts: ids(raw.posts, POST_IDS),
+    standings: ids(raw.standings, STANDINGS),
     inventory,
     // -1 is blackout, and it is the only answer for an empty inventory.
     activeIndex: inventory.length ? int(raw.activeIndex, 0, inventory.length - 1) : -1,

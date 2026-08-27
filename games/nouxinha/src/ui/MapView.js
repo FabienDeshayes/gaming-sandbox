@@ -19,10 +19,21 @@ import {
   VIEW_ROWS,
   gemColour,
   getPalette,
+  paletteColour,
 } from '../config.js';
-import { isBase, isMerchant, sanctumAt, terrainAt, variantAt } from '../core/world.js';
-import { chestOnTile, gateOnTile, isBlackout, itemOnTile, litTiles, tileKey } from '../core/rules.js';
+import { courtAt, isBase, isMerchant, sanctumAt, signpostAt, terrainAt, variantAt } from '../core/world.js';
+import {
+  chestOnTile,
+  gateOnTile,
+  hasStanding,
+  isBlackout,
+  itemOnTile,
+  landmarkOnTile,
+  litTiles,
+  tileKey,
+} from '../core/rules.js';
 import { itemDef } from '../data/items.js';
+import { landmarkDef } from '../data/landmarks.js';
 import { biomeKey, variantKey, wallSprite } from '../data/tiles.js';
 import { makePainted, paintTile } from './painted.js';
 import { makeWizard, paintWizard } from './wizard.js';
@@ -44,6 +55,19 @@ function wallPiece(site, x, y) {
 function sanctumHue(sanctum) {
   const gem = itemDef(sanctum.gem);
   return gem ? gem.hue : sanctum.colour;
+}
+
+// The colour a landmark's own zone is drawn in: its palette outright, and the
+// plain foreground until this campaign has stood at it (DESIGN.md §4.10). The
+// role resolves to a colour rather than to a gem, because a landmark's colour
+// is absolute — the same one in all four worlds — where every gem's is relative
+// to the world it is being carried through (src/data/landmarks.js).
+//
+// The rule it keeps is the gems' rule: nothing is ever shown in a colour the
+// campaign has not brought back. It is just that what brings this one back is
+// having been there rather than having fetched something.
+export function landmarkRole(run, id) {
+  return { colour: id && hasStanding(run, id) ? paletteColour(landmarkDef(id).palette) : 0 };
 }
 
 export class MapView {
@@ -160,6 +184,14 @@ export class MapView {
       // way, and for the same reason — he is stood on it, not lying on it.
       const chest = terrain === 'chest' ? chestOnTile(run, wx, wy) : null;
 
+      // A landmark fills its tile the same way, and so does a signpost: both
+      // are walked into rather than onto (DESIGN.md §4.10). A landmark's court
+      // is floor — its own paving rather than the world's, which is what makes
+      // arriving at one look like arriving somewhere.
+      const mark = terrain === 'landmark' ? landmarkOnTile(run, wx, wy) : null;
+      const post = terrain === 'signpost' ? signpostAt(wx, wy, run.seed) : null;
+      const court = terrain === 'floor' ? courtAt(wx, wy, run.seed) : null;
+
       // A gate fills its tile the way rock and wall do — it *is* the ring it
       // stands in, not something lying on the floor.
       // Ground alternates like rock and trees do wherever the world it is in
@@ -169,22 +201,34 @@ export class MapView {
         ? biomeKey(gate.open ? 'gate-open' : 'gate', biome)
         : chest
           ? biomeKey(chest.opened ? 'chest-open' : 'chest', biome)
-          : terrain === 'sorcerer'
-            ? 'sorcerer'
-            : terrain === 'rock' || terrain === 'tree'
-              ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
-              : terrain === 'wall'
-                ? biomeKey(wallPiece(site, wx, wy), biome)
-                : variantKey('floor', variantAt(wx, wy, run.seed), biome);
+          : mark
+            ? landmarkDef(mark.landmark.id).sprite
+            : post
+              ? 'signpost'
+              : terrain === 'sorcerer'
+                ? 'sorcerer'
+                : terrain === 'rock' || terrain === 'tree'
+                  ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
+                  : terrain === 'wall'
+                    ? biomeKey(wallPiece(site, wx, wy), biome)
+                    : court
+                      ? landmarkDef(court).court
+                      : variantKey('floor', variantAt(wx, wy, run.seed), biome);
 
-      // The two hues a tile can only get from where it stands: the gem the
-      // sanctum around it keeps, and the gem whose colour opened its gate. Both
-      // resolve to the plain foreground until that gem is in hand, so a gate
-      // you can't open yet is just more wall and an unclaimed sanctum is just
-      // more masonry.
+      // The hues a tile can only get from where it stands: the gem the sanctum
+      // around it keeps, the gem whose colour opened its gate, and the colour a
+      // landmark keeps — its own on its own tile, and the one it names on a
+      // signpost's arm. Every one of them resolves to the plain foreground
+      // until the campaign has earned it, so a gate you can't open yet is just
+      // more wall, an unclaimed sanctum is just more masonry, and a landmark
+      // you have never stood at is a shape with a name you don't know.
       const roles = site
         ? { gem: sanctumHue(site.sanctum), opened: gate ? gate.colour : 0 }
-        : {};
+        : mark
+          ? { landmark: landmarkRole(run, mark.landmark.id) }
+          : post
+            ? { landmark: landmarkRole(run, post.post.target) }
+            : {};
 
       cell.ground.setVisible(true).setAlpha(alpha);
       paintTile(cell.ground, ground, { gems: run.gems, base: fg, roles });

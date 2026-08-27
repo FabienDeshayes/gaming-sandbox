@@ -136,7 +136,7 @@ export const ITEMS = {
   // The two tools. Neither is consumed and neither stacks — you own one or you
   // don't — so they sit outside the inventory entirely and show up in the HUD
   // instead. Each can be bought from the merchant or found lying in the dark
-  // (core/world.js `LANDMARK_PLAN`); owning one takes it off both.
+  // (balance.js `SITE_PLAN`); owning one takes it off both.
   compass: {
     id: 'compass',
     ...ITEM_TEXT['compass'],

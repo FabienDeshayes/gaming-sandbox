@@ -141,20 +141,32 @@ export const HOARD_PER_KIND = 2;
 // and the two tools lying in the dark, a chest belongs to the *slot* rather than
 // to the expedition: it is placed with the seed and never relaid by a respawn.
 //
-// Three of them hold the three keys, one per shut gate, and each sits well
-// inside the gate it opens so the walk to a gem is still the walk the distances
-// above describe. The rest hold coins, spread a band apart so a campaign meets
-// one every so often rather than all of them at once.
+// Four of them stand beside the landmarks (LANDMARK_PLAN below) — three keys and
+// a hoard — and each key still sits well inside the gate it opens, so the walk
+// to a gem is the walk the distances above describe. The rest are loose, on
+// rings of their own.
 export const CHEST_PLAN = [
-  { id: 'chest-key-1', key: 'key-1', near: 26, span: 10 },
-  { id: 'chest-key-2', key: 'key-2', near: 52, span: 12 },
-  { id: 'chest-key-3', key: 'key-3', near: 86, span: 14 },
+  // The four beside the landmarks (LANDMARK_PLAN below). Three of them hold the
+  // three keys, in the order the gates want them, and the nearest one holds a
+  // hoard — so the first landmark a campaign ever walks to pays in coins and
+  // every one after it pays in a gate.
+  { id: 'chest-mint', key: null, at: 'mint' },
+  { id: 'chest-key-1', key: 'key-1', at: 'bell' },
+  { id: 'chest-key-2', key: 'key-2', at: 'lantern-tree' },
+  { id: 'chest-key-3', key: 'key-3', at: 'gnomon' },
+  // And the loose ones, on rings of their own, holding coins: spread a band
+  // apart so a campaign meets one every so often rather than all at once.
   { id: 'chest-coin-1', key: null, near: 12, span: 8 },
   { id: 'chest-coin-2', key: null, near: 32, span: 10 },
   { id: 'chest-coin-3', key: null, near: 58, span: 12 },
   { id: 'chest-coin-4', key: null, near: 84, span: 14 },
   { id: 'chest-coin-5', key: null, near: 104, span: 14 },
 ];
+
+// How far off a landmark its chest stands: outside the court, near enough that
+// the light which shows you the landmark is one step from showing you the box.
+export const LANDMARK_CHEST_NEAR = 3;
+export const LANDMARK_CHEST_SPAN = 3;
 
 // What a coin chest is worth, picked per chest from the seed. An order of
 // magnitude above a coin pile on the ground (COIN_VALUE_MIN/MAX below) because a
@@ -165,11 +177,14 @@ export const CHEST_PLAN = [
 // second look.
 export const CHEST_COIN_VALUES = [30, 50, 75];
 
-// --- Landmarks ----------------------------------------------------------------
+// --- Sites --------------------------------------------------------------------
 //
-// The three things in the world that aren't behind a gate and aren't rerolled:
-// the merchant, and the one compass and one map lying out in the dark.
-export const LANDMARK_PLAN = [
+// The three single-tile things in the world that aren't behind a gate and
+// aren't rerolled: the merchant, and the one compass and one map lying out in
+// the dark. Placed like the chests and the landmarks are, and named `site`
+// because that is all they have in common — a stall, a tool on the floor, and
+// a tool on the floor.
+export const SITE_PLAN = [
   // Close enough that a first expedition can reach it and walk home, and on the
   // far side of the hut from the first sanctum, so an early run has two
   // directions worth walking rather than one.
@@ -180,6 +195,85 @@ export const LANDMARK_PLAN = [
   // though at 50 coins it's also the cheaper of the two to just buy.
   { id: 'map', item: 'map', near: 90, span: 16, opposite: null },
 ];
+
+// --- Landmarks ----------------------------------------------------------------
+//
+// Four named places per world, one per colour, and the same four in every world
+// the hall moulds (DESIGN.md §4.10). What a landmark *is* — its sprite, the
+// ground its court is paved with, the colour it keeps and what standing it
+// hands over — is `src/data/landmarks.js`; what is here is where it stands.
+//
+// The rings are the pacing. The first two are inside a first or second
+// expedition, so a campaign meets a landmark before it meets a gate; the fourth
+// tops out at 74, nearer than the third sanctum and a long way inside the hall.
+// Each takes a quarter of the compass, with the whole rose turned by the seed:
+// every world has one in every direction, and which direction holds which
+// changes every time the world is moulded. That is what makes them orient you.
+export const LANDMARK_PLAN = [
+  { id: 'mint', near: 12, span: 6 },
+  { id: 'bell', near: 28, span: 8 },
+  { id: 'lantern-tree', near: 48, span: 10 },
+  { id: 'gnomon', near: 66, span: 9 },
+];
+
+// The court: the ring of its own ground around a landmark, forced walkable so
+// there is always a way in and a way round whatever the noise did. One tile, so
+// a landmark is 3x3 — which is the whole of a small torch's shape, and the
+// reason arriving at one fills your light.
+export const LANDMARK_COURT = 1;
+
+// What a landmark hands the run the first time it is touched **in a world**: a
+// gift, not a standing (DESIGN.md §4.10). Small, one-off and per world, so the
+// fourth world still has four reasons to walk in four directions.
+//
+//   coins    — a handful of blanks, struck on the spot
+//   water    — Infinity is a full tank, the same as the spring vial's
+//   relight   — the equipped light burns back up to full
+//   reveal   — tiles of ground drawn around it, so you can see how far you came
+export const LANDMARK_GIFTS = {
+  mint: { coins: 15 },
+  bell: { water: Infinity },
+  'lantern-tree': { relight: true },
+  gnomon: { reveal: 8 },
+};
+
+// The Drowned Bell's standing: how far its note carries in every world after
+// the one you first put a hand on it in. Wide enough to be a bearing rather
+// than a proximity beep — you hear it long before a light could show it.
+export const BELL_HEARING = 20;
+
+// --- Signposts ----------------------------------------------------------------
+//
+// Eight posts, each naming one landmark and pointing at it. Two per landmark,
+// one nearer than it and one about level with it, so no post is more than about
+// 25 tiles from the thing it names and every heading is worth trusting.
+//
+// The one at 5 is the post every campaign meets on its first expedition: near
+// enough that the opening walk cannot miss it, far enough to be outside the
+// hut's clearing, and it points at the nearest landmark there is.
+export const SIGNPOST_PLAN = [
+  { id: 'post-1', near: 5, span: 0, target: 'mint' },
+  { id: 'post-2', near: 12, span: 4, target: 'bell' },
+  { id: 'post-3', near: 20, span: 4, target: 'mint' },
+  { id: 'post-4', near: 28, span: 4, target: 'lantern-tree' },
+  { id: 'post-5', near: 38, span: 5, target: 'bell' },
+  { id: 'post-6', near: 50, span: 5, target: 'gnomon' },
+  { id: 'post-7', near: 62, span: 5, target: 'lantern-tree' },
+  { id: 'post-8', near: 75, span: 5, target: 'gnomon' },
+];
+
+// How much room a post needs: clear of the landmark courts, because a signpost
+// standing next to the thing it points at is a joke the player has to walk to
+// get to, and clear of the other posts, so the eight of them stay eight
+// directions rather than one crowd.
+export const SIGNPOST_CLEARANCE = 8;
+export const SIGNPOST_SPACING = 10;
+
+// What a post says about how far it is, in Chebyshev tiles: under the first is
+// nearby, under the last is a long walk, past it is far (`SIGNPOST.far` in
+// src/text.js names them). Banded rather than counted because a post is
+// somebody's directions, not an instrument — the compass is the instrument.
+export const SIGNPOST_BANDS = [15, 40, 80];
 
 // --- The scatter --------------------------------------------------------------
 //

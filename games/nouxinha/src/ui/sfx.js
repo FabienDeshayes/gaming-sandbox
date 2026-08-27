@@ -272,6 +272,41 @@ export function playTorch() {
   });
 }
 
+// The Drowned Bell, heard rather than touched: the one sound in the game that
+// comes out of the world instead of out of something you did (DESIGN.md
+// §4.10). A low struck note with its fifth under it and a long tail, and
+// `nearness` — 0 at the edge of hearing, 1 standing on its court — is the whole
+// of the mix, so walking towards it is the sound getting louder.
+export function playBell(nearness = 1) {
+  const peak = 0.012 + 0.05 * Math.max(0, Math.min(1, nearness));
+  play('bell', (a, bus, now) => {
+    note(a, bus, { freq: 98, at: now, duration: 2.4, peak, cutoff: 500 });
+    note(a, bus, { freq: 147, at: now + 0.02, duration: 1.8, peak: peak * 0.6, cutoff: 700 });
+    note(a, bus, { freq: 294, at: now + 0.05, duration: 1.1, peak: peak * 0.3, cutoff: 1200 });
+  });
+}
+
+// Standing at a landmark for the first time: the same struck-thing shape as the
+// chest, opened out — three notes climbing rather than one lid, because what a
+// landmark hands over is the campaign's rather than the run's.
+export function playLandmark() {
+  play('landmark', (a, bus, now) => {
+    note(a, bus, { freq: 196, at: now, duration: 0.5, peak: 0.055, cutoff: 800 });
+    note(a, bus, { freq: 294, at: now + 0.16, duration: 0.45, peak: 0.05 });
+    note(a, bus, { freq: 440, at: now + 0.32, duration: 0.5, peak: 0.05 });
+    note(a, bus, { freq: 587, at: now + 0.48, duration: 0.7, peak: 0.045 });
+  });
+}
+
+// Reading a signpost: wood, so a knock rather than a note — short, flat and
+// over, because the post is not the thing, the direction is.
+export function playSignpost() {
+  play('signpost', (a, bus, now) => {
+    note(a, bus, { freq: 220, glide: 165, at: now, duration: 0.09, peak: 0.05, cutoff: 700 });
+    note(a, bus, { freq: 330, at: now + 0.08, duration: 0.12, peak: 0.035, cutoff: 1400 });
+  });
+}
+
 // Running dry: three notes falling, then the low one sagging as it goes. The
 // only sound in the game that descends, because it is the only thing that
 // happens to you rather than for you.

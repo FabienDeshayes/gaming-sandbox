@@ -60,7 +60,11 @@ export class Hud {
     divider.lineStyle(2, pal.fg, 1);
     divider.lineBetween(0, HUD_Y, GAME_WIDTH, HUD_Y);
 
-    this.exploredIcon = scene.add.image(EXPLORED_ICON_X, COUNTER_Y + 6, 'map').setOrigin(0, 0.5).setScale(1.1);
+    this.exploredIcon = scene.add
+      .image(EXPLORED_ICON_X, COUNTER_Y + 6, 'map')
+      .setOrigin(0, 0.5)
+      .setScale(1.1)
+      .setTint(pal.fg);
     this.explored = text(EXPLORED_TEXT_X, COUNTER_Y, 13);
 
     // The purse, not this run's haul: it is the number that decides whether the
@@ -71,6 +75,7 @@ export class Hud {
       .image(COINS_ICON_X, COUNTER_Y + 6, 'coin')
       .setOrigin(0, 0.5)
       .setScale(1.1)
+      .setTint(pal.fg)
       .setInteractive({ useHandCursor: true });
     this.coins = text(COINS_TEXT_X, COUNTER_Y, 13).setInteractive({ useHandCursor: true });
     for (const obj of [this.coinsIcon, this.coins])

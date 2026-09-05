@@ -270,8 +270,8 @@ export const CREDITS = {
     'THANK YOU FOR WALKING BACK',
   ],
   // The one thing on this screen that is about the game rather than the story:
-  // the light it just turned on is a switch from here on (src/config.js).
-  unlocked: 'INVERT COLOURS IS IN SETTINGS NOW, WITH THE CHEATS',
+  // the light it is being read in is a switch of its own (src/config.js).
+  setting: 'INVERT COLOURS IS IN SETTINGS, UNDER THE CHEATS',
   back: 'TAP TO GO ON',
 };
 

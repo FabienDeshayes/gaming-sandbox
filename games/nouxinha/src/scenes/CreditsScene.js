@@ -19,7 +19,6 @@ import {
   GAME_WIDTH,
   getPalette,
   hex,
-  invertUnlocked,
   overrideInvert,
 } from '../config.js';
 import { CREDITS } from '../text.js';
@@ -59,13 +58,10 @@ export class CreditsScene extends Phaser.Scene {
     // has left.
     paintWizard(makeWizard(this, cx, 258, 'down', 5), 'down', 0, pal.fg);
 
-    // The lines, and then the one piece of chrome on the screen: what the ending
-    // just unlocked, which a player who never opens Settings would otherwise
-    // never find (src/config.js).
-    const lines = [
-      ...CREDITS.lines,
-      ...(invertUnlocked() ? [CREDITS.unlocked] : []),
-    ];
+    // The lines, and then the one piece of chrome on the screen: where the
+    // colours this is being read in can be turned back on, which a player who
+    // never opens Settings would otherwise never find (src/config.js).
+    const lines = [...CREDITS.lines, CREDITS.setting];
     this.lines = lines.map((line, i) =>
       this.add
         .text(cx, FIRST_LINE_Y + i * LINE_GAP, line, {

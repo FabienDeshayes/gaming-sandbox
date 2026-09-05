@@ -332,8 +332,10 @@ test('the last world finished ends the game in the light', async (game) => {
   assertEqual(await game.background(), invertColour(getPalette().bg),
     'the credits are drawn in the world with its colours turned over');
   assert(await game.hasText(CREDITS.title), 'and the game signs what it just did');
-  assertEqual(await game.pref('nouxinha.invert.unlocked'), '1',
-    'the switch that does that is in Settings from now on');
+  // The light is the ending's, not the player's: nothing about it was written
+  // down, so a page closed on the credits comes back to an ordinary dark world
+  // (src/config.js).
+  assert(!(await game.pref('nouxinha.invert')), 'and the setting behind it was never touched');
 
   // The campaign is still a campaign: the walk into the hall was banked, the
   // world was moulded like every other time, and the kind of world it just

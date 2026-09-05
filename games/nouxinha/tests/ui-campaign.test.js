@@ -525,6 +525,77 @@ test('running dry takes the saved expedition with it', async (game) => {
   assert(await game.hasText(SLOTS.furthest(0)), 'and the slot is a campaign to walk out from again');
 }, { save: THIRSTY_RUN });
 
+// The same last mouthful as THIRSTY_RUN, with a purse and a tool this walk
+// hadn't banked yet — what a death used to simply erase now goes into a bag
+// on the tile it happened on (DESIGN.md §6).
+const DYING_WITH_LOOT = {
+  ...emptySave(),
+  run: {
+    seed: SEED,
+    x: 0,
+    y: 0,
+    facing: 'right',
+    steps: 40,
+    water: 1,
+    coins: 12,
+    coinsFound: 12,
+    gems: 0,
+    furthest: 4,
+    nonce: NONCE,
+    epoch: 0,
+    tools: ['map'],
+    inventory: [{ id: 'torch-small', durability: 60 }],
+    activeIndex: 0,
+    found: {},
+    collected: '',
+    startExplored: 0,
+    banked: emptySave(),
+  },
+};
+
+test('dying leaves a bag where it happened, and walking back to it hands it all back', async (game) => {
+  await game.startRun();
+  assertEqual((await game.state()).water, 1, 'resumed on its last mouthful');
+
+  await game.tapDpad('right');
+  await game.settle();
+  assert(await game.hasText(DEATH.title), 'the step that empties the tank ends the run');
+
+  // What the death screen abandons doesn't vanish — it goes into a bag on the
+  // tile the run fell on.
+  const dead = await game.save();
+  assert(dead.bag, 'a bag is left behind');
+  assertEqual({ x: dead.bag.x, y: dead.bag.y }, { x: 1, y: 0 }, 'right where the run died');
+  assertEqual(dead.bag.coins, 12, 'holding the coins that were in the pocket');
+  assertEqual(dead.bag.tools, ['map'], 'and the tool that never made it home');
+
+  await game.clickText(RECAP.home);
+  await game.waitForScene('TitleScene');
+  await game.clickText(UI.loadGame);
+  await game.waitForScene('SlotScene');
+  await game.clickText(SLOTS.slotName(1));
+  await game.waitForScene('ExploreScene');
+  await game.readPanel();
+
+  // A fresh expedition sets out from south of the hut — walk round rather than
+  // back over the hut's own tile, which would open its own question instead.
+  await game.tapDpad('right');
+  await game.settle();
+  await game.tapDpad('up');
+  await game.settle();
+  assert(await game.hasText(FLASH.bagFound), 'the status line says so');
+
+  const picked = await game.state();
+  assertEqual(picked.coins, 12, 'the coins are back in the pocket');
+  assert(picked.tools.includes('map'), 'and so is the map');
+
+  // Picking it up only makes it real the way any other pickup does — walking
+  // it home to the hut is what writes the slot down without it.
+  await game.tapDpad('left');
+  await game.settle();
+  assertEqual((await game.save()).bag, null, 'and the bag itself is gone from the slot');
+}, { save: DYING_WITH_LOOT });
+
 // Standing one step off the merchant's stall, with a campaign's fortune banked
 // behind the run: what the merchant spends is everything banked plus what the
 // run is carrying (DESIGN.md §4.5).

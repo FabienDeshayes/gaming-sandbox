@@ -207,7 +207,8 @@ unit('walking onto a gem repaints the world, and banking is what keeps it', () =
   assertEqual({ x: state.x, y: state.y }, FIRST_GEM.centre, 'arrived at the gem');
   assertEqual(state.gems, 1, 'and picked it up');
   assertEqual(found.picked, 'gem-1', 'the step reported which gem');
-  assertEqual(found.respawned, true, 'and that taking it relaid the world');
+  assertEqual(found.respawned, false, 'taking it leaves the ground exactly as it was');
+  assertEqual(state.epoch, 0, 'no respawn happened');
   assertEqual(
     gateOnTile(state, SHUT_GATE.gate.x, SHUT_GATE.gate.y),
     { needs: 'key-1', colour: 1, open: false },

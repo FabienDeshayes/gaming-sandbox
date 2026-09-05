@@ -970,6 +970,33 @@ function available(kind, gems) {
   return true;
 }
 
+const SCATTER_BY_ID = new Map(SCATTER.map((kind) => [kind.id, kind]));
+
+// The gem a scatter kind needs before it is part of the ground at all — 0 for
+// everything but the tier a gem brings in (balance.js SCATTER `tier`).
+export function scatterTier(id) {
+  const kind = SCATTER_BY_ID.get(id);
+  return kind && kind.tier ? kind.tier : 0;
+}
+
+// What a kind turns into once a run holds enough gems to retire it: the one
+// other kind that arrives on the gem naming this one's `until` (balance.js
+// SCATTER) — water-drop's is water-flask, water-flask's is spring-vial, and so
+// on. Exported so a run can turn an item already lying on the ground into
+// what the gem "swapped" it for without moving it, relaying anything else, or
+// asking the pool it was drawn from to recompute at all
+// (core/rules.js `itemOnTile`).
+const SUCCESSOR_BY_ID = new Map();
+for (const kind of SCATTER) {
+  if (kind.until == null) continue;
+  const next = SCATTER.find((candidate) => candidate.tier === kind.until);
+  if (next) SUCCESSOR_BY_ID.set(kind.id, next.id);
+}
+
+export function scatterSuccessor(id) {
+  return SUCCESSOR_BY_ID.get(id) || null;
+}
+
 // How much the pile under a coin tile is worth (balance.js COIN_VALUE_MIN/MAX).
 export function coinValue(x, y, seed = DEFAULT_SEED, salt = 0) {
   const span = COIN_VALUE_MAX - COIN_VALUE_MIN + 1;

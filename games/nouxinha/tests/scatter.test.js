@@ -122,6 +122,39 @@ unit('a gem upgrades what the world spawns, and thins it', () => {
   }
 });
 
+unit('picking up a gem upgrades the ground already lying about, in place', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  assertEqual(state.scatterGems, 0, 'the ground is laid out for a fresh save');
+
+  let checked = 0;
+  let upgradedCount = 0;
+  for (let y = -40; y <= 40; y++)
+    for (let x = -40; x <= 40; x++) {
+      // The sanctum hoards are their own rule (`a sanctum clearing is a hoard`
+      // below) — this is a claim about the open world's ground alone.
+      if (sanctumAt(x, y, SEED)) continue;
+      const before = consumableAt(x, y, SEED, SALT, 0);
+      checked += 1;
+      if (before === 'water-drop') upgradedCount += 1;
+    }
+  assert(upgradedCount > 5, 'the window should hold several drops to upgrade');
+
+  // What `step` leaves the run holding on picking a gem up — no `respawn`.
+  state.gems = 1;
+  assertEqual(state.epoch, 0, 'picking it up alone never respawns the world');
+  assertEqual(state.scatterGems, 0, 'and never catches the frozen ground up either');
+
+  for (let y = -40; y <= 40; y++)
+    for (let x = -40; x <= 40; x++) {
+      if (sanctumAt(x, y, SEED)) continue;
+      const before = consumableAt(x, y, SEED, SALT, 0);
+      const after = itemOnTile(state, x, y);
+      if (before === 'water-drop')
+        assertEqual(after, 'water-flask', `(${x},${y}) upgraded in place rather than moving`);
+      else assertEqual(after, before, `(${x},${y}) stayed exactly as it was`);
+    }
+});
+
 unit('a sanctum clearing is a hoard, not a pile', () => {
   for (const sanctum of sanctums(SEED)) {
     const tally = {};

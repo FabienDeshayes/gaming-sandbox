@@ -42,7 +42,7 @@ at all, which is the quick way to work on the rules.
 | `terrain.test.js` | What the noise grows, where the world stops, which biome the seed makes it, and that every bit of it can be walked to |
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
 | `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall, the water ladder, the sites — merchant, compass, map — and the needle |
-| `landmarks.test.js` | The four landmarks and the eight posts: where they stand, what a touch gives, and which of it survives a world |
+| `landmarks.test.js` | The four landmarks and the twelve posts: where they stand, what a touch gives, and which of it survives a world |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, and what a cycle in the hall takes and leaves |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | The canvas against a phone, the sheet actually loading, the game's own voice |

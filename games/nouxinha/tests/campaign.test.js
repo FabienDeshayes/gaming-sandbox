@@ -1,7 +1,7 @@
 // The chain the campaign is: four sanctums, three gems, the leash each one
-// widens, and the sites — the merchant, the compass and the map — standing out
-// in the dark between them. The four landmarks are `landmarks.test.js`. Pure —
-// no browser.
+// widens, and the sites — the three merchants, the compass and the map —
+// standing out in the dark between them. The four landmarks are
+// `landmarks.test.js`. Pure — no browser.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import {
@@ -320,13 +320,16 @@ unit('the compass points at the hall once every colour is in hand', () => {
 
 // --- The sites ---------------------------------------------------------------
 
-unit('the merchant stands one walk from the hut, and there is only one', () => {
-  const found = sites(SEED).filter((site) => site.id === 'merchant');
-  assertEqual(found.length, 1, 'exactly one merchant');
-  const distance = chebyshev(found[0].x, found[0].y);
-  assert(distance >= 20 && distance <= 25, `the merchant sits ${distance} tiles out`);
-  assertEqual(isMerchant(found[0].x, found[0].y, SEED), true, 'and the tile says so');
-  assertEqual(terrainAt(found[0].x, found[0].y, SEED), 'floor', 'you can stand on it');
+unit('three merchants stand out in the dark, each one a proper stall', () => {
+  const found = sites(SEED).filter((site) => !site.item);
+  assertEqual(found.length, 3, 'exactly three merchants');
+  assertEqual(new Set(found.map((site) => site.id)).size, 3, 'each keeps its own id');
+  for (const site of found) {
+    assertEqual(isMerchant(site.x, site.y, SEED), true, `${site.id}'s tile says so`);
+    assertEqual(terrainAt(site.x, site.y, SEED), 'floor', `you can stand on ${site.id}`);
+  }
+  const distance = chebyshev(siteNamed('merchant', SEED).x, siteNamed('merchant', SEED).y);
+  assert(distance >= 20 && distance <= 25, `the first merchant sits ${distance} tiles out`);
 });
 
 unit('the compass and the map lie out in the dark, one of each', () => {

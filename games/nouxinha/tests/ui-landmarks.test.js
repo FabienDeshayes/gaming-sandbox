@@ -13,7 +13,7 @@ import { assert, assertEqual, runIfMain } from './harness.js';
 import { FLASH, SIGNPOST } from '../src/text.js';
 import { getPalette, paletteColour } from '../src/config.js';
 import { landmarkDef } from '../src/data/landmarks.js';
-import { signpostReading } from '../src/core/world.js';
+import { signpostHutBearing, signpostReadings } from '../src/core/world.js';
 import { maxWater } from '../src/core/rules.js';
 import {
   FIRST_POST,
@@ -113,22 +113,29 @@ test('a signpost is read by walking into it, and says which way and how far', as
   assert((await game.sounds()).includes('signpost'), 'the wood was heard');
 
   // The directions themselves, worked out from where the post stands.
-  const reading = signpostReading(FIRST_POST, SEED);
+  // Post-1 stands only five tiles from the hut, far too close to any landmark
+  // but Mint to ever also land within naming distance of another, so it is
+  // always exactly one reading.
+  const [reading] = signpostReadings(FIRST_POST, SEED);
   const line = SIGNPOST.line(
     landmarkDef(reading.target).name,
     SIGNPOST.bearings[reading.bearing],
     SIGNPOST.far[reading.band]
   );
+  const hutLine = SIGNPOST.hutHint(SIGNPOST.bearings[signpostHutBearing(FIRST_POST)]);
   assert(read.textPanelOpen, 'the first read gets the panel');
-  // Read it out block by block: the last one is the directions themselves,
-  // which is the only part of a post worth re-reading.
-  let last = null;
+  // Read it out block by block: the directions are one of them, and the
+  // cryptic hut hint — flavour rather than a fact worth re-reading — is last.
+  const blocks = [];
   for (let taps = 0; taps < 40 && (await game.textPanel()); taps++) {
     const panel = await game.textPanel();
-    if (panel.done) last = panel.full;
+    // The panel bakes its own word-wrap into real newlines (src/ui/textPanel.js);
+    // that is a rendering detail, not part of what the block says.
+    if (panel.done) blocks.push(panel.full.replace(/\n/g, ' '));
     await game.tapPanel();
   }
-  assertEqual(last, line, 'and it ends on the directions');
+  assert(blocks.includes(line), 'and the directions are read out somewhere in it');
+  assertEqual(blocks[blocks.length - 1], hutLine, 'and it ends on the cryptic hint toward the hut');
 
   // Read again, it is the same directions as a line in the status bar — by then
   // the player is checking rather than finding out, as long as no step has

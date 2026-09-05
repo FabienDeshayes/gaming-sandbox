@@ -68,10 +68,11 @@ export function availableTargets(state) {
       if (!state.tools.has(site.item)) out.push(fromItem(site.item, site.x, site.y));
       continue;
     }
-    // The merchant is worth pointing at while it still has something you can
-    // only get there once — after that it's a shop you know the way to.
+    // A merchant is worth pointing at while it still has something you can
+    // only get there once — after that it's a shop you know the way to. Each
+    // stall keeps its own id, so the needle can tell two apart.
     if (state.tools.size < 2)
-      out.push({ id: 'merchant', sprite: 'merchant', hue: 0, x: site.x, y: site.y });
+      out.push({ id: site.id, sprite: 'merchant', hue: 0, x: site.x, y: site.y });
   }
 
   // Landmarks are deliberately **not** on the needle (DESIGN.md §4.10). They

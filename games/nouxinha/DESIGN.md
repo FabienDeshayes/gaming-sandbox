@@ -67,9 +67,9 @@ The world has three things in it: **terrain** (floor, two formations of rock, gr
 | Pickup | Stepping onto a tile holding an item picks it up automatically, with a short rising blip — or, for a gem, a fanfare (§9). Lights go into the inventory unequipped; coins, water and gems apply immediately (coin counter, water level, colour restored) rather than sitting in the inventory. An item needing more gems than you hold isn't there to pick up at all (§4.3). | — |
 | Coming home | Stepping onto the base **writes the run down and fills the tank**, then says what it wrote and asks the one question left: **HEAD BACK OUT** carries the expedition on, **END HERE** closes it on a recap (§6) and returns to the title screen. Neither answer risks anything, and the panel says so — that is the whole difference between them (§6.1). Arriving still costs a step and burns durability like any other. | Tap a button on the dialog |
 | The hall | The fourth sanctum holds no gem and no hoard: it holds **Nouxinha**, standing at the centre of its clearing. Walking into him is a conversation, and the end of it is a new world in the same slot (§4.9). | Walk into him |
-| The merchant | One stall, 20-25 tiles from the hut and always in the same place for a seed. Selling lights, water, a **compass** and a **map** for coins — the only thing coins are for (§4.5). | Walk onto the stall |
+| The merchant | Three stalls, roughly 20-25/40-47/65-74 tiles from the hut and always in the same places for a seed. Selling lights, water, a **compass** and a **map** for coins — the only thing coins are for (§4.5). | Walk onto a stall |
 | Compass & map | Two tools, each bought once or found lying in the dark. The compass points at whatever unique object is worth walking to next; the map draws everywhere you have walked (§4.6). | Owned, not carried — neither takes an inventory slot |
-| Respawning | Everything lying on the ground goes back, in **new places**, whenever the world respawns: on picking up a gem, and on walking back onto the hut. Unique objects — gems, the merchant, the compass and map lying out there — never move (§4.3). | — |
+| Respawning | Everything lying on the ground goes back, in **new places**, whenever the world respawns: on picking up a gem, and on walking back onto the hut. Unique objects — gems, the merchants, the compass and map lying out there — never move (§4.3). | — |
 | Fixed camera | **The character never moves on screen — the world moves around them.** The character sprite is pinned to the exact centre of the map viewport and every step scrolls the world one tile in the opposite direction. This is the first thing to reconsider if the game feels static: the alternative is a camera that only scrolls when the character nears the viewport edge, which reads as more grounded but hides how much dark is on each side. | — |
 
 ### 4.1 Light sources
@@ -145,7 +145,7 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
 | Layer | Depends on | Holds |
 |---|---|---|
 | **Terrain** | `(x, y, seed)` | Floor, rock in two formations, groves of trees, the built walls, gates and clearings, and the four landmarks and eight posts set into it (§4.10). The same every run, forever. |
-| **Unique objects** | `(x, y, seed)` | The three gems, the merchant, the eight chests, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
+| **Unique objects** | `(x, y, seed)` | The three gems, the three merchants, the eight chests, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
 | **Consumables** | `(x, y, seed, salt)` | Coins, water and lights. The salt changes every run and every respawn, so these are never twice in the same places. |
 
 - **Each campaign gets a world of its own.** The seed is drawn when NEW GAME claims a save slot and
@@ -288,12 +288,17 @@ The one built structure in an otherwise noise-grown world, and the spine of the 
 
 ### 4.5 The merchant
 
-One stall, 20-25 tiles from the hut, in the same place every run for a given seed — and deliberately
-on the **far side of the hut from the first sanctum**, so an early expedition has two directions
-worth walking rather than one. Its tile and the ring around it are forced floor, and `pickSeed`
-checks it can be walked to from the hut with nothing in hand.
+Three stalls, each in the same place every run for a given seed. The first is 20-25 tiles from the
+hut and deliberately on the **far side of the hut from the first sanctum**, so an early expedition
+has two directions worth walking rather than one. The second sits roughly level with the second
+sanctum and opposite it the same way, and the third the same again opposite the third — so a
+campaign that has pushed that far out always has somewhere to spend what it found without the walk
+all the way back home. Every stall's tile and the ring around it are forced floor, and `pickSeed`
+checks each can be walked to from the hut with nothing in hand.
 
-Stepping onto the stall opens the counter. It is the only thing coins are for.
+Stepping onto any stall opens the same counter. It is the only thing coins are for — and buying the
+compass or the map at one takes it off every other stall's shelf too, since it's the same tool
+wherever you found it.
 
 | Stock | Price | Limit |
 |---|---|---|
@@ -319,23 +324,23 @@ shop's code.
 
 ### 4.6 The compass and the map
 
-Two tools. Each exists exactly once — buy it from the merchant or find it lying in the dark, and
-owning it takes it off the other. Neither is consumed, neither stacks, and neither takes an inventory
-slot; they live in the top-right corner of the map viewport instead (§7). Like a gem, each is only
-kept by walking it home.
+Two tools. Each exists exactly once — buy it from a merchant or find it lying in the dark, and
+owning it takes it off both the ground and every stall's shelf. Neither is consumed, neither stacks,
+and neither takes an inventory slot; they live in the top-right corner of the map viewport instead
+(§7). Like a gem, each is only kept by walking it home.
 
-The two lying in the world are placed like the merchant: seed-derived, forced-floor clearing,
-reachability checked at run start. The compass sits past the second sanctum's distance and the map
-past the third's, so finding either is a proper walk — which is what makes 250 and 50 coins a
-shortcut rather than a tax. The compass costs five times the map on purpose: it is the tool that
-turns the rest of the campaign into following a needle, so it should take most of an early
+The two lying in the world are placed like the merchants: seed-derived, forced-floor clearing,
+reachability checked at run start. The map sits past the second sanctum's distance and the compass
+past the third's, so finding either is a proper walk — the map is cheap enough at 50 coins that it
+doesn't need to be the longer one. The compass costs five times the map on purpose: it is the tool
+that turns the rest of the campaign into following a needle, so it should take most of an early
 campaign's coin to afford outright, where the map is cheap enough that a couple of chests cover it.
 
 **The compass** shows an arrow and the icon of what the arrow is pointing at, because "that way" on
 its own is useless and "that way, and it's a gem" is a decision. The needle snaps to the four
 directions its sprites can draw (§9) — enough to start walking, and the icon does the rest. It points at the nearest
 **available** unique object: a chest still shut, a gem whose gate this run already has the key to, a
-tool it doesn't own yet, the merchant while there is still a one-off on the shelf, or — once all
+tool it doesn't own yet, the nearest merchant while there is still a one-off on any shelf, or — once all
 three colours and the third key are in hand — the sorcerer at 110 (§4.9), which by then is the only
 thing left in the world worth walking to. **Not** the four landmarks: they have the eight posts
 (§4.10), and a needle that counted them would rarely be pointing anywhere else. It deliberately
@@ -497,7 +502,7 @@ only things in the game that are neither terrain nor a pickup: places, with name
 in order to have stood there.
 
 The fiction is in `STORY.md` §11.10 and it is one sentence: **the landmarks are the pins he pushes
-into the map before the ground goes on.** He re-moulds terrain, sanctums, stall and scatter every
+into the map before the ground goes on.** He re-moulds terrain, sanctums, stalls and scatter every
 cycle, but he anchors each new world to the same four points, because nobody can mould a world out
 of nothing without something to measure from. They are the second thing in this game he cannot make
 from scratch; the first is the fact that you have been here before.
@@ -606,7 +611,7 @@ the world, because the new one has four of its own to find.
 
 | Landmark | Standing |
 |---|---|
-| The Mint | The stall is on your map from the first step of every world after. |
+| The Mint | Every stall is on your map from the first step of every world after. |
 | The Drowned Bell | You hear it. In every world after, the bell sounds when you are within 20 tiles, and closer is louder. |
 | The Lantern Tree | You never set out with one light again: every expedition starts with a second small torch in the pack. |
 | The Gnomon | The HUD's counter row gains your distance from the hut — not how far you have ever been, how far you are *now*. |

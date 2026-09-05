@@ -310,14 +310,16 @@ function buildSanctums(seed) {
 
 // --- Sites -------------------------------------------------------------------
 //
-// The three single-tile things in the world that aren't behind a gate and
-// aren't rerolled: the merchant, and the one compass and one map lying out in
-// the dark (balance.js `SITE_PLAN`). Each is a single tile with a forced-floor
+// The single-tile things in the world that aren't behind a gate and aren't
+// rerolled: the merchants, and the one compass and one map lying out in the
+// dark (balance.js `SITE_PLAN`). Each is a single tile with a forced-floor
 // apron around it, so however the noise fell there is always ground to stand on
 // next to it.
 //
-// A site carrying an `item` is a pickup; the merchant carries none, because
-// what you do at the merchant's tile is trade, not collect.
+// A site carrying an `item` is a pickup; a merchant carries none, because
+// what you do at a merchant's tile is trade, not collect — and each merchant
+// keeps its own `id` (`merchant`, `merchant-2`, ...) so a campaign can find one
+// stall without the map already knowing where the others are.
 
 // Whether a built thing with a forced-floor apron around it can stand here:
 // clear of the sanctums, of everything already placed, and of the base
@@ -626,9 +628,11 @@ export function siteAt(x, y, seed = DEFAULT_SEED) {
   return null;
 }
 
+// A site carrying no item is a stall, however many of them a world has —
+// what you do there is trade, not collect.
 export function isMerchant(x, y, seed = DEFAULT_SEED) {
   const at = siteAt(x, y, seed);
-  return !!at && at.part === 'site' && at.site.id === 'merchant';
+  return !!at && at.part === 'site' && !at.site.item;
 }
 
 // Which landmark a tile belongs to: the centrepiece itself, which is walked

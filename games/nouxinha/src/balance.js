@@ -179,21 +179,30 @@ export const CHEST_COIN_VALUES = [30, 50, 75];
 
 // --- Sites --------------------------------------------------------------------
 //
-// The three single-tile things in the world that aren't behind a gate and
-// aren't rerolled: the merchant, and the one compass and one map lying out in
-// the dark. Placed like the chests and the landmarks are, and named `site`
-// because that is all they have in common — a stall, a tool on the floor, and
-// a tool on the floor.
+// The single-tile things in the world that aren't behind a gate and aren't
+// rerolled: the merchants, and the one compass and one map lying out in the
+// dark. Placed like the chests and the landmarks are, and named `site` because
+// that is all they have in common — a stall, a tool on the floor, and a tool
+// on the floor. A site's `item` says which: `null` is a stall (`isMerchant`
+// goes by that, not by `id`), anything else is a pickup with that item's id.
 export const SITE_PLAN = [
   // Close enough that a first expedition can reach it and walk home, and on the
   // far side of the hut from the first sanctum, so an early run has two
   // directions worth walking rather than one.
   { id: 'merchant', item: null, near: 20, span: 6, opposite: 0 },
-  // Past the second sanctum: the compass is either 250 coins or a long walk.
-  { id: 'compass', item: 'compass', near: 55, span: 16, opposite: null },
-  // Past the third: the map is the longest walk in the game that isn't a gem,
-  // though at 50 coins it's also the cheaper of the two to just buy.
-  { id: 'map', item: 'map', near: 90, span: 16, opposite: null },
+  // A second stall roughly level with the second sanctum, opposite it the same
+  // way the first stall sits opposite the first — so a campaign that has
+  // pushed that far out has somewhere to spend what it found without the walk
+  // all the way back home.
+  { id: 'merchant-2', item: null, near: 40, span: 8, opposite: 1 },
+  // A third, opposite the third sanctum, for the same reason further out.
+  { id: 'merchant-3', item: null, near: 65, span: 10, opposite: 2 },
+  // Past the second sanctum: the map is the cheaper of the two to just buy, at
+  // 50 coins, so it doesn't need to be the longer walk.
+  { id: 'map', item: 'map', near: 45, span: 16, opposite: null },
+  // Past the third: the compass is either 250 coins or the longest walk in the
+  // game that isn't a gem.
+  { id: 'compass', item: 'compass', near: 85, span: 16, opposite: null },
 ];
 
 // --- Landmarks ----------------------------------------------------------------

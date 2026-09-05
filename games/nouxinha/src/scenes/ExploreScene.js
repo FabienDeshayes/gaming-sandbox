@@ -12,7 +12,6 @@ import {
   invertColour,
   overrideInvert,
   setDefaultPalette,
-  unlockInvert,
 } from '../config.js';
 import {
   DIRECTIONS,
@@ -725,16 +724,16 @@ export class ExploreScene extends Phaser.Scene {
   // a lit one, which is the only thing this game could do to say the sun is
   // back, since it has only ever had two colours to say anything with.
   //
-  // The inversion is an override rather than the Settings switch (src/config.js):
-  // the switch is what the ending *unlocks*, and it stays off until the player
-  // asks for it. `CreditsScene` drops the override on its way to the title.
+  // The inversion is an override rather than the Settings switch (src/config.js),
+  // which is left exactly as the player set it: `CreditsScene` drops the
+  // override on its way to the title, so the game goes back to the dark it has
+  // always been in unless the switch itself says otherwise.
   theEnd() {
     // Nothing walks, opens a menu or bumps into him a second time between here
     // and the credits (`modalOpen`).
     this.ending = true;
     stopMusic();
     playDawn();
-    unlockInvert();
     const burst = this.add
       .circle(VIEW_CX, VIEW_CY, BURST_RADIUS, invertColour(getPalette().bg))
       .setDepth(1000);

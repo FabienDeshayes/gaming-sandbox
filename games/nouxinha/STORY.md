@@ -247,7 +247,7 @@ the first honest ground the game has ever drawn.
 
 What a two-colour game can draw of that is exactly what it draws: a **light explosion** from where
 you are standing, every colour on screen **inverted** — the dark world drawn as a lit one — and the
-credits read in that light. The switch that does it stays in Settings afterwards, which is the game
+credits read in that light. The same colours are a switch in Settings, under the cheats, which is the game
 admitting its ending is a colour change and being pleased about it.
 
 And then the world goes round again, because the campaign is still a campaign: the slot keeps its

@@ -124,7 +124,7 @@ reaches in to *set* game state.
 | `tapPanel()` / `readPanel()` | One tap on the panel, or as many as it takes to read it out and close it |
 | `tapScreen()` | A tap on the middle of the screen and nothing else — the credits' only control (DESIGN.md §4.9) |
 | `background()` | The colour whichever scene is on top is clearing to. The ending inverts every colour in the game, and this is the half of that a test can read with no tile on screen to look at |
-| `pref(key)` | One of the settings kept beside the saves rather than in one (`src/config.js`): the music and cheat switches, and the inversion the ending unlocks |
+| `pref(key)` | One of the settings kept beside the saves rather than in one (`src/config.js`): the music and cheat switches, and the inversion that rides with the cheats |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run carried it back to the hut, so asserting that has to read the save rather than the run that found it — and since arriving is what banks, the slot is worth reading *before* the hut's dialog is answered as well as after |
 | `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'chest'`, `'unlock'`, `'torch'`, `'death'`, `'dawn'`. Read out of `src/ui/sfx.js` itself, since a headless browser can't be asked to listen, and the only way to assert that a gem gets the fanfare and a torch is heard catching. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |

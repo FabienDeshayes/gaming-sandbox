@@ -19,7 +19,6 @@ import {
   getMusic,
   getPalette,
   hex,
-  invertUnlocked,
   setCheats,
   setInvert,
   setMoveSpeed,
@@ -103,9 +102,11 @@ export class SettingsScene extends Phaser.Scene {
         note.setText(cheatNote(on)).setAlpha(on ? 0.8 : 0.5);
         // Turning the cheats off takes the inversion with it, switch and all:
         // the switch lives under the cheats, and a screen drawn inside out with
-        // nothing on it to undo that would be a trap rather than a setting.
+        // nothing on it to undo that would be a trap rather than a setting. The
+        // screen is drawn again either way, because that switch has just
+        // appeared or gone.
         if (!on && getInvert()) setInvert(false);
-        if (invertUnlocked()) this.scene.restart(this.opened);
+        this.scene.restart(this.opened);
       },
       { width: 300, fontSize: 14 }
     );
@@ -118,14 +119,13 @@ export class SettingsScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setAlpha(getCheats() ? 0.8 : 0.5);
 
-    // What the ending left behind (DESIGN.md §4.9), and the one control on this
-    // screen that isn't always here: the game drawn inside out, for a player who
-    // has watched the sorcerer open his hands. It sits under the cheats and is
-    // only on screen while they are on, because it is a way of looking at the
-    // game rather than a way of playing it — and it takes effect where it is
-    // tapped, which means drawing this screen again in the colours it just
-    // chose.
-    if (invertUnlocked() && getCheats()) {
+    // The game drawn inside out (DESIGN.md §4.9): the colours the ending itself
+    // is read in, and the one control on this screen that isn't always here. It
+    // belongs to the cheats — a way of looking at the game rather than a way of
+    // playing it — so it is on screen exactly while they are, and it takes
+    // effect where it is tapped, which means drawing this screen again in the
+    // colours it just chose.
+    if (getCheats()) {
       makeButton(
         this,
         cx,

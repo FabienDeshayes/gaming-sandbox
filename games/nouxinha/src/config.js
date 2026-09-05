@@ -73,26 +73,22 @@ export function setDefaultPalette(id) {
 
 // --- Inverting the colours ---------------------------------------------------
 //
-// What the sun coming back leaves behind (DESIGN.md §4.9). A campaign that has
-// finished all four worlds ends on a light explosion that turns every colour on
-// screen into its opposite, and the switch that does it stays in Settings
-// afterwards — next to the cheats and shown only while they are on, because it
+// The whole game drawn inside out: what the end of a campaign turns on for the
+// light explosion and the credits (DESIGN.md §4.9), and a switch of its own in
+// Settings, next to the cheats and shown only while they are on — like them, it
 // is a way of looking at the game rather than a way of playing it.
 //
 // One line of arithmetic reaches the whole screen, because every colour in the
 // game comes out of the three accessors below: the palette, a gem's colour and a
 // landmark's. Nothing that draws anything has to know this exists.
 const INVERT_KEY = 'nouxinha.invert';
-const INVERT_UNLOCKED_KEY = 'nouxinha.invert.unlocked';
 
 let invertOn = false;
-let invertKnown = false;
 
 try {
   invertOn = localStorage.getItem(INVERT_KEY) === '1';
-  invertKnown = localStorage.getItem(INVERT_UNLOCKED_KEY) === '1';
 } catch (e) {
-  /* off, and not a switch anybody has yet */
+  /* off by default */
 }
 
 // The ending's own inversion, which is deliberately *not* the player's setting:
@@ -122,24 +118,6 @@ export function setInvert(on) {
 export function overrideInvert(on) {
   invertOverride = on === null ? null : !!on;
   return getInvert();
-}
-
-// Whether the campaign has ever seen the light come back. Kept next to the
-// cheats rather than in a save slot: it is something the player has seen, not
-// something a campaign is holding, so it survives a slot being overwritten the
-// way the music switch does.
-export function invertUnlocked() {
-  return invertKnown;
-}
-
-export function unlockInvert() {
-  invertKnown = true;
-  try {
-    localStorage.setItem(INVERT_UNLOCKED_KEY, '1');
-  } catch (e) {
-    /* it will have to be earned again next time */
-  }
-  return invertKnown;
 }
 
 // White less the colour, channel by channel, which is the whole of what

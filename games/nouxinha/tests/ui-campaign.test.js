@@ -20,8 +20,10 @@ import { maxWater, spendable } from '../src/core/rules.js';
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
 import { decodeExplored } from '../src/core/cartography.js';
 import { PRICES } from '../src/balance.js';
-import { gemColour } from '../src/config.js';
+import { gemColour, getPalette, invertColour } from '../src/config.js';
+import { BIOME_IDS } from '../src/data/biomes.js';
 import {
+  CREDITS,
   DEATH,
   FLASH,
   HALL,
@@ -40,6 +42,7 @@ import {
 } from '../src/text.js';
 import {
   ALL_KEYS_LIST,
+  BIOME,
   FIRST_GEM,
   GEM_ROUTE,
   HALL as THE_HALL,
@@ -296,6 +299,58 @@ test('walking into the sorcerer ends the world and hands you a new one', async (
   await game.clickText(HALL.endHere);
   await game.waitForScene('TitleScene');
 }, { save: AT_HALL.save });
+
+// The same doorstep, at the end of the last kind of world a campaign has left:
+// three biomes already finished, three colours in hand, and so nothing left for
+// him to mould (DESIGN.md §4.9).
+const AT_THE_END = standingAt(HALL_ROUTE, {
+  save: {
+    ...emptySave(),
+    gems: MAX_GEMS,
+    keys: ALL_KEYS_LIST,
+    finished: BIOME_IDS.filter((id) => id !== BIOME),
+  },
+  run: {
+    gems: MAX_GEMS,
+    keys: ALL_KEYS_LIST,
+    water: 300,
+    inventory: [{ id: 'torch-beacon', durability: 60 }],
+  },
+});
+
+test('the last world finished ends the game in the light', async (game) => {
+  await game.startRun();
+  await game.tapDpad(HALL_ROUTE.hit);
+  await game.settle();
+  assert((await game.state()).textPanelOpen, 'he has the floor one last time');
+  await game.readPanel();
+
+  // He opens his hands, the light takes the screen, and what is on the other
+  // side of it is the same world drawn inside out — which is the only thing a
+  // game with two colours can do to say the sun is back.
+  await game.waitForScene('CreditsScene');
+  assertEqual(await game.background(), invertColour(getPalette().bg),
+    'the credits are drawn in the world with its colours turned over');
+  assert(await game.hasText(CREDITS.title), 'and the game signs what it just did');
+  assertEqual(await game.pref('nouxinha.invert.unlocked'), '1',
+    'the switch that does that is in Settings from now on');
+
+  // The campaign is still a campaign: the walk into the hall was banked, the
+  // world was moulded like every other time, and the kind of world it just
+  // finished is written into the slot — which is the one thing that could never
+  // be worked out again from the seed.
+  const saved = await game.save();
+  assertEqual(saved.cycles, 1, 'the last world ended like all the others');
+  assertEqual(saved.finished.length, BIOME_IDS.length, 'with every kind of world walked out');
+
+  // A tap brings the rest of it in, and the one after leaves — back to a title
+  // screen in the colours the game has always been in, because the light was the
+  // ending's rather than the player's (src/config.js).
+  await game.tapScreen();
+  await game.tapScreen();
+  await game.waitForScene('TitleScene');
+  assertEqual(await game.background(), getPalette().bg, 'and the dark is back where it was');
+}, { save: AT_THE_END.save });
 
 test('the cogwheel saves the walk, and load game carries it on', async (game) => {
   await game.startRun();

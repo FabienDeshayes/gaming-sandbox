@@ -77,6 +77,11 @@ export const SETTINGS = {
     on
       ? 'WHOLE MAP REVEALED, ONE OF EVERYTHING. NOTHING SAVES.'
       : 'REVEALS THE MAP AND HANDS YOU EVERY ITEM.',
+  // The switch the ending leaves behind (DESIGN.md §4.9). Only on this screen
+  // for a player who has seen the light come back, and only while the cheats are
+  // on: it is a way of looking at the game rather than a way of playing it.
+  invert: (on) => `INVERT COLOURS: ${on ? 'ON' : 'OFF'}`,
+  invertNote: 'THE WORLD DRAWN INSIDE OUT, THE WAY IT ENDED.',
   back: UI.back,
 };
 
@@ -247,6 +252,27 @@ export const HALL = {
   endHere: 'END HERE',
 };
 
+// What is on the screen after he lets go (DESIGN.md §4.9): the whole game drawn
+// inside out, in the light, one line at a time. Sentence case is the game
+// talking and caps are its chrome, and credits are neither — they are the game
+// signing what it just did, so they are set the way the title screen is.
+export const CREDITS = {
+  title: 'NOUXINHA',
+  lines: [
+    'THE SUN CAME BACK',
+    'FOUR WORLDS WALKED TO THE END',
+    'AND EVERY COLOUR CARRIED HOME OUT OF ALL FOUR',
+    'THE DARK WAS HIS',
+    'THE LIGHT WAS ALWAYS SOMETHING YOU HAD TO CARRY',
+    'THE HUT HE LEFT STANDING EVERY SINGLE TIME',
+    'THANK YOU FOR WALKING BACK',
+  ],
+  // The one thing on this screen that is about the game rather than the story:
+  // the light it just turned on is a switch from here on (src/config.js).
+  unlocked: 'INVERT COLOURS IS IN SETTINGS NOW, WITH THE CHEATS',
+  back: 'TAP TO GO ON',
+};
+
 // END HERE: the run is over and counted up.
 export const RECAP = {
   title: 'EXPEDITION OVER',
@@ -333,10 +359,36 @@ export const SAY = {
     hutLine,
   ],
   // The hall (DESIGN.md §4.9). He introduces himself, he is courteous, he takes
-  // what you brought, and he moulds the world again. What he says about the
-  // shards is the one part of it that depends on the walk you actually had, so
-  // it is a function of what you are carrying.
-  hall: (gems, max) => [
+  // what you brought, and he moulds the world again — and what he says is a
+  // different conversation every time this campaign finishes a kind of world,
+  // because how many it has finished is the only thing he has to go on.
+  //
+  // `finished` is that count, before this meeting. Nought is a campaign he has
+  // never been carried a full set by; four is a campaign that has already
+  // watched him let go and come back anyway (`ending` below).
+  hall: (gems, max, finished = 0) => HALL_SPEECH[Math.min(finished, HALL_SPEECH.length - 1)](gems, max),
+  // The end of the game: the fourth kind of world, walked to the hall with every
+  // colour in hand, and nothing left for him to mould that you have not already
+  // finished. He is not beaten and there is no fight — he simply runs out of
+  // worlds to hand over, and says the two things the whole campaign has been
+  // walking towards.
+  ending: () => [
+    'The clearing holds the hall, and the hall holds him, and his hands are open before you have said a word.',
+    '"Four," he says. "Four kinds of world, walked all the way to the end, and every colour out of every one of them carried back to me. I have nothing left to hand you."',
+    '"It is going out," he says. "It has been going out the whole time I have been holding it. I called that keeping it, and you carried the pieces back so that I could go on calling it that."',
+    'There is nothing to take out of your hands. He turns his own over and looks at them.',
+    '"You kept coming back," he says. "Nobody has ever kept coming back. Stand where you are — this will be bright."',
+    'And he lets go.',
+  ],
+};
+
+// The five conversations, by how many kinds of world this campaign had finished
+// when it walked in (DESIGN.md §4.9). Each is the same shape — the clearing, his
+// name for what is happening, the one line that depends on what you are actually
+// carrying, the taking, and the ground going — and each is a man further along
+// in something he has never said out loud.
+const HALL_SPEECH = [
+  (gems, max) => [
     'The clearing holds no hoard. It holds a hall, and a man standing in front of it with his hands full of light.',
     '"Nouxinha," he says, as though you had asked. "You have come a long way, and not for the first time — though you would not remember that."',
     gems >= max
@@ -348,7 +400,53 @@ export const SAY = {
     '"The sun went out because I caught it," he says. "I am not sorry, and I am not finished. Go home and rest."',
     'The ground goes. When it comes back it is not the ground you learned — and your own door is behind you.',
   ],
-};
+  (gems, max) => [
+    'The clearing again, and the hall in it, and the man in front of the hall with his hands full of light.',
+    '"Nouxinha," he says. "Which you knew. You walked one of my worlds all the way to the end, and something of it stayed on you — that is new, and I have not decided whose it is."',
+    gems >= max
+      ? '"All three again, and faster. You are learning the shape of what I build."'
+      : gems
+        ? `"${gems === 1 ? 'One' : 'Two'} of three, this time. You came anyway. Last time you came with everything, and I am not going to ask."`
+        : '"Nothing in your hands at all. You came the whole way to look at me. I would have, in your place."',
+    'He takes what you have, one piece at a time, and he is careful about your hands.',
+    '"You will be back," he says, with no weight on it whatsoever. "Everybody is. Go home and rest."',
+    'The ground goes. When it comes back it is a different kind of dark, and your own door is behind you.',
+  ],
+  (gems, max) => [
+    'The hall stands where a hoard should be, in the third clearing of its kind you have walked into.',
+    '"Two of them finished, and here is the next," he says. "I keep the count as well. It is most of the arithmetic I have left."',
+    gems >= max
+      ? '"All three. You do this well now — better than I built it to be done."'
+      : gems
+        ? `"${gems === 1 ? 'One' : 'Two'} of three. You are not here for the fetching any more, are you."`
+        : '"Empty-handed, and you knew you would be before you set out. So this is a visit."',
+    'He gathers them in. His hands do not quite close any more, and you both watch them not close.',
+    '"You are looking at my hands," he says. "Everyone gets there eventually. Go home."',
+    'The ground goes, and comes back as somewhere else, and your own door is behind you.',
+  ],
+  (gems, max) => [
+    'The clearing, the hall, the man — the third time you have arrived already knowing what all three of them are.',
+    '"Three kinds of world walked out from under you," he says. "There is one left that you have not finished. I would rather you did not, and I am going to hand it to you anyway, because handing you a world is the only thing I still know how to do."',
+    gems >= max
+      ? '"All three. Of course. You have not missed a set since the first world."'
+      : gems
+        ? `"${gems === 1 ? 'One' : 'Two'} of three. Not this time, then. Neither of us is in a hurry."`
+        : '"Nothing. Good — sit down. The next one will want your legs."',
+    'He takes what there is. The light in his hands is thinner than it was the first time you stood here, and it is not the dark that has thinned it.',
+    '"Go on," he says. "Finish it. I will be standing in the last one."',
+    'The ground goes, for what you both know is the last time but one.',
+  ],
+  (gems) => [
+    'The clearing, and the hall, and him in front of it as though the sun had never come up over any of this.',
+    '"You know how it goes now," he says. "It went out of my hands, and it came up over all of it, and here we both still are. I mould, you walk. I never minded the walking."',
+    gems
+      ? '"And you brought colour with you, out of habit. So did I, once."'
+      : '"And nothing in your hands, which is the honest way to arrive."',
+    'He takes what you have and sets it down beside him, where the light already is.',
+    '"Again, then," he says. "You know the way."',
+    'The ground goes. It always does. Your own door is behind you.',
+  ],
+];
 
 // --- The landmarks -----------------------------------------------------------
 //

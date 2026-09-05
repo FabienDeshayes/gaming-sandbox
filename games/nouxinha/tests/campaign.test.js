@@ -25,6 +25,7 @@ import {
   chestOnTile,
   createRun,
   gateOnTile,
+  hallMeeting,
   itemOnTile,
   maxWater,
   resumeRun,
@@ -37,9 +38,12 @@ import { compassTarget } from '../src/core/compass.js';
 import { CHEST_COIN_VALUES, PRICES, STARTING_WATER, WATER_PER_GEM } from '../src/balance.js';
 import { ITEMS } from '../src/data/items.js';
 import { gemColour } from '../src/config.js';
+import { BIOME_IDS } from '../src/data/biomes.js';
+import { SAY } from '../src/text.js';
 import {
   ALL_KEYS,
   ALL_KEYS_LIST,
+  BIOME,
   FIRST_GEM,
   GEM_ROUTE,
   HALL,
@@ -296,6 +300,60 @@ unit('the hall holds the sorcerer, and walking into him is a bump, not a step', 
   // and `turnCycle` is the only thing that ever takes anything off a run
   // (save.test.js).
   assertEqual(state.gems, MAX_GEMS, 'and takes nothing off you on its own');
+});
+
+unit('which conversation the hall is depends on how much of him you have seen', () => {
+  // Every kind of world this campaign has walked all the way to the end of is
+  // one more thing he has to account for (DESIGN.md §4.9), and the fourth one
+  // is the end of the game.
+  const others = BIOME_IDS.filter((id) => id !== BIOME);
+  // One run, walked through every campaign it could be: `pickSeed` flood-fills
+  // the world every time a run is created, and what this is about is three
+  // fields on the state it hands back.
+  const state = createRun(SEED, { ...emptySave(), gems: MAX_GEMS }, NONCE);
+  const carrying = (finished, gems = MAX_GEMS) => {
+    state.gems = gems;
+    state.finished = new Set(finished);
+    return hallMeeting(state);
+  };
+
+  const first = carrying([]);
+  assertEqual(first.finished, 0, 'the first meeting has nothing behind it');
+  assertEqual(first.finishes, true, 'and arriving with every colour finishes this world');
+  assertEqual(first.last, false, 'with three kinds of world still unwalked');
+
+  assertEqual(carrying(others.slice(0, 2)).finished, 2, 'he counts the ones already finished');
+  assertEqual(carrying(others).last, true, 'and the fourth, carried in full, is the end');
+  assertEqual(carrying([...others, BIOME]).last, false,
+    'a campaign that has already finished all four is past the ending, not back at it');
+  assertEqual(carrying([...others, BIOME]).finishes, false, 'and finishes nothing twice');
+
+  // Arriving short is still a meeting, still turns the world over, and still
+  // counts for nothing — which is what keeps the ending a walk rather than a
+  // formality.
+  const short = carrying(others, MAX_GEMS - 1);
+  assertEqual(short.finishes, false, 'one colour short finishes nothing');
+  assertEqual(short.last, false, 'and cannot be the ending');
+
+  // The cheat sandbox exists to look at the late game, and the late game is the
+  // ending (DESIGN.md §6.2), so it opens standing at the end of the last world.
+  const sandbox = hallMeeting(createRun(SEED, emptySave(), NONCE, { cheats: true }));
+  assertEqual(sandbox.last, true, 'a cheat run walks into the last conversation');
+});
+
+unit('he says something different every time a world is finished', () => {
+  // The promise the count is there to keep: five meetings, five conversations,
+  // and the last of them is not a conversation at all (src/text.js).
+  const speeches = [0, 1, 2, 3, 4].map((finished) => SAY.hall(MAX_GEMS, MAX_GEMS, finished).join(''));
+  assertEqual(new Set(speeches).size, 5, 'no two meetings read the same');
+  // And what he says about what you brought moves with the walk you had, in
+  // every one of them.
+  for (const finished of [0, 1, 2, 3, 4])
+    assert(
+      SAY.hall(0, MAX_GEMS, finished).join('') !== SAY.hall(MAX_GEMS, MAX_GEMS, finished).join(''),
+      `arriving empty-handed reads differently at ${finished} worlds finished`
+    );
+  assert(SAY.ending().length > 0, 'and the ending is its own copy entirely');
 });
 
 unit('the compass points at the hall once every colour is in hand', () => {

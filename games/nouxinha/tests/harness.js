@@ -428,6 +428,10 @@ export async function openGame(
     // this one is tapped as often as a step.
     tapPanel: () => tapAt(TEXT_PANEL.x, TEXT_PANEL.y),
 
+    // A tap on the middle of the screen and nothing else — the credits' only
+    // control, and the shape of every "tap anywhere" the game has.
+    tapScreen: () => tapAt(VIEW_CX, 854 / 2),
+
     // Reads the panel to the end, the way a player who has seen it before does:
     // two taps a block, one to fill it and one to move on. `startRun` calls it,
     // so no test has to know that setting out says anything.
@@ -568,6 +572,10 @@ export async function openGame(
           landmarks: [...r.landmarks],
           posts: [...r.posts],
           standings: [...r.standings],
+          // Which kinds of world this campaign has carried three colours into
+          // the hall of (DESIGN.md §4.9) — what the sorcerer has to go on, and
+          // what the end of the game is counted in.
+          finished: [...r.finished],
           seenUnique: [...r.seenUnique],
           banked: { ...r.banked },
           animating: s.animating,
@@ -617,6 +625,27 @@ export async function openGame(
             itemTint: c.item.visible ? c.item.layers[0].tintTopLeft : null,
           }));
       }),
+
+    // The colour the screen is actually being cleared to, off whichever scene is
+    // on top. The ending inverts every colour in the game (DESIGN.md §4.9), and
+    // the background is the half of that a test can read without a tile on
+    // screen to look at.
+    background: () =>
+      page.evaluate(() => {
+        const s = window.__game.scene.getScenes(true).slice(-1)[0];
+        return s ? s.cameras.main.backgroundColor.color : null;
+      }),
+
+    // One of the settings kept beside the saves rather than in one (src/config.js):
+    // the music and cheat switches, and the inversion the ending unlocks.
+    pref: (key) =>
+      page.evaluate((k) => {
+        try {
+          return localStorage.getItem(k);
+        } catch (e) {
+          return null;
+        }
+      }, key),
 
     // A save slot, straight out of localStorage — the only state that outlives a
     // run, so a test asserting a gem was kept has to read it here rather than

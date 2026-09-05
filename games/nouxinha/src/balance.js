@@ -74,6 +74,14 @@ export const SEED_WINDOW = 40;
 export const SEED_MIN_FRACTION = 0.6;
 export const SEED_MAX_ATTEMPTS = 20;
 
+// How many raw seeds the hall looks through for a kind of world this campaign
+// has not finished yet before it moulds whatever it has in hand (`turnCycle` in
+// core/rules.js, DESIGN.md §4.9). Candidates are rejected on `biomeOf` alone,
+// which is one hash, so this is cheap: with one biome left to find, twenty-four
+// looks miss it about once in a thousand campaigns, and missing costs a cycle
+// rather than the ending.
+export const MOULD_ATTEMPTS = 24;
+
 // --- Sanctums -----------------------------------------------------------------
 //
 // The chain is what turns three gems into a reason to keep walking: sanctum 1's

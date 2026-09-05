@@ -41,14 +41,14 @@ at all, which is the quick way to work on the rules.
 | `rules.test.js` | A step's costs, burnout and auto-swap, pickup, the inventory, the recap, cheats |
 | `terrain.test.js` | What the noise grows, where the world stops, which biome the seed makes it, and that every bit of it can be walked to |
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
-| `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall, the water ladder, the sites — merchant, compass, map — and the needle |
+| `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall and which of its five conversations a campaign is having, the water ladder, the sites — merchant, compass, map — and the needle |
 | `landmarks.test.js` | The four landmarks and the twelve posts: where they stand, what a touch gives, and which of it survives a world |
-| `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, and what a cycle in the hall takes and leaves |
+| `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, what a cycle in the hall takes and leaves, and which kinds of world a campaign has finished |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | The canvas against a phone, the sheet actually loading, the game's own voice |
 | `ui-explore.test.js` | The controls that walk, and the three visibility states the viewport draws |
 | `ui-items.test.js` | The HUD counters, the item card, and finding a light and burning it |
-| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, the merchant, the map, a sanctum's colour, a chest's key, the sorcerer and the world he moulds |
+| `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, the merchant, the map, a sanctum's colour, a chest's key, the sorcerer and the world he moulds, and the last world finished ending the game in the light |
 | `ui-landmarks.test.js` | Bumping into a landmark and into a post: the panel, the gift, and the colour a standing turns on |
 
 Suites share `tests/world.js` — the seed, the pinned nonce, and every route BFSed out of the real
@@ -115,15 +115,18 @@ reaches in to *set* game state.
 | `swipe(dir)` | Swipes across the map area from its centre |
 | `press(key)` | Sends a keyboard key |
 | `tapSlot(i)` / `tapCoins()` | Opens an inventory slot's item card / the coin card |
-| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, **keys held and chests opened**, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter, map or text panel. `mapView` is the open map overlay's drawing: its scale, the fit/min/max it is allowed, where it sits, how big it is drawn and the window it is drawn in — `null` while the map is closed |
+| `state()` | The live run: position, facing, steps, coins, water, gems, seed, **nonce and epoch** (which together make the consumable salt), tools owned, **keys held and chests opened**, **which kinds of world the campaign has finished**, unique objects seen, the banked save, explored count, furthest distance, inventory, active light, and which overlay is open — item card, inventory, dialog (and whether that dialog is the cogwheel menu), merchant's counter, map or text panel. `mapView` is the open map overlay's drawing: its scale, the fit/min/max it is allowed, where it sits, how big it is drawn and the window it is drawn in — `null` while the map is closed |
 | `visibleTiles()` | What is actually **drawn**: per tile, its world coordinate, ground sprite, alpha, **tint**, **paint**, overlay, item and item tint. Every tile on screen is a stack of colour zones (`src/ui/painted.js`), so `tint` is the colour the bulk of the tile is in and `paint` the colours of the zones over it — a sanctum wearing its own gem's colour shows up there, not in `tint`. This is the render, not the model: it's how the three visibility states get asserted, and the only way to see that a gem's colour actually reached the screen |
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its colour-zone layers — the silhouette the character set out in, plus the hood, robe and staff that turn the colours of gems one, two and three |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
 | `tapMenuButton()` | Taps the **cogwheel** in the top right, which opens the in-run menu (SETTINGS, SAVE GAME, EXIT GAME, KEEP PLAYING) |
 | `textPanel()` | What the text panel is showing: which block of how many, the characters of it on screen so far, and whether that block has finished typing — `null` while the panel is closed |
 | `tapPanel()` / `readPanel()` | One tap on the panel, or as many as it takes to read it out and close it |
+| `tapScreen()` | A tap on the middle of the screen and nothing else — the credits' only control (DESIGN.md §4.9) |
+| `background()` | The colour whichever scene is on top is clearing to. The ending inverts every colour in the game, and this is the half of that a test can read with no tile on screen to look at |
+| `pref(key)` | One of the settings kept beside the saves rather than in one (`src/config.js`): the music and cheat switches, and the inversion the ending unlocks |
 | `save(slot)` | A save slot straight out of `localStorage`, slot 1 by default. A gem is only *kept* if the run carried it back to the hut, so asserting that has to read the save rather than the run that found it — and since arriving is what banks, the slot is worth reading *before* the hut's dialog is answered as well as after |
-| `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'chest'`, `'unlock'`, `'torch'`, `'death'`. Read out of `src/ui/sfx.js` itself, since a headless browser can't be asked to listen, and the only way to assert that a gem gets the fanfare and a torch is heard catching. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
+| `sounds()` | Every sound played so far, in order — `'tap'`, `'text'`, `'coin'`, `'pickup'`, `'gem'`, `'chest'`, `'unlock'`, `'torch'`, `'death'`, `'dawn'`. Read out of `src/ui/sfx.js` itself, since a headless browser can't be asked to listen, and the only way to assert that a gem gets the fanfare and a torch is heard catching. The typewriter fires dozens of times a second, so a whole block being read out goes in as a single `'text'` — otherwise one sentence would push every other sound in the run off the end of the log |
 | `settle()` | Waits out the step slide, so a read isn't taken mid-tween |
 | `waitForDialog()` | Waits for a dialog to be up. Only the hall needs it: reading the sorcerer out replaces the whole scene under the test — new world, new palette, new run — so there is no tween to settle on, and the question over that new world is the first thing that says it is there |
 | `canvasFit()` | Where the canvas actually sits against the browser viewport, and whether the page scrolls behind it |

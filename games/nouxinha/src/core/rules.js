@@ -44,12 +44,14 @@ import {
   CHEAT_COINS,
   CHEAT_REVEAL_RADIUS,
   LANDMARK_GIFTS,
+  MOULD_ATTEMPTS,
   STARTING_LIGHT,
   STARTING_WATER,
   WATER_PER_GEM,
   WATER_PER_STEP,
 } from '../balance.js';
-import { drawSeed, emptySave, loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
+import { emptySave, loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
+import { BIOME_IDS } from '../data/biomes.js';
 import { ITEMS, itemDef, KEYS, TOOLS } from '../data/items.js';
 import { LANDMARK_IDS, landmarkDef, STANDINGS } from '../data/landmarks.js';
 import { isOneOff, priceOf } from '../data/shop.js';
@@ -172,6 +174,11 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     landmarks: new Set(banked.landmarks),
     posts: new Set(banked.posts),
     standings: new Set(banked.standings),
+    // Which kinds of world this campaign has already finished — carried three
+    // colours into the hall of (DESIGN.md §4.9). Read off the slot and never
+    // changed by walking: the one thing that can add to it is the conversation
+    // at the end of the walk, which ends the run it is holding.
+    finished: new Set(banked.finished),
     // The salt the consumable layer is hashed against. `nonce` is this
     // expedition's, `epoch` counts the times the world has respawned under it.
     nonce: salted,
@@ -263,6 +270,11 @@ function applyCheats(state) {
   // left shut: there should still be something to walk to.
   for (const landmark of landmarks(state.seed)) state.seenUnique.add(landmark.id);
   for (const standing of STANDINGS) state.standings.add(standing);
+  // And every *other* kind of world already finished, so the sorcerer is
+  // standing at the end of the last one (DESIGN.md §4.9). The switch exists to
+  // look at the late game without walking to it, and the late game is the
+  // ending — so a sandbox walked into the hall carrying three colours sees it.
+  for (const biome of BIOME_IDS) if (biome !== state.biome) state.finished.add(biome);
 }
 
 // Everything on the ground goes back, in new places. This is what a gem and a
@@ -890,6 +902,9 @@ function writeDeposit(state, closing) {
     landmarks: [...state.landmarks],
     posts: [...state.posts],
     standings: [...state.standings],
+    // Carried over by hand for the same reason `cycles` above is: a walk home
+    // that dropped it would hand the campaign back a world it has finished.
+    finished: [...state.finished],
     // Ground is written whichever way a run ends, so this is the same drawing
     // `rememberGround` would have left — banking simply gets there first.
     mapped: encodeExplored(state.explored),
@@ -913,7 +928,53 @@ function writeDeposit(state, closing) {
 }
 
 // --- The hall ----------------------------------------------------------------
+
+// What kind of meeting this is, worked out the moment the sorcerer is walked
+// into (DESIGN.md §4.9). Three numbers, and everything about the end of the game
+// falls out of them:
 //
+//   - `finished` — how many of the four kinds of world this campaign has already
+//     carried three colours into the hall of. It is what he has to go on, so it
+//     is what he talks about: a different conversation every time one goes up.
+//   - `finishes` — whether this meeting adds this world to that list, which it
+//     does when the walk arrived carrying every colour and this kind of world
+//     has not been finished before. Arriving short is still a meeting, still
+//     turns the world over, and still counts for nothing.
+//   - `last` — whether this is the fourth, and so the end: every other kind of
+//     world already finished, three colours in hand, and nothing left for him to
+//     mould that this campaign has not already walked out of.
+//
+// A campaign that has finished all four and keeps walking gets the meetings
+// after the ending, which is neither of the first two and not the last again —
+// he let go once, and the world went round anyway.
+export function hallMeeting(state) {
+  const carrying = state.gems >= MAX_GEMS;
+  const unfinished = BIOME_IDS.filter((id) => !state.finished.has(id));
+  return {
+    finished: state.finished.size,
+    finishes: carrying && !state.finished.has(state.biome),
+    last: carrying && unfinished.length === 1 && unfinished[0] === state.biome,
+  };
+}
+
+// The world he moulds next, which — while there is one to give — is a kind this
+// campaign has not finished (DESIGN.md §4.9). Without that the four kinds come
+// up at random and the last one can take a dozen cycles to arrive, which turns
+// the end of the game into a wait rather than a walk.
+//
+// Candidates are judged on `biomeOf` alone, which is one hash, and only the seed
+// actually taken is put through `pickSeed` — the flood fill costs about as much
+// as ninety of these looks. `pickSeed` can bump a seed onto a kind of world the
+// campaign has finished after all; that is rare enough to cost a cycle and
+// nothing more.
+function mouldSeed(finished) {
+  const raw = () => (Math.random() * 0x100000000) | 0;
+  let seed = raw();
+  for (let attempt = 0; attempt < MOULD_ATTEMPTS && finished.has(biomeOf(seed)); attempt++)
+    seed = raw();
+  return pickSeed(seed);
+}
+
 // What the fourth sanctum holds instead of a hoard (DESIGN.md §4.9). Walking
 // into the sorcerer is a conversation, and the end of the conversation is this:
 // he takes the shards out of your hands, and he moulds the world again.
@@ -930,7 +991,12 @@ function writeDeposit(state, closing) {
 // other, the slot is written, and the run this hands back is a fresh walk out
 // of the hut door — in a world nobody has ever lit a tile of.
 export function turnCycle(state) {
-  const seed = drawSeed();
+  const meeting = hallMeeting(state);
+  // What the campaign has finished, plus this world if the walk into the hall
+  // was the one that finished it (`hallMeeting`).
+  const finished = new Set(state.finished);
+  if (meeting.finishes) finished.add(state.biome);
+  const seed = mouldSeed(finished);
   // A cheat run is a sandbox and writes nothing at all, here as everywhere else
   // (DESIGN.md §6.2) — it still gets its new world, because looking at what the
   // hall does is exactly what the switch is for.
@@ -939,6 +1005,10 @@ export function turnCycle(state) {
     ...emptySave(),
     seed,
     cycles: state.banked.cycles + 1,
+    // Which kinds of world this campaign has walked all the way to the end of.
+    // Kept for the same reason the standings below are kept: he can unmake the
+    // ground, and he has never found a way to unmake having been walked out of.
+    finished: [...finished],
     // What the campaign keeps out of the four landmarks: he can unmake the
     // ground one was standing in, and he has never found a way to unmake the
     // fact that you have stood there (DESIGN.md §4.10). The landmarks
@@ -1082,6 +1152,10 @@ export function resumeRun(save = loadSave()) {
     landmarks: new Set(suspended.landmarks),
     posts: new Set(suspended.posts),
     standings: new Set(suspended.standings),
+    // Not part of what a suspended walk writes down: finishing a world is
+    // something the hall does, and the hall ends the walk it does it to — so
+    // this is read off the campaign the expedition set out from, like `cycles`.
+    finished: new Set(banked.finished),
     nonce: suspended.nonce,
     epoch: suspended.epoch,
     salt: saltOf(suspended.nonce, suspended.epoch),

@@ -5,11 +5,12 @@
 
 > **Status:** the **cycle** is built — the hall at 110, the conversation in it, and a new world in
 > the same slot every time you walk into him (`DESIGN.md` §4.9) — and so are the **landmarks**, the
-> four places he anchors every world to, which are the first thing a campaign keeps through a
-> re-moulding besides the count of them (§11.10). What is not built is everything that makes losing
-> better each time round: no remnants, no truths, no thinning of the far dark, no shrinking rim, and
-> so no second ending. §11 marks which is which. `DESIGN.md` describes the game
-> as it is; this describes the story it is being pointed at.
+> four places he anchors every world to (§11.10), and now the **ending**: he says something
+> different every time a kind of world is finished, and the fourth one finished is where he opens
+> his hands (§10). What is not built is the road the story wanted to get there by — no remnants, no
+> truths to say back to him, no thinning of the far dark, no shrinking rim — so the ending is
+> reached by walking every kind of world out rather than by learning what to say. §11 marks which is
+> which. `DESIGN.md` describes the game as it is; this describes the story it is being pointed at.
 
 > **Doc convention:** this doc describes the story *as it stands now*. When it changes, edit the
 > relevant section in place — no "previously"/"superseded" notes. Git history is the changelog.
@@ -112,11 +113,12 @@ introduces himself. He is courteous. He answers questions. **He keeps you** — 
 exactly, but because a world with nobody in it is a world he would have to look at alone, and he has
 looked at it alone for longer than you have been walking.
 
-What he does when you finally reach him is always the same. He takes the three shards out of your
-hands, he says something kind, and he puts you back at your door. Then he moulds the world again —
-new ground, new sanctums, new places for everything, a new dark for you to walk into — because a
-fetcher who already knows the route is no use to him, and because rebuilding is the only thing he
-can still do with what he is holding.
+What he does when you reach him is the same thing every time but the last. He takes the three shards
+out of your hands, he says something kind, and he puts you back at your door. Then he moulds the
+world again — new ground, new sanctums, new places for everything, a new dark for you to walk into —
+because a fetcher who already knows the route is no use to him, and because rebuilding is the only
+thing he can still do with what he is holding. What changes each time is only what he says, and it
+changes because you have walked one more of his worlds all the way out (§10).
 
 Three things about him that the game earns rather than states, and that §9 turns into the endgame:
 
@@ -135,10 +137,12 @@ points at what is worth walking to next stops pointing at anything else.
 Inside is a clearing, a hall, and him.
 
 **The confrontation is a conversation.** It is the text panel, doing the thing the text panel was
-built for, plus one dialog with the things you are able to say on it — and *you can only say what you
-know*. The first time through, you know nothing, so you listen, he takes the shards, and the world
-turns over. Every time after that you can say one thing more, he answers it, and his answer is how
-the next thing gets learned. **You lose better each cycle**, and the losing is the content.
+built for. **You lose better each cycle**, and the losing is the content: what he says is a
+different conversation every time you finish a kind of world — five of them, from the man who
+introduces himself to a stranger to the man who has run out of worlds to hand over (`DESIGN.md`
+§4.9). What the story still wants on top of that is a dialog with the things you are able to say on
+it, and *you can only say what you know* (§9): the conversations move today because you have walked
+further, not because you have learned anything you can put to him.
 
 Nothing about it is combat. He never chases, he is never on the ground, there is never a fight, and
 being sent back is not death — the run is not lost, the *world* is.
@@ -155,8 +159,11 @@ One turn of the game, and the reason a save slot is a campaign rather than a sav
    dark, for the one thing in the world he did not make (§8). This is the decision the whole endgame
    rests on, and it is the game's own push-your-luck question asked at the largest scale it has: the
    walk to a remnant and back is the longest in the game, and dying on it costs you the shards.
-4. **You reach him.** You say what you know. He takes them and puts you back.
-5. **Round again**, one truth better.
+4. **You reach him.** He says what a man four worlds into being counted at says, which is a
+   different thing every time (§6), and — one day — you say what you know. He takes them and puts
+   you back.
+5. **Round again**, one world better — and the fourth kind of world walked out this way is where
+   the going round stops being the only thing that happens (§10).
 
 **What he takes:** the three shards, and the world. Every time.
 
@@ -226,6 +233,11 @@ you kept coming back until you knew all of it.
 
 ## 10. The ending
 
+**Built, and reached by walking rather than by saying.** There are four kinds of world (`DESIGN.md`
+§4.3) and finishing one is carrying all three shards into its hall. Finish all four and there is
+nothing left for him to mould that you have not already walked out of — so on the fourth he says the
+first truth and the third one himself, in his own words, and:
+
 He opens his hands.
 
 The world goes — his ground, his walls, his stall, his coins, and the hut he has been leaving
@@ -233,17 +245,26 @@ standing for you every single time — and for a moment there is nothing under e
 Then the sun comes up on whatever was actually there, which is not a world anybody moulded and is
 the first honest ground the game has ever drawn.
 
-Then the one real choice in the game, and it belongs on the dialog that every other decision in this
-game has been rehearsing:
+What a two-colour game can draw of that is exactly what it draws: a **light explosion** from where
+you are standing, every colour on screen **inverted** — the dark world drawn as a lit one — and the
+credits read in that light. The switch that does it stays in Settings afterwards, which is the game
+admitting its ending is a colour change and being pleased about it.
 
-- **LET GO** — the ending above. The sun comes back, he does not, and the last screen is daylight
-  over ground that is nobody's.
+And then the world goes round again, because the campaign is still a campaign: the slot keeps its
+count, its standings and the four kinds of world it has finished, and a wizard who walks back into
+the hall after all that meets a man who has already let go once and is standing there anyway.
+
+**What is not built is the choice**, because there are no truths to hold and so nothing to say:
+
+- **LET GO** — the ending above, which today happens *to* you when the fourth world is finished
+  rather than being chosen. The sun comes back and the last screen is the light.
 - **STAY** — you don't say the third truth. He takes the shards, and puts you back at your door, and
-  moulds another world, and there are two of you in it, the way there have always been. The game
-  goes round again and you can end it any time.
+  moulds another world, and there are two of you in it, the way there have always been. This is what
+  every meeting is today, ending included: the game goes round again either way.
 
 Both are endings and neither is the good one. A game whose every mechanic is about deciding when to
-turn back has earned the right to make turning back an ending.
+turn back has earned the right to make turning back an ending — and to put the two of them on the
+one dialog it has been rehearsing all game, which is the piece still missing.
 
 ## 11. What this asks the game for
 
@@ -259,16 +280,19 @@ Ordered by how much of the existing design it moves. Items 1-5 are the restructu
    the slot from scratch, so anything that has to survive a cycle has to be carried over by hand.
 2. ~~**The explored ground goes with it.**~~ Built, and it wipes rather than mixes: the drawing is
    tied to the seed it was drawn against, and the cycle writes an empty one anyway.
-3. ~~**The win condition moves.**~~ Built as far as the middle of the cycle goes — banking three
-   shards is what opens the last gate rather than what ends the game. There is still only one ending
-   available, which is to keep going (§10's **STAY**), because there are no truths to say.
+3. ~~**The win condition moves.**~~ Built, and all the way: banking three shards opens the last gate
+   rather than ending the game, and what ends the game is having walked all four **kinds** of world
+   out that way (§10). Which kinds a campaign has finished is kept across a re-moulding like a
+   standing is, and it is also what picks which of the five conversations the hall is. What is still
+   missing is the *choosing*: the ending arrives on the fourth finish rather than on a truth said.
 4. ~~**The hall replaces the fourth sanctum's cache.**~~ Built: same wall, same distance, same gate,
    and the gate still wants the third *key* rather than the three shards — the chain the game has is
    keys, and a second lock on the same door would say the same thing twice. The compass points at
    him once all three shards are banked, as asked.
-5. ~~**The confrontation.**~~ Built as the text panel plus the dialog the new world opens on. The
-   dialog's buttons are not yet the truths you hold — there are none — so what it asks is whether to
-   set out again or stop there. Every word of it is in `src/text.js`.
+5. ~~**The confrontation.**~~ Built as the text panel plus the dialog the new world opens on — five
+   conversations deep, one for every kind of world finished, and a sixth thing entirely on the
+   fourth. The dialog's buttons are not yet the truths you hold — there are none — so what it asks
+   is whether to set out again or stop there. Every word of it is in `src/text.js`.
 6. **Remnants.** One per moulded world, in the unique layer (seed-derived, fixed, like the gems),
    placed near the rim; visible only while carrying three shards; banked at the hut to become a
    truth. The compass already points at "the nearest unique thing you have not got" — a remnant is

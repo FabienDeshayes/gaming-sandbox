@@ -937,6 +937,12 @@ export class ExploreScene extends Phaser.Scene {
       this.hud.flash(FLASH.coins(result.coinsGained));
       return;
     }
+    // A bag hands back a whole run's worth of things at once, so it gets its
+    // own line rather than "FOUND YOUR BAG."
+    if (result.picked === 'bag') {
+      this.hud.flash(FLASH.bagFound);
+      return;
+    }
     if (result.picked) this.hud.flash(FLASH.picked(itemDef(result.picked).name));
     // Nothing was picked up, but a gate gave way, which is the other thing a
     // step can be worth saying something about.

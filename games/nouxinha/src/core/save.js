@@ -114,6 +114,11 @@ export function emptySave() {
     mappedSeed: 0,
     // Which unique objects have been laid eyes on, for the map's markers.
     seen: [],
+    // Where a walk out of this slot died and left everything it was carrying,
+    // and the tile it left it on — a chest the run itself filled rather than
+    // the seed, and the only thing about a death that is ever written down
+    // (DESIGN.md §6). Null for a slot with nothing waiting to be picked up.
+    bag: null,
     // The expedition this slot was left in the middle of, or null for a slot
     // that is between runs. LOAD GAME resumes it (`resumeRun` in core/rules.js).
     run: null,
@@ -170,6 +175,7 @@ export function normaliseSave(raw, keepRun = true) {
   save.seen = Array.isArray(raw.seen)
     ? raw.seen.filter((id) => typeof id === 'string').slice(0, 32)
     : [];
+  save.bag = normaliseBag(raw.bag);
   save.run = keepRun ? normaliseRun(raw.run) : null;
   // Anything in a slot means the slot is in use, whether or not the flag
   // survived — a hand-written save is still somebody's campaign.
@@ -187,8 +193,32 @@ export function normaliseSave(raw, keepRun = true) {
     save.standings.length > 0 ||
     save.finished.length > 0 ||
     !!save.mapped ||
+    !!save.bag ||
     !!save.run;
   return save;
+}
+
+// A death's bag: where it landed, and what a walk back to it hands over.
+// Checked the same way a suspended run is — anything that doesn't parse away
+// comes back as null, which simply means "nothing waiting to be picked up".
+function normaliseBag(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!Number.isFinite(raw.seed)) return null;
+  if (beyondEdge(whole(raw.x), whole(raw.y))) return null;
+  const lights = (Array.isArray(raw.lights) ? raw.lights : [])
+    .filter((slot) => slot && ITEMS[slot.id] && ITEMS[slot.id].isLight)
+    .map((slot) => ({ id: slot.id, durability: int(slot.durability, 1, ITEMS[slot.id].maxDurability) }))
+    .slice(0, 64);
+  return {
+    seed: raw.seed | 0,
+    x: whole(raw.x),
+    y: whole(raw.y),
+    coins: int(raw.coins, 0, Number.MAX_SAFE_INTEGER),
+    gems: int(raw.gems, 0, MAX_GEMS),
+    tools: Array.isArray(raw.tools) ? raw.tools.filter((id) => TOOLS.includes(id)) : [],
+    keys: ids(raw.keys, KEYS),
+    lights,
+  };
 }
 
 // The suspended expedition, checked the same way and to the same end: a slot
@@ -244,6 +274,12 @@ function normaliseRun(raw) {
     // they are the whole of what puts the scatter back where it was.
     nonce: Number.isFinite(raw.nonce) ? raw.nonce | 0 : 0,
     epoch: int(raw.epoch, 0, Number.MAX_SAFE_INTEGER),
+    // How many gems the ground was laid out for as of that respawn — missing
+    // on a save from before this existed, which reads as "already caught up
+    // to whatever this run holds" rather than as zero.
+    scatterGems: Number.isFinite(raw.scatterGems)
+      ? int(raw.scatterGems, 0, MAX_GEMS)
+      : int(raw.gems, 0, MAX_GEMS),
     tools: Array.isArray(raw.tools) ? raw.tools.filter((id) => TOOLS.includes(id)) : [],
     keys: ids(raw.keys, KEYS),
     chests: ids(raw.chests, CHEST_IDS),

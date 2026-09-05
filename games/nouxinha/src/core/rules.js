@@ -31,6 +31,8 @@ import {
   saltOf,
   sanctumAt,
   sanctums,
+  scatterSuccessor,
+  scatterTier,
   signpostAt,
   signpostHutBearing,
   signpostReadings,
@@ -184,6 +186,13 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     nonce: salted,
     epoch: 0,
     salt: saltOf(salted, 0),
+    // How many gems the ground currently lying about was laid out for — set
+    // once per respawn (`respawn` below) rather than read live off `state.gems`,
+    // so a gem picked up mid-expedition never relays or thins what is already
+    // on the ground (DESIGN.md §4.3). `itemOnTile` is what reads the gap
+    // between this and `state.gems` to upgrade, in place, whichever kind the
+    // gem retires — the one thing about the ground a gem still changes.
+    scatterGems: gems,
     water: maxWater(gems),
     // Every coin this expedition has picked up, banked or not. `coins` is only
     // what is in the pocket right now and empties every time the hut writes it
@@ -220,6 +229,11 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // second bump on the same one while still standing against it reads as the
     // same visit — never saved, and reset by `resumeRun` losing it for free.
     lastBump: null,
+    // Where a walk out of this slot died and left everything it was carrying
+    // (`dropBag` below), or null for a slot with nothing waiting to be picked
+    // back up. Tied to the seed it was dropped in — a world the hall has
+    // moulded since has no tile that used to be that spot.
+    bag: banked.bag && banked.bag.seed === picked ? banked.bag : null,
   };
   if (state.cheats) applyCheats(state);
   // How much ground the slot had already drawn before this expedition took a
@@ -243,6 +257,7 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
 
 function applyCheats(state) {
   state.gems = MAX_GEMS;
+  state.scatterGems = MAX_GEMS;
   state.water = maxWater(state.gems);
   state.coins = CHEAT_COINS;
   for (const id of TOOLS) state.tools.add(id);
@@ -277,12 +292,16 @@ function applyCheats(state) {
   for (const biome of BIOME_IDS) if (biome !== state.biome) state.finished.add(biome);
 }
 
-// Everything on the ground goes back, in new places. This is what a gem and a
-// stop at the hut both do (DESIGN.md §4.3): the salt moves, so the scatter is
-// relaid, and nothing this run has already emptied stays empty.
+// Everything on the ground goes back, in new places. This is what a stop at
+// the hut does (DESIGN.md §4.3): the salt moves, so the scatter is relaid at
+// however many gems the run now holds, and nothing this run has already
+// emptied stays empty.
 export function respawn(state) {
   state.epoch += 1;
   state.salt = saltOf(state.nonce, state.epoch);
+  // The ground catches up to what the run is holding right here — the one
+  // moment `itemOnTile`'s frozen layer is allowed to move (see `createRun`).
+  state.scatterGems = state.gems;
   state.collected.clear();
   // Nothing materialises under the character's feet — the tile they are
   // standing on stays bare until they step off it and come back.
@@ -352,13 +371,42 @@ export function uniqueTaken(state, id) {
   return false;
 }
 
-// The item lying on a tile for this run: the unique layer first, which no
-// respawn ever moves, then whatever the current scatter put there.
+// A kind lying settled on the ground, upgraded in place for however many
+// gems the run holds *right now* — water-drop becomes water-flask the moment
+// a run picks up the first gem, in exactly the spot the drop was already
+// sitting in, without the tile ever being asked what else it might have held
+// (`scatterSuccessor` in core/world.js).
+function upgraded(id, gems) {
+  let current = id;
+  for (;;) {
+    const next = scatterSuccessor(current);
+    if (!next || scatterTier(next) > gems) return current;
+    current = next;
+  }
+}
+
+// The item lying on a tile for this run: a bag this run can walk back to
+// first, then the unique layer, which no respawn ever moves, then whatever
+// the current scatter put there.
 export function itemOnTile(state, x, y) {
+  if (state.bag && state.bag.x === x && state.bag.y === y) return 'bag';
   const unique = uniqueAt(x, y, state.seed);
   if (unique) return uniqueTaken(state, unique) ? null : unique;
   if (state.collected.has(tileKey(x, y))) return null;
-  return consumableAt(x, y, state.seed, state.salt, state.gems);
+  // The ground settles at `scatterGems`, frozen since the run's last respawn,
+  // so a gem picked up mid-expedition never relays or thins what is already
+  // lying about (DESIGN.md §4.3) — everything already out there is enough for
+  // a full refill on its own. The one thing a gem still does to it is let the
+  // tier it just unlocked take over the exact tiles the kind it replaces was
+  // already sitting on, which is the "new category, nowhere else visible
+  // before" a gem is supposed to bring in.
+  const settled = consumableAt(x, y, state.seed, state.salt, state.scatterGems);
+  if (!settled) return null;
+  // A sanctum's own hoard is fixed at what the sanctum was built holding and
+  // never upgrades with a gem the way the open world's ground does (DESIGN.md
+  // §4.4) — the swap above is the open world's rule alone.
+  const inSanctum = sanctumAt(x, y, state.seed);
+  return inSanctum && inSanctum.part === 'inside' ? settled : upgraded(settled, state.gems);
 }
 
 // Whether a step onto this tile is legal for the keys this run is carrying:
@@ -628,9 +676,26 @@ function burnActiveLight(state) {
 function collect(state, x, y) {
   const id = itemOnTile(state, x, y);
   if (!id) return null;
-  const def = itemDef(id);
   state.collected.add(tileKey(x, y));
   state.found[id] = (state.found[id] || 0) + 1;
+
+  // The bag isn't part of the seed at all, so it doesn't fit the unique/gem/
+  // water/light shape every other pickup does — it hands back a whole run's
+  // worth of things at once, whatever this run happened to be holding when it
+  // went down (`dropBag` below).
+  if (id === 'bag') {
+    const bag = state.bag;
+    state.bag = null;
+    state.coins += bag.coins;
+    state.coinsFound += bag.coins;
+    state.gems = Math.max(state.gems, bag.gems);
+    for (const tool of bag.tools) state.tools.add(tool);
+    for (const key of bag.keys) state.keys.add(key);
+    for (const light of bag.lights) state.inventory.push({ ...light });
+    return { id, coins: bag.coins };
+  }
+
+  const def = itemDef(id);
   let coins = 0;
 
   if (id === 'coin') {
@@ -788,12 +853,14 @@ export function step(state, direction) {
   const got = collect(state, nx, ny);
   const picked = got ? got.id : null;
 
-  // Two things put everything on the ground back, in new places: taking a gem,
-  // and walking back onto the hut (DESIGN.md §4.3). Done before the reveal, so
-  // the light already shows the world it relaid.
+  // Walking back onto the hut puts everything on the ground back, in new
+  // places (DESIGN.md §4.3). Done before the reveal, so the light already
+  // shows the world it relaid. A gem no longer does this — it leaves the
+  // ground exactly as it is and only lets what it unlocked start turning up
+  // where the frozen layer had nothing (`itemOnTile`).
   const gemFound = state.gems > gemsBefore;
   const atBase = isBase(nx, ny);
-  const respawned = gemFound || atBase;
+  const respawned = atBase;
   if (respawned) respawn(state);
 
   // The hut fills the tank the moment you reach it, not when you answer its
@@ -910,6 +977,11 @@ function writeDeposit(state, closing) {
     mapped: encodeExplored(state.explored),
     mappedSeed: state.seed,
     seen: [...state.seenUnique],
+    // Whatever this run is still carrying that isn't a bag no death has ever
+    // written — reaching the hut banks what's in hand, but it doesn't walk out
+    // to a bag sitting unretrieved somewhere else in the world, so that stays
+    // exactly as this run found it.
+    bag: state.bag,
     // The expedition being over is what clears a suspended walk: a saved run is
     // a walk to carry on with, and this one has come home.
     run: closing ? null : suspended,
@@ -1046,20 +1118,44 @@ export function rememberGround(state) {
     mapped: encodeExplored(state.explored),
     mappedSeed: state.seed,
     seen: [...state.seenUnique],
+    // Written explicitly rather than left to `...stored`: a run that walked
+    // back to an earlier bag and took it up carries `null` here now, and that
+    // has to overwrite the slot's own record of it too.
+    bag: state.bag,
   });
 }
 
+// What a death leaves on the tile it happened on: everything this run hadn't
+// banked, packed up rather than gone for good (DESIGN.md §6). Walking back
+// into it is a bump like a chest's, and hands all of it straight back —
+// coins and gems the same way a chest's key is held, since the run picking
+// it back up is exactly the run that has to walk it home to keep it.
+function dropBag(state) {
+  return {
+    seed: state.seed,
+    x: state.x,
+    y: state.y,
+    coins: state.coins,
+    gems: state.gems,
+    tools: [...state.tools],
+    keys: [...state.keys],
+    lights: state.inventory.map((light) => ({ ...light })),
+  };
+}
+
 // Running dry: the ground is kept exactly as above, and the slot's suspended
-// expedition goes with the run it belonged to.
+// expedition goes with the run it belonged to — but what the run was carrying
+// isn't gone, it's in a bag on the tile it fell on.
 //
 // This is the one place a save is destroyed by playing rather than by choosing
 // to (DESIGN.md §6.1). Death is the game's only hard failure, and a save file
 // you could reload out of it would make it a rewind instead — so what the
-// campaign keeps is what it had banked at the hut, and the walk that died is
-// gone the same way a walk abandoned mid-expedition always was.
+// campaign keeps banked is what it had banked at the hut, and the walk that
+// died is gone the same way a walk abandoned mid-expedition always was. What
+// it was holding stays out there, the same way a gem or a key already did.
 export function abandonRun(state) {
   if (state.cheats) return loadSave();
-  return writeSave({ ...rememberGround(state), run: null });
+  return writeSave({ ...rememberGround(state), run: null, bag: dropBag(state) });
 }
 
 // --- Suspending and resuming an expedition -----------------------------------
@@ -1086,6 +1182,9 @@ export function suspendRun(state) {
     mapped: encodeExplored(state.explored),
     mappedSeed: state.seed,
     seen: [...state.seenUnique],
+    // Same reasoning as `rememberGround`: written explicitly so a bag this run
+    // has already taken up doesn't come back out of the slot's old copy of it.
+    bag: state.bag,
     run: {
       seed: state.seed,
       x: state.x,
@@ -1099,6 +1198,10 @@ export function suspendRun(state) {
       furthest: state.furthest,
       nonce: state.nonce,
       epoch: state.epoch,
+      // What the ground was last laid out for (`itemOnTile`) — carried
+      // separately from `gems` because the two can differ mid-expedition, and
+      // a resumed walk has to pick up exactly as frozen as it was saved.
+      scatterGems: state.scatterGems,
       tools: [...state.tools],
       keys: [...state.keys],
       chests: [...state.chests],
@@ -1159,6 +1262,7 @@ export function resumeRun(save = loadSave()) {
     nonce: suspended.nonce,
     epoch: suspended.epoch,
     salt: saltOf(suspended.nonce, suspended.epoch),
+    scatterGems: suspended.scatterGems,
     // Capped rather than trusted: a save hand-edited to a tankful the gems it
     // holds could never justify would otherwise walk further than the leash.
     water: Math.min(maxWater(suspended.gems), suspended.water),
@@ -1175,6 +1279,7 @@ export function resumeRun(save = loadSave()) {
     // Not part of what was saved (see `createRun`) — a resumed expedition
     // starts as if it had just stepped, so the next bump reads as a fresh one.
     lastBump: null,
+    bag: slot.bag && slot.bag.seed === suspended.seed ? slot.bag : null,
   };
   // How much ground the campaign had drawn when the expedition set out, so the
   // recap still reports what this walk added rather than what the slot holds.

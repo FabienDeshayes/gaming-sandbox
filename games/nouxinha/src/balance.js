@@ -358,8 +358,10 @@ export const BAND_MID = 8;
 export const BAND_FAR = 20;
 
 // How often a cell offers up a tile at all. This is the density dial; the
-// weights below only decide what the offered tile turns out to be.
-export const SPAWN_CHANCE = { near: 0.9, mid: 0.95, far: 1 };
+// weights below only decide what the offered tile turns out to be. Near used
+// to be the stingiest of the three, which read backwards next to a hut that
+// is supposed to be an easy first stretch — it now offers something every time.
+export const SPAWN_CHANCE = { near: 1, mid: 0.95, far: 1 };
 
 // ...and how much of that dial each gem leaves standing. The world gets
 // *sparser* as the campaign gets richer, and this is the one place the gems
@@ -418,15 +420,19 @@ export const GEM_DENSITY = [1, 0.85, 0.72, 0.6];
 // made the leash the game is actually about invisible behind a torch supply
 // that never ran out. Water is the pressure; light is meant to be the thing you
 // ration. So water outweighs light in every band before the first gem.
+// Water's near-band weights are raised well past the rest of this table
+// (water-drop, and water-flask once it is the tier that is out): the hut is
+// meant to be an easy stretch a new run can always drink its way across, and
+// the opening weights were leaving it no more generous than anywhere else.
 export const SCATTER = [
   { id: 'coin', near: 5, mid: 4, far: 3 },
-  { id: 'water-drop', near: 7, mid: 6, far: 4.5, until: 1 },
+  { id: 'water-drop', near: 12, mid: 8, far: 4.5, until: 1 },
   { id: 'torch-small', near: 1.2, mid: 0.8, far: 0.4 },
   { id: 'torch-medium', near: 0, mid: 1.6, far: 1.2, until: 2 },
   { id: 'torch-lamp', near: 0, mid: 0, far: 0.8 },
-  { id: 'water-flask', near: 5, mid: 4, far: 2.5, tier: 1, until: 3 },
+  { id: 'water-flask', near: 8, mid: 5, far: 2.5, tier: 1, until: 3 },
   { id: 'torch-beacon', near: 0, mid: 2.5, far: 2, tier: 2 },
-  { id: 'spring-vial', near: 5, mid: 4, far: 2.5, tier: 3 },
+  { id: 'spring-vial', near: 6, mid: 4, far: 2.5, tier: 3 },
 ];
 
 // A coin is a small pile, not a penny: the separation rule caps any one kind at

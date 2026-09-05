@@ -151,6 +151,17 @@ export const ITEMS = {
     isLight: false,
     tool: true,
   },
+
+  // A death's own drop: not part of the seed at all, so it carries no `tier`
+  // and no `hue` — nothing but whatever this run happened to be holding when
+  // it went down (core/rules.js `dropBag`). Drawn with the chest's own
+  // sprite, since a box somebody left on the ground is a box either way.
+  bag: {
+    id: 'bag',
+    ...ITEM_TEXT['bag'],
+    sprite: 'chest',
+    isLight: false,
+  },
 };
 
 // The tools, in the order they are offered and shown.

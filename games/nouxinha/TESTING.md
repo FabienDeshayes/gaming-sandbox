@@ -312,6 +312,11 @@ A gem changes three things and each is asserted where it actually lives:
   `save()`. Every browser test gets its own page and so its own empty `localStorage`; no test
   inherits another's save. What a run keeps *however* it ends is the ground it lit, so the tests that
   pin that read `mapped` back out of the slot rather than the run (DESIGN.md §6.1).
+- **That it doesn't respawn the world is pure too.** `scatter.test.js` reads a window of
+  `consumableAt` before setting `state.gems` up by hand, then reads the same window back through
+  `itemOnTile` — no `respawn` in between — and asserts every tile is either exactly what it was or the
+  kind the gem retired upgraded in place, never reshuffled and never thinner. Sanctum tiles are
+  excluded, because a hoard is `scatter.test.js`'s own claim (`a sanctum clearing is a hoard`).
 
 ## Testing a saved expedition
 
@@ -329,6 +334,13 @@ from opposite ends:
   death screen by playing would be 200 taps, so that test plants a suspended run with one mouthful of
   water in it through the `save` page option and lets **LOAD GAME** resume it — prior state, not live
   state, the same as any other planted save.
+- **The bag a death leaves is tested the same way, one screen further.** `ui-campaign.test.js` plants
+  the same one-mouthful walk with a purse and a tool still unbanked, drives it into the death screen,
+  and reads `save().bag` back — position and contents — before **LOAD GAME** opens a fresh expedition
+  on the same slot. Walking onto the bag's tile from there is an ordinary pickup after that: the status
+  line, what the run is holding, and that `save().bag` clears once the hut writes the pickup down. The
+  route deliberately avoids the hut's own tile on the way, since stepping onto that would open its own
+  question instead of walking on.
 
 ## Starting from a player who already has something
 

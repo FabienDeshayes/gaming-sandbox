@@ -120,6 +120,8 @@ export const FLASH = {
   coins: (n) => `FOUND ${n} COIN${n === 1 ? '' : 'S'}.`,
   picked: (name) => `FOUND ${name}.`,
   respawned: 'THE DARK HAS PUT EVERYTHING BACK SOMEWHERE NEW.',
+  // Walking back into the bag a death left behind (DESIGN.md §6).
+  bagFound: 'YOUR BAG. EVERYTHING YOU LOST IS BACK IN HAND.',
   // A shut gate bumps like rock, so it says what it wants rather than reading
   // as a wall with a pattern on it. It names the key by colour, because the key
   // and the gate are drawn in the same one.
@@ -270,10 +272,10 @@ export const RECAP = {
 export const DEATH = {
   title: 'OUT OF WATER',
   collapsed: (what, many) =>
-    `You collapsed in the dark. ${what} you were carrying ${many ? 'are' : 'is'} back where you found ${
+    `You collapsed in the dark. ${what} you were carrying ${many ? 'are' : 'is'} in a bag where you fell — walk back to it to take ${
       many ? 'them' : 'it'
-    }.`,
-  collapsedEmptyHanded: 'You collapsed in the dark. Everything you carried is lost.',
+    } up again.`,
+  collapsedEmptyHanded: 'You collapsed in the dark. Everything you were carrying is in a bag where you fell.',
   groundKept: LEAVING.groundKept,
   rowExplored: RECAP.rowExplored,
   rowNewGround: RECAP.rowNewGround,
@@ -554,5 +556,10 @@ export const ITEM_TEXT = {
   map: {
     name: 'MAP',
     effect: 'Draws everywhere you have walked, and remembers it between runs.',
+  },
+  // A death's own drop, never part of the seed (core/rules.js `dropBag`).
+  bag: {
+    name: 'YOUR BAG',
+    effect: 'Everything you were carrying when you fell, waiting where you left it.',
   },
 };

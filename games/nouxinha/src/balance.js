@@ -253,27 +253,39 @@ export const BELL_HEARING = 20;
 
 // --- Signposts ----------------------------------------------------------------
 //
-// Eight posts, each naming one landmark and pointing at it. Two per landmark,
-// one nearer than it and one about level with it, so no post is more than about
-// 25 tiles from the thing it names and every heading is worth trusting.
+// Twelve posts, each *assigned* one landmark to name. Three per landmark: one
+// nearer than it, one about level with it, and one further out, so no post is
+// more than about 25 tiles from the thing it is assigned to and every heading
+// is worth trusting.
 //
 // The one at 5 is the post every campaign meets on its first expedition: near
 // enough that the opening walk cannot miss it, far enough to be outside the
 // hut's clearing, and it points at the nearest landmark there is.
+//
+// A post's own spot is rolled independently of its assigned landmark's
+// heading, so nothing stops it landing, by chance, close enough to a
+// *different* landmark to be worth naming too (`signpostTargets` in
+// core/world.js) — "close enough" being SIGNPOST_BANDS' own NEARBY threshold.
+// Most posts only ever name the one landmark they were assigned; a few, some
+// worlds, end up naming two.
 export const SIGNPOST_PLAN = [
   { id: 'post-1', near: 5, span: 0, target: 'mint' },
   { id: 'post-2', near: 12, span: 4, target: 'bell' },
   { id: 'post-3', near: 20, span: 4, target: 'mint' },
   { id: 'post-4', near: 28, span: 4, target: 'lantern-tree' },
-  { id: 'post-5', near: 38, span: 5, target: 'bell' },
-  { id: 'post-6', near: 50, span: 5, target: 'gnomon' },
-  { id: 'post-7', near: 62, span: 5, target: 'lantern-tree' },
-  { id: 'post-8', near: 75, span: 5, target: 'gnomon' },
+  { id: 'post-5', near: 33, span: 5, target: 'mint' },
+  { id: 'post-6', near: 38, span: 5, target: 'bell' },
+  { id: 'post-7', near: 50, span: 5, target: 'gnomon' },
+  { id: 'post-8', near: 58, span: 5, target: 'bell' },
+  { id: 'post-9', near: 62, span: 5, target: 'lantern-tree' },
+  { id: 'post-10', near: 75, span: 5, target: 'gnomon' },
+  { id: 'post-11', near: 82, span: 5, target: 'lantern-tree' },
+  { id: 'post-12', near: 90, span: 5, target: 'gnomon' },
 ];
 
 // How much room a post needs: clear of the landmark courts, because a signpost
 // standing next to the thing it points at is a joke the player has to walk to
-// get to, and clear of the other posts, so the eight of them stay eight
+// get to, and clear of the other posts, so the twelve of them stay twelve
 // directions rather than one crowd.
 export const SIGNPOST_CLEARANCE = 8;
 export const SIGNPOST_SPACING = 10;
@@ -282,6 +294,8 @@ export const SIGNPOST_SPACING = 10;
 // nearby, under the last is a long walk, past it is far (`SIGNPOST.far` in
 // src/text.js names them). Banded rather than counted because a post is
 // somebody's directions, not an instrument — the compass is the instrument.
+// The first band doubles as "close enough to name too" for a landmark that
+// isn't the one a post was assigned (see `SIGNPOST_PLAN` above).
 export const SIGNPOST_BANDS = [15, 40, 80];
 
 // --- The scatter --------------------------------------------------------------

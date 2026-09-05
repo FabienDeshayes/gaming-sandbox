@@ -435,11 +435,13 @@ function buildLandmarks(seed, built, taken) {
 
 // --- Signposts -----------------------------------------------------------------
 //
-// Eight posts, each naming one landmark and pointing at it (balance.js
-// `SIGNPOST_PLAN`). Placed like everything else here and differing in what they
-// have to stay away from: a post has to stand well clear of the landmark it
-// names, because directions you can read from the doorstep are not directions,
-// and well clear of the other posts, so the eight of them stay eight bearings.
+// Twelve posts, each assigned one landmark to name and point at (balance.js
+// `SIGNPOST_PLAN`) — and, occasionally, a second one it landed close enough to
+// (`signpostTargets` below). Placed like everything else here and differing in
+// what they have to stay away from: a post has to stand well clear of every
+// landmark, because directions you can read from the doorstep are not
+// directions, and well clear of the other posts, so the twelve of them stay
+// twelve bearings.
 //
 // What a post *says* isn't stored: the heading and the distance are worked out
 // from where it stands when it is read (`signpostBearing` below), so a post is
@@ -464,7 +466,7 @@ function buildSignposts(seed, built, taken) {
       }
     }
     // Nothing in the sweep worked. A post is the one placed thing that may be
-    // dropped rather than forced: eight of them are directions, and seven of
+    // dropped rather than forced: twelve of them are directions, and eleven of
     // them are still directions, where a landmark nobody can reach is a hole in
     // the world. `pickSeed` never sees this one.
     return null;
@@ -664,9 +666,9 @@ export function signpostAt(x, y, seed = DEFAULT_SEED) {
 }
 
 // What a post says, worked out when it is read rather than stored: which of the
-// eight headings the landmark it names lies on, counted from north and going
-// clockwise (`SIGNPOST.bearings` in src/text.js reads them out), and which band
-// of distance it is in (balance.js `SIGNPOST_BANDS`).
+// eight headings a thing lies on from where the post stands, counted from
+// north and going clockwise (`SIGNPOST.bearings` in src/text.js reads them
+// out), and which band of distance it is in (balance.js `SIGNPOST_BANDS`).
 export const SIGNPOST_SECTORS = 8;
 
 export function signpostBearing(post, target) {
@@ -680,21 +682,48 @@ export function signpostBand(distance) {
   return band < 0 ? SIGNPOST_BANDS.length : band;
 }
 
-// Everything a post has to say about the landmark it names, from where it
-// stands. Pure, so the panel, the status line and a test all read the same
-// answer off it.
-export function signpostReading(post, seed = DEFAULT_SEED) {
-  const target = landmarkNamed(post.target, seed);
-  if (!target) return null;
-  const distance = chebyshev(post.x, post.y, target.x, target.y);
+// Which landmarks a post has something to say about: the one it was assigned
+// (balance.js `SIGNPOST_PLAN`), plus any other it happens to have landed
+// close enough to be worth naming too. A post's own spot is rolled
+// independently of its assigned landmark's heading, so this is genuinely
+// circumstantial — most posts only ever name the one, a few end up naming two.
+export function signpostTargets(post, seed = DEFAULT_SEED) {
+  const ids = [post.target];
+  for (const landmark of landmarks(seed))
+    if (landmark.id !== post.target && chebyshev(post.x, post.y, landmark.x, landmark.y) < SIGNPOST_BANDS[0])
+      ids.push(landmark.id);
+  return ids;
+}
+
+// Everything a post has to say about one landmark, from where it stands.
+function landmarkReading(post, landmark) {
+  const distance = chebyshev(post.x, post.y, landmark.x, landmark.y);
   return {
-    target: target.id,
-    x: target.x,
-    y: target.y,
-    bearing: signpostBearing(post, target),
+    target: landmark.id,
+    x: landmark.x,
+    y: landmark.y,
+    bearing: signpostBearing(post, landmark),
     band: signpostBand(distance),
     distance,
   };
+}
+
+// Every reading a post has to give, in the order `signpostTargets` names them
+// — the landmark it was assigned always first. Pure, so the panel, the status
+// line and a test all read the same answers off it.
+export function signpostReadings(post, seed = DEFAULT_SEED) {
+  return signpostTargets(post, seed)
+    .map((id) => landmarkNamed(id, seed))
+    .filter(Boolean)
+    .map((landmark) => landmarkReading(post, landmark));
+}
+
+// The heading back to the hut. Never surfaced as a named reading — a post
+// that knew the way to *your* hut would be a strange thing to find lying in
+// the dark (DESIGN.md §4.10) — so the text this drives is deliberately vague
+// about what it's a heading to.
+export function signpostHutBearing(post) {
+  return signpostBearing(post, { x: BASE_X, y: BASE_Y });
 }
 
 // Which chest a tile belongs to: the chest's own tile, or the forced-floor apron

@@ -135,8 +135,9 @@ export const FLASH = {
   landmarkWater: 'THE WELL UNDER IT IS DEEP. YOUR WATER IS FULL.',
   landmarkRelit: (name) => `${name} BURNS LIKE NEW.`,
   landmarkReveal: 'THE DIAL SHOWS YOU THE GROUND YOU CAME OVER.',
-  // A signpost, read again. The first read gets the panel.
-  signpost: (line) => line,
+  // A signpost, read again. The first read gets the panel; the hut's hint is
+  // flavour rather than a fact worth repeating, so it isn't in this one.
+  signpost: (lines) => lines.join(' / '),
   // The edge, every time after the first — the first bump earns the EDGE dialog.
   edge: 'THE DARK IS BLOCKING YOU.',
   bought: (name, coinsLeft) => `BOUGHT ${name}. ${coinsLeft} COINS LEFT.`,
@@ -317,13 +318,19 @@ export const SAY = {
   // world — shorter, because the second time you are not discovering it, you
   // are recognising it.
   landmark: (id, again) => LANDMARK_TEXT[id][again ? 'again' : 'met'],
-  // A signpost, read for the first time. Two blocks and then the directions,
-  // which are the only thing worth re-reading — every read after this one is a
-  // line in the status bar.
-  signpost: (line) => [
+  // A signpost, read for the first time. Every post has three arms: one is
+  // always a blank stub gesturing cryptically toward the hut (SIGNPOST.hutHint),
+  // and the rest carry names — usually one, occasionally two, of a landmark
+  // this post happens to stand close enough to (`signpostTargets` in
+  // core/world.js). Named directions are the only thing worth re-reading —
+  // every read after this one is a line in the status bar.
+  signpost: (lines, hutLine) => [
     'A post, leaning, with the ground trodden down around it.',
-    'Two of its arms are gone. The one still on it has a name burned into the wood.',
-    line,
+    lines.length > 1
+      ? 'One of its three arms is a blank stub. The other two have names burned into the wood.'
+      : 'One of its three arms is gone outright. Another is a blank stub. The last has a name burned into the wood.',
+    ...lines,
+    hutLine,
   ],
   // The hall (DESIGN.md §4.9). He introduces himself, he is courteous, he takes
   // what you brought, and he moulds the world again. What he says about the
@@ -432,6 +439,11 @@ export const SIGNPOST = {
   // and further than any of those.
   far: ['NEARBY', 'A WALK', 'A LONG WALK', 'FAR'],
   line: (name, bearing, far) => `${name} — ${bearing} — ${far}`,
+  // The stub that isn't a named arm — cryptic on purpose, because a signpost
+  // that knew the way to your hut would be a strange thing to find lying in
+  // the dark (DESIGN.md §4.10). It gets a heading and nothing else: no name,
+  // no distance, just a direction that happens to be worth remembering.
+  hutHint: (bearing) => `A blank stub still points ${bearing.toLowerCase()}. No name on it — but you know that way.`,
 };
 
 // --- Panels ------------------------------------------------------------------

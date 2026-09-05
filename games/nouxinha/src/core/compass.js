@@ -76,7 +76,7 @@ export function availableTargets(state) {
   }
 
   // Landmarks are deliberately **not** on the needle (DESIGN.md §4.10). They
-  // have a way of being found already, and it is the eight posts standing
+  // have a way of being found already, and it is the twelve posts standing
   // around the world with their names on: the compass is the instrument and a
   // signpost is somebody's directions, and pointing both at the same thing
   // would spend the instrument on the one thing that doesn't need it. It would

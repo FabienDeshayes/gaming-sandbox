@@ -15,8 +15,13 @@
 // the whole of what a landmark is (DESIGN.md §4.10): `landmarks` is the ones
 // stood at in *this* world, `posts` the signposts read in it — both of which go
 // when the hall moulds the world again — and `standings` what a campaign keeps
-// out of them, which is the one thing besides the count of worlds that survives
-// every re-moulding.
+// out of them, which — with the count of worlds finished, below — is what
+// survives every re-moulding.
+//
+// `finished` is the campaign's fourth kind of memory and the coarsest: which of
+// the four **biomes** it has carried three colours all the way into the hall of
+// (DESIGN.md §4.9). It is what makes each meeting with the sorcerer a different
+// conversation, and holding all four is the end of the game.
 //
 // Gems are stored as a *count*, not a list. The sanctum chain hands them out in
 // order, nearest first, so "how many" says everything "which ones" would. Keys
@@ -39,6 +44,7 @@ import { CHEST_PLAN, SANCTUM_PLAN, SIGNPOST_PLAN } from '../balance.js';
 import { BASE_X, BASE_Y, beyondEdge, pickSeed } from './world.js';
 import { ITEMS, KEYS, TOOLS } from '../data/items.js';
 import { LANDMARK_IDS, STANDINGS } from '../data/landmarks.js';
+import { BIOME_IDS } from '../data/biomes.js';
 
 const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;
 const ACTIVE_KEY = 'nouxinha.slot';
@@ -93,10 +99,16 @@ export function emptySave() {
     landmarks: [],
     posts: [],
     // And the standings: what stood at a landmark once and kept it. These are
-    // the one thing besides `cycles` that survives a world being moulded away —
-    // he can unmake the ground a landmark stood in, and he has never found a
-    // way to unmake the fact that you have stood there.
+    // one of the three things besides `cycles` that survive a world being
+    // moulded away — he can unmake the ground a landmark stood in, and he has
+    // never found a way to unmake the fact that you have stood there.
     standings: [],
+    // Which **kinds** of world this campaign has finished: the biomes it has
+    // carried all three colours into the hall of (DESIGN.md §4.9). Kept across
+    // a re-moulding for the same reason the standings are, and the count of
+    // them is what the sorcerer has to say for himself each time — and, once
+    // all four are in it, the end of the game.
+    finished: [],
     // Run-length encoded explored ground, and the seed it belongs to.
     mapped: '',
     mappedSeed: 0,
@@ -157,6 +169,7 @@ export function normaliseSave(raw, keepRun = true) {
   save.landmarks = ids(raw.landmarks, LANDMARK_IDS);
   save.posts = ids(raw.posts, POST_IDS);
   save.standings = ids(raw.standings, STANDINGS);
+  save.finished = ids(raw.finished, BIOME_IDS);
   save.mapped = typeof raw.mapped === 'string' ? raw.mapped : '';
   save.mappedSeed = Number.isFinite(raw.mappedSeed) ? raw.mappedSeed | 0 : 0;
   save.seen = Array.isArray(raw.seen)
@@ -178,6 +191,7 @@ export function normaliseSave(raw, keepRun = true) {
     save.chests.length > 0 ||
     save.landmarks.length > 0 ||
     save.standings.length > 0 ||
+    save.finished.length > 0 ||
     !!save.mapped ||
     !!save.bag ||
     !!save.run;

@@ -24,7 +24,8 @@ import {
 import { clampSlot, emptySave, MAX_GEMS, normaliseSave, SLOT_COUNT } from '../src/core/save.js';
 import { decodeExplored, encodeExplored } from '../src/core/cartography.js';
 import { ITEMS } from '../src/data/items.js';
-import { ALL_KEYS_LIST, GEM_ROUTE, KEY_CHEST, NONCE, SEED, TORCH_ROUTE } from './world.js';
+import { BIOME_IDS } from '../src/data/biomes.js';
+import { ALL_KEYS_LIST, BIOME, GEM_ROUTE, KEY_CHEST, NONCE, SEED, TORCH_ROUTE } from './world.js';
 
 // --- Slots -------------------------------------------------------------------
 
@@ -350,6 +351,34 @@ unit('the hall takes everything you carried and leaves only the tally', () => {
   // hand are the two places a number like this goes missing.
   step(next, 'up');
   assertEqual(bankRun(next).cycles, 1, 'and the hut writes the count back down');
+});
+
+unit('finishing a world is what he counts, and it survives the world going', () => {
+  // A walk into the hall carrying every colour is what finishes a *kind* of
+  // world (DESIGN.md §4.9). It goes into the slot like a standing does — the
+  // ground it happened on is gone, the fact of it is not.
+  const state = createRun(SEED, finishedCampaign(), NONCE);
+  const next = turnCycle(state);
+
+  assertEqual(next.banked.finished, [BIOME], 'the kind of world walked out is written down');
+  assertEqual([...next.finished], [BIOME], 'and the run he hands back is holding it');
+  assert(next.biome !== BIOME || BIOME_IDS.length === 1,
+    'and what he moulds next is a kind you have not finished');
+
+  // And it survives the next walk home, which rebuilds the slot from scratch the
+  // same way the cycle did — the two places a save is written out by hand.
+  step(next, 'up');
+  assertEqual(bankRun(next).finished, [BIOME], 'the hut writes it back down');
+});
+
+unit('arriving one colour short is still a meeting and still finishes nothing', () => {
+  // The walk is what counts, not the arrival: he takes what you have, moulds
+  // the world anyway, and the kind of world you were in is still unfinished
+  // (DESIGN.md §4.9) — which is what stops the ending being a formality.
+  const state = createRun(SEED, { ...finishedCampaign(), gems: MAX_GEMS - 1 }, NONCE);
+  const next = turnCycle(state);
+  assertEqual(next.banked.finished, [], 'nothing was finished');
+  assertEqual(next.banked.cycles, 1, 'but the world went all the same');
 });
 
 unit('a cheat run gets its new world and still writes nothing', () => {

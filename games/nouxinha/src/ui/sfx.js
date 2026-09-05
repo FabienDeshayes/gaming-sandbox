@@ -307,6 +307,28 @@ export function playSignpost() {
   });
 }
 
+// The sun coming back (DESIGN.md §4.9): the one sound in the game that is longer
+// than a second and a half, and the only one that goes up and stays up. Air
+// catching, sweeping the whole way from the bottom of the band to the top, and
+// then a chord that opens under it a note at a time and holds — the shape of the
+// gem fanfare with the hurry taken out of it, because nothing follows this.
+const DAWN_CHORD = [131, 262, 330, 392, 523, 659];
+
+export function playDawn() {
+  play('dawn', (a, bus, now) => {
+    whoosh(a, bus, { at: now, duration: 1.9, peak: 0.1, from: 180, to: 4200 });
+    DAWN_CHORD.forEach((freq, i) =>
+      note(a, bus, {
+        freq,
+        at: now + 0.45 + i * 0.09,
+        duration: 2.6 - i * 0.15,
+        peak: i ? 0.05 : 0.06,
+        cutoff: i ? 3800 : 500,
+      })
+    );
+  });
+}
+
 // Running dry: three notes falling, then the low one sagging as it goes. The
 // only sound in the game that descends, because it is the only thing that
 // happens to you rather than for you.

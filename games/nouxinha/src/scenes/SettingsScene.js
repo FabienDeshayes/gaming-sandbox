@@ -1,6 +1,8 @@
-// Settings: the music and cheat switches, and the move-speed slider. There is
-// no palette picker here — a world's colour comes from its biome (DESIGN.md
-// §4.3, src/data/biomes.js), not from a choice a player makes.
+// Settings: the music and cheat switches, the move-speed slider, and — for a
+// player who has finished all four worlds — the switch that draws the game
+// inside out (DESIGN.md §4.9). There is no palette picker here: a world's colour
+// comes from its biome (§4.3, src/data/biomes.js), not from a choice a player
+// makes.
 //
 // Reached from the title screen, and from the cogwheel menu mid-expedition
 // (scenes/ExploreScene.js). In the second case the live run rides along in the
@@ -12,11 +14,14 @@ import {
   MAX_MOVE_SPEED,
   MIN_MOVE_SPEED,
   getCheats,
+  getInvert,
   getMoveSpeed,
   getMusic,
   getPalette,
   hex,
+  invertUnlocked,
   setCheats,
+  setInvert,
   setMoveSpeed,
   setMusic,
 } from '../config.js';
@@ -96,6 +101,11 @@ export class SettingsScene extends Phaser.Scene {
         const on = setCheats(!getCheats());
         cheats.setLabel(cheatLabel(on));
         note.setText(cheatNote(on)).setAlpha(on ? 0.8 : 0.5);
+        // Turning the cheats off takes the inversion with it, switch and all:
+        // the switch lives under the cheats, and a screen drawn inside out with
+        // nothing on it to undo that would be a trap rather than a setting.
+        if (!on && getInvert()) setInvert(false);
+        if (invertUnlocked()) this.scene.restart(this.opened);
       },
       { width: 300, fontSize: 14 }
     );
@@ -107,6 +117,35 @@ export class SettingsScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setAlpha(getCheats() ? 0.8 : 0.5);
+
+    // What the ending left behind (DESIGN.md §4.9), and the one control on this
+    // screen that isn't always here: the game drawn inside out, for a player who
+    // has watched the sorcerer open his hands. It sits under the cheats and is
+    // only on screen while they are on, because it is a way of looking at the
+    // game rather than a way of playing it — and it takes effect where it is
+    // tapped, which means drawing this screen again in the colours it just
+    // chose.
+    if (invertUnlocked() && getCheats()) {
+      makeButton(
+        this,
+        cx,
+        610,
+        invertLabel(getInvert()),
+        () => {
+          setInvert(!getInvert());
+          this.scene.restart(this.opened);
+        },
+        { width: 300, fontSize: 14 }
+      );
+      this.add
+        .text(cx, 648, SETTINGS.invertNote, {
+          fontFamily: FONT,
+          fontSize: '11px',
+          color: hex(pal.fg),
+        })
+        .setOrigin(0.5)
+        .setAlpha(getInvert() ? 0.8 : 0.5);
+    }
 
     // Back where it came from: the expedition it was opened from, or the title
     // screen.
@@ -127,3 +166,4 @@ export class SettingsScene extends Phaser.Scene {
 const musicLabel = SETTINGS.music;
 const cheatLabel = SETTINGS.cheats;
 const cheatNote = SETTINGS.cheatNote;
+const invertLabel = SETTINGS.invert;

@@ -460,6 +460,14 @@ took the sun, standing dead centre of it — and the only conversation in the ga
   visibly standing there while he talks. He introduces himself, he is courteous, he takes the
   colours out of your hands — and what he says about them depends on how many you actually brought,
   because a walk that arrives one short is a walk that happened.
+- **He says something different every time a kind of world is finished.** Five conversations, in
+  `src/text.js`, picked by how many of the four **biomes** (§4.3) this campaign has already carried
+  three colours into the hall of: the first meeting, one world finished, two, three — and the one
+  after the ending, for a campaign that has watched him let go and kept walking. Inside each of
+  them the line about what you are carrying still moves with the walk you actually had, so
+  arriving empty-handed never reads like arriving in full. The count is the only thing about the
+  player he has to go on, and it is the whole of what makes him a person who is getting somewhere
+  rather than a cutscene on a loop.
 - **He takes nothing until the last block is read.** Reading him out is what turns the world over,
   so the ground going is something the player reads about and then sees.
 
@@ -496,12 +504,49 @@ with the new world already written into the slot.
   (§4.6): everything else worth walking to has been found by then, so the needle saying "that way,
   and it's him" is the whole of how the endgame is signposted.
 - **A cheat run gets the hall too** and writes none of it (§6.2) — the switch exists to look at the
-  late game without walking to it, and the late game is now this.
+  late game without walking to it, and the late game is now the ending below, so a sandbox run
+  opens with the other three kinds of world already finished and meets him at the end of the last.
+
+#### Finishing a world, and the end of the game
+
+**A world is finished by walking into the hall of it carrying all three colours.** Which *kinds* of
+world a campaign has finished — a list of biomes (§4.3) — is the third thing that survives a
+re-moulding, alongside the count of worlds ended and the standings (§4.10): he can unmake the
+ground, and he has never found a way to unmake having been walked out of. Arriving one colour short
+is still a meeting, still ends the expedition and still turns the world over; it simply finishes
+nothing, which is what keeps the ending a walk rather than a formality.
+
+**So the world he moulds next is a kind you have not finished, while there is one left to give.**
+Without that, the four kinds come up at random and the last one can take a dozen cycles to arrive,
+which turns the end of the game into a wait. Candidates are judged on `biomeOf` alone — one hash —
+and only the seed actually taken is put through `pickSeed`, so preferring a kind of world costs
+nothing (`mouldSeed` in `core/rules.js`, `MOULD_ATTEMPTS` in `balance.js`).
+
+**The fourth one finished is the end of the game.** Walk into him in the last kind of world this
+campaign has not finished, carrying every colour, and there is nothing left for him to mould that
+you have not already walked out of — so he stops. What follows is not a fight and not a defeat: he
+says the two things the whole campaign has been walking towards, and he opens his hands.
+
+- **A light explosion**, from where the character is standing, taking the whole screen.
+- **Every colour on screen is then inverted** — the same two colours this world was drawn in, the
+  other way round, so a game that has spent its whole life being a hole in the light is suddenly
+  the light with things standing in it. It is the only thing a two-colour game can do to say the
+  sun is back, and it costs one line of arithmetic because every colour in the game comes out of
+  three accessors in `src/config.js`.
+- **Then the credits**, in that light, a line at a time, tapped through like the text panel.
+- **And the world turns over anyway.** The ending is the last thing that happens to this
+  campaign's world, not instead of it: the walk is banked, the cycle counts, the seed is re-drawn
+  and the slot is written before the first credit appears. A campaign that has seen the ending
+  carries on into a world it has already finished the kind of, and gets the fifth conversation.
+- **It leaves one thing behind: INVERT COLOURS in Settings** (§6.2), off until it is asked for.
+  The inversion the ending itself draws is *not* that switch — it is an override that is dropped
+  on the way back to the title screen, so a page closed on the credits comes back to an ordinary
+  dark world.
 
 Three things in `STORY.md` that this deliberately does *not* do yet, so the doc and the game don't
 drift: there are no **remnants** out past the fourth wall and so no **truths** to say back to him,
 the far dark is not thinned, and the rim does not come in cycle over cycle. Every cycle is the same
-world size and the same conversation.
+world size, and what changes across them is what he says and how many kinds of world are left.
 
 ### 4.10 Landmarks and signposts
 
@@ -813,7 +858,7 @@ mean the merchant, the compass and the map. Those are **sites** now — `SITE_PL
 
 ## 6. Win / lose conditions
 
-- **Win:** walking the three colours home and then carrying them out to the hall at 110, where the sorcerer takes them and moulds the world again (§4.9). Bringing the colours home is the middle of a cycle rather than the end of one: what it opens is the last gate and the walk behind it. The campaign does not end there either — a cycle turns, the slot keeps its purse, its tools, its standings (§4.10) and its count of worlds ended, and the whole game is walked again in a world nobody has lit.
+- **Win:** walking the three colours home and then carrying them out to the hall at 110, where the sorcerer takes them and moulds the world again (§4.9) — four times over, once for each kind of world, which is what ends the game: the fourth one finished is the one where he opens his hands instead, and what is on the other side of that is the light and the credits. Bringing the colours home is the middle of a cycle rather than the end of one: what it opens is the last gate and the walk behind it. The campaign does not end there either — a cycle turns, the slot keeps its purse, its tools, its standings (§4.10) and its count of worlds ended, and the whole game is walked again in a world nobody has lit.
 - **Lose:** running out of water. It depletes independently of light and refills only at a water pickup or the hut, so hitting 0 out in the dark ends the run on the spot. Everything carried since the hut was last stood on — gems, keys, lights, coins, and any tool bought or found on the way — drops into a **bag** on the tile the run died on rather than into the hut's books (§6.1), with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen; the ground it lit goes into the slot regardless of any of that. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
 - **Session end:** the player walks back to the hut and takes it up on the offer to end the expedition (§4). The HUD tracks the numbers that stand in for a score while you're out — **tiles explored** (distinct tiles the campaign has ever lit, since ground carries between runs — §6.1), **coins**, **water** remaining, and the row of **colours** recovered — and ending the expedition closes the run with a **recap**: tiles explored, **new ground** this expedition lit that no earlier one had, **coins found** — the whole walk's, since the hut empties the pocket into the bank every time it is crossed — lights found, colours saved, furthest distance reached, steps taken, and what's still in hand. The two ground numbers are both there on purpose: the total is how much of the world is drawn, the new one is what this particular walk was worth.
 
@@ -855,6 +900,8 @@ A developer switch in Settings, off by default, for looking at what the late gam
 
 - A run started with cheats on opens with **the whole world revealed** — every tile out past the fourth sanctum, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **all three keys** so every gate stands open, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust. The chests themselves are left shut, so a sandbox for looking at the late game still has one to open.
 - **A cheat run writes nothing at all.** It banks no progress at the hut, it cannot be saved mid-walk from the menu (which says so instead of writing), and it does not even keep its ground, because a run that was *handed* three gems is not a campaign and must never overwrite one. The toggle says so on itself, the title screen says so under the character, and the recap says so instead of listing what is being carried home.
+- **A cheat run opens at the end of the game.** The late game is now the ending (§4.9), so a sandbox is handed the other three kinds of world already finished: walk it into the hall carrying the three colours it started with and the sorcerer opens his hands. Like everything else a cheat run does, it writes no campaign — but the switch it unlocks is a preference rather than a campaign, so it is unlocked for good.
+- **INVERT COLOURS lives here**, under the cheats and only on screen while they are on, for a player who has seen the ending. It draws the whole game inside out — the same two colours the other way round — and turning the cheats off turns it off with them, because a screen drawn inside out with nothing on it to undo that would be a trap rather than a setting.
 - It is a preference rather than run state: `src/config.js` persists it to `localStorage`, the scene reads it and hands it to `createRun`, and `src/core/rules.js` never asks.
 
 ## 7. Controls
@@ -966,7 +1013,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 
 ## 9. Art & audio style
 
-- **Visual style:** Pixel art, **duo-chromatic**, retro CRT. Two colours are on screen at any moment — a dark background and a single foreground used for every tile border, the character, items, HUD, and text — **and one more for each gem recovered**. Every sprite is a 16×16 1-bit tile drawn at 3× with nearest-neighbour filtering and tinted at draw time, which is what makes both a palette swap and a restored colour a tint change rather than an asset rebuild.
+- **Visual style:** Pixel art, **duo-chromatic**, retro CRT. Two colours are on screen at any moment — a dark background and a single foreground used for every tile border, the character, items, HUD, and text — **and one more for each gem recovered**. The one thing that ever breaks the dark is the end of the game (§4.9), which turns every colour on screen into its opposite and leaves that behind as a switch: the same palette, the same tints, the same one-colour-per-gem rule, drawn inside out. Every sprite is a 16×16 1-bit tile drawn at 3× with nearest-neighbour filtering and tinted at draw time, which is what makes both a palette swap and a restored colour a tint change rather than an asset rebuild.
   - **The art is one sheet, addressed by coordinate.** `assets/tiles.png` holds 49×22 tiles of 16px, one transparent pixel apart, drawn in near-white on transparent. `src/data/tiles.js` maps each sprite key the game draws with — `rock`, `torch-lamp`, `wizard-down` — to the **(col, row)** of its tile, zero-based from the top-left, and that table is the only place in the game that knows the sheet exists. At boot the sheet is read once, the named tiles are cut out of it as 1-bit masks, and each is baked into a **white** texture; white rather than the sheet's own near-white so a tint lands exactly on its hex. Changing what something looks like is editing one pair of numbers: open `tiles.html` through the same server the game runs on and it draws the sheet with those coordinates on it, boxing the tiles already claimed and boxing the painted ones (below) in their own colour. It is the way in to the other three, which it links to for whatever tile is picked, and which link back. Painting (below) is `paint.html`. Redrawing a tile is `draw.html`: it picks a tile off the sheet, draws its pixels one by one — the sheet is 1-bit, so there is a brush and a rubber and no colour to choose — and exports the whole sheet back out as a PNG to save over `assets/tiles.png`. It only ever rewrites the pixels that changed state, so every other byte of the sheet comes out of it exactly as it went in. Saying which tile a sprite is cut from is `biomes.html`: it lists every one of the world's own sprites, shows what each of the four biomes draws it with next to the default they all fall back on, and builds a terrain's list of tiles by clicking them off the sheet. None of the four has a palette to pick — they are drawn in the colour of the biome being worked on, exactly as the game would draw it (§4.3).
   - **A terrain can name several tiles and alternate between them.** Floor, rock and trees are lists — one floor, three rocks and eight trees today — picked per world tile from the seed (`variantAt` in `src/core/world.js`), so a rock field isn't one boulder stamped fifty times and the tile a given square draws never changes as you walk back past it. Which is the same rule as everything else about this world: derived from the seed, never stored. Those three are the terrains each biome names for itself, and a world can alternate between a different number of them than the shared table does; everything else a biome draws is one tile, because a hut is a hut.
   - **A biome can draw the world's own tiles its own way.** Which world a run is in decides which
@@ -1099,13 +1146,13 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
   | `src/balance.js` | **Every number the game is balanced on, and nothing else**: terrain thresholds, the edge of the world and its choke, seed validation, the sanctum, site, landmark, signpost and chest plans (and what a landmark hands over), the scatter lattice (`MIN_SEPARATION`, `SCATTER`, the per-band spawn chance and the gem density taper), coin values, water and the leash, light durability and shapes, the merchant's prices and the cheat switch's reach. Imports nothing — it is a table, not code |
   | `src/text.js` | **Every word the game says to the player, and nothing else**: the title screen and its tagline, the slot picker, Settings, the HUD's counters and status line, every dialog — the hut, the recap, the death screen, the menu, the edge — the merchant, the map, the panels, and each item's name and card copy. Anything that varies is a function of what it varies on, so copy and the number it quotes cannot drift apart. Imports only `src/balance.js`, for the refill figures the water cards quote. No layout, no logic — a scene never spells a player-facing string itself |
-  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor and `setDefaultPalette` — which sets it from a run's biome, the only way it is ever set (§4.3) — the music and cheat switches (§9, §6.2, persisted to `localStorage`), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
+  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor and `setDefaultPalette` — which sets it from a run's biome, the only way it is ever set (§4.3) — `invertColour` and the inversion the ending leaves behind (§4.9): the switch, the unlock and the override the ending itself draws with, all three of which reach the whole screen because every colour in the game comes out of `getPalette`, `gemColour` and `paletteColour` — the music and cheat switches (§9, §6.2, persisted to `localStorage`), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
   | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums, sites, landmarks, signposts and chests (`sanctums`, `sanctumAt`, `sites`, `siteAt`, `isMerchant`, `landmarks`, `landmarkAt`, `signposts`, `signpostAt`, `signpostTargets`/`signpostReadings`/`signpostHutBearing`, `chests`, `chestAt`, `entryKey`/`canEnter` — which key a tile wants — and `blocksSight`, what stops a light rather than a step); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`sitesReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws — and `biomeOf`, which kind of world a seed is (§9, §4.3). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw, snapped to the four the needle has sprites for. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
   | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles — and, handed a predicate saying what is opaque, the same set with its shadows cut out of it (§4.1). Knows what a shadow is and nothing at all about rock, which is what keeps it pure |
-  | `src/core/rules.js` | The run: step legality (including gates and chests), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, `openChest`/`chestOnTile` for the lid, reveal, `inventoryStacks` for grouping same-id copies for display, `depositRun` for what reaching the hut writes down and `bankRun` for the same thing plus the end of the expedition, `rememberGround` for the ground a run keeps however it ends, `abandonRun` for the death that takes the slot's saved walk with it, `suspendRun`/`resumeRun` for the menu's SAVE GAME and the LOAD GAME that carries it on (§6.1), the cheat setup (§6.2), and `runSummary` for the recap. Pure |
-  | `src/core/save.js` | The three save slots and which one is active: load, write, erase, start, the keys held and chests opened, the slot listing the picker draws, the shape of a suspended expedition (§6.1), and the normaliser every save — and every run block inside one — passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
+  | `src/core/rules.js` | The run: step legality (including gates and chests), durability tick, burnout/auto-swap, water depletion/refill and the death condition, pickup, `openChest`/`chestOnTile` for the lid, `hallMeeting` for which of the five conversations the sorcerer is having and whether this one is the ending, `turnCycle` and `mouldSeed` for the world he moulds next (§4.9), reveal, `inventoryStacks` for grouping same-id copies for display, `depositRun` for what reaching the hut writes down and `bankRun` for the same thing plus the end of the expedition, `rememberGround` for the ground a run keeps however it ends, `abandonRun` for the death that takes the slot's saved walk with it, `suspendRun`/`resumeRun` for the menu's SAVE GAME and the LOAD GAME that carries it on (§6.1), the cheat setup (§6.2), and `runSummary` for the recap. Pure |
+  | `src/core/save.js` | The three save slots and which one is active: load, write, erase, start, the keys held and chests opened, which kinds of world the campaign has finished (§4.9), the slot listing the picker draws, the shape of a suspended expedition (§6.1), and the normaliser every save — and every run block inside one — passes through whichever direction it came from. Pure bar its `localStorage` access, which is guarded |
   | `src/data/items.js` | Item definitions — sprite key, `hue` (the gem colour it's drawn in), the three keys and the two tools. The words (name, effect text) are spread in from `src/text.js` and the numbers (durability, light shape, water refill) from `src/balance.js`; which gem brings an item into the world is the `SCATTER` table's, not an item's |
   | `src/data/biomes.js` | The four biomes (§4.3): what each is called and the palette it is drawn in. Which tiles each draws is `src/data/tiles.js`'s, and which biome a world is is `biomeOf`'s |
   | `src/data/shop.js` | The merchant's stock order and which lines are one-offs; the prices themselves are `src/balance.js`'s |
@@ -1120,14 +1167,14 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/MapView.js` | The tile pool, the three visibility states, per-tile tinting (gates and gem-tier items), the step slide and the blocked-step bump. Holds no game state |
   | `src/ui/hud.js` | The grouped, icon-led run counters (explored, coins), the stacked inventory strip with **ITEMS** as one more slot in it, the active light's durability and water's — same size, stacked one under the other — and the status line |
   | `src/ui/scroll.js` | A drag/wheel-scrollable, mask-clipped list region shared by the item card's instance list and the inventory panel |
-  | `src/ui/sfx.js` | Every sound but the music — the tap, the pickup blips, the gem fanfare, the chest lid, the key turning, the torch and the death knell — plus the one `AudioContext` and the master gain everything audible goes through. No assets, and silently inert where audio is unavailable |
+  | `src/ui/sfx.js` | Every sound but the music — the tap, the pickup blips, the gem fanfare, the chest lid, the key turning, the torch, the death knell and the sun coming back (§4.9) — plus the one `AudioContext` and the master gain everything audible goes through. No assets, and silently inert where audio is unavailable |
   | `src/ui/music.js` | The two loops: both scores as text, the square-wave voices, and the lookahead scheduler that writes them to the clock. The track follows the scene — `menu` for the title, slot picker and settings, `explore` for a run |
   | `src/ui/shop.js` | The merchant's counter: a row per line of stock, over the purse it's paid from |
   | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers — and the pinch/drag/wheel/button zoom and pan over the top of it, which are one container's scale and position |
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |
   | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js`, `src/ui/slider.js` | The D-pad, held to repeat a step at the rate `getMoveSpeed` gives; the item card overlay (single-copy or scrollable instance list); the full scrollable inventory panel, with the gem-pip row above its list; the title/rows/buttons dialog the hut, the recap and the cogwheel menu all use, its buttons in a row or stacked one per line once there are more than two; the shared bordered button; the shared drag-or-tap slider, used once for the move-speed setting |
-  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker, which says which slots are mid-expedition), `SettingsScene` (the music switch, the move-speed slider, the cheat switch — and, opened from a run, the way back into it), `ExploreScene` (the run, and the cogwheel menu hanging off it) |
-  | `tests/` | `harness.js` (local server + Playwright driver + runner), `world.js` (the seed and every route BFSed out of it), eleven `*.test.js` suites and `all.test.js`, which runs them all — see `TESTING.md` |
+  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker, which says which slots are mid-expedition), `SettingsScene` (the music switch, the move-speed slider, the cheat switch, the inversion the ending unlocks — and, opened from a run, the way back into it), `ExploreScene` (the run, the cogwheel menu hanging off it, and the light explosion that ends the game), `CreditsScene` (what is on the other side of that explosion, and the only scene drawn with the colours inverted — §4.9) |
+  | `tests/` | `harness.js` (local server + Playwright driver + runner), `world.js` (the seed and every route BFSed out of it), thirteen `*.test.js` suites and `all.test.js`, which runs them all — see `TESTING.md` |
 
 - **Sprites are coordinates on one sheet.** `src/data/tiles.js` names a **(col, row)** of `assets/tiles.png` per sprite key; the tile is cut out as a 1-bit mask at boot, baked into a white texture and tinted at draw time. One image, no image editor to repoint a sprite, no build step — and one texture set serves all four palettes.
 

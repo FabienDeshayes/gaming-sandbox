@@ -3,10 +3,16 @@
 import {
   FONT,
   GAME_WIDTH,
+  VIEW_CX,
+  VIEW_CY,
   VIEW_H,
   getCheats,
+  getPalette,
   hex,
+  invertColour,
+  overrideInvert,
   setDefaultPalette,
+  unlockInvert,
 } from '../config.js';
 import {
   DIRECTIONS,
@@ -18,6 +24,7 @@ import {
   depositRun,
   equip,
   hasStanding,
+  hallMeeting,
   hasSuspendedRun,
   isBlackout,
   rememberGround,
@@ -63,6 +70,7 @@ import { makeDpad } from '../ui/dpad.js';
 import {
   playBell,
   playChest,
+  playDawn,
   playDeath,
   playLandmark,
   playPickup,
@@ -73,6 +81,14 @@ import {
   unlockAudio,
 } from '../ui/sfx.js';
 import { startMusic, stopMusic } from '../ui/music.js';
+
+// The light explosion at the end of the fourth world (`theEnd`): a disc opening
+// from where the character is standing until it has swallowed the screen, which
+// is every pixel of it — the corner furthest from the centre of the viewport is
+// under 600 away, and the disc is drawn at 8px and scaled.
+const BURST_RADIUS = 8;
+const BURST_SCALE = 80;
+const BURST_MS = 900;
 
 const DPAD_CX = 361;
 const DPAD_CY = 737;
@@ -203,6 +219,9 @@ export class ExploreScene extends Phaser.Scene {
     // question and the death screen are decisions that have to be answered, so
     // Esc closes this one and leaves those alone.
     this.menuOpen = false;
+    // Whether the sorcerer has opened his hands and the screen belongs to the
+    // ending (`theEnd`).
+    this.ending = false;
 
     this.map = new MapView(this);
     this.hud = new Hud(this, {
@@ -324,6 +343,9 @@ export class ExploreScene extends Phaser.Scene {
 
   closeMenu() {
     this.menuOpen = false;
+    // Whether the sorcerer has opened his hands and the screen belongs to the
+    // ending (`theEnd`).
+    this.ending = false;
     this.dialog.hide();
   }
 
@@ -333,6 +355,9 @@ export class ExploreScene extends Phaser.Scene {
   // is what makes the round trip cost the expedition nothing.
   openSettings() {
     this.menuOpen = false;
+    // Whether the sorcerer has opened his hands and the screen belongs to the
+    // ending (`theEnd`).
+    this.ending = false;
     this.dialog.hide();
     this.scene.start('SettingsScene', { run: this.run });
   }
@@ -342,6 +367,9 @@ export class ExploreScene extends Phaser.Scene {
   // saved (DESIGN.md §6.1).
   saveGame() {
     this.menuOpen = false;
+    // Whether the sorcerer has opened his hands and the screen belongs to the
+    // ending (`theEnd`).
+    this.ending = false;
     suspendRun(this.run);
     const summary = runSummary(this.run);
     this.dialog.show({
@@ -365,6 +393,9 @@ export class ExploreScene extends Phaser.Scene {
   // so it asks, and says what it is about to cost.
   confirmExit() {
     this.menuOpen = false;
+    // Whether the sorcerer has opened his hands and the screen belongs to the
+    // ending (`theEnd`).
+    this.ending = false;
     const summary = runSummary(this.run);
     const atRisk = carriedAtRisk(summary);
     const stood = landmarksAtRisk(summary);
@@ -402,6 +433,10 @@ export class ExploreScene extends Phaser.Scene {
   // screen while they're up: nothing behind them steps, swipes, or reacts to a key.
   modalOpen() {
     return (
+      // The light going off is not an overlay, but it owns the screen the same
+      // way one does: the world under it has already been moulded away, and a
+      // step taken during it would be a step in a run that is over (`theEnd`).
+      this.ending ||
       this.textPanel.isOpen() ||
       this.card.isOpen() ||
       this.inventory.isOpen() ||
@@ -665,9 +700,53 @@ export class ExploreScene extends Phaser.Scene {
   meetSorcerer() {
     if (this.card.isOpen()) this.card.hide();
     if (this.inventory.isOpen()) this.inventory.hide();
-    this.textPanel.show(SAY.hall(this.run.gems, MAX_GEMS), () => {
+    // Which conversation this is (DESIGN.md §4.9): a different one for every
+    // kind of world this campaign has already finished, and — for the fourth,
+    // arrived at carrying every colour — the one that ends the game instead of
+    // moulding another world.
+    const meeting = hallMeeting(this.run);
+    const blocks = meeting.last
+      ? SAY.ending()
+      : SAY.hall(this.run.gems, MAX_GEMS, meeting.finished);
+    this.textPanel.show(blocks, () => {
+      // The world turns over either way, and it is written down either way: the
+      // ending is the last thing that happens to this campaign's world, not
+      // instead of it — a slot that has seen it is a slot with a fresh world in
+      // it, and the biome it just finished written into its list.
       const next = turnCycle(this.run);
-      this.scene.start('ExploreScene', { run: next, moulded: true });
+      if (meeting.last) this.theEnd();
+      else this.scene.start('ExploreScene', { run: next, moulded: true });
+    });
+  }
+
+  // He opens his hands (DESIGN.md §4.9). The light goes off from where the
+  // character is standing, takes the whole screen, and what is on the other side
+  // of it is the same two colours the other way round — the dark world drawn as
+  // a lit one, which is the only thing this game could do to say the sun is
+  // back, since it has only ever had two colours to say anything with.
+  //
+  // The inversion is an override rather than the Settings switch (src/config.js):
+  // the switch is what the ending *unlocks*, and it stays off until the player
+  // asks for it. `CreditsScene` drops the override on its way to the title.
+  theEnd() {
+    // Nothing walks, opens a menu or bumps into him a second time between here
+    // and the credits (`modalOpen`).
+    this.ending = true;
+    stopMusic();
+    playDawn();
+    unlockInvert();
+    const burst = this.add
+      .circle(VIEW_CX, VIEW_CY, BURST_RADIUS, invertColour(getPalette().bg))
+      .setDepth(1000);
+    this.tweens.add({
+      targets: burst,
+      scale: BURST_SCALE,
+      duration: BURST_MS,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        overrideInvert(true);
+        this.scene.start('CreditsScene');
+      },
     });
   }
 

@@ -56,7 +56,10 @@ export const PALETTES = [
 let activeId = PALETTES[0].id;
 
 export function getPalette() {
-  return PALETTES.find((p) => p.id === activeId) || PALETTES[0];
+  const pal = PALETTES.find((p) => p.id === activeId) || PALETTES[0];
+  // Inverted, the palette is still two colours and still the pair this world was
+  // given — they have simply swapped sides of the light (`invertColour` below).
+  return getInvert() ? { ...pal, bg: invertColour(pal.bg), fg: invertColour(pal.fg) } : pal;
 }
 
 // The colour a run's world is drawn in, set from its biome the moment a run
@@ -67,6 +70,87 @@ export function setDefaultPalette(id) {
   if (PALETTES.some((p) => p.id === id)) activeId = id;
   return getPalette();
 }
+
+// --- Inverting the colours ---------------------------------------------------
+//
+// What the sun coming back leaves behind (DESIGN.md §4.9). A campaign that has
+// finished all four worlds ends on a light explosion that turns every colour on
+// screen into its opposite, and the switch that does it stays in Settings
+// afterwards — next to the cheats and shown only while they are on, because it
+// is a way of looking at the game rather than a way of playing it.
+//
+// One line of arithmetic reaches the whole screen, because every colour in the
+// game comes out of the three accessors below: the palette, a gem's colour and a
+// landmark's. Nothing that draws anything has to know this exists.
+const INVERT_KEY = 'nouxinha.invert';
+const INVERT_UNLOCKED_KEY = 'nouxinha.invert.unlocked';
+
+let invertOn = false;
+let invertKnown = false;
+
+try {
+  invertOn = localStorage.getItem(INVERT_KEY) === '1';
+  invertKnown = localStorage.getItem(INVERT_UNLOCKED_KEY) === '1';
+} catch (e) {
+  /* off, and not a switch anybody has yet */
+}
+
+// The ending's own inversion, which is deliberately *not* the player's setting:
+// it is turned on for the explosion and the credits and dropped on the way back
+// to the title screen. A page closed halfway through the credits therefore never
+// comes back to a game drawn inside out with the switch to undo it hidden behind
+// a cheat toggle. `null` means nothing is overriding the setting.
+let invertOverride = null;
+
+export function getInvert() {
+  return invertOverride === null ? invertOn : invertOverride;
+}
+
+// The Settings switch, persisted like the other two.
+export function setInvert(on) {
+  invertOn = !!on;
+  try {
+    localStorage.setItem(INVERT_KEY, invertOn ? '1' : '0');
+  } catch (e) {
+    /* preference just won't persist */
+  }
+  return invertOn;
+}
+
+// The ending's, which persists nothing. `null` hands the screen back to the
+// setting.
+export function overrideInvert(on) {
+  invertOverride = on === null ? null : !!on;
+  return getInvert();
+}
+
+// Whether the campaign has ever seen the light come back. Kept next to the
+// cheats rather than in a save slot: it is something the player has seen, not
+// something a campaign is holding, so it survives a slot being overwritten the
+// way the music switch does.
+export function invertUnlocked() {
+  return invertKnown;
+}
+
+export function unlockInvert() {
+  invertKnown = true;
+  try {
+    localStorage.setItem(INVERT_UNLOCKED_KEY, '1');
+  } catch (e) {
+    /* it will have to be earned again next time */
+  }
+  return invertKnown;
+}
+
+// White less the colour, channel by channel, which is the whole of what
+// inverting is: the dark background goes bright, the foreground goes dark, and a
+// world that has spent the entire game being a hole in the light is suddenly the
+// light with things standing in it.
+export function invertColour(colour) {
+  return 0xffffff ^ (colour & 0xffffff);
+}
+
+const shown = (colour) => (getInvert() ? invertColour(colour) : colour);
 
 // --- Music -------------------------------------------------------------------
 //
@@ -175,7 +259,7 @@ export function gemColour(hue) {
   const active = getPalette();
   if (!hue) return active.fg;
   const other = PALETTES.filter((p) => p.id !== active.id)[hue - 1];
-  return other ? other.fg : active.fg;
+  return other ? shown(other.fg) : active.fg;
 }
 
 // A palette's foreground by name, for the one thing in the game whose colour is
@@ -185,7 +269,7 @@ export function gemColour(hue) {
 // is the same object in every world, so it keeps the same colour in all four.
 export function paletteColour(id) {
   const found = PALETTES.find((p) => p.id === id);
-  return found ? found.fg : getPalette().fg;
+  return found ? shown(found.fg) : getPalette().fg;
 }
 
 // Phaser wants '#rrggbb' for text colours, the palette stores numbers.

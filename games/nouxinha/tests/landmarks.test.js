@@ -1,4 +1,4 @@
-// The four landmarks and the eight posts that point at them: where they stand,
+// The four landmarks and the twelve posts that point at them: where they stand,
 // what putting a hand on one hands over, and which of that survives a world
 // being moulded away (DESIGN.md §4.10). Pure — no browser.
 //
@@ -14,9 +14,12 @@ import {
   landmarkAt,
   landmarkNamed,
   landmarks,
+  pickSeed,
   signpostBand,
   signpostBearing,
-  signpostReading,
+  signpostHutBearing,
+  signpostReadings,
+  signpostTargets,
   signposts,
   terrainAt,
   blocksSight,
@@ -145,7 +148,7 @@ unit('three landmarks have a key chest beside them, and the nearest a hoard', ()
 
 unit('the posts spread out, stay clear of what they point at, and one is at five', () => {
   const posts = signposts(SEED);
-  assert(posts.length >= 6, `most of the eight stood up (${posts.length})`);
+  assert(posts.length >= 9, `most of the twelve stood up (${posts.length})`);
 
   const first = posts.find((post) => post.id === 'post-1');
   assert(first, 'the near post is one of them');
@@ -162,22 +165,46 @@ unit('the posts spread out, stay clear of what they point at, and one is at five
       );
   }
 
-  // Two apiece, so every landmark is named from two directions.
+  // Three apiece, so every landmark is assigned from three directions.
   for (const id of LANDMARK_IDS)
     assert(
-      SIGNPOST_PLAN.filter((plan) => plan.target === id).length === 2,
-      `${id} is named by two posts`
+      SIGNPOST_PLAN.filter((plan) => plan.target === id).length === 3,
+      `${id} is assigned three posts`
     );
 });
 
-unit('what a post says is worked out from where it stands', () => {
+unit('what a post says is worked out from where it stands, sometimes about two landmarks', () => {
   for (const post of signposts(SEED)) {
-    const reading = signpostReading(post, SEED);
-    const target = landmarkNamed(post.target, SEED);
-    assertEqual(reading.target, post.target, `${post.id} names its landmark`);
-    assertEqual(reading.distance, chebyshev(post.x, post.y, target.x, target.y), 'and how far it is');
-    assert(reading.bearing >= 0 && reading.bearing < 8, 'on one of the eight headings');
-    assert(reading.band >= 0 && reading.band <= SIGNPOST_BANDS.length, 'in one of the bands');
+    const targets = signpostTargets(post, SEED);
+    assertEqual(targets[0], post.target, `${post.id} always names its assigned landmark first`);
+    assertEqual(new Set(targets).size, targets.length, `${post.id} never names a landmark twice`);
+    // Any name beyond the assigned one is only there because this post
+    // genuinely landed close enough to it to be worth mentioning too.
+    for (const id of targets.slice(1)) {
+      const extra = landmarkNamed(id, SEED);
+      assert(
+        chebyshev(post.x, post.y, extra.x, extra.y) < SIGNPOST_BANDS[0],
+        `${post.id} only names ${id} because it is nearby`
+      );
+    }
+
+    const readings = signpostReadings(post, SEED);
+    assertEqual(
+      readings.map((r) => r.target),
+      targets,
+      `${post.id} has exactly one reading per target, in the same order`
+    );
+    for (const reading of readings) {
+      const target = landmarkNamed(reading.target, SEED);
+      assertEqual(reading.distance, chebyshev(post.x, post.y, target.x, target.y), 'and how far it is');
+      assert(reading.bearing >= 0 && reading.bearing < 8, 'on one of the eight headings');
+      assert(reading.band >= 0 && reading.band <= SIGNPOST_BANDS.length, 'in one of the bands');
+    }
+
+    // The cryptic hut heading is always one of the eight, and is never mixed
+    // into the landmark readings above.
+    const hutBearing = signpostHutBearing(post);
+    assert(hutBearing >= 0 && hutBearing < 8, `${post.id}'s blank stub still points somewhere`);
   }
 
   // North is 0 and it goes clockwise, which is the order the words are in
@@ -334,6 +361,27 @@ unit('banking is what keeps a landmark, and a cycle keeps only the standing', ()
   assertEqual(after.cycles, 1, 'and the cycle counted');
 });
 
+unit('a post occasionally lands close enough to name a second landmark', () => {
+  // SEED never happens to put a post within naming distance of a landmark it
+  // wasn't assigned, so the general sweep above never exercises that branch.
+  // Seed 2 is picked because it does, on the world it actually derives — this
+  // checks the real thing happening at least once rather than only the shape
+  // of the rule.
+  const seed = pickSeed(2);
+  const multi = signposts(seed).filter((post) => signpostTargets(post, seed).length > 1);
+  assert(multi.length > 0, 'at least one post on this seed names two landmarks');
+  for (const post of multi) {
+    const targets = signpostTargets(post, seed);
+    const readings = signpostReadings(post, seed);
+    assertEqual(targets[0], post.target, `${post.id} still names its assigned landmark first`);
+    assertEqual(
+      readings.map((r) => r.target),
+      targets,
+      `${post.id} has one reading per name it gives`
+    );
+  }
+});
+
 unit('the Lantern Tree is the one standing that changes what a run sets out with', () => {
   const plain = createRun(SEED, emptySave(), NONCE);
   assertEqual(plain.inventory.length, 1, 'one candle, as it always was');
@@ -349,10 +397,15 @@ unit('reading a post marks what it names, without going there', () => {
   const state = createRun(SEED, emptySave(), NONCE);
   assertEqual(markedLandmarks(state).size, 0, 'nothing marked to begin with');
 
+  // post-1 stands only 5 tiles out, far too close to any landmark but the one
+  // it is assigned (mint) to ever also land within naming distance of another
+  // — see the ring gaps in SIGNPOST_PLAN/LANDMARK_PLAN — so it is always a
+  // single, deterministic reading to check against.
   const post = signposts(SEED).find((one) => one.id === 'post-1');
   const reading = readSignpost(state, post);
   assertEqual(reading.first, true, 'the first read');
-  assertEqual(reading.target, post.target, 'names its landmark');
+  assertEqual(reading.readings.length, 1, 'post-1 only ever names the one landmark');
+  assertEqual(reading.readings[0].target, post.target, 'names its landmark');
   assert(markedLandmarks(state).has(post.target), 'which is now on the map');
   assertEqual(state.landmarks.has(post.target), false, 'though you have still never been');
 

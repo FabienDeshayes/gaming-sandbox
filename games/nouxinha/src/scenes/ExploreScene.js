@@ -620,13 +620,13 @@ export class ExploreScene extends Phaser.Scene {
     this.map.refresh(this.run);
     this.hud.update(this.run);
     playSignpost();
-    const line = SIGNPOST.line(
-      landmarkDef(result.target).name,
-      SIGNPOST.bearings[result.bearing],
-      SIGNPOST.far[result.band]
+    const lines = result.readings.map((reading) =>
+      SIGNPOST.line(landmarkDef(reading.target).name, SIGNPOST.bearings[reading.bearing], SIGNPOST.far[reading.band])
     );
-    if (result.first || result.fresh) this.textPanel.show(SAY.signpost(line));
-    else this.hud.flash(FLASH.signpost(line));
+    if (result.first || result.fresh) {
+      const hutLine = SIGNPOST.hutHint(SIGNPOST.bearings[result.hutBearing]);
+      this.textPanel.show(SAY.signpost(lines, hutLine));
+    } else this.hud.flash(FLASH.signpost(lines));
   }
 
   // The Drowned Bell's standing: once a campaign has stood at it, it can be

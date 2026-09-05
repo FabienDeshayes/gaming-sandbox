@@ -179,21 +179,30 @@ export const CHEST_COIN_VALUES = [30, 50, 75];
 
 // --- Sites --------------------------------------------------------------------
 //
-// The three single-tile things in the world that aren't behind a gate and
-// aren't rerolled: the merchant, and the one compass and one map lying out in
-// the dark. Placed like the chests and the landmarks are, and named `site`
-// because that is all they have in common — a stall, a tool on the floor, and
-// a tool on the floor.
+// The single-tile things in the world that aren't behind a gate and aren't
+// rerolled: the merchants, and the one compass and one map lying out in the
+// dark. Placed like the chests and the landmarks are, and named `site` because
+// that is all they have in common — a stall, a tool on the floor, and a tool
+// on the floor. A site's `item` says which: `null` is a stall (`isMerchant`
+// goes by that, not by `id`), anything else is a pickup with that item's id.
 export const SITE_PLAN = [
   // Close enough that a first expedition can reach it and walk home, and on the
   // far side of the hut from the first sanctum, so an early run has two
   // directions worth walking rather than one.
   { id: 'merchant', item: null, near: 20, span: 6, opposite: 0 },
-  // Past the second sanctum: the compass is either 250 coins or a long walk.
-  { id: 'compass', item: 'compass', near: 55, span: 16, opposite: null },
-  // Past the third: the map is the longest walk in the game that isn't a gem,
-  // though at 50 coins it's also the cheaper of the two to just buy.
-  { id: 'map', item: 'map', near: 90, span: 16, opposite: null },
+  // A second stall roughly level with the second sanctum, opposite it the same
+  // way the first stall sits opposite the first — so a campaign that has
+  // pushed that far out has somewhere to spend what it found without the walk
+  // all the way back home.
+  { id: 'merchant-2', item: null, near: 40, span: 8, opposite: 1 },
+  // A third, opposite the third sanctum, for the same reason further out.
+  { id: 'merchant-3', item: null, near: 65, span: 10, opposite: 2 },
+  // Past the second sanctum: the map is the cheaper of the two to just buy, at
+  // 50 coins, so it doesn't need to be the longer walk.
+  { id: 'map', item: 'map', near: 45, span: 16, opposite: null },
+  // Past the third: the compass is either 250 coins or the longest walk in the
+  // game that isn't a gem.
+  { id: 'compass', item: 'compass', near: 85, span: 16, opposite: null },
 ];
 
 // --- Landmarks ----------------------------------------------------------------
@@ -244,27 +253,39 @@ export const BELL_HEARING = 20;
 
 // --- Signposts ----------------------------------------------------------------
 //
-// Eight posts, each naming one landmark and pointing at it. Two per landmark,
-// one nearer than it and one about level with it, so no post is more than about
-// 25 tiles from the thing it names and every heading is worth trusting.
+// Twelve posts, each *assigned* one landmark to name. Three per landmark: one
+// nearer than it, one about level with it, and one further out, so no post is
+// more than about 25 tiles from the thing it is assigned to and every heading
+// is worth trusting.
 //
 // The one at 5 is the post every campaign meets on its first expedition: near
 // enough that the opening walk cannot miss it, far enough to be outside the
 // hut's clearing, and it points at the nearest landmark there is.
+//
+// A post's own spot is rolled independently of its assigned landmark's
+// heading, so nothing stops it landing, by chance, close enough to a
+// *different* landmark to be worth naming too (`signpostTargets` in
+// core/world.js) — "close enough" being SIGNPOST_BANDS' own NEARBY threshold.
+// Most posts only ever name the one landmark they were assigned; a few, some
+// worlds, end up naming two.
 export const SIGNPOST_PLAN = [
   { id: 'post-1', near: 5, span: 0, target: 'mint' },
   { id: 'post-2', near: 12, span: 4, target: 'bell' },
   { id: 'post-3', near: 20, span: 4, target: 'mint' },
   { id: 'post-4', near: 28, span: 4, target: 'lantern-tree' },
-  { id: 'post-5', near: 38, span: 5, target: 'bell' },
-  { id: 'post-6', near: 50, span: 5, target: 'gnomon' },
-  { id: 'post-7', near: 62, span: 5, target: 'lantern-tree' },
-  { id: 'post-8', near: 75, span: 5, target: 'gnomon' },
+  { id: 'post-5', near: 33, span: 5, target: 'mint' },
+  { id: 'post-6', near: 38, span: 5, target: 'bell' },
+  { id: 'post-7', near: 50, span: 5, target: 'gnomon' },
+  { id: 'post-8', near: 58, span: 5, target: 'bell' },
+  { id: 'post-9', near: 62, span: 5, target: 'lantern-tree' },
+  { id: 'post-10', near: 75, span: 5, target: 'gnomon' },
+  { id: 'post-11', near: 82, span: 5, target: 'lantern-tree' },
+  { id: 'post-12', near: 90, span: 5, target: 'gnomon' },
 ];
 
 // How much room a post needs: clear of the landmark courts, because a signpost
 // standing next to the thing it points at is a joke the player has to walk to
-// get to, and clear of the other posts, so the eight of them stay eight
+// get to, and clear of the other posts, so the twelve of them stay twelve
 // directions rather than one crowd.
 export const SIGNPOST_CLEARANCE = 8;
 export const SIGNPOST_SPACING = 10;
@@ -273,6 +294,8 @@ export const SIGNPOST_SPACING = 10;
 // nearby, under the last is a long walk, past it is far (`SIGNPOST.far` in
 // src/text.js names them). Banded rather than counted because a post is
 // somebody's directions, not an instrument — the compass is the instrument.
+// The first band doubles as "close enough to name too" for a landmark that
+// isn't the one a post was assigned (see `SIGNPOST_PLAN` above).
 export const SIGNPOST_BANDS = [15, 40, 80];
 
 // --- The scatter --------------------------------------------------------------

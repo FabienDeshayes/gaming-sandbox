@@ -34,7 +34,9 @@ import {
   scatterSuccessor,
   scatterTier,
   signpostAt,
-  signpostReading,
+  signpostHutBearing,
+  signpostReadings,
+  signpostTargets,
   signposts,
   sites,
   uniqueAt,
@@ -558,14 +560,19 @@ export function signpostOnTile(state, x, y) {
   return { post: at.post, read: state.posts.has(at.post.id) };
 }
 
-// Reading a post. Nothing about what it says is stored — the heading and the
-// distance are worked out from where it stands (`signpostReading` in
-// core/world.js) — so all this writes down is that it has been read, which is
-// what pins the landmark it names on the map for the rest of this world.
+// Reading a post. Nothing about what it says is stored — the readings and the
+// hut heading are worked out from where it stands (`signpostReadings` /
+// `signpostHutBearing` in core/world.js) — so all this writes down is that it
+// has been read, which is what pins the landmark(s) it names on the map for
+// the rest of this world.
 export function readSignpost(state, post) {
   const first = !state.posts.has(post.id);
   state.posts.add(post.id);
-  return { first, ...signpostReading(post, state.seed) };
+  return {
+    first,
+    readings: signpostReadings(post, state.seed),
+    hutBearing: signpostHutBearing(post),
+  };
 }
 
 // Which landmarks the map is allowed to mark: the ones a light has actually
@@ -576,7 +583,8 @@ export function markedLandmarks(state) {
   for (const landmark of landmarks(state.seed))
     if (state.seenUnique.has(landmark.id)) marked.add(landmark.id);
   for (const post of signposts(state.seed))
-    if (state.posts.has(post.id)) marked.add(post.target);
+    if (state.posts.has(post.id))
+      for (const id of signpostTargets(post, state.seed)) marked.add(id);
   return marked;
 }
 

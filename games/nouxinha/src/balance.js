@@ -361,7 +361,7 @@ export const LANDMARK_GIFTS = {
   mint: { coins: 15 },
   bell: { water: Infinity },
   'lantern-tree': { relight: true },
-  gnomon: { reveal: 8 },
+  gnomon: { reveal: 10 },
 };
 
 // The Drowned Bell's standing: how far its note carries in every world after
@@ -658,7 +658,7 @@ export const BLACKOUT_MEMORY_RADIUS = 1;
 // more — which is also what keeps the flask from being the moment water stops
 // being a problem at all.
 export const WATER_VALUE = {
-  'water-drop': 30,
+  'water-drop': 45,
   'water-flask': 60,
   'spring-vial': Infinity,
 };

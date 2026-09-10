@@ -84,7 +84,7 @@ export async function run() {
   const startedAt = Date.now();
   const { server, port } = await startServer();
   // Only paid for if something asks: a pure suite run on its own never starts
-  // a browser, which is what makes `npm run test:rules` instant.
+  // a browser, which is what makes `npm run test:pure` instant.
   let browser = null;
   const browserFor = async (opts) => {
     if (!browser) browser = await launchBrowser();
@@ -353,11 +353,12 @@ export async function openGame(
 
     shot: (file) => page.screenshot({ path: file }),
 
-    // Every sound played so far, in order ('tap', 'text', 'coin', 'pickup',
-    // 'gem', 'chest', 'unlock', 'torch', 'death'). Read out of the module the
-    // game itself imported — a dynamic import of the same URL is the same
-    // module instance — because there is nothing about a square wave that a
-    // headless browser can be asked to listen to.
+    // Every sound played so far, in order — one name per `play` in
+    // src/ui/sfx.js ('tap', 'text', 'coin', 'pickup', 'gem', 'chest',
+    // 'unlock', 'torch', 'bell', 'landmark', 'signpost', 'dawn', 'death').
+    // Read out of the module the game itself imported — a dynamic import of
+    // the same URL is the same module instance — because there is nothing
+    // about a square wave that a headless browser can be asked to listen to.
     sounds: () => page.evaluate(() => import('/src/ui/sfx.js').then((m) => m.soundLog())),
 
     activeScene: () =>

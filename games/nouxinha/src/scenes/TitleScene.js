@@ -1,6 +1,6 @@
 import { FONT, GAME_WIDTH, gemColour, getCheats, getPalette, hex } from '../config.js';
-import { anySlotUsed, loadSave, MAX_GEMS } from '../core/save.js';
-import { progressLine, TITLE } from '../text.js';
+import { anySlotUsed } from '../core/save.js';
+import { TITLE } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { makeWizard, paintWizard } from '../ui/wizard.js';
@@ -25,9 +25,9 @@ export class TitleScene extends Phaser.Scene {
     // of them stop the music on the way out, so the handover from the menus to
     // an expedition is a crossfade rather than a silence (ui/music.js).
     startMusic('menu');
-    // The slot last played, which is what the title screen reports and what
-    // EXPLORE would pick up again (core/save.js).
-    const save = loadSave();
+    // Whether there is a campaign anywhere to go back to, which is the only
+    // thing this screen has to know about the slots — which one, and what is in
+    // it, is the picker's question (scenes/SlotScene.js).
     const canLoad = anySlotUsed();
 
     // Two independent picks off the three gem hues, so the title text is never

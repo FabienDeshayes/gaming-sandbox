@@ -74,9 +74,3 @@ export function landmarkDef(id) {
 // Every standing a campaign can hold, for the save to check a file against
 // rather than trusting whatever is in it.
 export const STANDINGS = LANDMARK_IDS.map((id) => LANDMARKS[id].standing);
-
-// The landmark a standing belongs to, for anything that has one in hand and
-// wants to know whose it is.
-export function landmarkOfStanding(standing) {
-  return LANDMARK_IDS.map((id) => LANDMARKS[id]).find((mark) => mark.standing === standing) || null;
-}

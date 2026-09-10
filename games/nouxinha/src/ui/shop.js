@@ -44,7 +44,6 @@ export class Shop {
   show(run) {
     const pal = getPalette();
     const scene = this.scene;
-    this.run = run;
     this.container.removeAll(true);
 
     const panelH = PAD + TITLE_H + PURSE_H + STOCK.length * ROW_H + 20 + BUTTON_H + PAD;

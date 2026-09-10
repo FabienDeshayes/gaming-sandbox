@@ -76,7 +76,14 @@ test('holding a D-pad arrow keeps stepping until released', async (game) => {
   // seed, so a held press can take more than one step without hitting rock —
   // the assertion is deliberately "more than one", not a count, because the
   // repeat rate is a Settings slider and not a fact about the game.
-  await game.holdDpad('left', 900);
+  //
+  // The hold is far longer than the ~500ms the pad nominally needs to repeat
+  // once (`HOLD_DELAY_MS` plus one interval at the default speed, src/ui/dpad.js).
+  // The repeat rides Phaser's clock, which advances with the frame delta, so on
+  // a loaded machine drawing well under 60fps it runs slower than wall time —
+  // a budget sized to the nominal timings fails there for no reason the game is
+  // responsible for.
+  await game.holdDpad('left', 1800);
   await game.settle();
 
   const after = await game.state();

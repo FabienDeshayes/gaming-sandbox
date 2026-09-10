@@ -107,6 +107,11 @@ export class Hud {
 
   update(run) {
     const pal = getPalette();
+    // The status line is transient (`flash`), so a repaint is what clears it:
+    // every caller that has something to say says it *after* calling this, and
+    // a step with nothing to report leaves the band blank rather than still
+    // showing what the last one found.
+    this.status.setText('');
     this.explored.setText(HUD.explored(run.explored.size));
     this.coins.setText(HUD.coins(spendable(run)));
     this.cycles.setText(run.cycles ? HUD.cycles(run.cycles) : '');

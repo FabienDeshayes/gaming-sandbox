@@ -9,13 +9,14 @@
 //
 // What a biome *is*, so far, is two things:
 //
-//   - the colour the world is drawn in by default. Each biome takes one of the
-//     four palettes (src/config.js), which is what makes a frozen world read
-//     cold and a desert warm without a single new asset. A palette picked in
-//     Settings is the player's, and outranks this everywhere (`setDefaultPalette`).
+//   - the colour the world is drawn in. Each biome takes one of the four
+//     palettes (src/config.js), which is what makes a frozen world read cold
+//     and a desert warm without a single new asset. There is no picking one in
+//     Settings: a world's biome is the only thing that ever sets it
+//     (`setDefaultPalette`).
 //   - the tiles it draws its terrain with. A biome names only the keys it wants
-//     to draw differently, in `BIOME_TILES` (src/data/tiles.js) — today all four
-//     draw the same art, and that table is where that stops being true.
+//     to draw differently, in `BIOME_TILES` (src/data/tiles.js) — today that is
+//     its floor and its trees, with the rock still shared between all four.
 //
 // The parameters the ground itself is grown on — how much rock, how thick the
 // groves, what the scatter holds — are not here yet: they live in
@@ -38,8 +39,4 @@ export const BIOME_IDS = BIOMES.map((biome) => biome.id);
 
 export function biomeDef(id) {
   return BIOMES.find((biome) => biome.id === id) || BIOMES[0];
-}
-
-export function isBiome(id) {
-  return BIOME_IDS.includes(id);
 }

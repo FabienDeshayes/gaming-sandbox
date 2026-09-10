@@ -860,8 +860,7 @@ export function step(state, direction) {
   // where the frozen layer had nothing (`itemOnTile`).
   const gemFound = state.gems > gemsBefore;
   const atBase = isBase(nx, ny);
-  const respawned = atBase;
-  if (respawned) respawn(state);
+  if (atBase) respawn(state);
 
   // The hut fills the tank the moment you reach it, not when you answer its
   // question — which is also what makes arriving on your last drop of water a
@@ -882,11 +881,10 @@ export function step(state, direction) {
     // A gem landing is the one pickup that changes how the whole screen looks,
     // so the scene gets told rather than having to diff the count itself.
     gemFound: gemFound ? state.gems : 0,
-    // How many coins the pile was worth, for the line the HUD flashes.
     // How much the coin pile was worth, for the line the HUD flashes.
     coinsGained: got ? got.coins : 0,
     // Whether this step put everything on the ground back somewhere new.
-    respawned,
+    respawned: atBase,
     relit,
     lit,
     atBase,
@@ -936,7 +934,6 @@ function writeDeposit(state, closing) {
   if (state.cheats) return loadSave();
   const suspended = normaliseSave(loadSave()).run;
   const written = writeSave({
-    v: 1,
     // The campaign's world. Rebuilt from scratch here rather than merged onto
     // what is in the slot, so this has to be carried over by hand — a walk home
     // that dropped it would move the campaign to a different world, and take its

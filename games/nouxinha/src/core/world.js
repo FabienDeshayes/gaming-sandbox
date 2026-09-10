@@ -574,10 +574,6 @@ export function chests(seed = DEFAULT_SEED) {
   return structures(seed).chests;
 }
 
-export function chestNamed(id, seed = DEFAULT_SEED) {
-  return chests(seed).find((c) => c.id === id) || null;
-}
-
 export function siteNamed(id, seed = DEFAULT_SEED) {
   return sites(seed).find((site) => site.id === id) || null;
 }
@@ -784,16 +780,6 @@ export function isWalkable(x, y, seed = DEFAULT_SEED) {
   return terrainAt(x, y, seed) === 'floor';
 }
 
-// What stops a light rather than a step (DESIGN.md §4.1). Rock, trees and
-// masonry all stop one dead; a gate stops it only while it is shut, so the key
-// that opens a sanctum opens a window into it in the same moment it opens the
-// door. A **chest doesn't stop one at all** — it is a thing standing on the
-// floor, not a piece of the world's shape, and a box you could hide behind would
-// read as a wall wearing a lid; the sorcerer is the same kind of thing standing
-// on the same kind of tile. Everything outside the world counts as opaque too,
-// which costs nothing: the world is a disc, and a straight line between two
-// points inside a disc never leaves it, so the edge can never shadow ground that
-// is still in play.
 // The terrains a light goes straight past: open ground, and the four things
 // that *stand* on it rather than being part of the world's shape — a chest, the
 // sorcerer, a landmark and a signpost. Every one of them is walked into rather
@@ -801,6 +787,12 @@ export function isWalkable(x, y, seed = DEFAULT_SEED) {
 // a shadow.
 const SEE_PAST = new Set(['floor', 'chest', 'sorcerer', 'landmark', 'signpost']);
 
+// What stops a light rather than a step (DESIGN.md §4.1). Rock, trees and
+// masonry all stop one dead; a gate stops it only while it is shut, so the key
+// that opens a sanctum opens a window into it in the same moment it opens the
+// door. Everything outside the world counts as opaque too, which costs nothing:
+// the world is a disc, and a straight line between two points inside a disc
+// never leaves it, so the edge can never shadow ground that is still in play.
 export function blocksSight(x, y, seed = DEFAULT_SEED, keys = null) {
   const terrain = terrainAt(x, y, seed);
   if (SEE_PAST.has(terrain)) return false;

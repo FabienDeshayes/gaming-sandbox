@@ -70,10 +70,4 @@ export class CompassBadge {
     }
     this.icon.setTexture(target.sprite).setTint(gemColour(target.hue || 0));
   }
-
-  // The needle points at the *nearest* thing worth walking to, which is what the
-  // renderer draws and what a test reads back.
-  currentTarget(run) {
-    return run.tools.has('compass') ? compassTarget(run) : null;
-  }
 }

@@ -247,10 +247,6 @@ export function stopMusic() {
   master = null;
 }
 
-export function isMusicPlaying() {
-  return !!timer;
-}
-
 // A tab pushed to the background (or a phone screen switched away from) keeps
 // running WebAudio, so without this the loop would keep playing to nobody.
 // The track resumes where the loop pattern always resumes — the top of the
@@ -270,10 +266,4 @@ if (typeof document !== 'undefined') {
       startMusic(id);
     }
   });
-}
-
-// Which of the two loops is running, or null. The suite reads this: a headless
-// browser can't be asked to listen, but it can be asked what is playing.
-export function musicTrack() {
-  return trackId;
 }

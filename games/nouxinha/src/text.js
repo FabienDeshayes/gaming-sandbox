@@ -29,8 +29,8 @@ export const UI = {
   loadGame: 'LOAD GAME',
 };
 
-// The one line both the title screen and the slot picker use to say what a
-// campaign has to show for itself.
+// The one line the slot picker uses to say what a campaign has to show for
+// itself.
 export const progressLine = (gems, maxGems, coins, runs) =>
   `${gems}/${maxGems} COLOURS  ${coins} COINS  ${runs} RUNS`;
 

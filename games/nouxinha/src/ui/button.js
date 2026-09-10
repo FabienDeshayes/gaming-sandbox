@@ -78,7 +78,5 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
     enabled = next;
     draw(false);
   };
-  container.label = text;
-
   return container;
 }

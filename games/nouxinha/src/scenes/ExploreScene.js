@@ -177,8 +177,8 @@ export class ExploreScene extends Phaser.Scene {
     // Three ways a run reaches this scene, in order of precedence:
     //
     //   1. handed straight over, still walking — the scene was re-entered to
-    //      repaint it in a palette just picked in Settings, and the run object
-    //      is the same one, untouched;
+    //      redraw it in whatever Settings just changed, and the run object is
+    //      the same one, untouched;
     //   2. resumed off the slot, because the cogwheel menu suspended an
     //      expedition there and LOAD GAME came back for it (DESIGN.md §6.1);
     //   3. a fresh expedition out of the hut.
@@ -199,11 +199,10 @@ export class ExploreScene extends Phaser.Scene {
     const settingOut = !handed && !carriedOn;
 
     // The colour this world is drawn in, now that there is a world to ask. Each
-    // biome has one of its own (src/data/biomes.js) and it only ever applies to
-    // a player who has not picked a palette in Settings — so walking into a
-    // frozen world turns the dark cold, and a player who chose amber keeps
-    // amber wherever they walk. Before anything reads the palette: every colour
-    // on this screen comes out of the next line.
+    // biome has one of its own (src/data/biomes.js) and there is no picking one
+    // in Settings — so walking into a frozen world turns the dark cold, and
+    // walking out of it turns it back. Before anything reads the palette: every
+    // colour on this screen comes out of the next line.
     const pal = setDefaultPalette(biomeDef(this.run.biome).palette);
     this.cameras.main.setBackgroundColor(pal.bg);
 
@@ -342,21 +341,16 @@ export class ExploreScene extends Phaser.Scene {
 
   closeMenu() {
     this.menuOpen = false;
-    // Whether the sorcerer has opened his hands and the screen belongs to the
-    // ending (`theEnd`).
-    this.ending = false;
     this.dialog.hide();
   }
 
-  // Settings mid-run. A palette is picked by tinting everything on screen at
-  // create time, so coming back re-enters this scene rather than resuming a
-  // paused one — and the live run object rides along in the scene data, which
-  // is what makes the round trip cost the expedition nothing.
+  // Settings mid-run. Everything on screen is tinted at create time, so a
+  // setting that changes a colour — INVERT COLOURS, or the cheats it hangs off
+  // — only lands by re-entering this scene rather than resuming a paused one.
+  // The live run object rides along in the scene data, which is what makes the
+  // round trip cost the expedition nothing.
   openSettings() {
     this.menuOpen = false;
-    // Whether the sorcerer has opened his hands and the screen belongs to the
-    // ending (`theEnd`).
-    this.ending = false;
     this.dialog.hide();
     this.scene.start('SettingsScene', { run: this.run });
   }
@@ -366,9 +360,6 @@ export class ExploreScene extends Phaser.Scene {
   // saved (DESIGN.md §6.1).
   saveGame() {
     this.menuOpen = false;
-    // Whether the sorcerer has opened his hands and the screen belongs to the
-    // ending (`theEnd`).
-    this.ending = false;
     suspendRun(this.run);
     const summary = runSummary(this.run);
     this.dialog.show({
@@ -392,9 +383,6 @@ export class ExploreScene extends Phaser.Scene {
   // so it asks, and says what it is about to cost.
   confirmExit() {
     this.menuOpen = false;
-    // Whether the sorcerer has opened his hands and the screen belongs to the
-    // ending (`theEnd`).
-    this.ending = false;
     const summary = runSummary(this.run);
     const atRisk = carriedAtRisk(summary);
     const stood = landmarksAtRisk(summary);

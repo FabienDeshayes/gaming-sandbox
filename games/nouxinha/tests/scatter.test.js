@@ -7,6 +7,7 @@ import {
   chebyshev,
   consumableAt,
   itemAt,
+  richnessAt,
   sites,
   sanctumAt,
   sanctums,
@@ -16,7 +17,14 @@ import {
 } from '../src/core/world.js';
 import { createRun, itemOnTile, respawn, step } from '../src/core/rules.js';
 import { emptySave } from '../src/core/save.js';
-import { COIN_VALUE_MAX, COIN_VALUE_MIN, HOARD_PER_KIND, MIN_SEPARATION } from '../src/balance.js';
+import {
+  COIN_VALUE_MAX,
+  COIN_VALUE_MIN,
+  HOARD_PER_KIND,
+  MIN_SEPARATION,
+  RICHNESS_MAX,
+  RICHNESS_MIN,
+} from '../src/balance.js';
 import { NONCE, SALT, SEED, bfs, scatter } from './world.js';
 
 // The open world in one 141x141 window, bucketed by kind. Sanctum clearings are
@@ -43,6 +51,52 @@ unit('the ground holds something about one floor tile in 35', () => {
   // them, and the thing that regresses silently is this number.
   const share = itemTiles / floorTiles;
   assert(share > 0.025 && share < 0.035, `one floor tile in ${(floorTiles / itemTiles).toFixed(0)}`);
+});
+
+unit('the ground is uneven: some patches are worth combing, some worth crossing', () => {
+  // The mean above says how much there is; this says it is not spread evenly
+  // (balance.js RICHNESS_MIN/MAX). Flattening the richness field is the change
+  // that would pass every other test in this file and quietly put the world back
+  // to holding the same amount everywhere, which is what made no stretch of
+  // ground worth remembering.
+  //
+  // Measured against the field itself rather than by carving the window into
+  // squares: a patch is RICHNESS_CELL across and lands wherever the noise puts
+  // it, so a grid of blocks straddles patch edges and averages away most of what
+  // is being claimed. Asking each tile what the ground there is offering is the
+  // same claim without the blur — and it is the claim, which is that the field
+  // reaches the scatter at all.
+  //
+  // Walked over eight worlds because a 141x141 window only holds a couple of
+  // dozen patches, and the extremes of the field are a slice of those.
+  const lean = { floor: 0, items: 0 };
+  const rich = { floor: 0, items: 0 };
+  const range = RICHNESS_MAX - RICHNESS_MIN;
+  const thinnest = RICHNESS_MIN + range * 0.15;
+  const richest = RICHNESS_MAX - range * 0.15;
+  for (let world = 0; world < 8; world++) {
+    const seed = SEED + world * 101;
+    for (let y = -SPAN; y <= SPAN; y++)
+      for (let x = -SPAN; x <= SPAN; x++) {
+        if (sanctumAt(x, y, seed) || terrainAt(x, y, seed) !== 'floor') continue;
+        const here = richnessAt(x, y, seed);
+        const bucket = here < thinnest ? lean : here > richest ? rich : null;
+        if (!bucket) continue;
+        bucket.floor += 1;
+        if (consumableAt(x, y, seed, SALT, 0)) bucket.items += 1;
+      }
+  }
+
+  assert(lean.floor > 2000 && rich.floor > 2000, 'both ends of the field should be well sampled');
+  const thin = lean.items / lean.floor;
+  const good = rich.items / rich.floor;
+  assert(
+    good > thin * 1.6,
+    `good ground should be well better than thin (one per ${(1 / good).toFixed(0)} against one per ${(1 / thin).toFixed(0)})`
+  );
+  // And thin ground is thin, never empty: a stretch you notice crossing rather
+  // than one you could starve in (DESIGN.md §4.3).
+  assert(thin > 0.012, `the leanest ground holds one per ${(1 / thin).toFixed(0)} floor tiles`);
 });
 
 unit('no two of the same consumable ever land within the separation distance', () => {

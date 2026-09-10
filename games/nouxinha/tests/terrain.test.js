@@ -31,11 +31,15 @@ import { CHEST_COIN_VALUES, EDGE_RADIUS, SEED_MIN_FRACTION } from '../src/balanc
 import { BIOME_IDS } from '../src/data/biomes.js';
 import { ALL_KEYS, ALL_KEYS_LIST, NONCE, ORTHOGONAL, SEED, SHUT_GATE } from './world.js';
 
-// One window, walked once, for the three distribution tests below — the whole
-// cost of them is `terrainAt`, and asking it 20,000 times per test is the only
-// slow thing in this file.
+// One window per kind of world, walked once, for the distribution tests below.
+// Four rather than one because a biome now grows its own ground (balance.js
+// `BIOME_TERRAIN`): how much rock there is and how it masses is the world's own
+// business, so "how much rock is there" is four claims and not one. The whole
+// cost is `terrainAt`, and asking it 20,000 times per world is the only slow
+// thing in this file.
 const SPAN = 70;
-const survey = (() => {
+
+function surveyOf(seed) {
   const counts = { floor: 0, rock: 0, tree: 0, wall: 0, gate: 0, dark: 0 };
   let open = 0;
   let looseRock = 0;
@@ -45,22 +49,40 @@ const survey = (() => {
       // Everything built into the world is skipped: what this survey is about
       // is the ground the noise grew, not the places set into it.
       if (
-        sanctumAt(x, y, SEED) ||
-        siteAt(x, y, SEED) ||
-        landmarkAt(x, y, SEED) ||
-        signpostAt(x, y, SEED)
+        sanctumAt(x, y, seed) ||
+        siteAt(x, y, seed) ||
+        landmarkAt(x, y, seed) ||
+        signpostAt(x, y, seed)
       )
         continue;
       open += 1;
-      const at = terrainAt(x, y, SEED);
+      const at = terrainAt(x, y, seed);
       counts[at] += 1;
-      if (at === 'rock' && ORTHOGONAL.every(([dx, dy]) => terrainAt(x + dx, y + dy, SEED) !== 'rock'))
+      if (at === 'rock' && ORTHOGONAL.every(([dx, dy]) => terrainAt(x + dx, y + dy, seed) !== 'rock'))
         looseRock += 1;
-      if (at === 'tree' && ORTHOGONAL.some(([dx, dy]) => terrainAt(x + dx, y + dy, SEED) === 'tree'))
+      if (at === 'tree' && ORTHOGONAL.some(([dx, dy]) => terrainAt(x + dx, y + dy, seed) === 'tree'))
         treesInAStand += 1;
     }
   return { counts, open, looseRock, treesInAStand };
+}
+
+// One seed per biome, found by asking `biomeOf` rather than written down, so
+// nothing here is a coordinate somebody has to keep true (TESTING.md).
+const BIOME_SEEDS = (() => {
+  const out = {};
+  for (let i = 1; Object.keys(out).length < BIOME_IDS.length && i < 100000; i++) {
+    const seed = (Math.imul(i, 2654435761) ^ 0x5bf03635) | 0;
+    const biome = biomeOf(seed);
+    if (!out[biome]) out[biome] = seed;
+  }
+  return out;
 })();
+
+const SURVEYS = Object.fromEntries(
+  Object.entries(BIOME_SEEDS).map(([biome, seed]) => [biome, surveyOf(seed)])
+);
+
+const survey = surveyOf(SEED);
 
 unit('the world is derived, so walking through it never changes it', () => {
   // Terrain and items are pure functions of (x, y, seed), but they are read
@@ -128,31 +150,55 @@ unit('the base clearing is always walkable', () => {
       for (const seed of [SEED, 5, 8, 999]) assert(isWalkable(x, y, seed), `(${x},${y}) seed ${seed}`);
 });
 
-unit('rock covers about a fifth of the world, in masses and loose boulders', () => {
-  const share = survey.counts.rock / survey.open;
-  // Enough to grow caves worth navigating, few enough that the world reads as
-  // floor with rock in it rather than the other way round.
-  assert(share > 0.15 && share < 0.26, `rock covers ${(share * 100).toFixed(1)}% of the world`);
+unit('rock covers a fifth of the world, or less, or half again — the world decides', () => {
+  // Every world reads as floor with rock in it rather than the other way round,
+  // and no two of them read the same (balance.js `BIOME_TERRAIN`). The bounds
+  // are wide because what is being checked is that the ground stayed walkable
+  // ground in all four, not that a threshold is still the number it is.
+  const shares = {};
+  for (const [biome, s] of Object.entries(SURVEYS)) {
+    const share = s.counts.rock / s.open;
+    shares[biome] = share;
+    assert(
+      share > 0.03 && share < 0.34,
+      `${biome} rock covers ${(share * 100).toFixed(1)}% of the world`
+    );
 
-  // Two formations, same terrain and so the same sprite: masses grown on a
-  // lattice, and boulders thrown as white noise into the open ground between
-  // them. The second is what keeps a wide stretch of floor from being an empty
-  // screen.
-  assert(survey.looseRock > 150, `only ${survey.looseRock} boulders stand on their own`);
-  assert(
-    survey.counts.rock - survey.looseRock > survey.looseRock * 5,
-    'the masses should still be most of the rock in the world'
-  );
+    // Two formations, same terrain and so the same sprite: masses grown on a
+    // lattice, and boulders thrown as white noise into the open ground between
+    // them. The second is what keeps a wide stretch of floor from being an
+    // empty screen, and it is the open worlds that need it most.
+    assert(s.looseRock > 60, `${biome} has only ${s.looseRock} boulders standing on their own`);
+    assert(
+      s.counts.rock - s.looseRock > s.looseRock * 3,
+      `${biome}: the masses should still be most of the rock in the world`
+    );
+  }
+
+  // And they are four different worlds rather than four tints of one: the
+  // tangled world is several times the stone of the open one, which is the
+  // whole of why a campaign's four worlds are worth walking (DESIGN.md §4.3).
+  const spread = Math.max(...Object.values(shares)) / Math.min(...Object.values(shares));
+  assert(spread > 2, `the four worlds should grow different ground (spread ${spread.toFixed(1)}x)`);
 });
 
 unit('trees grow in groves and stop a step the way rock does', () => {
+  // Few enough everywhere that the world is still mostly ground — trees block,
+  // so every one of them is floor the player lost — and the world decides how
+  // many, down to nearly none in the desert (balance.js `BIOME_TERRAIN`).
+  for (const [biome, s] of Object.entries(SURVEYS)) {
+    const share = s.counts.tree / s.open;
+    assert(share < 0.12, `${biome} trees cover ${(share * 100).toFixed(1)}% of the world`);
+    // Groves, not scattered trunks — that is what the coarse lattice buys.
+    if (s.counts.tree > 200)
+      assert(
+        s.treesInAStand / s.counts.tree > 0.9,
+        `${biome}: nearly every tree should have another beside it`
+      );
+  }
+
   const trees = survey.counts.tree;
-  const share = trees / survey.open;
-  // Enough that a walk meets one, few enough that the world is still mostly
-  // ground: trees block, so every one of them is floor the player lost.
-  assert(share > 0.04 && share < 0.1, `trees cover ${(share * 100).toFixed(1)}% of the world`);
-  // Groves, not scattered trunks — that is what the coarse lattice buys.
-  assert(survey.treesInAStand / trees > 0.9, 'nearly every tree should have another beside it');
+  assert(trees > 0, 'the suite walks a world with trees in it');
 
   // Blocking, and blocking absolutely: no key opens a tree.
   const tree = (() => {

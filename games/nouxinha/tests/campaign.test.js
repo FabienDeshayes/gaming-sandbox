@@ -5,6 +5,7 @@
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import {
+  biomeOf,
   blocksSight,
   canEnter,
   chebyshev,
@@ -13,6 +14,7 @@ import {
   isMerchant,
   isWalkable,
   itemAt,
+  pickSeed,
   siteNamed,
   sites,
   sanctums,
@@ -35,7 +37,13 @@ import {
 } from '../src/core/rules.js';
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
 import { compassTarget } from '../src/core/compass.js';
-import { CHEST_COIN_VALUES, PRICES, STARTING_WATER, WATER_PER_GEM } from '../src/balance.js';
+import {
+  CHEST_COIN_VALUES,
+  COMPASS_RANGE,
+  PRICES,
+  STARTING_WATER,
+  WATER_PER_GEM,
+} from '../src/balance.js';
 import { ITEMS } from '../src/data/items.js';
 import { gemColour } from '../src/config.js';
 import { BIOME_IDS } from '../src/data/biomes.js';
@@ -231,31 +239,54 @@ unit('walking onto a gem repaints the world, and banking is what keeps it', () =
   assertEqual(runSummary(next).gemsCarried, 0, 'and is no longer carrying it at risk');
 });
 
-unit('every sanctum can be walked to and back on the water its gate implies', () => {
+unit('every sanctum can be walked to on the water its gate implies, in every world', () => {
   // The chain only works if the gem that opens a gate is also what makes the
   // walk to it survivable (DESIGN.md §4.4). This is the invariant that keeps
-  // that true, and the one a retune of the distances or the water is most
-  // likely to break silently — a sanctum nobody can return from is a gem the
-  // player can never bank, and the game would just quietly dead-end there.
+  // that true, and the one a retune of the distances, the water or a biome's
+  // ground is most likely to break silently — a sanctum nobody can return from
+  // is a gem the player can never bank, and the game would just quietly
+  // dead-end there.
   assertEqual(maxWater(0), STARTING_WATER, 'no gems is the starting tank');
   assertEqual(maxWater(3), STARTING_WATER + 3 * WATER_PER_GEM, 'and each gem widens it');
 
-  for (const s of SANCTUMS) {
-    // The hall's centre can't be stood on — the sorcerer is on it — so the walk
-    // to it ends on the tile you talk to him from (DESIGN.md §4.9).
-    const arrived = s.hall
-      ? (x, y) => ORTHOGONAL.some(([dx, dy]) => x + dx === s.centre.x && y + dy === s.centre.y)
-      : (x, y) => x === s.centre.x && y === s.centre.y;
-    const route = bfs(SEED, arrived, 200, [0, 0], ALL_KEYS);
-    const round = route.path.length * 2;
-    // The gems the chain has handed out by the time this sanctum is the one
-    // being walked to — its own index, since they come in order of distance.
-    const cap = maxWater(s.index);
-    assert(round <= cap, `sanctum ${s.index} is a ${round}-step round trip on ${cap} water — unreturnable`);
-    // And it has to leave room to actually *find* the place, not just to walk a
-    // route you already knew.
-    assert(cap - round >= 50, `sanctum ${s.index} leaves only ${cap - round} steps of slack to search with`);
+  // Walked in one world of each kind rather than in the suite's own, because a
+  // biome grows its own ground now (balance.js `BIOME_TERRAIN`) and how much
+  // rock stands between the hut and a gate is the world's business. The seeds
+  // are found by asking `biomeOf` and then `pickSeed`, exactly as a campaign
+  // gets one — nothing here is a coordinate somebody has to keep true.
+  const worlds = {};
+  for (let i = 1; Object.keys(worlds).length < BIOME_IDS.length && i < 100000; i++) {
+    const raw = (Math.imul(i, 2654435761) ^ 0x5bf03635) | 0;
+    if (!worlds[biomeOf(raw)]) worlds[biomeOf(raw)] = pickSeed(raw);
   }
+
+  for (const [biome, seed] of Object.entries(worlds))
+    for (const s of sanctums(seed)) {
+      // The hall's centre can't be stood on — the sorcerer is on it — so the
+      // walk to it ends on the tile you talk to him from (DESIGN.md §4.9).
+      const arrived = s.hall
+        ? (x, y) => ORTHOGONAL.some(([dx, dy]) => x + dx === s.centre.x && y + dy === s.centre.y)
+        : (x, y) => x === s.centre.x && y === s.centre.y;
+      const route = bfs(seed, arrived, 400, [0, 0], ALL_KEYS);
+      // A gem has to be carried *home* to be worth anything, so the walk to one
+      // is a round trip. The hall is the one that isn't: talking to him ends the
+      // expedition where it stands and turns the world over (DESIGN.md §4.9), so
+      // what it has to be is reachable, not returnable.
+      const cost = route.path.length * (s.hall ? 1 : 2);
+      // The gems the chain has handed out by the time this sanctum is the one
+      // being walked to — its own index, since they come in order of distance.
+      const cap = maxWater(s.index);
+      assert(
+        cost <= cap,
+        `${biome} sanctum ${s.index} is a ${cost}-step walk on ${cap} water — unwalkable`
+      );
+      // And it has to leave room to actually *find* the place, not just to walk
+      // a route you already knew.
+      assert(
+        cap - cost >= 50,
+        `${biome} sanctum ${s.index} leaves only ${cap - cost} steps of slack to search with`
+      );
+    }
 });
 
 unit('each gem gets a colour the world did not already have', () => {
@@ -368,12 +399,20 @@ unit('the compass points at the hall once every colour is in hand', () => {
   };
   // Everything else in the world is either found or opened, so the one thing
   // left worth walking to is the man at 110 — which is what "drawn to it" means
-  // (DESIGN.md §4.9).
-  assertEqual(compassTarget(createRun(SEED, finished, NONCE)).id, 'hall', 'the needle turns to him');
+  // (DESIGN.md §4.9). Read from within the needle's range of him, because the
+  // needle has one: standing at the hut it is a compass and not a map of where
+  // he lives (balance.js `COMPASS_RANGE`).
+  const near = createRun(SEED, finished, NONCE);
+  near.x = HALL.centre.x;
+  near.y = HALL.centre.y - COMPASS_RANGE;
+  assertEqual(compassTarget(near).id, 'hall', 'the needle turns to him');
 
   // And not a step before: a campaign one colour short is still being pointed
   // at the colour, however many keys it is carrying.
   const nearly = createRun(SEED, { ...finished, gems: MAX_GEMS - 1 }, NONCE);
+  const gem = sanctums(SEED).find((s) => s.gem === 'gem-3');
+  nearly.x = gem.centre.x;
+  nearly.y = gem.centre.y - COMPASS_RANGE;
   assertEqual(compassTarget(nearly).id, 'gem-3', 'until then it points at what is missing');
 });
 
@@ -470,9 +509,24 @@ unit('the compass points at the nearest thing this run could actually reach', ()
     .filter((s) => s.gem && !s.key)
     .map((s) => s.centre)
     .concat(sites(SEED).map((site) => ({ x: site.x, y: site.y })))
-    .concat(chests(SEED).map((c) => ({ x: c.x, y: c.y })));
-  const nearest = Math.min(...reachable.map((t) => chebyshev(t.x, t.y, state.x, state.y)));
+    .concat(chests(SEED).map((c) => ({ x: c.x, y: c.y })))
+    .map((t) => chebyshev(t.x, t.y, state.x, state.y))
+    .filter((d) => d <= COMPASS_RANGE);
+  const nearest = Math.min(...reachable);
   assertEqual(compassTarget(state).distance, nearest, 'it points at the nearest of them');
+
+  // And only at what is in range. A needle that named the nearest unfound thing
+  // anywhere in a 200-tile world would be a quest marker, and would leave the
+  // twelve signposts — the game's actual wayfinding — nothing to say
+  // (DESIGN.md §4.6). Out past everything, the needle turns for home.
+  const adrift = createRun(SEED, { ...emptySave(), compass: true }, NONCE);
+  adrift.x = 0;
+  adrift.y = -160;
+  const found = compassTarget(adrift);
+  assert(
+    found.id === 'hut' || found.distance <= COMPASS_RANGE,
+    `the needle reached ${found.distance} tiles for ${found.id}`
+  );
 
   // A gem behind a gate this run cannot open is never a target, whatever it is
   // carrying — that is what keeps the needle from sending anyone to a wall.

@@ -33,6 +33,109 @@ export const GROVE_THRESHOLD = 0.72;
 // The base's 3x3 neighbourhood is forced to floor so spawn can never be walled in.
 export const BASE_CLEARING = 1;
 
+// --- What kind of world this is -----------------------------------------------
+//
+// The four biomes (`src/data/biomes.js`) were a palette and a set of tiles and
+// nothing else, which made a campaign's second, third and fourth worlds the
+// same walk in another colour — and finishing all four is the win condition, so
+// that is three quarters of the game asking to be played again with a tint on
+// it. A biome now grows its own ground.
+//
+// Everything above is the temperate world's numbers and stays the shared
+// default; what is here is each world's exception to it, and `biomeOf(seed)`
+// is what picks between them, so a world's ground falls out of its seed exactly
+// the way its colour already did (DESIGN.md §4.3).
+//
+// The four are meant to be four different walks rather than four difficulties,
+// so each one leans on a different one of the game's own pressures:
+//
+//   temperate — the baseline. Nothing is stressed; this is the world the rest
+//               of the numbers in this file were tuned against.
+//   frozen    — open and legible, with the rock in broad masses and hardly a
+//               tree. Easy to cross and easy to read, and light-poor, so what
+//               it costs you is torches: you can see where to go and you have
+//               to ration what you go there with.
+//   desert    — the emptiest ground in the game, and the driest. Almost nothing
+//               blocks a step, so distance is the only thing between you and
+//               anywhere — and the water is thin, so distance is the whole
+//               problem.
+//   mystic    — tangled. Not the most stone by much, but the most *broken up*:
+//               the finest lattice in the game, so where the other worlds put
+//               up walls to walk round this one puts up a hundred small ones to
+//               thread, and the walk to anywhere is longer than the distance to
+//               it. It pays for that in coin.
+//
+// `rock` and `grove` are thresholds on the noise, so a *higher* number is less
+// of it; `cell` is the lattice each is grown on, so a bigger number is broader
+// masses and thicker stands. `scatter` tilts the weights in SCATTER below by
+// item id — it changes what the ground offers, never how much, since the
+// weights are relative within a band.
+//
+// `density` is the last of them: it scales how often the ground offers
+// anything, and it is here to hold the *rate a walk pays* level across four
+// worlds with wildly different amounts of floor in them. Without it the open
+// worlds spread the same items over half again as much ground and read as
+// barren; with it, every world hands back something about every 37 floor tiles,
+// which is the number MIN_SEPARATION was playtested at.
+//
+// Measured over a 141x141 window, per 1000 floor tiles walked:
+//
+//   world       blocked   seeds bumped   items   water   lit steps
+//   temperate      27%            10%     27.4     277         698
+//   frozen         19%            15%     26.2     286         567
+//   desert         12%             5%     27.2     233         808
+//   mystic         30%             5%     27.5     273         618
+//
+// So the same walk pays at the same rate everywhere, and what differs is what
+// it pays in and what it costs to walk: the frozen world is a fifth short of
+// light, the desert a sixth short of water, and the mystical one hands back
+// coin for ground that takes appreciably longer to cross than it measures.
+//
+// The rock is what those last two are really tuned against, and it is the one
+// place here that can break the game rather than merely retune it: the walk to
+// a sanctum has to stay inside the water the gem before it hands over
+// (`every sanctum can be walked to and back` in tests/campaign.test.js). Broad
+// masses are far worse for that than the blocked share suggests — a coarse
+// lattice grows blobs big enough to wall a gate off and send a route the long
+// way round, where a fine one at the same density is threadable. That is why
+// the tangled world has the *finest* lattice in the table and not the coarsest,
+// which is the opposite of where this started.
+//
+// The bump rate is what a world's rock costs `pickSeed`, which rejects a seed
+// whose spawn is sealed into a pocket. It stays well inside SEED_MAX_ATTEMPTS
+// in the densest world, and a bump now keeps the *kind* of world it was given
+// (`pickSeed` in core/world.js) — otherwise the tangled world would quietly
+// bump itself into being one of the open ones.
+//
+export const BIOME_TERRAIN = {
+  temperate: {},
+  frozen: {
+    rock: 0.655,
+    rockCell: 9,
+    grove: 0.82,
+    boulder: 0.012,
+    density: 1.5,
+    scatter: { 'torch-small': 0.5, 'torch-medium': 0.5, 'torch-lamp': 0.5, 'torch-beacon': 0.5 },
+  },
+  desert: {
+    rock: 0.7,
+    rockCell: 8,
+    grove: 0.92,
+    boulder: 0.01,
+    density: 1.05,
+    scatter: { 'water-drop': 0.55, 'water-flask': 0.55, 'spring-vial': 0.55 },
+  },
+  mystic: {
+    rock: 0.63,
+    rockCell: 4,
+    grove: 0.73,
+    groveCell: 5,
+    boulder: 0.045,
+    density: 0.97,
+    scatter: { coin: 2.2 },
+  },
+};
+
 // --- The edge of the world ----------------------------------------------------
 //
 // The world is bounded, and what bounds it is the dark itself. Far enough out
@@ -220,17 +323,24 @@ export const SITE_PLAN = [
 // ground its court is paved with, the colour it keeps and what standing it
 // hands over — is `src/data/landmarks.js`; what is here is where it stands.
 //
-// The rings are the pacing. The first two are inside a first or second
-// expedition, so a campaign meets a landmark before it meets a gate; the fourth
-// tops out at 74, nearer than the third sanctum and a long way inside the hall.
-// Each takes a quarter of the compass, with the whole rose turned by the seed:
-// every world has one in every direction, and which direction holds which
-// changes every time the world is moulded. That is what makes them orient you.
+// The rings are the pacing, and they are read against SANCTUM_PLAN above: each
+// landmark stands inside the sanctum of the same index, on that sanctum's own
+// heading (`buildLandmarks` in core/world.js). So the four still take a quarter
+// of the compass each with the whole rose turned by the seed — every world has
+// one in every direction, and which direction holds which changes every time
+// the world is moulded, which is what makes them orient you — and the long walk
+// out to a gem now has a place on it.
+//
+// That is what makes the gifts (LANDMARK_GIFTS below) worth anything. A full
+// tank at the Bell and a relit torch at the Lantern Tree are waystations on the
+// route the campaign is walking anyway; on a rose of their own they were a
+// detour in another direction that only ever cost water to take. Moving one of
+// these rings past its sanctum's distance is what would undo it.
 export const LANDMARK_PLAN = [
-  { id: 'mint', near: 12, span: 6 },
-  { id: 'bell', near: 28, span: 8 },
-  { id: 'lantern-tree', near: 48, span: 10 },
-  { id: 'gnomon', near: 66, span: 9 },
+  { id: 'mint', near: 12, span: 6 }, // inside sanctum 1, at 20
+  { id: 'bell', near: 28, span: 8 }, // inside sanctum 2, at 45
+  { id: 'lantern-tree', near: 48, span: 10 }, // inside sanctum 3, at 80
+  { id: 'gnomon', near: 66, span: 9 }, // inside the hall, at 110
 ];
 
 // The court: the ring of its own ground around a landmark, forced walkable so
@@ -348,9 +458,15 @@ export const MIN_SEPARATION = 8;
 // allows, and still lands irregularly, because the survivors are the ones that
 // won a hash rather than the ones sitting on a grid.
 //
+// It is finer still than that trade alone would ask for, because richness
+// (RICHNESS_MIN/MAX below) needs somewhere to move *up* to: SCATTER_OFFER
+// throttles the extra darts back to the density the game was tuned at, and rich
+// ground is where that throttle opens. A lattice with one dart per offer has no
+// headroom and richness can only ever take away from it.
+//
 // The cost is the neighbourhood a candidate has to check: a conflict can come
 // from several cells away rather than one.
-export const CONSUMABLE_CELL = 4;
+export const CONSUMABLE_CELL = 3;
 
 // Where the bands the weights below are quoted per fall, in Chebyshev tiles
 // from the hut.
@@ -362,6 +478,60 @@ export const BAND_FAR = 20;
 // to be the stingiest of the three, which read backwards next to a hut that
 // is supposed to be an easy first stretch — it now offers something every time.
 export const SPAWN_CHANCE = { near: 1, mid: 0.95, far: 1 };
+
+// --- Rich ground and thin ground ----------------------------------------------
+//
+// MIN_SEPARATION above says how *close* two of a kind may ever land. It says
+// nothing about where the good ground is, so every screenful held about the
+// same amount as every other: no stretch was ever worth combing and none was
+// ever worth hurrying across. A world with no texture in it.
+//
+// So the chance a cell offers anything is scaled by a **richness** field: broad,
+// slow value noise on a lattice of its own (`richnessAt` in core/world.js),
+// mapped onto the range below. Rich ground offers several times as often as
+// thin ground, and what survives is thinned by the same separation rule
+// everywhere.
+//
+// **The law in DESIGN.md §4.3 is untouched.** Richness scales the *offer* and
+// never the separation: nowhere in any world do two of a kind land closer than
+// MIN_SEPARATION, in the richest patch as much as the leanest.
+//
+// What makes it work is CONSUMABLE_CELL being finer than SCATTER_OFFER needs.
+// The obvious version — leave the lattice alone and scale SPAWN_CHANCE — does
+// almost nothing, and it took measuring to believe: at a chance of 1 every cell
+// already offers something, so richness can only ever take away, and the
+// thinning swallows most of what it takes, since offering less also means
+// conflicting less. Measured, it bought 4 points of unevenness for 8% of the
+// items. Throwing three times as many darts and then throttling them to the
+// same rate leaves room to move in *both* directions, and costs nothing:
+//
+//   scatter               one per      leanest 10%   richest 10%   spread
+//   flat, one dart/cell   36 floor     one per 49    one per 28      22%
+//   richness 0.25-1.75    36 floor     one per 61    one per 26      31%
+//
+// Same amount to find, half again as unevenly arranged. The rich end is capped
+// by the separation rule and not by this — one per 26 is about as tight as 8
+// tiles apart allows — so widening the range only ever thins the lean end.
+//
+// A lean patch is a stretch you notice crossing and never one you could starve
+// in: one per 61 floor tiles, across a patch RICHNESS_CELL wide, is a fraction
+// of a tank (STARTING_WATER).
+export const RICHNESS_MIN = 0.25;
+export const RICHNESS_MAX = 1.75;
+
+// How much of the lattice's offer actually stands, before richness moves it.
+// CONSUMABLE_CELL is three times finer than one-dart-per-offer would need, and
+// this is what throttles it back to the density the game was tuned at — so the
+// mean is what it always was and richness has headroom on both sides of it.
+export const SCATTER_OFFER = 0.66;
+
+// How broad a patch is: the lattice the field is grown on, in tiles, so a patch
+// of rich or thin ground runs roughly this across and sometimes twice it. Well
+// past a light's reach — a lit ring can never take in a whole patch, so richness
+// is something a walk learns and never something a glance reads — and well
+// inside a tank, so crossing the leanest ground in the world is several
+// screenfuls and never an expedition.
+export const RICHNESS_CELL = 28;
 
 // ...and how much of that dial each gem leaves standing. The world gets
 // *sparser* as the campaign gets richer, and this is the one place the gems
@@ -510,6 +680,22 @@ export const PRICES = {
   compass: 250,
   map: 50,
 };
+
+// How far the needle can see (`compassTarget` in core/compass.js). Past this it
+// has nothing to say and points home, which is the other thing it is for.
+//
+// A needle with no range at all is not a compass, it is a quest marker: it
+// names the nearest unfound thing anywhere in a 200-tile world, so the whole
+// late campaign becomes walking down an arrow and the twelve signposts it was
+// supposed to complement have nothing left to do. Ranged, it answers the
+// question it is actually good at — *something is near, which way* — and leaves
+// finding the far things to the walking and the posts.
+//
+// 40 is a little under the second sanctum's distance, so it reaches the next
+// thing worth walking to from anywhere a campaign has got to rather than from
+// the doorstep, and it is wider than any light in the game by an order of
+// magnitude, so it is never merely telling you what you can already see.
+export const COMPASS_RANGE = 40;
 
 // --- Cheats -------------------------------------------------------------------
 //

@@ -24,6 +24,7 @@ import {
   BAND_FAR,
   BAND_MID,
   BASE_CLEARING,
+  BIOME_TERRAIN,
   BOULDER_CHANCE,
   CHEST_COIN_VALUES,
   CHEST_PLAN,
@@ -41,9 +42,13 @@ import {
   LANDMARK_PLAN,
   MIN_SEPARATION,
   POCKET_PROBE,
+  RICHNESS_CELL,
+  RICHNESS_MAX,
+  RICHNESS_MIN,
   ROCK_THRESHOLD,
   SANCTUM_PLAN,
   SCATTER,
+  SCATTER_OFFER,
   SEED_MAX_ATTEMPTS,
   SEED_MIN_FRACTION,
   SEED_WINDOW,
@@ -73,6 +78,7 @@ const CH_CHEST = 10;
 const CH_BIOME = 11;
 const CH_LANDMARK = 12;
 const CH_SIGNPOST = 13;
+const CH_RICHNESS = 14;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
@@ -141,6 +147,33 @@ export function biomeOf(seed = DEFAULT_SEED) {
   return BIOME_IDS[Math.min(BIOME_IDS.length - 1, Math.floor(roll * BIOME_IDS.length))];
 }
 
+// What kind of ground this world grows (balance.js `BIOME_TERRAIN`). A biome
+// names only its exceptions and everything else is the shared default, so this
+// is that table flattened out — and memoised per seed, because `noiseTerrain`
+// asks for it on every tile lookup in the game.
+const DEFAULT_TERRAIN = {
+  rock: ROCK_THRESHOLD,
+  rockCell: 6,
+  rockFineCell: 3,
+  grove: GROVE_THRESHOLD,
+  groveCell: 9,
+  groveFineCell: 4,
+  boulder: BOULDER_CHANCE,
+  density: 1,
+  scatter: null,
+};
+
+const tuningCache = new Map();
+
+export function terrainTuning(seed = DEFAULT_SEED) {
+  const key = seed | 0;
+  const cached = tuningCache.get(key);
+  if (cached) return cached;
+  const tuning = { ...DEFAULT_TERRAIN, ...(BIOME_TERRAIN[biomeOf(key)] || {}) };
+  tuningCache.set(key, tuning);
+  return tuning;
+}
+
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (t) => t * t * (3 - 2 * t);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -155,6 +188,29 @@ function valueNoise(x, y, seed, channel, cell) {
   const top = lerp(hash(gx, gy, seed, channel), hash(gx + 1, gy, seed, channel), fx);
   const bot = lerp(hash(gx, gy + 1, seed, channel), hash(gx + 1, gy + 1, seed, channel), fx);
   return lerp(top, bot, fy);
+}
+
+// How much this patch of ground is offering (balance.js RICHNESS_MIN/MAX). A
+// broad, slow field on a lattice of its own, scaling how often a cell offers
+// anything at all — so a world has rich ground worth combing and thin ground
+// worth crossing instead of the same amount everywhere.
+//
+// It scales the *offer* and never the separation, so the law in DESIGN.md §4.3
+// stands exactly as written: no two of a kind land closer than MIN_SEPARATION
+// anywhere in any world, in the richest patch as much as the leanest.
+//
+// What makes that work is the lattice being finer than the offer rate needs
+// (CONSUMABLE_CELL against SCATTER_OFFER in balance.js). With a cell per offer
+// there is no headroom — every cell already offers something, so richness could
+// only ever take away — and the thinning swallows most of what it takes, since
+// offering less also means conflicting less. Throwing several times as many
+// darts and then throttling them leaves room to move in both directions, which
+// is the whole of why this reads as texture rather than as a shortage.
+export function richnessAt(x, y, seed = DEFAULT_SEED) {
+  return (
+    RICHNESS_MIN +
+    (RICHNESS_MAX - RICHNESS_MIN) * valueNoise(x, y, seed, CH_RICHNESS, RICHNESS_CELL)
+  );
 }
 
 export function chebyshev(x, y, ox = 0, oy = 0) {
@@ -173,22 +229,27 @@ function noiseTerrain(x, y, seed) {
   // item spawning and every flood probe all agree on where the world stops.
   if (beyondEdge(x, y)) return 'dark';
   if (chebyshev(x, y, BASE_X, BASE_Y) <= BASE_CLEARING) return 'floor';
+  // How much of each of these there is, and how broadly it masses, is the
+  // biome's (balance.js `BIOME_TERRAIN`) — a frozen world is mostly open with
+  // its stone in long walls, a mystical one is a tangle.
+  const tuning = terrainTuning(seed);
   // Two octaves: broad masses from the coarse lattice, ragged edges from the fine one.
   const n =
-    0.65 * valueNoise(x, y, seed, CH_TERRAIN, 6) +
-    0.35 * valueNoise(x, y, seed, CH_TERRAIN_FINE, 3);
-  if (n > ROCK_THRESHOLD) return 'rock';
+    0.65 * valueNoise(x, y, seed, CH_TERRAIN, tuning.rockCell) +
+    0.35 * valueNoise(x, y, seed, CH_TERRAIN_FINE, tuning.rockFineCell);
+  if (n > tuning.rock) return 'rock';
 
   // Groves grow on a lattice of their own, so where the trees are owes nothing
   // to where the rock is and a stand can run right up against a wall.
   const g =
-    0.6 * valueNoise(x, y, seed, CH_GROVE, 9) + 0.4 * valueNoise(x, y, seed, CH_GROVE_FINE, 4);
-  if (g > GROVE_THRESHOLD) return 'tree';
+    0.6 * valueNoise(x, y, seed, CH_GROVE, tuning.groveCell) +
+    0.4 * valueNoise(x, y, seed, CH_GROVE_FINE, tuning.groveFineCell);
+  if (g > tuning.grove) return 'tree';
 
   // Boulders are thrown as white noise rather than grown on a lattice: what
   // makes them the other kind of rock is precisely that they stand alone
   // instead of massing, so they want no shape at all.
-  if (hash(x, y, seed, CH_BOULDER) < BOULDER_CHANCE) return 'rock';
+  if (hash(x, y, seed, CH_BOULDER) < tuning.boulder) return 'rock';
 
   return 'floor';
 }
@@ -403,21 +464,37 @@ function buildSites(seed, built, taken) {
 // **court**, a ring of its own ground forced walkable so there is always a way
 // in and a way round whatever the noise did.
 //
-// They take a quarter of the compass each, with the whole rose turned by the
-// seed: every world has a landmark in every direction, and which direction
-// holds which changes every time the world is moulded. That is the half of them
-// that orients you — the other half is that they keep their names.
+// They take a quarter of the compass each — the *sanctums'* quarters, one
+// landmark to a sanctum, in ring order: the Mint stands inside the first
+// sanctum's distance on the first sanctum's heading, the Bell inside the
+// second's, the Lantern Tree inside the third's and the Gnomon inside the
+// hall's. So every world still has a landmark in every direction and which
+// direction holds which still changes every time the world is moulded — and on
+// top of that, the long walk out to a gem now has a place on it.
+//
+// That is what makes the gifts (DESIGN.md §4.10) worth anything: a full tank at
+// the Bell and a relit torch at the Lantern Tree are waystations on the route
+// the campaign is walking anyway, where on a rose of their own they were a
+// detour in some other direction that only ever cost water to take. The
+// signposts still point wherever they point; a post now points down a road that
+// goes somewhere.
+//
+// The stalls are unaffected and keep doing the opposite job: `SITE_PLAN` pins
+// each of the first three *opposite* its sanctum, so an expedition still has
+// two directions worth walking (DESIGN.md §4.5).
 
 function buildLandmarks(seed, built, taken) {
   const spread = (Math.PI * 2) / LANDMARK_PLAN.length;
-  const heading = randomAt(0, 0, seed, CH_LANDMARK) * Math.PI * 2;
 
   return LANDMARK_PLAN.map((plan, i) => {
     const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_LANDMARK) * plan.span);
-    // Jittered inside its own quarter, the way the sanctums are, so the four
-    // never bunch into one direction however the search below wanders.
-    const jitter = (randomAt(i + 1, 0, seed, CH_LANDMARK) - 0.5) * spread * 0.4;
-    const nominal = heading + i * spread + jitter;
+    // The heading of the sanctum this one stands inside, jittered by about as
+    // much as that sanctum's own placement was — near enough to the line out to
+    // be on the way, far enough off it that a landmark is still something you
+    // come across rather than something you cannot miss.
+    const heading = Math.atan2(built[i].centre.y, built[i].centre.x);
+    const jitter = (randomAt(i + 1, 0, seed, CH_LANDMARK) - 0.5) * spread * 0.24;
+    const nominal = heading + jitter;
 
     for (const delta of HEADING_SEARCH) {
       const spot = ringPoint(distance, nominal + delta * spread);
@@ -895,17 +972,38 @@ export function sitesReachable(seed) {
 // into the noise, which would leave a visible lattice and point straight at
 // each gem. It converges immediately in practice: the terrain is well connected
 // at range, so the landmark check almost never bites.
+//
+// A bump keeps the *kind* of world where it can. Everything about a world falls
+// out of its seed, biome included, so bumping past a bad seed re-rolls the
+// ground and the colour together — which matters now that a biome grows its own
+// ground (balance.js `BIOME_TERRAIN`) and the four no longer reject seeds at
+// the same rate. Left alone, the tangled world would quietly bump itself into
+// being the open one more often than it was ever meant to come up, and
+// `turnCycle`'s promise to hand back a kind of world the campaign has not
+// finished (DESIGN.md §4.9) would come apart in exactly the same way: it picks
+// the kind on `biomeOf` and then hands the seed here.
+//
+// So the walk down the chain prefers a seed of the same kind, and settles for
+// any valid one rather than walking off the end — a world of the wrong colour
+// beats a world with the spawn sealed into a pocket. The common case costs
+// nothing: the preferred seed is its own kind, so a valid one returns on the
+// first look exactly as it always did.
 export function pickSeed(
   preferred = DEFAULT_SEED,
   minFraction = SEED_MIN_FRACTION,
   maxAttempts = SEED_MAX_ATTEMPTS
 ) {
+  const wanted = biomeOf(preferred | 0);
   let seed = preferred | 0;
+  let fallback = null;
   for (let i = 0; i < maxAttempts; i++) {
-    if (reachableFraction(seed) >= minFraction && sitesReachable(seed)) return seed;
+    if (reachableFraction(seed) >= minFraction && sitesReachable(seed)) {
+      if (biomeOf(seed) === wanted) return seed;
+      if (fallback === null) fallback = seed;
+    }
     seed = (Math.imul(seed, 1103515245) + 12345) | 0;
   }
-  return seed;
+  return fallback === null ? seed : fallback;
 }
 
 // --- The consumable salt ------------------------------------------------------
@@ -1029,15 +1127,28 @@ function candidateIn(cx, cy, seed, salt) {
 function kindOf(candidate, seed, gems) {
   const d = chebyshev(candidate.x, candidate.y);
   const band = bandOf(d);
-  if (candidate.roll >= SPAWN_CHANCE[band] * GEM_DENSITY[Math.min(gems, GEM_DENSITY.length - 1)])
-    return null;
+  const tuning = terrainTuning(seed);
+  const chance =
+    SPAWN_CHANCE[band] *
+    GEM_DENSITY[Math.min(gems, GEM_DENSITY.length - 1)] *
+    SCATTER_OFFER *
+    tuning.density *
+    richnessAt(candidate.x, candidate.y, seed);
+  if (candidate.roll >= chance) return null;
   if (!spawnable(candidate.x, candidate.y, seed)) return null;
 
-  const pool = SCATTER.filter((kind) => kind[band] > 0 && available(kind, gems));
+  // Which world this is tilts what the ground offers without changing how much
+  // of it there is: the weights are relative within a band, so thinning the
+  // water in a desert is the same act as thickening everything else
+  // (balance.js `BIOME_TERRAIN`).
+  const tilt = tuning.scatter;
+  const weigh = (kind) => kind[band] * ((tilt && tilt[kind.id]) || 1);
+
+  const pool = SCATTER.filter((kind) => weigh(kind) > 0 && available(kind, gems));
   if (!pool.length) return null;
-  let pick = candidate.kindRoll * pool.reduce((sum, kind) => sum + kind[band], 0);
+  let pick = candidate.kindRoll * pool.reduce((sum, kind) => sum + weigh(kind), 0);
   for (const kind of pool) {
-    pick -= kind[band];
+    pick -= weigh(kind);
     if (pick < 0) return kind.id;
   }
   return pool[pool.length - 1].id;

@@ -9,6 +9,7 @@
 // Pure: no Phaser, no run mutation.
 
 import { BASE_X, BASE_Y, chebyshev, chests, sanctums, sites } from './world.js';
+import { COMPASS_RANGE } from '../balance.js';
 import { itemDef } from '../data/items.js';
 
 // The hut, which is what the compass falls back to when there is nothing left
@@ -86,11 +87,24 @@ export function availableTargets(state) {
   return out;
 }
 
-// The nearest available unique object, or the hut when there is none. Ties break
-// on id so the needle never flickers between two things the same distance away.
+// The nearest available unique object **within the needle's range**, or the hut
+// when there is none. Ties break on id so the needle never flickers between two
+// things the same distance away.
+//
+// The range (balance.js `COMPASS_RANGE`) is what keeps this a compass rather
+// than a quest marker. Unranged it named the nearest unfound thing anywhere in
+// a 200-tile world, which turned the back half of every campaign into walking
+// down an arrow and left the twelve signposts — the game's actual wayfinding —
+// with nothing to say. Ranged, it answers the question it is good at: something
+// is near, and this is which way. Finding the far things is the walking's job.
+//
+// Falling back to the hut is not a failure state, it is the tool's other use
+// (DESIGN.md §4.6) — the thing you want at three in the morning with no light
+// left — so a needle with nothing in range is still a needle worth owning.
 export function compassTarget(state) {
   const ranked = availableTargets(state)
     .map((target) => ({ ...target, distance: chebyshev(target.x, target.y, state.x, state.y) }))
+    .filter((target) => target.distance <= COMPASS_RANGE)
     .sort((a, b) => a.distance - b.distance || (a.id < b.id ? -1 : 1));
   if (ranked.length) return ranked[0];
   const home = hut();

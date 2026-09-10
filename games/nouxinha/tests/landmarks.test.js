@@ -19,6 +19,7 @@ import {
   signpostBearing,
   signpostHutBearing,
   signpostReadings,
+  sanctums,
   signpostTargets,
   signposts,
   terrainAt,
@@ -78,8 +79,6 @@ unit('there are four landmarks, one to a quarter, and none of them far out', () 
   // what a player can rely on across worlds is not "the Mint is north", it is
   // "there is one in every direction". The claim that survives that is the
   // spread: the four bearings are never bunched, whichever way the rose fell.
-  // (Each takes a quarter jittered inside itself, and the search that dodges bad
-  // ground stays inside that quarter, so the worst case is well over 45°.)
   const apart = [];
   for (let a = 0; a < angles.length; a++)
     for (let b = a + 1; b < angles.length; b++) {
@@ -87,6 +86,42 @@ unit('there are four landmarks, one to a quarter, and none of them far out', () 
       apart.push(((d > Math.PI ? Math.PI * 2 - d : d) * 180) / Math.PI);
     }
   assert(Math.min(...apart) > 45, `no two of them bunch (${Math.min(...apart).toFixed(0)}° apart)`);
+});
+
+unit('a landmark stands on the way out to its sanctum', () => {
+  // The rose the four take a quarter of each is the *sanctums'* (DESIGN.md
+  // §4.10.2): landmark N stands inside sanctum N, on that sanctum's own heading,
+  // so the walk out to a gem passes a place worth stopping at. That is what the
+  // gifts are worth anything for — a full tank at the Bell is a waystation on a
+  // route the campaign is walking anyway, where on a rose of its own it was a
+  // detour in some other direction.
+  //
+  // Walked across many worlds rather than one, because what is being checked is
+  // the placement rule and not where one seed happened to put things. Measured,
+  // a landmark sits a mean 7 degrees off its sanctum's bearing and never more
+  // than about 30; the bound here is loose enough that the search which dodges
+  // bad ground can do its job.
+  for (let i = 1; i < 40; i++) {
+    const seed = pickSeed((Math.imul(i, 2654435761) ^ 0x5bf03635) | 0);
+    const built = sanctums(seed);
+    landmarks(seed).forEach((landmark, index) => {
+      const sanctum = built[index];
+      const a = Math.atan2(landmark.y, landmark.x);
+      const b = Math.atan2(sanctum.centre.y, sanctum.centre.x);
+      let off = Math.abs(a - b);
+      if (off > Math.PI) off = Math.PI * 2 - off;
+      assert(
+        (off * 180) / Math.PI < 45,
+        `${landmark.id} is ${((off * 180) / Math.PI).toFixed(0)}° off sanctum ${index}`
+      );
+      // And inside it, so it is passed on the way out rather than found beyond
+      // the thing it was meant to be on the way to.
+      assert(
+        chebyshev(landmark.x, landmark.y) < sanctum.distance,
+        `${landmark.id} stands outside sanctum ${index}`
+      );
+    });
+  }
 });
 
 unit('a landmark blocks a step, never a light, and stands in a court', () => {

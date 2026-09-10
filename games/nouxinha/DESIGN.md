@@ -160,7 +160,7 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
   property of the world, not of any tile in it, which is what makes "which world am I in" a question
   with one answer.
 
-  A biome is two things so far. It has a **colour of its own** — temperate is drawn in PHOSPHOR,
+  A biome is three things. It has a **colour of its own** — temperate is drawn in PHOSPHOR,
   frozen in CATHODE, desert in AMBER, the mystical realm in MAGENTA (§9), and that is the whole of how
   a world's colour is decided; there is no picking one in Settings. The colour is set when a run
   opens, so the menus are drawn in whatever world was last walked and a page opened cold is drawn in
@@ -168,11 +168,36 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
   shares the rest, so frozen rock and desert rock can be different stone without either being a
   second copy of the sheet. Each biome spells out **its own floors, its own rock and its own trees** —
   the three terrains a world is mostly made of, each a list the world alternates between — and falls
-  back on the shared table for everything else. Today all four name the same tiles, so the difference
-  is still the colour alone, and giving a world stone of its own is repointing one of those lists.
-  What a biome does *not* change yet is the ground it grows: rock density, groves, the scatter and
-  the distances are one set of numbers for every world (`src/balance.js`), and per-biome landscape
-  parameters are the next thing this grows into.
+  back on the shared table for everything else. Today all four name the same tiles, so giving a world
+  stone of its own is repointing one of those lists.
+
+  And it has **ground of its own** (`BIOME_TERRAIN` in `src/balance.js`, read by `terrainTuning`).
+  This is the one that makes a campaign's four worlds four different *walks*, which the game needs
+  because finishing all four is how it ends (§4.9): a biome that was only a tint asked the player to
+  walk the same world three more times. Everything the shared table says is the temperate world's,
+  and each of the other three is a set of exceptions to it — how much rock and how broadly it masses,
+  how thick the groves are, how loose the boulders, how often the ground offers anything and which
+  kinds it favours when it does. The distances, the sanctums, the landmarks, the water and the lights
+  stay one set of numbers for every world: what changes is the ground between them.
+
+  The four lean on different pressures rather than on different difficulties, and the rate a walk
+  *pays* is deliberately level across all four — about one thing found every 37 floor tiles, the
+  number the scatter was playtested at — so what differs is what it pays in and what it costs to
+  walk:
+
+  | World | Blocked | What it is | What it costs you |
+  |---|---|---|---|
+  | Temperate | 27% | The baseline every other number was tuned against | Nothing in particular |
+  | Frozen | 19% | Open and legible, stone in long broad masses, hardly a tree | A fifth less light on the ground: you can see where to go and have to ration what you go there with |
+  | Desert | 12% | The emptiest ground in the game — almost nothing blocks a step | A sixth less water: distance is the only thing between you and anywhere, and distance is the whole problem |
+  | Mystical | 30% | Tangled. Not much more stone than temperate, but the finest lattice in the game, so a hundred small formations to thread rather than walls to round | Steps: the walk to anywhere is longer than the distance to it. It pays for that in coin |
+
+  One thing here can break the game rather than merely retune it, and it is written down next to the
+  table: **a sanctum has to stay reachable on the water the gem before it hands over** (§4.4). Broad
+  rock masses are far worse for that than a blocked share suggests — a coarse lattice grows blobs big
+  enough to wall a gate off and send the route the long way round — which is why the tangled world
+  has the finest lattice of the four rather than the coarsest. `tests/campaign.test.js` walks that
+  invariant in one world of every kind.
 - The **base** sits at `(0, 0)`. Its 3×3 neighbourhood is forced to floor so you can never be walled
   in at spawn. It renders as a hut with a flag so it's recognisable from the edge of your light, and
   it's the one tile that's always on the map. The hut isn't drawn while the wizard is standing on
@@ -226,6 +251,21 @@ as a good patch of ground rather than a clump. Two consequences fall out:
   100-coin map.
 - **Sanctum clearings are the exception.** A clearing is a hoard somebody left there, so it keeps its
   dense cache — capped at two of any one kind, so it reads as a cache and not a pile (§4.4).
+
+**And the ground is uneven: some of it is worth combing and some is worth crossing.** The separation
+rule says how *close* two of a kind may land and nothing about where the good ground is, so every
+screenful used to hold about what every other one did, and no stretch was ever worth remembering. So
+the chance a patch offers anything at all is scaled by a slow noise field of its own, broad enough
+(`RICHNESS_CELL`, 28 tiles) that a light can never take a whole patch in — richness is something a
+walk learns, never something a glance reads. The leanest tenth of the world now holds something every
+61 floor tiles and the richest every 26, against a flat 49 and 28 before, with the total unchanged:
+the same amount to find, half again as unevenly arranged.
+
+**The separation law is untouched by that.** Richness scales what the ground *offers*, and the
+thinning that follows is the same everywhere, so nowhere in any world do two of a kind land closer
+than 8. The rich end is capped by that rule rather than by the field, which is why widening the range
+only ever thins the lean end — and why a lean patch is a stretch you notice crossing rather than one
+you could starve in.
 
 **Water outweighs light on the ground, before any gem.** A step costs one water and one point of
 durability off the burning light, so the honest way to read the scatter is what a walk gets back per
@@ -349,10 +389,21 @@ campaign's coin to afford outright, where the map is cheap enough that a couple 
 **The compass** shows an arrow and the icon of what the arrow is pointing at, because "that way" on
 its own is useless and "that way, and it's a gem" is a decision. The needle snaps to the four
 directions its sprites can draw (§9) — enough to start walking, and the icon does the rest. It points at the nearest
-**available** unique object: a chest still shut, a gem whose gate this run already has the key to, a
+**available** unique object *within 40 tiles*: a chest still shut, a gem whose gate this run already has the key to, a
 tool it doesn't own yet, the nearest merchant while there is still a one-off on any shelf, or — once all
 three colours and the third key are in hand — the sorcerer at 110 (§4.9), which by then is the only
-thing left in the world worth walking to. **Not** the four landmarks: they have the twelve posts
+thing left in the world worth walking to.
+
+**It has a range, and that is what keeps it a compass rather than a quest marker.** Unranged it named
+the nearest unfound thing anywhere in a 200-tile world, which turned the back half of every campaign
+into walking down an arrow and left the twelve signposts (§4.10) — the game's actual wayfinding —
+with nothing to do. Ranged, it answers the question it is genuinely good at: *something is near, and
+this is which way.* Finding the far things is the walking's job and the posts'. 40 is a little under
+the second sanctum's distance, so the needle reaches the next thing worth walking to from anywhere a
+campaign has got to rather than from the doorstep, and it is wider than any light in the game by an
+order of magnitude, so it is never merely telling you what you can already see. With nothing in
+range it turns for home, which is not a failure state but the tool's other use — the thing you want
+at three in the morning with no light left. **Not** the four landmarks: they have the twelve posts
 (§4.10), and a needle that counted them would rarely be pointing anywhere else. It deliberately
 points at things the player has *not* found — that is the whole value of it, and with the keys behind
 chests (§4.8) it is also what keeps the chain from dead-ending. When nothing qualifies it points at the hut, which
@@ -584,12 +635,29 @@ and it costs no new mechanic.
 Ring order is Mint, Bell, Lantern Tree, Gnomon — nearest to furthest — and that is also the order of
 what they are about: coin, water, light, distance, which is every currency the game has.
 
-| | Name | Colour | Ring | The chest beside it |
-|---|---|---|---|---|
-| 1 | **THE MINT** | magenta | 12-17 | a hoard of coins |
-| 2 | **THE DROWNED BELL** | cathode blue | 28-35 | key 1 |
-| 3 | **THE LANTERN TREE** | amber | 48-57 | key 2 |
-| 4 | **THE GNOMON** | phosphor green | 66-74 | key 3 |
+| | Name | Colour | Ring | Stands inside | The chest beside it |
+|---|---|---|---|---|---|
+| 1 | **THE MINT** | magenta | 12-17 | sanctum 1, at 20 | a hoard of coins |
+| 2 | **THE DROWNED BELL** | cathode blue | 28-35 | sanctum 2, at 45 | key 1 |
+| 3 | **THE LANTERN TREE** | amber | 48-57 | sanctum 3, at 80 | key 2 |
+| 4 | **THE GNOMON** | phosphor green | 66-74 | the hall, at 110 | key 3 |
+
+**They stand on the sanctums' rose, one to a sanctum, in ring order** — each on that sanctum's own
+heading with about as much jitter as the sanctum's own placement had. So every world still has a
+landmark in every direction and which direction holds which still changes every time the world is
+moulded (§4.4 turns the rose by the seed), and on top of that **the long walk out to a gem now has a
+place on it**.
+
+That is what the gifts below are worth anything for. A full tank at the Bell and a relit torch at the
+Lantern Tree are waystations on the route the campaign is already walking; on a rose of their own they
+were a detour in some other direction that only ever cost water to take, which made a landmark
+something you visited *instead of* making progress rather than on the way to it. An expedition is now
+a series of hops rather than one curve that only goes down — which is the only positive beat a run
+has, since everything else about it burns.
+
+The stalls keep doing the opposite job and are untouched: §4.5 pins each of the first three
+*opposite* its sanctum, so an expedition still has two directions worth walking. The twelve posts are
+untouched too — a post now points down a road that goes somewhere.
 
 **THE MINT.** A stone coin press with the die still in it, standing in a drift of **blanks** — coins
 with nothing struck on them. It is the closest landmark to the hut and the first one any campaign

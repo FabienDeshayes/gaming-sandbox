@@ -171,6 +171,26 @@ setDefaultPalette(biomeDef(BIOME).palette);
 A test that says what colour something should be works it out from `gemColour` in Node, and that
 line is what keeps the two ends in the same world.
 
+**A biome grows its own ground too, so some claims are four claims.** How much rock there is, how it
+masses, how thick the groves are and how often the ground offers anything are the world's own
+business now (`BIOME_TERRAIN` in `src/balance.js`, DESIGN.md §4.3) — so a test that measures the
+*ground* can't measure it in `SEED`'s world alone, because `SEED`'s world is one of four and not the
+average of them. Those tests find one seed per biome by asking `biomeOf`, then `pickSeed`, exactly as
+a campaign gets one:
+
+```js
+for (let i = 1; Object.keys(worlds).length < BIOME_IDS.length && i < 100000; i++) {
+  const raw = (Math.imul(i, 2654435761) ^ 0x5bf03635) | 0;
+  if (!worlds[biomeOf(raw)]) worlds[biomeOf(raw)] = pickSeed(raw);
+}
+```
+
+Two are written this way and both are worth knowing about: `terrain.test.js` surveys a window per
+biome for the rock and grove shares, and `campaign.test.js` walks the water ladder — *can every
+sanctum be reached on the water the gem before it hands over* — in one world of every kind. The
+second is the invariant a biome retune is most likely to break, and it will not fail in the suite's
+own world when it breaks: it fails in one of the other three.
+
 **Consumables move; terrain and unique objects don't.** Coins, water and lights are salted with a
 nonce the run draws at the start and re-salted every time the world respawns (DESIGN.md §4.3), so a
 route to one is only valid for a run with that salt. The suite pins one:
@@ -414,6 +434,15 @@ a one-line change. It
 is quadratic in the number of items per kind and still runs in milliseconds, because the whole point
 of the rule is that there aren't many. Sanctum clearings are skipped — a clearing is a deliberate
 hoard with its own cap (two of a kind), tested separately.
+
+**How much there is and how evenly it is spread are two different tests**, and the second is easy to
+write wrongly. The mean is one window and one number. The unevenness (`RICHNESS_MIN/MAX`, DESIGN.md
+§4.3) is measured *against the field itself* — every floor tile is bucketed by what `richnessAt` says
+the ground there is offering, and the two ends are compared — rather than by carving the window into
+squares. A patch is `RICHNESS_CELL` across and lands wherever the noise puts it, so a grid of blocks
+straddles patch edges and averages away most of the effect: the first version of that test measured a
+1.4x spread where the field's own ends differ by 1.9x, and would have passed a world with half the
+texture in it. Eight worlds, because one 141x141 window holds only a couple of dozen patches.
 
 The other two invariants worth keeping honest:
 

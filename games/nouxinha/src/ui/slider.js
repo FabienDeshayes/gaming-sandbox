@@ -19,6 +19,10 @@ export function makeSlider(scene, x, y, { width = 300, min, max, value, label, o
 
   const track = scene.add.graphics();
   let current = value;
+  // The keyboard's own outline: a slider isn't a bordered box like a button,
+  // so focus gets a ring drawn around the whole control instead of over it.
+  let focused = false;
+  const focusRing = scene.add.graphics();
 
   const draw = () => {
     track.clear();
@@ -29,6 +33,12 @@ export function makeSlider(scene, x, y, { width = 300, min, max, value, label, o
     track.fillStyle(pal.fg, 1);
     track.fillCircle(hx, 0, HANDLE_R);
     text.setText(label(current));
+
+    focusRing.clear();
+    if (focused) {
+      focusRing.lineStyle(1, pal.fg, 0.9);
+      focusRing.strokeRect(-width / 2 - 10, -34, width + 20, 60);
+    }
   };
   draw();
 
@@ -63,7 +73,24 @@ export function makeSlider(scene, x, y, { width = 300, min, max, value, label, o
   scene.input.on('pointerup', stop);
   scene.input.on('pointerupoutside', stop);
 
-  container.add([text, track, zone]);
+  container.add([text, track, focusRing, zone]);
   container.setSize(width, 48);
+
+  // The same contract every `ui/keyboardNav.js` focusable shares, plus
+  // `adjust` — which is what tells the nav that Left/Right belong to this
+  // control's value instead of moving off it.
+  container.setFocused = (v) => {
+    focused = v;
+    draw();
+  };
+  container.isEnabled = () => true;
+  container.adjust = (delta) => {
+    const next = Phaser.Math.Clamp(current + delta, min, max);
+    if (next === current) return;
+    current = next;
+    draw();
+    playTap();
+    onChange(current);
+  };
   return container;
 }

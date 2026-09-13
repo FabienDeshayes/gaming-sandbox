@@ -56,6 +56,7 @@ import {
   WORLD_MAP,
 } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
+import { bindKeyboardNav } from '../ui/keyboardNav.js';
 import { MapView } from '../ui/MapView.js';
 import { Hud } from '../ui/hud.js';
 import { ItemCard } from '../ui/itemCard.js';
@@ -220,6 +221,11 @@ export class ExploreScene extends Phaser.Scene {
     // Whether the sorcerer has opened his hands and the screen belongs to the
     // ending (`theEnd`).
     this.ending = false;
+
+    // Every overlay built below hands its own buttons to this on `show()` and
+    // takes them back on `hide()` (ui/keyboardNav.js), so Tab only ever visits
+    // whatever overlay is actually on screen.
+    this.nav = bindKeyboardNav(this);
 
     this.map = new MapView(this);
     this.hud = new Hud(this, {
@@ -468,9 +474,14 @@ export class ExploreScene extends Phaser.Scene {
     };
     for (const [event, dir] of Object.entries(keys))
       this.input.keyboard.on(event, () => this.tryStep(dir));
+
+    // The text panel's one control, on the keyboard: Space, Enter or Esc all
+    // read it on, the same as a tap anywhere on screen (DESIGN.md §7) — none
+    // of them close it, because there is nothing behind it to go back to yet.
+    this.input.keyboard.on('keydown-SPACE', () => this.textPanel.isOpen() && this.textPanel.advance());
+    this.input.keyboard.on('keydown-ENTER', () => this.textPanel.isOpen() && this.textPanel.advance());
+
     this.input.keyboard.on('keydown-ESC', () => {
-      // The panel's one control, on the keyboard: Esc reads it on rather than
-      // closing it, because there is nothing behind it to go back to yet.
       if (this.textPanel.isOpen()) {
         this.textPanel.advance();
         return;

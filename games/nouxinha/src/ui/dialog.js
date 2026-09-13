@@ -137,26 +137,30 @@ export class Dialog {
     parts.push(...body);
 
     const firstY = top + panelH - PAD - buttonsH + BUTTON_H / 2;
-    buttons.forEach((button, i) => {
+    const buttonObjs = buttons.map((button, i) => {
       const bx = stacked ? cx : cx - rowSpan / 2 + BUTTON_W / 2 + i * (BUTTON_W + BUTTON_GAP);
       const by = stacked ? firstY + i * (BUTTON_H + STACKED_GAP) : firstY;
-      parts.push(
-        makeButton(scene, bx, by, button.label, button.onClick, {
-          width: stacked ? STACKED_W : BUTTON_W,
-          height: BUTTON_H,
-          fontSize: 13,
-        })
-      );
+      const obj = makeButton(scene, bx, by, button.label, button.onClick, {
+        width: stacked ? STACKED_W : BUTTON_W,
+        height: BUTTON_H,
+        fontSize: 13,
+      });
+      parts.push(obj);
+      return obj;
     });
 
     this.container.add(parts);
     this.container.setVisible(true);
     this.open = true;
+    // A dialog has no close control of its own — every way out is one of its
+    // buttons (DESIGN.md §7) — so Tab only ever has those to visit.
+    scene.nav.set(buttonObjs);
   }
 
   hide() {
     this.container.setVisible(false);
     this.container.removeAll(true);
     this.open = false;
+    this.scene.nav.clear();
   }
 }

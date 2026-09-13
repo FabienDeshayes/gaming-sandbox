@@ -23,6 +23,7 @@ import { biomeDef } from '../data/biomes.js';
 import { progressLine, SLOTS } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
+import { bindKeyboardNav, makeFocusRing } from '../ui/keyboardNav.js';
 import { playTap } from '../ui/sfx.js';
 import { startMusic } from '../ui/music.js';
 
@@ -72,7 +73,9 @@ export class SlotScene extends Phaser.Scene {
 
     this.rows = slots().map((entry, i) => this.buildRow(entry, FIRST_ROW_Y + i * (ROW_H + ROW_GAP), pal));
 
-    makeButton(this, cx, 700, SLOTS.back, () => this.scene.start('TitleScene'), { width: 240 });
+    const back = makeButton(this, cx, 700, SLOTS.back, () => this.scene.start('TitleScene'), { width: 240 });
+    bindKeyboardNav(this).set([...this.rows.map((row) => row.focusable), back]);
+    this.input.keyboard.on('keydown-ESC', () => this.scene.start('TitleScene'));
   }
 
   buildRow(entry, y, pal) {
@@ -173,7 +176,17 @@ export class SlotScene extends Phaser.Scene {
       this.pick(entry, status);
     });
 
-    return { entry, status };
+    const ring = makeFocusRing(this, left, y, ROW_W, ROW_H, pal.fg);
+    const focusable = {
+      setFocused: (v) => ring.setVisible(v),
+      isEnabled: () => usable,
+      activate: () => {
+        playTap();
+        this.pick(entry, status);
+      },
+    };
+
+    return { entry, status, focusable };
   }
 
   pick(entry, status) {

@@ -31,8 +31,11 @@ test('every counter and slot opens the card that explains it', async (game) => {
   assert(await game.hasText(ITEMS['torch-small'].effect), 'effect text');
   assert(await game.hasText(CARD.equipped), 'the active light reads as equipped');
   assertEqual((await game.state()).cardOpen, true, 'card is open');
-  await game.clickText(CARD.close);
-  assertEqual((await game.state()).cardOpen, false, 'card is closed');
+  // EQUIP is disabled since this light is already active, so CLOSE is the
+  // only enabled control and the card opens with it focused by itself
+  // (ui/keyboardNav.js) — Enter alone is the keyboard's whole way out.
+  await game.press('Enter');
+  assertEqual((await game.state()).cardOpen, false, 'Enter closed it, the same as tapping CLOSE');
 
   await game.tapCoins();
   assert(await game.hasText(ITEMS.coin.effect), 'the coin counter opens the coin card');
@@ -41,7 +44,7 @@ test('every counter and slot opens the card that explains it', async (game) => {
   await game.tapWater();
   assert(await game.hasText(ITEM_TEXT['water-drop'].name), 'and the water counter opens the water card');
   assert(await game.hasText(ITEMS['water-drop'].effect), 'effect text');
-  await game.clickText(CARD.close);
+  await game.press('Enter');
   assertEqual((await game.state()).cardOpen, false, 'card is closed');
 });
 

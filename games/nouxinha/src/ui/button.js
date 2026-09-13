@@ -21,14 +21,25 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   container.setSize(width, height);
 
   let enabled = opts.enabled !== false;
+  // Keyboard focus is drawn as its own ring, outside the border, rather than
+  // reusing the hover fill — a mouse hovering one button and Tab having
+  // landed on another are two different facts and have to stay visibly two
+  // different things.
+  let focused = false;
+  let lastFilled = false;
 
   const draw = (filled) => {
+    lastFilled = filled;
     border.clear();
     border.lineStyle(2, color, enabled ? 1 : 0.35);
     border.strokeRect(-width / 2, -height / 2, width, height);
     if (filled) {
       border.fillStyle(color, 0.2);
       border.fillRect(-width / 2, -height / 2, width, height);
+    }
+    if (focused) {
+      border.lineStyle(1, color, enabled ? 0.9 : 0.35);
+      border.strokeRect(-width / 2 - 5, -height / 2 - 5, width + 10, height + 10);
     }
     text.setAlpha(enabled ? 1 : 0.35);
   };
@@ -76,7 +87,21 @@ export function makeButton(scene, x, y, label, onClick, opts = {}) {
   container.setLabel = (next) => text.setText(next);
   container.setEnabled = (next) => {
     enabled = next;
-    draw(false);
+    draw(lastFilled);
+  };
+
+  // The keyboard-navigation contract every focusable in `ui/keyboardNav.js`
+  // shares: a way to draw focus, a way to ask whether this one is worth
+  // landing on, and a way to do what a click does.
+  container.setFocused = (next) => {
+    focused = next;
+    draw(lastFilled);
+  };
+  container.isEnabled = () => enabled;
+  container.activate = () => {
+    if (!enabled) return;
+    playTap();
+    if (onClick) onClick();
   };
   return container;
 }

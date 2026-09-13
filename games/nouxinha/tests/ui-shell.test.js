@@ -103,6 +103,16 @@ test('setting out, the game says its piece a character at a time', async (game) 
   await game.tapPanel();
   assertEqual((await game.textPanel()).index, 1, 'and the tap after that is the next block');
 
+  // Space and Enter are the same control, for a desk (DESIGN.md §7): the same
+  // two moments a tap has — filling a block in, then moving past a finished
+  // one — either key does too.
+  await game.press('Space');
+  const filledByKey = await game.textPanel();
+  assertEqual(filledByKey.index, 1, 'Space mid-sentence is not a move to the next block either');
+  assertEqual(filledByKey.shown, filledByKey.full, 'and it puts the rest of it up, the same as a tap');
+  await game.press('Enter');
+  assertEqual((await game.textPanel()).index, 2, 'and Enter after that moves on, exactly like a tap');
+
   // Anywhere on the screen is the panel's, so the D-pad under it reads it on
   // instead of walking.
   const before = await game.state();

@@ -99,6 +99,7 @@ export class CreditsScene extends Phaser.Scene {
     this.input.on('pointerdown', () => this.advance());
     this.input.keyboard.on('keydown-ESC', () => this.advance());
     this.input.keyboard.on('keydown-SPACE', () => this.advance());
+    this.input.keyboard.on('keydown-ENTER', () => this.advance());
   }
 
   everythingShown() {

@@ -1039,7 +1039,18 @@ A developer switch in Settings, off by default, for looking at what the late gam
 
 ## 7. Controls
 
-Touch is primary. Keyboard is a desktop convenience, not a design target.
+Touch is primary. Keyboard is a desktop convenience, not a design target — but
+every button on every screen is reachable from one. Tab, or the arrow keys,
+moves a focus ring between whatever is actually on screen — a dialog's
+buttons, a slot-picker row, a shop's stock — wrapping past whichever ones are
+disabled, and Enter or Space activates whichever one has it
+(`ui/keyboardNav.js`). Settings' **MOVE SPEED** slider is the one control that
+isn't really a button: focused, Left/Right change its value instead of moving
+off it, the same split a native slider makes, while Up/Down and Tab still step
+past it. None of this is a second control scheme — it's the same buttons a
+thumb taps, reached a different way, and a screen opens with the first one
+already focused so Enter alone repeats whatever a fresh page's own first tap
+would have been.
 
 | Action | Input (touch — primary) | Input (keyboard/mouse) |
 |---|---|---|
@@ -1047,30 +1058,31 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 | Open a chest | Step into it — it can't be stood on, so walking against it is what lifts the lid (§4.8) | The same |
 | Talk to the sorcerer | Step into him, the same way, at the centre of the hall (§4.9) | The same |
 | Walk | Hold a D-pad arrow down — after a 300ms hold, steps repeat at the rate set in Settings until released | Hold the same arrow's click |
-| Inspect a stack | Tap its slot in the inventory strip (bottom left of the HUD) → opens the item card | Click the slot |
+| Inspect a stack | Tap its slot in the inventory strip (bottom left of the HUD) → opens the item card | Click the slot — the strip itself has no Tab stop, only the full panel below does |
 | Browse the full inventory | Tap **ITEMS**, the box after the strip's slots → opens the scrollable inventory panel | Click **ITEMS** |
-| Equip a light | Tap **Equip** on its item card (single copy), or tap a copy's row in a stack's instance list (multiple copies) | Click the same |
-| Close an overlay | Tap its close control, or tap outside it | Click, or press Esc |
-| Read the text panel on | Tap anywhere — once to put the rest of the block up, again for the next one, and once more on the last to close it | Click, or press Esc |
-| Answer the hut | Tap **HEAD BACK OUT** or **END HERE** on the dialog | Click |
-| Answer a new world | Tap **SET OUT AGAIN** or **END HERE** on the dialog the hall leaves you on (§4.9) | Click |
-| Buy something | Tap a row on the merchant's counter, then **LEAVE** | Click the same |
+| Equip a light | Tap **Equip** on its item card (single copy), or tap a copy's row in a stack's instance list (multiple copies) | Tab to **EQUIP** and press Enter/Space (single copy), or click a row (the instance list isn't a Tab stop) |
+| Close an overlay | Tap its close control, or tap outside it | Tab to its close button and press Enter/Space, click, or press Esc |
+| Read the text panel on | Tap anywhere — once to put the rest of the block up, again for the next one, and once more on the last to close it | Click, or press Space, Enter or Esc |
+| Answer the hut | Tap **HEAD BACK OUT** or **END HERE** on the dialog | Tab between them and press Enter/Space, or click |
+| Answer a new world | Tap **SET OUT AGAIN** or **END HERE** on the dialog the hall leaves you on (§4.9) | Tab between them and press Enter/Space, or click |
+| Buy something | Tap a row on the merchant's counter, then **LEAVE** | Tab between the affordable rows and **LEAVE**, Enter/Space to pick one, or click |
 | Open the map | Tap **MAP** in the top right of the viewport (only there if you own one) | Click **MAP** |
-| Zoom the map | Pinch the drawing, or tap **-** / **+** under it; **FIT** puts the whole walk back on screen | Wheel over the drawing, or click the same buttons |
+| Zoom the map | Pinch the drawing, or tap **-** / **+** under it; **FIT** puts the whole walk back on screen | Wheel over the drawing, Tab to a zoom button and press Enter/Space, or click |
 | Pan the map | Drag the drawing (or move both fingers of a pinch together) | Drag it |
-| Start a run | **NEW GAME** or **LOAD GAME** on the title screen, then a slot on the picker | Click the same |
-| Overwrite a campaign | Tap an occupied slot under **NEW GAME**, then tap it again | Click the same |
-| Turn the music off | Settings → **MUSIC** (§9), which silences both loops | Same |
-| Set the walking speed | Settings → drag or tap the **MOVE SPEED** slider (2-10 steps/second) | Same |
-| Turn cheats on or off | Settings → **CHEATS** (§6.2) | Same |
+| Start a run | **NEW GAME** or **LOAD GAME** on the title screen, then a slot on the picker | Tab (both screens open with the first choice focused) and press Enter/Space, or click |
+| Overwrite a campaign | Tap an occupied slot under **NEW GAME**, then tap it again | Tab to the row and press Enter/Space twice, or click twice |
+| Back out of the slot picker | Tap **BACK** | Tab to it and press Enter/Space, click, or press Esc |
+| Turn the music off | Settings → **MUSIC** (§9), which silences both loops | Tab to it and press Enter/Space, or click |
+| Set the walking speed | Settings → drag or tap the **MOVE SPEED** slider (2-10 steps/second) | Tab to it, Left/Right to change it, or drag/click |
+| Turn cheats on or off | Settings → **CHEATS** (§6.2) | Tab to it and press Enter/Space, or click |
 | Open the in-run menu | Tap the **cogwheel** in the top right of the map | Click it, or press Esc |
-| Save the expedition | Menu → **SAVE GAME**, then **KEEP PLAYING** or **EXIT GAME** | Click the same |
-| Leave the run | Menu → **EXIT GAME**, then **LEAVE** | Click the same |
-| Settings mid-run | Menu → **SETTINGS**, then **BACK** | Click the same |
+| Save the expedition | Menu → **SAVE GAME**, then **KEEP PLAYING** or **EXIT GAME** | Tab between the menu's four choices and press Enter/Space, or click |
+| Leave the run | Menu → **EXIT GAME**, then **LEAVE** | Tab between them and press Enter/Space, or click |
+| Settings mid-run | Menu → **SETTINGS**, then **BACK** | Tab to it and press Enter/Space, or click — Esc reaches **BACK** directly on the Settings screen itself |
 
 **Stacking.** The inventory strip and panel both group carried lights by kind rather than showing one slot per copy: a kind you're carrying more than one of shows a single icon badged `×N`. The run itself still tracks every copy separately, in pickup order, each with its own durability — grouping is purely a display concern, so equipping still targets one specific copy.
 
-**The item card** is an overlay, opened from a slot in the strip or a row in the inventory panel, showing: the item's name, its sprite at large scale, and a one-line **effect** description ("Lights the 8 tiles around you"). A kind carried as a single copy shows that copy's **durability** as `current / max` with a bar and an **Equip** button (greyed out if it's already active). A kind carried as several copies shows a scrollable list instead — one row per copy, its own durability bar, and an `EQUIPPED` tag on whichever is active — since copies rarely share a durability and the choice of *which* one to equip has to be visible; tapping a row equips that exact copy and closes the card. Opening a card doesn't cost a step — the game is turn-based on movement only.
+**The item card** is an overlay, opened from a slot in the strip or a row in the inventory panel, showing: the item's name, its sprite at large scale, and a one-line **effect** description ("Lights the 8 tiles around you"). A kind carried as a single copy shows that copy's **durability** as `current / max` with a bar and an **Equip** button (greyed out if it's already active). A kind carried as several copies shows a scrollable list instead — one row per copy, its own durability bar, and an `EQUIPPED` tag on whichever is active — since copies rarely share a durability and the choice of *which* one to equip has to be visible; tapping a row equips that exact copy and closes the card. Opening a card doesn't cost a step — the game is turn-based on movement only. **Equip** and **Close** are both Tab stops (§7); the per-copy list, like the inventory panel's own stack list, is a tap/drag list rather than separately-focusable rows.
 
 **The inventory panel** is opened from the HUD's **ITEMS** slot and lists every carried stack — icon, name, and count — in a scrollable list, so a run isn't limited to what fits in the strip's slots. Above the list sits a gem-pip row: one pip per gem, recovered ones in the colour they gave back and the rest dimmed, so the run's progress toward all three colours is visible without standing on screen throughout a walk. The three keys sit on the same row after a gap, drawn in the same colours, because a key *is* a gate's colour and two rows would only be asking the player to hold two palettes in their head. Tapping a stack closes the panel and opens its item card.
 
@@ -1078,16 +1090,20 @@ Touch is primary. Keyboard is a desktop convenience, not a design target.
 the purse it has to be paid from. A row the run can't act on is dimmed rather than hidden, so the
 shop always says what it has and a player can see what they are saving towards; an owned one-off says
 `OWNED` where its price was. Buying re-renders the counter rather than closing it, because a sale
-moves the purse, which moves what every other row can do.
+moves the purse, which moves what every other row can do. Every affordable row is a Tab stop
+alongside **LEAVE** (§7), so the counter re-registers them on every re-render the same way a sale
+changes what's dimmed.
 
 **The map overlay** owns the whole screen and draws the run's explored ground at one pixel a tile,
 scaled up to fill the width of the screen, with markers over the top (§4.6). It opens on the whole
 walk and is zoomed by pinch, by wheel, or by the **-** / **FIT** / **+** row under it, and panned by
-dragging the drawing itself; **CLOSE** is the way out.
+dragging the drawing itself; **CLOSE** is the way out. Whichever of those buttons the current zoom
+leaves enabled are Tab stops (§7) — a fresh map opens at its own fit scale, where **-** and **FIT**
+have nothing left to do and are skipped.
 
-**The dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons — stacked one per line once there are more than two of them. It has no close control of its own: every way out is one of its buttons, because all of its uses (the hut's out-or-over question, the recap, the death screen, and the cogwheel menu) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key.
+**The dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons — stacked one per line once there are more than two of them. It has no close control of its own: every way out is one of its buttons, because all of its uses (the hut's out-or-over question, the recap, the death screen, and the cogwheel menu) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key — though its own buttons do, from Tab (or the arrows) and Enter or Space (§7), and it opens with the first one already focused.
 
-**The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is one: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again. **Opening a chest** (§4.8) is the second, and the reason the panel leaves the world on screen: the lid is visibly up behind the words. **The sorcerer** (§4.9) is the third and the longest, and the only one whose callback does something the player cannot undo — the world turns over when his last block has been read.
+**The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and Space, Enter or Esc do the same from a keyboard, all three reading it on rather than closing it, since there is nothing behind it to go back to (§7). Like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is one: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again. **Opening a chest** (§4.8) is the second, and the reason the panel leaves the world on screen: the lid is visibly up behind the words. **The sorcerer** (§4.9) is the third and the longest, and the only one whose callback does something the player cannot undo — the world turns over when his last block has been read.
 
 **The cogwheel menu** is a dialog with four choices — **SETTINGS**, **SAVE GAME**, **EXIT GAME** and **KEEP PLAYING**. Settings is the same screen the title screen opens and comes straight back to the tile you were standing on. Saving reports what it wrote and then asks the one question that follows from it: keep playing, or leave now. Leaving asks first, and says what it is about to cost, because an abandoned expedition can't be got back (§6.1).
 

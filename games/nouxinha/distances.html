@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nouxinha — distances</title>
+  <style>
+    /* A development page, not part of the game. It draws how far apart
+       everything in a world stands, with the hut at the middle of it, so the
+       rings in src/balance.js can be tuned against the walk they actually
+       cost rather than against the numbers they were typed as.
+
+       The whole page rests on one distinction. A plan in balance.js places a
+       thing at a *ring* distance — `ringPoint` in core/world.js turns a
+       distance and a heading into a tile, and that distance is Chebyshev, so
+       it is the number the plan spells. What a player pays is the *walk*: the
+       shortest path there over real ground, round the rock masses and the
+       groves and in through whichever gate is on the wrong side. The two are
+       never the same number, and the gap between them is most of what a
+       biome does to the pacing. Everything here shows both.
+
+       Four views, in the order a balance question is usually asked in:
+
+         THE ROSE     — where things are, hut-centred, over the ground itself,
+                        with the water leash drawn as the brightness of the
+                        floor: how far out a dry walk can get and still come
+                        home, at nought, one, two and three gems.
+         THE LADDER   — how far out, as one axis. A lane per kind, the band the
+                        plan authored behind each mark, and the leash as rules
+                        across it. Sampling a run of worlds puts the spread of
+                        each thing's ring over its band, which is the view for
+                        deciding a `near`/`span`.
+         THE WALK     — the campaign's own chain, leg by leg: hut to landmark
+                        to its chest to the gate to the gem, against the tank
+                        the run is carrying at that point.
+         BETWEEN      — every pair, in walking steps. Ordered by distance from
+                        the hut, so a thing's neighbours are its neighbours on
+                        the grid too.
+
+       Browsing the tile sheet is tiles.html, drawing a tile draw.html, its
+       colour zones paint.html, and which tile a world draws biomes.html.
+
+       The page is drawn in the colour of the biome being looked at, since
+       that is the world these distances belong to; there is no palette to
+       pick, in here or in the game. */
+    :root { --bg: #0b1a0b; --fg: #33ff66; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 monospace;
+      -webkit-font-smoothing: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+    }
+    .title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    h1 { font-size: 15px; margin: 0; letter-spacing: 2px; }
+    h2 {
+      font-size: 13px; margin: 0 0 10px; letter-spacing: 2px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
+    }
+    h2 span { opacity: 0.5; letter-spacing: 0; margin-left: 10px; }
+    a { color: var(--fg); }
+    .navlink { opacity: 0.65; text-decoration: none; }
+    .navlink:hover { opacity: 1; text-decoration: underline; }
+    p { margin: 0; opacity: 0.65; max-width: 92ch; }
+    .controls { display: flex; gap: 18px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    label { opacity: 0.65; }
+    select, button, input {
+      font: inherit; color: var(--fg); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+      padding: 6px 10px; cursor: pointer;
+      min-height: 34px;
+    }
+    input { cursor: text; width: 13ch; }
+    button:hover, select:hover { background: color-mix(in srgb, var(--fg) 14%, transparent); }
+    button[disabled] { opacity: 0.35; cursor: default; }
+    button.go { border-width: 2px; }
+    .dim { opacity: 0.45; }
+    .check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+    .check input { min-height: 0; width: auto; cursor: pointer; accent-color: var(--fg); }
+
+    main { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; padding: 16px; }
+    .pane { display: flex; flex-direction: column; gap: 10px; }
+    /* Fixed to the rose itself: left to size on its contents, the legend's
+       max-content width is eight columns wide and shoves the rest of the
+       page onto a line of its own. */
+    .pane.rose { flex: 0 0 auto; width: 622px; }
+    .pane.wide { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 26px; }
+    section { min-width: 0; }
+
+    /* THE ROSE. The ground is drawn a pixel a tile into an offscreen canvas
+       and blown up, so the rock masses read as shape rather than as noise. */
+    #rose { display: block; cursor: crosshair; touch-action: none; }
+    .roseBox { border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent); width: max-content; }
+    .legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 14px; font-size: 11px; opacity: 0.7; }
+    .legend b { font-weight: normal; font-style: normal; opacity: 1; }
+    .readout {
+      min-height: 3.2em; font-size: 12px;
+      padding: 6px 8px;
+      border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+      background: color-mix(in srgb, var(--fg) 6%, transparent);
+    }
+    .readout b { font-weight: normal; letter-spacing: 1px; }
+
+    /* THE LADDER. One row per kind; a track is a percentage of the axis, so
+       nothing here has to know how wide the page is. */
+    .ladder { display: grid; grid-template-columns: 8.5em 1fr; gap: 3px 10px; align-items: center; }
+    .ladder .lane { opacity: 0.6; font-size: 11px; text-align: right; letter-spacing: 1px; }
+    .track { position: relative; height: 22px; }
+    .track.named { height: 26px; }
+    .track.axis { height: 18px; }
+    .track i {
+      position: absolute; display: block; font-style: normal;
+    }
+    /* the band the plan authored: `near` to `near + span` */
+    .track i.band { top: 7px; height: 8px; background: color-mix(in srgb, var(--fg) 16%, transparent); }
+    /* the spread of that ring over a run of sampled worlds, and its median */
+    .track i.whisk { top: 9px; height: 4px; background: color-mix(in srgb, var(--fg) 34%, transparent); }
+    .track i.median { top: 5px; width: 1px; height: 12px; background: var(--fg); opacity: 0.75; }
+    /* ring to walk: the detour, drawn as the distance between the two marks */
+    .track i.detour { top: 10px; height: 2px; background: color-mix(in srgb, var(--fg) 45%, transparent); }
+    .track i.ring { top: 6px; width: 5px; height: 10px; margin-left: -2px; border: 1px solid color-mix(in srgb, var(--fg) 60%, transparent); }
+    .track i.walk { top: 4px; width: 7px; height: 14px; margin-left: -3px; background: var(--fg); cursor: pointer; }
+    .track i.walk.gate { background: none; border: 2px solid var(--fg); }
+    .track i.walk:hover { outline: 2px solid var(--fg); outline-offset: 2px; }
+    /* the leash rules: how far a dry walk gets and still comes home */
+    .track i.rule { top: 0; bottom: 0; height: 100%; width: 1px; background: color-mix(in srgb, var(--fg) 30%, transparent); }
+    .track i.rule.big { background: color-mix(in srgb, var(--fg) 55%, transparent); }
+    .track i.tick { top: 0; font-size: 10px; opacity: 0.55; padding-left: 3px; white-space: nowrap; }
+    .track i.tag { font-size: 9px; opacity: 0.7; padding-left: 6px; white-space: nowrap; }
+    .track i.grid { top: 0; bottom: 0; height: 100%; width: 1px; background: color-mix(in srgb, var(--fg) 12%, transparent); }
+
+    table { border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 3px 8px; text-align: right; white-space: nowrap; }
+    th { font-weight: normal; opacity: 0.55; letter-spacing: 1px; }
+    td.name, th.name { text-align: left; }
+    tbody tr:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+    tr.head td { padding-top: 12px; opacity: 0.75; letter-spacing: 1px; }
+    td.over { color: var(--bg); background: var(--fg); }
+    .scroller { overflow: auto; max-height: 70vh; border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent); }
+
+    /* BETWEEN. A cell's brightness is its distance, so the matrix reads as a
+       shape before it reads as numbers. */
+    #matrix { font-size: 10px; border-collapse: collapse; }
+    #matrix th { padding: 1px 3px; opacity: 0.7; }
+    #matrix th.col { writing-mode: vertical-rl; text-orientation: mixed; height: 8.5em; padding: 3px 1px; }
+    #matrix th.row { text-align: right; padding-right: 6px; position: sticky; left: 0; background: var(--bg); z-index: 1; }
+    #matrix td { padding: 1px 3px; text-align: right; min-width: 3.2em; }
+    #matrix td.self { opacity: 0.25; }
+    #matrix tr:hover th.row, #matrix td:hover { outline: 1px solid var(--fg); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>NOUXINHA DISTANCES</h1>
+      <a class="navlink" href="tiles.html">← browse tile sheet</a>
+      <a class="navlink" href="biomes.html">assign tiles to biomes →</a>
+      <a class="navlink" href="paint.html">paint a tile's zones →</a>
+      <a class="navlink" href="draw.html">draw a tile's pixels →</a>
+    </div>
+    <div class="controls">
+      <label>world <select id="biome"></select></label>
+      <label>seed <input id="seed" spellcheck="false" /></label>
+      <button id="roll" class="go">ANOTHER WORLD</button>
+      <label class="check"><input type="checkbox" id="minor" /> posts and wisps</label>
+      <label>sample <select id="samples"></select></label>
+      <button id="sample">WALK THAT MANY WORLDS</button>
+      <button id="copy">COPY THE TABLE</button>
+      <span id="status" class="dim"></span>
+    </div>
+    <div class="controls">
+      <p id="blurb"></p>
+    </div>
+  </header>
+
+  <main>
+    <div class="pane rose">
+      <section>
+        <h2>THE ROSE <span id="roseNote"></span></h2>
+        <div class="roseBox"><canvas id="rose"></canvas></div>
+      </section>
+      <div class="legend" id="legend"></div>
+      <div class="readout" id="readout"></div>
+      <section>
+        <h2>EVERYTHING <span>ring, and the walk</span></h2>
+        <div class="scroller"><table id="table"></table></div>
+      </section>
+    </div>
+
+    <div class="pane wide">
+      <section>
+        <h2>THE LADDER <span>how far out, in steps walked · hollow tick is the ring the plan asked for</span></h2>
+        <div class="ladder" id="ladder"></div>
+      </section>
+
+      <section>
+        <h2>THE WALK <span>the chain, leg by leg, against the tank it is walked on</span></h2>
+        <div id="chain"></div>
+      </section>
+
+      <section>
+        <h2>BETWEEN <span>walking steps between every pair, nearest the hut first</span></h2>
+        <div class="scroller"><table id="matrix"></table></div>
+      </section>
+    </div>
+  </main>
+
+<script type="module">
+import {
+  BASE_X,
+  BASE_Y,
+  DEFAULT_SEED,
+  biomeOf,
+  canEnter,
+  chebyshev,
+  chests,
+  landmarks,
+  pickSeed,
+  sanctums,
+  signposts,
+  sites,
+  wisps,
+} from './src/core/world.js';
+import {
+  LANDMARK_CHEST_NEAR,
+  LANDMARK_CHEST_SPAN,
+  STARTING_WATER,
+  WATER_PER_GEM,
+  WATER_PER_STEP,
+} from './src/balance.js';
+import { BIOMES, biomeDef } from './src/data/biomes.js';
+import { landmarkDef } from './src/data/landmarks.js';
+import { KEYS } from './src/data/items.js';
+import { gemColour, getPalette, hex, paletteColour, setDefaultPalette } from './src/config.js';
+
+// How far out the page looks. Everything a plan places is inside 120 (the
+// hall's wall at 117, the last coin chest at 118), so the rose draws 132 and
+// the flood fill walks a little further than that, because a path round a rock
+// mass may bulge well outside the ring of the thing it is walking to.
+const VIEW = 132;
+const GRID = 156;
+const SPAN = GRID * 2 + 1;
+
+// A walk is measured with every gate open. Only the four gates want a key, and
+// each one is a doorway into its own sanctum rather than a way through to
+// anywhere, so opening all four changes the distance to the gems and to
+// nothing else — and it is the distance to the gems that the chain is about.
+const ALL_KEYS = new Set(KEYS);
+
+// The tank a run sets out with, and after each gem. `WATER_PER_STEP` off it a
+// step, so half the tank is as far as a dry walk gets and still comes home:
+// the leash the whole of the pacing is written against.
+const TANKS = [0, 1, 2, 3].map((gems) => STARTING_WATER + gems * WATER_PER_GEM);
+const LEASH = TANKS.map((tank) => Math.floor(tank / (2 * WATER_PER_STEP)));
+
+const el = (id) => document.getElementById(id);
+const idx = (x, y) => (y + GRID) * SPAN + (x + GRID);
+const inGrid = (x, y) => x >= -GRID && x <= GRID && y >= -GRID && y <= GRID;
+
+// --- The world, as a list of things that stand somewhere -----------------------
+//
+// Every placed thing in the world flattened into one list, each carrying the
+// band its plan authored (`near` to `near + span`, or a sanctum's flat
+// `distance`) so a mark can be drawn against what was asked for. The ids are
+// the ones in balance.js, because the whole point of the page is to know which
+// line to go and edit.
+
+const KIND_ORDER = ['sanctum', 'landmark', 'chest', 'site', 'signpost', 'wisp'];
+
+function bandOf(plan) {
+  if (plan.distance !== undefined) return [plan.distance, plan.distance];
+  if (plan.near === undefined) return null;
+  return [plan.near, plan.near + Math.max(0, plan.span - 1)];
+}
+
+function entitiesOf(seed) {
+  const out = [];
+
+  for (const s of sanctums(seed)) {
+    out.push({
+      id: s.hall ? 'hall' : s.gem,
+      kind: 'sanctum',
+      name: s.hall ? 'THE HALL' : `SANCTUM ${s.index + 1}`,
+      note: s.hall ? 'the sorcerer' : `${s.gem}, wants ${s.key || 'nothing'}`,
+      x: s.centre.x,
+      y: s.centre.y,
+      band: bandOf(s),
+      colour: gemColour(s.colour),
+      sanctum: s,
+    });
+  }
+  for (const m of landmarks(seed)) {
+    const def = landmarkDef(m.id);
+    out.push({
+      id: m.id,
+      kind: 'landmark',
+      name: def ? def.name : m.id,
+      note: `inside sanctum ${m.index + 1}, on its heading`,
+      x: m.x,
+      y: m.y,
+      band: bandOf(m),
+      colour: def ? paletteColour(def.palette) : null,
+    });
+  }
+  for (const c of chests(seed)) {
+    // A chest beside a landmark is placed on a ring round *that landmark*, not
+    // round the hut, so the band it was authored with says nothing about how
+    // far out it lands — its distance from the hut is the landmark's, give or
+    // take three tiles. Drawn bandless on purpose.
+    out.push({
+      id: c.id,
+      kind: 'chest',
+      name: c.id.replace('chest-', 'chest ').toUpperCase(),
+      note: c.at
+        ? `${LANDMARK_CHEST_NEAR}-${LANDMARK_CHEST_NEAR + LANDMARK_CHEST_SPAN - 1} off ${c.at}`
+        : c.key
+          ? `holds ${c.key}`
+          : `holds ${c.coins} coins`,
+      x: c.x,
+      y: c.y,
+      band: c.at ? null : bandOf(c),
+      beside: c.at || null,
+      key: c.key || null,
+    });
+  }
+  for (const s of sites(seed)) {
+    out.push({
+      id: s.id,
+      kind: 'site',
+      name: s.id.toUpperCase(),
+      note: s.item ? `the ${s.item}, lying in the dark` : 'a stall',
+      x: s.x,
+      y: s.y,
+      band: bandOf(s),
+      stall: !s.item,
+    });
+  }
+  for (const p of signposts(seed)) {
+    out.push({
+      id: p.id,
+      kind: 'signpost',
+      name: p.id.toUpperCase(),
+      note: `points at ${p.target}`,
+      x: p.x,
+      y: p.y,
+      band: bandOf(p),
+    });
+  }
+  for (const w of wisps(seed)) {
+    out.push({
+      id: w.id,
+      kind: 'wisp',
+      name: w.id.toUpperCase(),
+      note: 'a light of its own',
+      x: w.x,
+      y: w.y,
+      band: bandOf(w),
+    });
+  }
+
+  for (const e of out) e.ring = chebyshev(e.x, e.y, BASE_X, BASE_Y);
+  return out;
+}
+
+// --- The ground, and the walk over it ------------------------------------------
+//
+// One pass of `canEnter` into a byte a tile, then one flood fill out of the
+// hut. Both are cheap enough to redo on every seed (about eighty milliseconds
+// together), which is what lets the page sample a run of worlds rather than
+// argue from one.
+
+function walkableGrid(seed) {
+  const grid = new Uint8Array(SPAN * SPAN);
+  for (let y = -GRID; y <= GRID; y++)
+    for (let x = -GRID; x <= GRID; x++)
+      grid[idx(x, y)] = canEnter(x, y, seed, ALL_KEYS) ? 1 : 0;
+  return grid;
+}
+
+// Breadth-first from one tile over that grid: the number of steps a character
+// actually takes to get anywhere, -1 where it cannot.
+function stepsFrom(grid, from) {
+  const dist = new Int32Array(SPAN * SPAN).fill(-1);
+  if (!inGrid(from.x, from.y)) return dist;
+  // A ring buffer rather than a growing array: the fill visits about ninety
+  // thousand tiles and this runs once per named thing in the world.
+  const queue = new Int32Array(SPAN * SPAN);
+  let head = 0;
+  let tail = 0;
+  const start = idx(from.x, from.y);
+  dist[start] = 0;
+  queue[tail++] = start;
+  while (head < tail) {
+    const at = queue[head++];
+    const d = dist[at] + 1;
+    const x = (at % SPAN) - GRID;
+    const y = Math.floor(at / SPAN) - GRID;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!inGrid(nx, ny)) continue;
+      const next = idx(nx, ny);
+      if (dist[next] >= 0 || !grid[next]) continue;
+      dist[next] = d;
+      queue[tail++] = next;
+    }
+  }
+  return dist;
+}
+
+// What it costs to reach a thing, which is not the same as reaching its tile:
+// a chest, a landmark, a signpost, a wisp and the sorcerer are all walked
+// *into* rather than onto, so the walk ends on whichever neighbour is nearest.
+function reach(dist, e) {
+  let best = -1;
+  const at = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (const [dx, dy] of at) {
+    const x = e.x + dx;
+    const y = e.y + dy;
+    if (!inGrid(x, y)) continue;
+    const d = dist[idx(x, y)];
+    if (d >= 0 && (best < 0 || d < best)) best = d;
+  }
+  return best;
+}
+
+// The whole of what the page knows about one seed.
+function worldOf(seed) {
+  const entities = entitiesOf(seed);
+  const grid = walkableGrid(seed);
+  const home = stepsFrom(grid, { x: BASE_X, y: BASE_Y });
+  for (const e of entities) {
+    e.walk = reach(home, e);
+    e.detour = e.walk > 0 && e.ring > 0 ? e.walk / e.ring : null;
+    // The smallest number of gems a dry walk out to it and home again fits in.
+    e.gems = LEASH.findIndex((leash) => e.walk >= 0 && e.walk <= leash);
+  }
+  return { seed, biome: biomeOf(seed), entities, grid, home };
+}
+
+// --- Which world is being looked at -------------------------------------------
+
+let biome = biomeDef(biomeOf(pickSeed(DEFAULT_SEED))).id;
+let world = null;
+let palette = getPalette();
+let showMinor = false;
+let spread = null; // id -> sorted rings/walks over a run of sampled worlds
+let hovered = null;
+
+// A seed of the kind of world asked for, validated the way a run's is: the
+// campaign never walks a seed `pickSeed` hasn't passed, so neither does this.
+function seedOfBiome(want) {
+  for (let tries = 0; tries < 400; tries++) {
+    const base = (Math.random() * 0xffffffff) | 0;
+    if (biomeOf(base) !== want) continue;
+    const seed = pickSeed(base);
+    if (biomeOf(seed) === want) return seed;
+  }
+  return pickSeed(DEFAULT_SEED);
+}
+
+function shown() {
+  return world.entities.filter((e) => showMinor || (e.kind !== 'signpost' && e.kind !== 'wisp'));
+}
+
+// --- THE ROSE -------------------------------------------------------------------
+//
+// The world from above, hut at the middle. The floor is drawn a pixel a tile
+// and blown up rather than a rectangle a tile, because at two and a bit pixels
+// a tile a rectangle per tile is sixty thousand draw calls to arrive at the
+// same picture.
+//
+// The brightness of the floor is the leash: the ground a dry walk can reach
+// and come home from carrying no gems is the brightest, and it steps down once
+// per gem. So the picture answers the question the distances are really about
+// — *how much of this world is open to a run at this point in the campaign* —
+// without a number in it.
+
+const ROSE = 620;
+const ground = document.createElement('canvas');
+ground.width = VIEW * 2 + 1;
+ground.height = VIEW * 2 + 1;
+
+// A tile's band: which tank first reaches it and gets home again. Rock and
+// everything off the grid is BLOCKED, floor the fill never arrived at is
+// SEALED — a pocket the noise closed, which is world that may as well not be
+// there — and floor past the last tank is BEYOND.
+const BLOCKED = -2;
+const SEALED = -1;
+const BEYOND = LEASH.length;
+const BAND_ALPHA = [0.34, 0.22, 0.14, 0.085];
+const BEYOND_ALPHA = 0.045;
+const SEALED_ALPHA = 0.02;
+// Where one band meets the next, drawn bright: four nested outlines saying
+// exactly how much further each gem lets a dry walk go. Without them the
+// steps in brightness are lost in a world made half of rock.
+const EDGE_ALPHA = 0.75;
+
+function bandAt(x, y) {
+  const at = idx(x, y);
+  if (!world.grid[at]) return BLOCKED;
+  const d = world.home[at];
+  if (d < 0) return SEALED;
+  const band = LEASH.findIndex((leash) => d <= leash);
+  return band < 0 ? BEYOND : band;
+}
+
+function drawGround() {
+  const ctx = ground.getContext('2d');
+  const img = ctx.createImageData(ground.width, ground.height);
+  const fg = palette.fg;
+  const r = (fg >> 16) & 0xff;
+  const g = (fg >> 8) & 0xff;
+  const b = fg & 0xff;
+  const width = ground.width;
+
+  const bands = new Int8Array(width * width);
+  for (let y = -VIEW; y <= VIEW; y++)
+    for (let x = -VIEW; x <= VIEW; x++) bands[(y + VIEW) * width + (x + VIEW)] = bandAt(x, y);
+
+  const alphaOf = (band) =>
+    band === BLOCKED ? 0 : band === SEALED ? SEALED_ALPHA : band === BEYOND ? BEYOND_ALPHA : BAND_ALPHA[band];
+
+  for (let ty = 0; ty < width; ty++)
+    for (let tx = 0; tx < width; tx++) {
+      const band = bands[ty * width + tx];
+      let alpha = alphaOf(band);
+      // The contour: a tile on the near side of a step in the leash. Only
+      // between two tiles a walk can stand on, or every rock face in the
+      // world would draw one.
+      if (band >= 0 && band < BEYOND) {
+        const right = tx + 1 < width ? bands[ty * width + tx + 1] : band;
+        const below = ty + 1 < width ? bands[(ty + 1) * width + tx] : band;
+        if ((right > band && right !== BLOCKED) || (below > band && below !== BLOCKED)) alpha = EDGE_ALPHA;
+      }
+      const p = (ty * width + tx) * 4;
+      img.data[p] = r;
+      img.data[p + 1] = g;
+      img.data[p + 2] = b;
+      img.data[p + 3] = Math.round(alpha * 255);
+    }
+  ctx.putImageData(img, 0, 0);
+}
+
+const rose = el('rose');
+const scale = ROSE / (VIEW * 2 + 1);
+const sx = (x) => (x + VIEW + 0.5) * scale;
+const sy = (y) => (y + VIEW + 0.5) * scale;
+
+function alpha(colour, a) {
+  return `rgba(${(colour >> 16) & 0xff}, ${(colour >> 8) & 0xff}, ${colour & 0xff}, ${a})`;
+}
+
+function drawRose() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  rose.width = ROSE * dpr;
+  rose.height = ROSE * dpr;
+  rose.style.width = `${ROSE}px`;
+  rose.style.height = `${ROSE}px`;
+  const ctx = rose.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, ROSE, ROSE);
+  const fg = palette.fg;
+
+  drawGround();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(ground, 0, 0, ROSE, ROSE);
+
+  // The rings the plans are written in, every twenty tiles. Chebyshev, because
+  // that is the distance `ringPoint` places on — a ring in this world is a
+  // square, and drawing it as a circle would quietly move every mark on it.
+  ctx.font = '10px monospace';
+  ctx.textBaseline = 'bottom';
+  for (let d = 20; d <= VIEW; d += 20) {
+    ctx.strokeStyle = alpha(fg, d % 40 === 0 ? 0.4 : 0.22);
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx(-d), sy(-d), d * 2 * scale, d * 2 * scale);
+    ctx.setLineDash([]);
+    ctx.fillStyle = alpha(fg, 0.45);
+    ctx.fillText(String(d), sx(0) + 3, sy(-d) - 1);
+  }
+
+  // A spoke out to each sanctum: the four headings the whole world is hung on,
+  // since a landmark takes its sanctum's heading and three of the stalls take
+  // the opposite one.
+  ctx.strokeStyle = alpha(fg, 0.16);
+  for (const e of world.entities.filter((s) => s.kind === 'sanctum')) {
+    ctx.beginPath();
+    ctx.moveTo(sx(0), sy(0));
+    ctx.lineTo(sx(e.x), sy(e.y));
+    ctx.stroke();
+  }
+
+  for (const e of shown()) drawMark(ctx, e);
+  drawHut(ctx);
+  if (hovered) {
+    ctx.strokeStyle = alpha(fg, 0.9);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx(hovered.x) - 7, sy(hovered.y) - 7, 14, 14);
+  }
+}
+
+function drawHut(ctx) {
+  const fg = palette.fg;
+  ctx.fillStyle = alpha(fg, 1);
+  ctx.fillRect(sx(0) - 4, sy(0) - 4, 8, 8);
+  ctx.strokeStyle = alpha(fg, 0.8);
+  ctx.strokeRect(sx(0) - 7, sy(0) - 7, 14, 14);
+  ctx.fillStyle = alpha(fg, 0.8);
+  ctx.fillText('HUT', sx(0) + 10, sy(0) + 4);
+}
+
+function drawMark(ctx, e) {
+  const fg = palette.fg;
+  const colour = e.colour || fg;
+  const x = sx(e.x);
+  const y = sy(e.y);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = alpha(colour, 0.95);
+  ctx.fillStyle = alpha(colour, 0.95);
+  ctx.font = '10px monospace';
+  ctx.textBaseline = 'middle';
+
+  if (e.kind === 'sanctum') {
+    const s = e.sanctum;
+    // The wall, as it stands: a Chebyshev square with one gate in it.
+    ctx.strokeStyle = alpha(colour, 0.55);
+    ctx.strokeRect(sx(s.centre.x - s.radius), sy(s.centre.y - s.radius), s.radius * 2 * scale, s.radius * 2 * scale);
+    ctx.fillStyle = alpha(colour, 0.9);
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    // The gate, which is the tile the walk actually has to find.
+    ctx.fillRect(sx(s.gate.x) - 2.5, sy(s.gate.y) - 2.5, 5, 5);
+    ctx.fillStyle = alpha(colour, 0.85);
+    ctx.fillText(e.name.replace('SANCTUM ', 'S'), x + 8, y);
+    return;
+  }
+  if (e.kind === 'landmark') {
+    ctx.beginPath();
+    ctx.moveTo(x, y - 6);
+    ctx.lineTo(x + 6, y);
+    ctx.lineTo(x, y + 6);
+    ctx.lineTo(x - 6, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = alpha(colour, 0.9);
+    ctx.fillText(e.name, x + 9, y);
+    return;
+  }
+  if (e.kind === 'chest') {
+    ctx.strokeStyle = alpha(fg, e.key ? 0.95 : 0.6);
+    ctx.lineWidth = e.key ? 2 : 1;
+    ctx.strokeRect(x - 4, y - 3, 8, 6);
+    if (e.key) {
+      ctx.fillStyle = alpha(fg, 0.8);
+      ctx.fillText(e.key.replace('key-', 'K'), x + 7, y);
+    }
+    return;
+  }
+  if (e.kind === 'site') {
+    ctx.strokeStyle = alpha(fg, 0.85);
+    if (e.stall) {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 6);
+      ctx.lineTo(x + 5.5, y + 4);
+      ctx.lineTo(x - 5.5, y + 4);
+      ctx.closePath();
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = alpha(fg, 0.85);
+      ctx.fillText(e.id.toUpperCase(), x + 8, y);
+    }
+    return;
+  }
+  if (e.kind === 'signpost') {
+    ctx.strokeStyle = alpha(fg, 0.5);
+    ctx.beginPath();
+    ctx.moveTo(x, y + 4);
+    ctx.lineTo(x, y - 4);
+    ctx.moveTo(x - 3, y - 3);
+    ctx.lineTo(x + 3, y - 3);
+    ctx.stroke();
+    return;
+  }
+  // A wisp, with the little clearing it lights on its own account round it.
+  ctx.strokeStyle = alpha(fg, 0.3);
+  ctx.beginPath();
+  ctx.arc(x, y, 2 * scale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = alpha(fg, 0.75);
+  ctx.beginPath();
+  ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function nearestTo(px, py) {
+  let best = null;
+  let bestD = 12;
+  for (const e of shown()) {
+    const d = Math.hypot(sx(e.x) - px, sy(e.y) - py);
+    if (d < bestD) {
+      bestD = d;
+      best = e;
+    }
+  }
+  return best;
+}
+
+rose.addEventListener('pointermove', (event) => {
+  const box = rose.getBoundingClientRect();
+  const found = nearestTo(event.clientX - box.left, event.clientY - box.top);
+  if (found === hovered) return;
+  hovered = found;
+  drawRose();
+  say(hovered);
+});
+rose.addEventListener('pointerleave', () => {
+  hovered = null;
+  drawRose();
+  say(null);
+});
+
+function say(e) {
+  if (!e) {
+    const far = shown().reduce((a, b) => (b.walk > a.walk ? b : a));
+    el('readout').innerHTML =
+      `<b>${world.entities.length} things stand in this world.</b> The furthest is ` +
+      `${far.name} — ${far.walk} steps out, ${(far.walk * 2)} of water there and back, ` +
+      `which is ${far.gems < 0 ? 'more than any tank in the game' : `a ${far.gems}-gem tank`}. ` +
+      `Hover a mark for its own numbers.`;
+    return;
+  }
+  const band = e.band ? `${e.band[0]}-${e.band[1]}` : e.beside ? `beside ${e.beside}` : '—';
+  el('readout').innerHTML =
+    `<b>${e.name}</b> <span class="dim">${e.id} · ${e.note}</span><br />` +
+    `at ${e.x},${e.y} · ring ${e.ring} <span class="dim">(plan: ${band})</span> · ` +
+    `walk ${e.walk < 0 ? 'unreachable' : `${e.walk} steps`}` +
+    (e.detour ? ` · detour ×${e.detour.toFixed(2)}` : '') +
+    ` · there and back ${e.walk * 2} water ` +
+    `<span class="dim">(${e.gems < 0 ? 'past every tank' : `${e.gems} gems`})</span>`;
+}
+
+// --- THE LADDER ------------------------------------------------------------------
+//
+// The same distances on one axis, which is the view a `near`/`span` is actually
+// decided in: a lane per kind, the authored band behind each mark, and the four
+// leashes ruled across the lot. Where a run of worlds has been sampled, the
+// spread of that thing's ring across them is drawn over its band — one world is
+// an anecdote, and a band is a claim about all of them.
+
+function axisMax() {
+  const far = Math.max(...world.entities.map((e) => Math.max(e.walk, e.ring)), LEASH[3]);
+  return Math.ceil((far + 4) / 20) * 20;
+}
+
+function ladder() {
+  const max = axisMax();
+  const pc = (d) => `${(Math.max(0, d) / max) * 100}%`;
+  const out = [];
+
+  const rules = () => {
+    let html = '';
+    for (let d = 20; d < max; d += 20) html += `<i class="grid" style="left:${pc(d)}"></i>`;
+    LEASH.forEach((leash, gems) => {
+      html += `<i class="rule${gems === 0 ? ' big' : ''}" style="left:${pc(leash)}" title="${gems} gems: ${TANKS[gems]} water, ${leash} steps out and home"></i>`;
+    });
+    return html;
+  };
+
+  // The axis: the ring numbers along the top, and the leash each rule is.
+  let head = rules();
+  for (let d = 0; d <= max; d += 20) head += `<i class="tick" style="left:${pc(d)}">${d}</i>`;
+  out.push(`<div class="lane">steps</div><div class="track axis">${head}</div>`);
+  let leashRow = rules();
+  LEASH.forEach((leash, gems) => {
+    leashRow += `<i class="tick" style="left:${pc(leash)};top:2px">${gems}g</i>`;
+  });
+  out.push(`<div class="lane">the leash</div><div class="track axis">${leashRow}</div>`);
+
+  for (const kind of KIND_ORDER) {
+    if (!showMinor && (kind === 'signpost' || kind === 'wisp')) continue;
+    const lane = world.entities.filter((e) => e.kind === kind);
+    if (!lane.length) continue;
+    let html = rules();
+    for (const e of lane) {
+      const spreadOf = spread && spread.get(e.id);
+      if (e.band) {
+        const [lo, hi] = e.band;
+        html += `<i class="band" style="left:${pc(lo)};width:${((hi - lo) / max) * 100}%" title="${e.id} is planned for ${lo}-${hi}"></i>`;
+      }
+      if (spreadOf) {
+        const lo = spreadOf.rings[0];
+        const hi = spreadOf.rings[spreadOf.rings.length - 1];
+        const mid = median(spreadOf.walks);
+        html += `<i class="whisk" style="left:${pc(lo)};width:${((hi - lo) / max) * 100}%" title="${e.id}: ring ${lo}-${hi} over ${spreadOf.rings.length} worlds"></i>`;
+        html += `<i class="median" style="left:${pc(mid)}" title="${e.id}: median walk ${mid} steps over ${spreadOf.walks.length} worlds"></i>`;
+      }
+      const from = Math.min(e.ring, Math.max(e.walk, 0));
+      const to = Math.max(e.ring, e.walk);
+      html += `<i class="detour" style="left:${pc(from)};width:${((to - from) / max) * 100}%"></i>`;
+      html += `<i class="ring" style="left:${pc(e.ring)}"></i>`;
+      html += `<i class="walk${e.key ? ' gate' : ''}" style="left:${pc(Math.max(e.walk, 0))}" data-id="${e.id}" title="${e.name}: ${e.walk} steps"></i>`;
+      if (kind === 'sanctum' || kind === 'landmark')
+        html += `<i class="tag" style="left:${pc(Math.max(e.walk, 0))};top:${lane.indexOf(e) % 2 ? 14 : 2}px">${e.id}</i>`;
+    }
+    const named = kind === 'sanctum' || kind === 'landmark';
+    out.push(`<div class="lane">${kind}s</div><div class="track${named ? ' named' : ''}">${html}</div>`);
+  }
+
+  el('ladder').innerHTML = out.join('');
+  for (const mark of el('ladder').querySelectorAll('.walk')) {
+    mark.addEventListener('pointerenter', () => {
+      hovered = world.entities.find((e) => e.id === mark.dataset.id);
+      drawRose();
+      say(hovered);
+    });
+  }
+}
+
+function median(list) {
+  const sorted = [...list].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+// --- THE WALK ---------------------------------------------------------------------
+//
+// The chain the campaign actually walks, which is the one thing a rose and a
+// ladder both flatten away: out to the landmark, on to the chest beside it for
+// the key, on to the gate that key opens, in to the gem — and home. Each leg is
+// a real walk between two tiles, and the total is set against the tank the run
+// is carrying at that point in the chain, which is one gem per sanctum behind
+// it. A row that is over its tank is a chain that cannot be walked dry.
+
+function chain(between) {
+  const legs = [];
+  const sanctumsOf = world.entities.filter((e) => e.kind === 'sanctum');
+  const step = (a, b) => (between.get(a.id) ? between.get(a.id)[b.id] : -1);
+
+  // The plans are read against each other by index (`buildLandmarks` in
+  // core/world.js): the nth landmark stands inside the nth sanctum, on its
+  // heading, and the chest beside it is the one that holds that gate's key.
+  const marks = world.entities.filter((e) => e.kind === 'landmark');
+
+  for (const s of sanctumsOf) {
+    const mark = marks[s.sanctum.index] || null;
+    const chest = world.entities.find((e) => e.kind === 'chest' && mark && e.beside === mark.id);
+    const route = [
+      ['hut → landmark', mark ? mark.walk : -1],
+      ['→ its chest', mark && chest ? step(mark, chest) : -1],
+      ['→ the gate', chest ? step(chest, s) : -1],
+    ];
+    const out = route.reduce((a, [, d]) => (d < 0 || a < 0 ? -1 : a + d), 0);
+    const home = s.walk;
+    const gems = s.sanctum.index; // one gem per sanctum already behind you
+    legs.push({
+      s,
+      mark,
+      chest,
+      route,
+      out,
+      home,
+      total: out < 0 || home < 0 ? -1 : out + home,
+      tank: TANKS[Math.min(gems, TANKS.length - 1)],
+    });
+  }
+
+  const rows = legs
+    .map((leg) => {
+      const cells = leg.route
+        .map(([, d]) => `<td>${d < 0 ? '—' : d}</td>`)
+        .join('');
+      const over = leg.total > leg.tank;
+      return (
+        `<tr><td class="name">${leg.s.name}</td>` +
+        `<td class="name dim">${leg.mark ? leg.mark.name : '—'} · ${leg.chest ? (leg.chest.key || 'coins') : '—'}</td>` +
+        cells +
+        `<td>${leg.out < 0 ? '—' : leg.out}</td>` +
+        `<td>${leg.home < 0 ? '—' : leg.home}</td>` +
+        `<td class="${over ? 'over' : ''}">${leg.total < 0 ? '—' : leg.total}</td>` +
+        `<td class="dim">${leg.tank}</td></tr>`
+      );
+    })
+    .join('');
+
+  el('chain').innerHTML =
+    '<table><thead><tr>' +
+    '<th class="name">sanctum</th><th class="name">by way of</th>' +
+    '<th>to the landmark</th><th>to its chest</th><th>to the gate</th>' +
+    '<th>out</th><th>home</th><th>dry round trip</th><th>tank</th>' +
+    '</tr></thead><tbody>' +
+    rows +
+    '</tbody></table>' +
+    '<p style="margin-top:8px">A round trip over its tank is dry-unwalkable: it wants water off the ground, ' +
+    'a full tank from the Bell, or a second trip. The tank is what a run holds with one gem per sanctum behind it.</p>';
+}
+
+// --- EVERYTHING, and BETWEEN --------------------------------------------------------
+
+function table() {
+  const rows = [];
+  for (const kind of KIND_ORDER) {
+    const lane = shown().filter((e) => e.kind === kind);
+    if (!lane.length) continue;
+    rows.push(`<tr class="head"><td class="name" colspan="8">${kind.toUpperCase()}S</td></tr>`);
+    for (const e of [...lane].sort((a, b) => a.walk - b.walk)) {
+      const spreadOf = spread && spread.get(e.id);
+      rows.push(
+        `<tr><td class="name">${e.id}</td>` +
+          `<td class="name dim">${e.x},${e.y}</td>` +
+          `<td class="dim">${e.band ? `${e.band[0]}-${e.band[1]}` : '—'}</td>` +
+          `<td>${e.ring}</td>` +
+          `<td>${e.walk < 0 ? '—' : e.walk}</td>` +
+          `<td>${e.detour ? `×${e.detour.toFixed(2)}` : '—'}</td>` +
+          `<td>${e.gems < 0 ? '—' : `${e.gems}g`}</td>` +
+          `<td class="dim">${spreadOf ? `${spreadOf.rings[0]}-${spreadOf.rings[spreadOf.rings.length - 1]} · ${median(spreadOf.walks)}` : ''}</td></tr>`
+      );
+    }
+  }
+  el('table').innerHTML =
+    '<thead><tr><th class="name">id</th><th class="name">tile</th><th>plan</th>' +
+    '<th>ring</th><th>walk</th><th>detour</th><th>tank</th>' +
+    `<th>${spread ? 'sampled ring · walk' : 'sampled'}</th></tr></thead><tbody>${rows.join('')}</tbody>`;
+}
+
+// Every pair, in steps: one flood fill per thing, ordered by how far out it is
+// so the matrix reads as a gradient off its own diagonal. Where it doesn't —
+// where two things at the same distance from the hut are a long way from each
+// other — that is a quarter of the compass the campaign has to cross.
+function matrix() {
+  const list = [
+    { id: 'hut', name: 'hut', kind: 'hut', x: BASE_X, y: BASE_Y, ring: 0, walk: 0 },
+    ...shown(),
+  ].sort((a, b) => a.ring - b.ring);
+
+  const between = new Map();
+  let far = 1;
+  for (const from of list) {
+    const dist = stepsFrom(world.grid, nearestOpen(from));
+    const row = {};
+    for (const to of list) {
+      const d = from === to ? 0 : reach(dist, to);
+      row[to.id] = d;
+      if (d > far) far = d;
+    }
+    between.set(from.id, row);
+  }
+
+  const head = list.map((e) => `<th class="col">${e.id}</th>`).join('');
+  const rows = list
+    .map((from) => {
+      const row = between.get(from.id);
+      const cells = list
+        .map((to) => {
+          const d = row[to.id];
+          if (from === to) return '<td class="self">·</td>';
+          const heat = d < 0 ? 0 : 0.06 + 0.34 * (1 - d / far);
+          return `<td style="background:${alpha(palette.fg, heat)}" title="${from.id} → ${to.id}: ${d} steps">${d < 0 ? '—' : d}</td>`;
+        })
+        .join('');
+      return `<tr><th class="row">${from.id}</th>${cells}</tr>`;
+    })
+    .join('');
+
+  el('matrix').innerHTML = `<thead><tr><th class="row"></th>${head}</tr></thead><tbody>${rows}</tbody>`;
+  return between;
+}
+
+// A flood fill has to start somewhere it can stand: the things that are walked
+// into rather than onto have no tile of their own to start from.
+function nearestOpen(e) {
+  for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const x = e.x + dx;
+    const y = e.y + dy;
+    if (inGrid(x, y) && world.grid[idx(x, y)]) return { x, y };
+  }
+  return { x: e.x, y: e.y };
+}
+
+// --- Sampling a run of worlds ---------------------------------------------------
+//
+// One world says where its own mint landed; a run of them says what the mint's
+// band actually does. Each sample is a fresh validated seed of the same kind of
+// world, walked the same way this one was — which costs about a tenth of a
+// second apiece, so it is asked for rather than done on the way in.
+
+const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+async function sampleWorlds(count) {
+  spread = new Map();
+  const busy = [el('sample'), el('roll'), el('biome')];
+  for (const b of busy) b.disabled = true;
+  for (let i = 0; i < count; i++) {
+    el('status').textContent = `walking world ${i + 1} of ${count}…`;
+    await frame();
+    const sampled = worldOf(seedOfBiome(biome));
+    for (const e of sampled.entities) {
+      if (!spread.has(e.id)) spread.set(e.id, { rings: [], walks: [] });
+      const into = spread.get(e.id);
+      into.rings.push(e.ring);
+      if (e.walk >= 0) into.walks.push(e.walk);
+    }
+  }
+  for (const into of spread.values()) {
+    into.rings.sort((a, b) => a - b);
+    into.walks.sort((a, b) => a - b);
+  }
+  for (const b of busy) b.disabled = false;
+  const detours = [...spread.values()]
+    .filter((into) => into.walks.length)
+    .map((into) => median(into.walks));
+  el('status').textContent = `${count} ${biomeDef(biome).name.toLowerCase()} worlds walked · median walk to a thing ${median(detours)} steps`;
+  ladder();
+  table();
+}
+
+// --- The table, as something to paste into a spreadsheet -------------------------
+
+function tsv() {
+  const head = ['id', 'kind', 'x', 'y', 'plan_from', 'plan_to', 'ring', 'walk', 'detour', 'round_trip', 'gems'];
+  const lines = world.entities.map((e) =>
+    [
+      e.id,
+      e.kind,
+      e.x,
+      e.y,
+      e.band ? e.band[0] : '',
+      e.band ? e.band[1] : '',
+      e.ring,
+      e.walk,
+      e.detour ? e.detour.toFixed(3) : '',
+      e.walk < 0 ? '' : e.walk * 2,
+      e.gems < 0 ? '' : e.gems,
+    ].join('\t')
+  );
+  return [`# nouxinha seed ${world.seed} · ${world.biome}`, head.join('\t'), ...lines].join('\n');
+}
+
+// --- Drawing the lot ---------------------------------------------------------------
+
+function legend() {
+  const rows = [
+    ['◆', 'a landmark, in the colour it keeps in every world'],
+    ['◻ ▪', 'a sanctum: its wall, its gem, and the gate in it'],
+    ['▭', 'a chest — thick where it holds a key'],
+    ['△ ◯', 'a stall · the map and the compass'],
+    ['┬', 'a signpost'],
+    ['◌', 'a wisp, with the ring it lights on its own'],
+    ['░', 'floor, brightest where a dry walk reaches it and comes home'],
+    ['▁', 'the bright contour: where one more gem is what gets you back'],
+    ['·', 'darkest floor: reachable, but past every tank in the game'],
+  ];
+  el('legend').innerHTML = rows.map(([g, t]) => `<div><b>${g}</b> ${t}</div>`).join('');
+}
+
+function paint() {
+  setDefaultPalette(biomeDef(biome).palette);
+  palette = getPalette();
+  document.documentElement.style.setProperty('--bg', hex(palette.bg));
+  document.documentElement.style.setProperty('--fg', hex(palette.fg));
+}
+
+function refresh() {
+  paint();
+  el('seed').value = String(world.seed);
+  el('biome').value = biome;
+  // What this world's ground costs, as one number: the middle of every
+  // thing's walk over its ring. A biome's rock is the whole of the difference.
+  const detours = world.entities.filter((e) => e.detour).map((e) => e.detour);
+  el('roseNote').textContent =
+    `${biomeDef(world.biome).name.toLowerCase()} · seed ${world.seed} · ` +
+    `median detour ×${median(detours.map((d) => Math.round(d * 100))) / 100}`;
+  el('blurb').textContent =
+    `Everything this world stands up, measured from the hut door. A ring is the Chebyshev distance the plans in ` +
+    `src/balance.js are written in; a walk is what it costs to get there over the ground this seed grew. ` +
+    `The leash is ${LEASH.join(' / ')} steps out and home again, at nought to three gems.`;
+  legend();
+  drawRose();
+  ladder();
+  chain(matrix());
+  table();
+  say(null);
+}
+
+function load(seed) {
+  el('status').textContent = 'deriving…';
+  world = worldOf(seed);
+  biome = world.biome;
+  spread = null;
+  hovered = null;
+  refresh();
+  el('status').textContent = '';
+}
+
+el('biome').innerHTML = BIOMES.map((b) => `<option value="${b.id}">${b.name}</option>`).join('');
+el('samples').innerHTML = [8, 16, 32, 64].map((n) => `<option value="${n}">${n} worlds</option>`).join('');
+el('samples').value = '16';
+
+el('biome').addEventListener('change', () => {
+  biome = el('biome').value;
+  load(seedOfBiome(biome));
+});
+el('roll').addEventListener('click', () => load(seedOfBiome(biome)));
+el('seed').addEventListener('change', () => {
+  const typed = Number(el('seed').value);
+  load(Number.isFinite(typed) ? pickSeed(typed | 0) : world.seed);
+});
+el('minor').addEventListener('change', () => {
+  showMinor = el('minor').checked;
+  refresh();
+});
+el('sample').addEventListener('click', () => sampleWorlds(Number(el('samples').value)));
+el('copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(tsv());
+    el('status').textContent = 'the table is on the clipboard';
+  } catch {
+    el('status').textContent = 'clipboard refused — the page needs a click first';
+  }
+});
+
+load(pickSeed(DEFAULT_SEED));
+</script>
+</body>
+</html>

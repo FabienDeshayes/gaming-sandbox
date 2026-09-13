@@ -13,7 +13,11 @@
 
        The page is drawn in a biome's colour, since that is what the tile will
        be seen in; there is no palette to pick, in here or in the game — a
-       world's colour is its biome's (src/data/biomes.js). */
+       world's colour is its biome's (src/data/biomes.js).
+
+       distances.html is the odd one out and is linked from here anyway: it is
+       about where things stand in a world rather than about the sheet, and it
+       is drawn the same way for the same reason. */
     :root { --bg: #0b1a0b; --fg: #33ff66; }
     * { box-sizing: border-box; }
     body {
@@ -81,6 +85,7 @@
       <a class="navlink" href="draw.html">draw a tile's pixels →</a>
       <a class="navlink" href="paint.html">paint a tile's zones →</a>
       <a class="navlink" href="biomes.html">assign tiles to biomes →</a>
+      <a class="navlink" href="distances.html">measure the world →</a>
     </div>
     <div class="controls">
       <label>biome <select id="biome"></select></label>

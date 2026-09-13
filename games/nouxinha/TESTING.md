@@ -9,7 +9,7 @@
 cd games/nouxinha
 npm install       # playwright-core + phaser, from the allowed npm registry — do NOT run `playwright install`
 npm test          # every suite, one server and one browser: about a minute
-npm run test:pure # the eight pure suites only, no browser: under ten seconds
+npm run test:pure # the nine pure suites only, no browser: under ten seconds
 ```
 
 The runner prints what each test cost and what the whole run cost, because a
@@ -43,6 +43,7 @@ at all, which is the quick way to work on the rules.
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
 | `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall and which of its five conversations a campaign is having, the water ladder, the sites — merchant, compass, map — and the needle |
 | `landmarks.test.js` | The four landmarks and the twelve posts: where they stand, what a touch gives, and which of it survives a world |
+| `wisps.test.js` | The ten wisps: where they stand, that touching one hands back nothing, and that a wisp lights its own clearing whatever the character is carrying |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, what a cycle in the hall takes and leaves, and which kinds of world a campaign has finished |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | The canvas against a phone, the sheet actually loading, the game's own voice |
@@ -264,6 +265,30 @@ The split to keep straight is the one the feature is about:
 
 A run can be handed a standing without walking to one: plant `standings: ['bell-heard']` in the save,
 the way a test plants `keys` or `compass: true`.
+
+## Testing a wisp
+
+The simplest of the four bumped things, and the one whose test is mostly about proving a negative:
+touching a wisp does not do anything. `wisps.test.js` walks every wisp in the world asserting the
+chest-shaped claims (its own terrain, blocks a step, casts no shadow, floor on every side) and then
+one BFSed route to the nearest (`WISP_ROUTE`/`FIRST_WISP` in `tests/world.js`, built exactly like
+`POST_ROUTE`) to check the bump itself: no water, no durability, no facing change, and `touchWisp`
+handing back only whether this is the first time — no gift and no standing to speak of, so the round
+trip through `bankRun` only has one thing worth checking (this world knows), and `turnCycle` only has
+one thing worth checking back (the new world doesn't).
+
+**What earns this feature its own pure test is the light.** A wisp is the one structure in the game
+that lights tiles the character's own torch had nothing to do with, so `litTiles` is asked directly:
+stand a state next to a wisp with an empty inventory (blackout) and its little disc is still in the
+lit set; stand it `WISP_REACH` tiles further out, same blackout, and none of it is. That second half
+is not a nice-to-have — without it every wisp in the world would be marked explored, and show on the
+map, from the moment a run took its first step, and a test that only checked the near case would never
+catch that regression. The shape itself (`{ kind: 'round', radius: 1 }` is a diamond of five tiles,
+not the nine a square radius-1 light shows) is `light.test.js`'s claim, not this file's — it is a
+property of `core/light.js` and has nothing to do with where a wisp happens to stand.
+
+No browser test yet covers what a wisp actually draws or the panel it opens on a touch; the split
+would be the same as a landmark's (**What earns a browser test**, above) whenever it is worth adding.
 
 ## Testing the chest-and-key chain
 

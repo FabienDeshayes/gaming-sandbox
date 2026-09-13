@@ -145,6 +145,9 @@ export const FLASH = {
   // A signpost, read again. The first read gets the panel; the hut's hint is
   // flavour rather than a fact worth repeating, so it isn't in this one.
   signpost: (lines) => lines.join(' / '),
+  // A wisp, bumped again with no step in between — a direction key held
+  // against it, the same debounce every other bumped thing gets.
+  wispAgain: 'STILL BURNING.',
   // The edge, every time after the first — the first bump earns the EDGE dialog.
   edge: 'THE DARK IS BLOCKING YOU.',
   bought: (name, coinsLeft) => `BOUGHT ${name}. ${coinsLeft} COINS LEFT.`,
@@ -352,6 +355,13 @@ export const SAY = {
   // this post happens to stand close enough to (`signpostTargets` in
   // core/world.js). Named directions are the only thing worth re-reading —
   // every read after this one is a line in the status bar.
+  // A wisp, put a hand on for the first time — or the tenth: it has nothing
+  // to give and nothing to remember about you, so every fresh touch reads the
+  // same short thing (DESIGN.md §4.11).
+  wisp: [
+    'A small light, alone out here, burning on nothing you can see.',
+    "It isn't yours, and it wasn't lit for you. It was already burning when you found it, and it will keep burning after you go.",
+  ],
   signpost: (lines, hutLine) => [
     'A post, leaning, with the ground trodden down around it.',
     lines.length > 1

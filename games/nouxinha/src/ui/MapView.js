@@ -31,6 +31,7 @@ import {
   landmarkOnTile,
   litTiles,
   tileKey,
+  wispOnTile,
 } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
 import { landmarkDef } from '../data/landmarks.js';
@@ -190,6 +191,10 @@ export class MapView {
       // arriving at one look like arriving somewhere.
       const mark = terrain === 'landmark' ? landmarkOnTile(run, wx, wy) : null;
       const post = terrain === 'signpost' ? signpostAt(wx, wy, run.seed) : null;
+      // A wisp fills its tile the same way — walked into rather than onto,
+      // like every other bumped thing (DESIGN.md §4.11) — and draws the one
+      // sprite a biome is actually expected to repoint (`BIOME_KEYS`).
+      const wisp = terrain === 'wisp' ? wispOnTile(run, wx, wy) : null;
       const court = terrain === 'floor' ? courtAt(wx, wy, run.seed) : null;
 
       // A gate fills its tile the way rock and wall do — it *is* the ring it
@@ -205,15 +210,17 @@ export class MapView {
             ? landmarkDef(mark.landmark.id).sprite
             : post
               ? 'signpost'
-              : terrain === 'sorcerer'
-                ? 'sorcerer'
-                : terrain === 'rock' || terrain === 'tree'
-                  ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
-                  : terrain === 'wall'
-                    ? biomeKey(wallPiece(site, wx, wy), biome)
-                    : court
-                      ? landmarkDef(court).court
-                      : variantKey('floor', variantAt(wx, wy, run.seed), biome);
+              : wisp
+                ? biomeKey('wisp', biome)
+                : terrain === 'sorcerer'
+                  ? 'sorcerer'
+                  : terrain === 'rock' || terrain === 'tree'
+                    ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
+                    : terrain === 'wall'
+                      ? biomeKey(wallPiece(site, wx, wy), biome)
+                      : court
+                        ? landmarkDef(court).court
+                        : variantKey('floor', variantAt(wx, wy, run.seed), biome);
 
       // The hues a tile can only get from where it stands: the gem the sanctum
       // around it keeps, the gem whose colour opened its gate, and the colour a

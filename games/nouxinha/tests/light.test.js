@@ -28,6 +28,19 @@ unit('the lamp is a cone that widens with distance and re-aims with facing', () 
   assert(!right.some((t) => t.x < 0), 'and nothing behind, whichever way that is');
 });
 
+unit('a round light is a diamond, not the square a radius draws', () => {
+  // A wisp's own light (balance.js WISP_SHAPE) is the one round shape in the
+  // game — a true Euclidean disc rather than a Chebyshev block, so at radius 1
+  // it stops one short of the two diagonal corners a square light of the same
+  // radius would also show.
+  const disc = visibleTiles({ kind: 'round', radius: 1 }, 0, 0, 'up');
+  assertEqual(disc.length, 5, 'the tile itself plus its four orthogonal neighbours');
+  for (const [x, y] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]])
+    assert(disc.some((t) => t.x === x && t.y === y), `includes (${x}, ${y})`);
+  for (const [x, y] of [[1, 1], [1, -1], [-1, 1], [-1, -1]])
+    assert(!disc.some((t) => t.x === x && t.y === y), `excludes the diagonal (${x}, ${y})`);
+});
+
 unit('no light at all is the tile underfoot', () => {
   assertEqual(visibleTiles(null, 3, -2), [{ x: 3, y: -2 }], 'blackout shows one tile');
 });

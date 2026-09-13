@@ -513,6 +513,7 @@ export class ExploreScene extends Phaser.Scene {
       // are worth more than a bump.
       if (result.reason === 'landmark') this.touchedLandmark(result);
       if (result.reason === 'signpost') this.readPost(result);
+      if (result.reason === 'wisp') this.touchedWisp(result);
       // And walking into the sorcerer is how you talk to him (DESIGN.md §4.9).
       // The bump still plays — he is standing in the way like anything else —
       // and then he has his say and takes the world off you.
@@ -649,6 +650,20 @@ export class ExploreScene extends Phaser.Scene {
       const hutLine = SIGNPOST.hutHint(SIGNPOST.bearings[result.hutBearing]);
       this.textPanel.show(SAY.signpost(lines, hutLine));
     } else this.hud.flash(FLASH.signpost(lines));
+  }
+
+  // A wisp, put a hand on by walking into it (DESIGN.md §4.11). It hands
+  // nothing back — no gift, no standing — so the panel is the whole of what
+  // touching one is worth: a line about the light itself, on every fresh
+  // touch, and the debounce line everything else bumped gets when it's
+  // bumped again with no step in between.
+  touchedWisp(result) {
+    if (!result.fresh) {
+      this.hud.flash(FLASH.wispAgain);
+      return;
+    }
+    playSignpost();
+    this.textPanel.show(SAY.wisp);
   }
 
   // The Drowned Bell's standing: once a campaign has stood at it, it can be

@@ -78,7 +78,7 @@ A light shape is defined relative to the character's tile, and — for the lamp 
 facing. What the shape says is how far the light *reaches*; what it shows is that minus whatever it
 cannot see round.
 
-**Rock, trees and masonry cast shadow; a chest, the sorcerer, a landmark and a signpost never do.** A tile inside the shape is lit only if a
+**Rock, trees and masonry cast shadow; a chest, the sorcerer, a landmark, a signpost and a wisp never do.** A tile inside the shape is lit only if a
 straight line reaches it from the character's tile without crossing something solid — and what counts
 as solid is the *shape of the world*, not everything that blocks a step. A chest (§4.8) stops a step
 and stops nothing else, because a box you could hide behind would read as a wall wearing a lid; the
@@ -144,7 +144,7 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
 
 | Layer | Depends on | Holds |
 |---|---|---|
-| **Terrain** | `(x, y, seed)` | Floor, rock in two formations, groves of trees, the built walls, gates and clearings, and the four landmarks and twelve posts set into it (§4.10). The same every run, forever. |
+| **Terrain** | `(x, y, seed)` | Floor, rock in two formations, groves of trees, the built walls, gates and clearings, the four landmarks and twelve posts set into it (§4.10), and the ten wisps (§4.11). The same every run, forever. |
 | **Unique objects** | `(x, y, seed)` | The three gems, the three merchants, the nine chests, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
 | **Consumables** | `(x, y, seed, salt)` | Coins, water and lights. The salt changes every run and every respawn, so these are never twice in the same places. |
 
@@ -908,6 +908,70 @@ standing shows itself is in what it does.
 The rename that made room for all of it: `LANDMARK_PLAN` / `landmarks()` / `landmarkAt()` used to
 mean the merchant, the compass and the map. Those are **sites** now — `SITE_PLAN`, `sites()`,
 `siteAt()` — which is what `spotIsClear` always called them.
+
+### 4.11 Wisps
+
+**Ten of them per world, and the simplest thing in it.** A chest holds a key or a hoard; a landmark
+holds a gift and a standing; a signpost holds a name and a bearing. A wisp holds nothing at all —
+touching one earns a line of text and changes nothing about the run — which is exactly what makes it
+able to do the one thing none of those can: it lights its own little clearing **on its own account**,
+whatever the character happens to be carrying.
+
+Every other lit tile in the game is lit because the character's own torch reaches it. That is fine
+until the torch is gone: in blackout the world shrinks to the character's own tile, and a chest, a
+landmark, a post — everything the game has to orient a lost run by — is invisible until it is bumped
+into blind. A wisp is the answer. It burns whether or not anything in the inventory does, so a run
+that has burned its last torch is not walking through featureless black — it is walking towards ten
+small lit rooms scattered through the dark, each one worth aiming for and none of them worth detouring
+far for.
+
+- **Placed like the loose coin chests**, on rings of their own from 6 tiles out to 106
+  (`WISP_PLAN` in `src/balance.js`) — near ones a first expedition stumbles across, far ones spread
+  out past the sanctums. Like a signpost, a wisp is the one kind of placed thing the world may go
+  without: `pickSeed` never rejects a seed over one that found nowhere to stand.
+- **A tile of its own**, impassable and bumped into rather than stepped on — the chest contract
+  exactly (§4.8) — with a forced-floor apron round it, and it never stops a light for the same reason
+  a chest, the sorcerer, a landmark and a signpost never do: a small light that cast its own shadow
+  would be a contradiction standing in the world.
+- **Its own light is round, not square.** Every shape a character can carry is a Chebyshev block or a
+  cone (§4.1) — flat-edged, because that is what a torch held at the centre of a grid draws. A wisp's
+  is a true (Euclidean) disc, radius 1: the tile it stands on, plus the four tiles it touches
+  orthogonally, and *not* the two diagonal corners a square light of the same radius would also
+  show. Three tiles across, so it is unmistakably a light and unmistakably a small one — worth a
+  detour of a step or two, never worth the walk a torch upgrade is.
+- **It is composed in `litTiles`, not drawn by a second renderer.** Every wisp within `WISP_REACH`
+  (3 tiles) of the character has its own disc worked out through the same shadow rule the character's
+  own light uses (`blocksSight`) and unioned into what the step reveals — so a wisp's glow never
+  reaches round a wall it has no business reaching round, and the viewport, the map and the explored
+  set all agree on the answer for free, the same way they already did for the character's own light.
+  The reach is a proximity gate and nothing more: without it, all ten wisps in the world would be
+  marked explored — and show on the map — the moment a run took its very first step, which would
+  hand over the very discovery this feature exists to reward.
+- **Touching one is a bump like every other placed thing**: no water, no durability, no facing
+  change. It hands back a line of flavour text on the panel and nothing else — no gift, no standing,
+  no gate — so `touchWisp` in `core/rules.js` only has one thing worth reporting, which is whether
+  this world has had a hand on this one before.
+- **What it remembers belongs to the world**, on exactly the signposts' terms: `wisps` in the save is
+  which of them this world has had a hand put on, banked at the hut alongside the landmarks and the
+  posts, and dropped with the ground the moment the hall moulds the world again (§4.9). There is
+  nothing here for a standing to keep, because there is nothing about a wisp that outlasts knowing
+  where it stood.
+- **A different sprite per biome, and that is the point of it being a biome's to repoint at all**
+  (`BIOME_KEYS` in `src/data/tiles.js`). Unlike a landmark, a wisp carries no identity from world to
+  world — nothing recognises it, nothing colours it — so four worlds are free to draw it four
+  different ways: temperate's own small four-point glint, a ringed glass orb for the frozen world, a
+  low ember for the desert, a scatter of motes for the mystical realm. All four are tiles the sheet
+  already had, standing in until they are drawn for this game like the landmarks once were (§4.10).
+
+| Path | Holds |
+|---|---|
+| `src/balance.js` | `WISP_PLAN`, `WISP_SHAPE`, `WISP_REACH` |
+| `src/core/world.js` | `buildWisps`, `wisps()`, `wispAt()`, and the `'wisp'` terrain |
+| `src/core/light.js` | the `round` shape kind (`roundTiles`) |
+| `src/core/rules.js` | `wispOnTile`, `touchWisp`, and `wispLitTiles` inside `litTiles` |
+| `src/data/tiles.js` | the shared `wisp` sprite and each biome's own |
+| `src/text.js` | `SAY.wisp`, `FLASH.wispAgain` |
+| `src/ui/MapView.js` / `src/ui/worldMap.js` | drawing the tile, and marking it once it has been lit |
 
 ## 5. Constraints
 

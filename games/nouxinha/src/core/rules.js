@@ -40,6 +40,8 @@ import {
   signposts,
   sites,
   uniqueAt,
+  wispAt,
+  wisps,
 } from './world.js';
 import { decodeExplored, encodeExplored } from './cartography.js';
 import {
@@ -51,6 +53,8 @@ import {
   STARTING_WATER,
   WATER_PER_GEM,
   WATER_PER_STEP,
+  WISP_REACH,
+  WISP_SHAPE,
 } from '../balance.js';
 import { emptySave, loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
 import { BIOME_IDS } from '../data/biomes.js';
@@ -175,6 +179,10 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // landmark, and the one thing besides `cycles` that survives the hall.
     landmarks: new Set(banked.landmarks),
     posts: new Set(banked.posts),
+    // Wisps touched in **this** world, on the same terms as the landmarks and
+    // posts above: no gift, no standing, so nothing about a wisp survives the
+    // hall taking the world with it.
+    wisps: new Set(banked.wisps),
     standings: new Set(banked.standings),
     // Which kinds of world this campaign has already finished — carried three
     // colours into the hall of (DESIGN.md §4.9). Read off the slot and never
@@ -284,6 +292,9 @@ function applyCheats(state) {
   // landmarks themselves are left untouched, for the same reason the chests are
   // left shut: there should still be something to walk to.
   for (const landmark of landmarks(state.seed)) state.seenUnique.add(landmark.id);
+  // And every wisp, so a sandbox run's map already shows where all ten of
+  // this world's small lights are standing.
+  for (const wisp of wisps(state.seed)) state.seenUnique.add(wisp.id);
   for (const standing of STANDINGS) state.standings.add(standing);
   // And every *other* kind of world already finished, so the sorcerer is
   // standing at the end of the last one (DESIGN.md §4.9). The switch exists to
@@ -587,6 +598,31 @@ export function readSignpost(state, post) {
   };
 }
 
+// --- Wisps ---------------------------------------------------------------
+//
+// A wisp is bumped into exactly like a chest, a landmark or a post, and it is
+// the simplest of the four: touching one earns a line of text and changes
+// nothing about the run. What it stores is only whether this world has had a
+// hand put on it before — banked with the landmarks and the posts, and gone
+// with them the moment the hall moulds the world again.
+
+// The wisp standing on a tile and whether this world has already been touched
+// it, or null where there is no wisp there.
+export function wispOnTile(state, x, y) {
+  const at = wispAt(x, y, state.seed);
+  if (!at || at.part !== 'site') return null;
+  return { wisp: at.wisp, touched: state.wisps.has(at.wisp.id) };
+}
+
+// Putting a hand on a wisp. Unlike a landmark this hands nothing back — no
+// gift, no standing — so all there is to report is whether this world has
+// ever had a hand on this one before.
+export function touchWisp(state, wisp) {
+  const first = !state.wisps.has(wisp.id);
+  state.wisps.add(wisp.id);
+  return { first };
+}
+
 // Which landmarks the map is allowed to mark: the ones a light has actually
 // reached, plus any a signpost has pointed the way to. A post is somebody's
 // directions, and directions are worth exactly as much as a mark on a map.
@@ -627,24 +663,52 @@ function noteSeen(state, lit) {
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
   for (const chest of chests(state.seed))
     if (litKeys.has(tileKey(chest.x, chest.y))) state.seenUnique.add(chest.id);
+  // A wisp is marked the same way — and since its own light always reaches its
+  // own tile the moment it is close enough to compose at all (`wispLitTiles`
+  // below), touching distance and marking distance are the same walk.
+  for (const wisp of wisps(state.seed))
+    if (litKeys.has(tileKey(wisp.x, wisp.y))) state.seenUnique.add(wisp.id);
   const hallOf = hall(state.seed);
   if (hallOf && litKeys.has(tileKey(hallOf.centre.x, hallOf.centre.y)))
     state.seenUnique.add(HALL_SEEN);
 }
 
-// What the light actually shows: the shape it reaches, narrowed by the dark at
-// the edge (`activeShape`), then cut back to what it can actually see round
-// (`blocksSight` — DESIGN.md §4.1). The three compose in that order and only
-// here, which is what keeps every renderer and the explored set agreeing on one
-// answer.
+// What a wisp shows on its own account, for every wisp close enough to the
+// character to be worth asking (balance.js `WISP_REACH`) — which is what
+// keeps ninety-odd tiles of ground scattered across the world from being
+// marked explored the moment a run takes its first step (DESIGN.md §4.11).
+// Composed through the same shadow rule as the character's own light
+// (`blocksSight`), so a wisp's glow never reaches round a wall it has no
+// business reaching round.
+function wispLitTiles(state) {
+  const out = [];
+  for (const wisp of wisps(state.seed)) {
+    if (chebyshev(state.x, state.y, wisp.x, wisp.y) > WISP_REACH) continue;
+    out.push(
+      ...visibleTiles(WISP_SHAPE, wisp.x, wisp.y, 'up', (x, y) => blocksSight(x, y, state.seed, state.keys))
+    );
+  }
+  return out;
+}
+
+// What the light actually shows: the shape the character is carrying, narrowed
+// by the dark at the edge (`activeShape`), then cut back to what it can
+// actually see round (`blocksSight` — DESIGN.md §4.1) — plus whatever the
+// wisps nearby are lighting on their own account, whether or not the character
+// is carrying anything at all (`wispLitTiles`, DESIGN.md §4.11). All of it
+// composes in this one place, which is what keeps every renderer and the
+// explored set agreeing on one answer.
 //
 // Tiles outside the world are dropped rather than lit: the dark out there is
 // what the light is losing against, so it can never be what the light reveals —
 // which is also what keeps them out of the explored set, and so off both maps.
 export function litTiles(state) {
-  return visibleTiles(activeShape(state), state.x, state.y, state.facing, (x, y) =>
-    blocksSight(x, y, state.seed, state.keys)
-  ).filter(({ x, y }) => !beyondEdge(x, y));
+  return [
+    ...visibleTiles(activeShape(state), state.x, state.y, state.facing, (x, y) =>
+      blocksSight(x, y, state.seed, state.keys)
+    ),
+    ...wispLitTiles(state),
+  ].filter(({ x, y }) => !beyondEdge(x, y));
 }
 
 // Burns one durability off the active light. When it hits zero the light is
@@ -807,6 +871,17 @@ export function step(state, direction) {
         fresh: bumpAgain(state, 'signpost', post.post.id),
         ...readSignpost(state, post.post),
       };
+    // And walking into a wisp is how you put a hand on it (DESIGN.md §4.11) —
+    // a bump like the rest of them, and the only one that hands nothing back.
+    const wisp = wispOnTile(state, nx, ny);
+    if (wisp)
+      return {
+        moved: false,
+        reason: 'wisp',
+        wisp: wisp.wisp.id,
+        fresh: bumpAgain(state, 'wisp', wisp.wisp.id),
+        ...touchWisp(state, wisp.wisp),
+      };
     // Walking into a chest is what opens it (DESIGN.md §4.8). The step is still
     // a step that didn't happen — no water, no durability, no facing change —
     // because what moved was the lid.
@@ -965,6 +1040,9 @@ function writeDeposit(state, closing) {
     // here by nothing at all: `turnCycle` carries them over by hand.
     landmarks: [...state.landmarks],
     posts: [...state.posts],
+    // The wisps put a hand on in this world, banked on exactly the posts'
+    // terms — they carry nothing else to bank (DESIGN.md §4.11).
+    wisps: [...state.wisps],
     standings: [...state.standings],
     // Carried over by hand for the same reason `cycles` above is: a walk home
     // that dropped it would hand the campaign back a world it has finished.
@@ -1204,6 +1282,7 @@ export function suspendRun(state) {
       chests: [...state.chests],
       landmarks: [...state.landmarks],
       posts: [...state.posts],
+      wisps: [...state.wisps],
       standings: [...state.standings],
       inventory: state.inventory.map((light) => ({ ...light })),
       activeIndex: state.activeIndex,
@@ -1251,6 +1330,7 @@ export function resumeRun(save = loadSave()) {
     chests: new Set(suspended.chests),
     landmarks: new Set(suspended.landmarks),
     posts: new Set(suspended.posts),
+    wisps: new Set(suspended.wisps),
     standings: new Set(suspended.standings),
     // Not part of what a suspended walk writes down: finishing a world is
     // something the hall does, and the hall ends the walk it does it to — so

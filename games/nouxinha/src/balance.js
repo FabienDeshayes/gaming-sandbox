@@ -416,6 +416,53 @@ export const SIGNPOST_SPACING = 10;
 // isn't the one a post was assigned (see `SIGNPOST_PLAN` above).
 export const SIGNPOST_BANDS = [15, 40, 80];
 
+// --- Wisps ----------------------------------------------------------------
+//
+// Ten of them per world, and the answer to one thing a chest, a landmark and
+// a signpost all leave alone: every one of those is only ever *shown* by the
+// light the character is carrying, so a run out of torches is a run that
+// cannot find any of them until it bumps into one blind. A wisp is a small
+// light burning on its own account — it lights its own little clearing
+// whatever is or isn't equipped (`WISP_SHAPE` below, composed in `litTiles`
+// in core/rules.js) — so a walk with nothing left to burn still has ten
+// small lit rooms scattered through the dark to aim for.
+//
+// Touching one earns a line of text and nothing else: no gift, no standing,
+// no gate. It is placed and forgotten the way a loose coin chest is —
+// nearer ones a first expedition can stumble across, further ones spread out
+// past the sanctums — and, like a signpost, it is the one kind of placed
+// thing the world may go without: `pickSeed` never rejects a seed over a
+// wisp that found nowhere to stand.
+export const WISP_PLAN = [
+  { id: 'wisp-1', near: 6, span: 4 },
+  { id: 'wisp-2', near: 15, span: 5 },
+  { id: 'wisp-3', near: 24, span: 6 },
+  { id: 'wisp-4', near: 34, span: 6 },
+  { id: 'wisp-5', near: 44, span: 8 },
+  { id: 'wisp-6', near: 55, span: 8 },
+  { id: 'wisp-7', near: 66, span: 8 },
+  { id: 'wisp-8', near: 78, span: 10 },
+  { id: 'wisp-9', near: 92, span: 10 },
+  { id: 'wisp-10', near: 106, span: 10 },
+];
+
+// The shape a wisp lights on its own account, whatever the character is
+// carrying: `round` is a true (Euclidean) disc rather than the Chebyshev
+// blocks every carried light shows (`core/light.js`), so a wisp's little
+// clearing always reads as a different kind of light from a torch's — the
+// one thing in the world that is round. Radius 1 is a diameter of three
+// tiles: the character's own tile plus the four it touches orthogonally,
+// which is "a little light" rather than a light worth walking to for reach.
+export const WISP_SHAPE = { kind: 'round', radius: 1 };
+
+// How close the character has to be before a wisp's own light is worth
+// composing into what they see (`litTiles`). It has to be a real approach
+// rather than the width of the shape alone, or every wisp in the world would
+// be marked explored — and show on the map — the moment a run took its first
+// step, which is exactly the discovery this feature is supposed to reward
+// rather than skip.
+export const WISP_REACH = 3;
+
 // --- The scatter --------------------------------------------------------------
 //
 // Coins, water and lights: the layer that moves. Candidates are thrown on a

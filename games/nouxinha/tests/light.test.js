@@ -39,6 +39,17 @@ unit('a round light is a diamond, not the square a radius draws', () => {
     assert(disc.some((t) => t.x === x && t.y === y), `includes (${x}, ${y})`);
   for (const [x, y] of [[1, 1], [1, -1], [-1, 1], [-1, -1]])
     assert(!disc.some((t) => t.x === x && t.y === y), `excludes the diagonal (${x}, ${y})`);
+
+  // A wisp's own radius (balance.js WISP_SHAPE) is wider still: the same
+  // diagonals now fit inside the circle, plus the two tiles straight out at
+  // distance 2 on each axis — and the shape still stops short of a square,
+  // excluding the further diagonals a radius-2 block would include.
+  const wide = visibleTiles({ kind: 'round', radius: 2 }, 0, 0, 'up');
+  assertEqual(wide.length, 13, 'the plus, its four inner diagonals, and the four far points');
+  for (const [x, y] of [[1, 1], [1, -1], [-1, 1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]])
+    assert(wide.some((t) => t.x === x && t.y === y), `includes (${x}, ${y})`);
+  for (const [x, y] of [[2, 2], [2, -2], [-2, 2], [-2, -2], [2, 1], [1, 2]])
+    assert(!wide.some((t) => t.x === x && t.y === y), `still excludes the far corner (${x}, ${y})`);
 });
 
 unit('no light at all is the tile underfoot', () => {

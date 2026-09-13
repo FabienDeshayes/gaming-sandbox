@@ -53,7 +53,6 @@ import {
   STARTING_WATER,
   WATER_PER_GEM,
   WATER_PER_STEP,
-  WISP_REACH,
   WISP_SHAPE,
 } from '../balance.js';
 import { emptySave, loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
@@ -663,9 +662,9 @@ function noteSeen(state, lit) {
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
   for (const chest of chests(state.seed))
     if (litKeys.has(tileKey(chest.x, chest.y))) state.seenUnique.add(chest.id);
-  // A wisp is marked the same way — and since its own light always reaches its
-  // own tile the moment it is close enough to compose at all (`wispLitTiles`
-  // below), touching distance and marking distance are the same walk.
+  // A wisp is marked the same way — and since every wisp's own light always
+  // reaches its own tile (`wispLitTiles` below), every wisp in the world is
+  // seen, and on the map, from the very first reveal.
   for (const wisp of wisps(state.seed))
     if (litKeys.has(tileKey(wisp.x, wisp.y))) state.seenUnique.add(wisp.id);
   const hallOf = hall(state.seed);
@@ -673,17 +672,16 @@ function noteSeen(state, lit) {
     state.seenUnique.add(HALL_SEEN);
 }
 
-// What a wisp shows on its own account, for every wisp close enough to the
-// character to be worth asking (balance.js `WISP_REACH`) — which is what
-// keeps ninety-odd tiles of ground scattered across the world from being
-// marked explored the moment a run takes its first step (DESIGN.md §4.11).
+// What every wisp in the world shows on its own account (DESIGN.md §4.11).
+// Unconditional — a wisp's whole point is that it doesn't wait for the
+// character to be carrying a light or standing nearby, so all ten of a
+// world's wisps are always composed in, however far out they stand.
 // Composed through the same shadow rule as the character's own light
 // (`blocksSight`), so a wisp's glow never reaches round a wall it has no
 // business reaching round.
 function wispLitTiles(state) {
   const out = [];
   for (const wisp of wisps(state.seed)) {
-    if (chebyshev(state.x, state.y, wisp.x, wisp.y) > WISP_REACH) continue;
     out.push(
       ...visibleTiles(WISP_SHAPE, wisp.x, wisp.y, 'up', (x, y) => blocksSight(x, y, state.seed, state.keys))
     );
@@ -693,11 +691,11 @@ function wispLitTiles(state) {
 
 // What the light actually shows: the shape the character is carrying, narrowed
 // by the dark at the edge (`activeShape`), then cut back to what it can
-// actually see round (`blocksSight` — DESIGN.md §4.1) — plus whatever the
-// wisps nearby are lighting on their own account, whether or not the character
-// is carrying anything at all (`wispLitTiles`, DESIGN.md §4.11). All of it
-// composes in this one place, which is what keeps every renderer and the
-// explored set agreeing on one answer.
+// actually see round (`blocksSight` — DESIGN.md §4.1) — plus every wisp's own
+// little clearing, always, whether or not the character is carrying anything
+// at all or standing anywhere near it (`wispLitTiles`, DESIGN.md §4.11). All
+// of it composes in this one place, which is what keeps every renderer and
+// the explored set agreeing on one answer.
 //
 // Tiles outside the world are dropped rather than lit: the dark out there is
 // what the light is losing against, so it can never be what the light reveals —

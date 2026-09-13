@@ -2,8 +2,8 @@
 // picked up, and what the recap makes of it. Pure — no browser.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
-import { tileKey } from '../src/core/light.js';
-import { isBase, isWalkable, sanctums } from '../src/core/world.js';
+import { tileKey, visibleTiles } from '../src/core/light.js';
+import { blocksSight, isBase, isWalkable, sanctums } from '../src/core/world.js';
 import {
   activeLight,
   activeShape,
@@ -13,7 +13,6 @@ import {
   inventoryStacks,
   isBlackout,
   itemOnTile,
-  litTiles,
   maxWater,
   refillWater,
   rememberGround,
@@ -45,6 +44,15 @@ const OUT = (() => {
   return found[0];
 })();
 const BACK = OPPOSITE[OUT];
+
+// The character's own shape, cut back by shadow — `litTiles` in core/rules.js
+// also unions in every wisp in the world unconditionally now (DESIGN.md
+// §4.11), which is a claim `wisps.test.js` owns. What these tests are about
+// is the character's own light, so they ask for that half alone.
+const ownLitTiles = (state) =>
+  visibleTiles(activeShape(state), state.x, state.y, state.facing, (x, y) =>
+    blocksSight(x, y, state.seed, state.keys)
+  );
 // Out to the second tile, then back and forth between the first and the second.
 const pace = (state, steps) => {
   const results = [];
@@ -88,7 +96,7 @@ unit('a light shows the rock and not the ground behind it', () => {
   state.inventory.push({ id: 'torch-beacon', durability: ITEMS['torch-beacon'].maxDurability });
   equip(state, state.inventory.length - 1);
 
-  const lit = new Set(litTiles(state).map((t) => tileKey(t.x, t.y)));
+  const lit = new Set(ownLitTiles(state).map((t) => tileKey(t.x, t.y)));
   assert(lit.has(blocker), 'the blocker itself is lit — a wall you cannot see is one you walk into');
   assert(!lit.has(behind), 'the floor directly behind it is not');
   assertEqual(state.explored.has(behind), knewBefore, 'and lighting up never wrote it into the map');
@@ -175,7 +183,7 @@ unit('with no lights left you see only your own tile, and can still walk', () =>
 
   assert(isBlackout(state), 'should be in blackout');
   assertEqual(activeShape(state), null, 'no active shape');
-  assertEqual(litTiles(state).length, 1, 'only the tile underfoot');
+  assertEqual(ownLitTiles(state).length, 1, 'only the tile underfoot');
   // Blackout is a setback, not a death.
   const before = state.steps;
   step(state, BACK);
@@ -197,10 +205,10 @@ unit('reaching the hut in blackout hands back a starting light', () => {
 
 unit('equipping a carried light changes what you can see', () => {
   const state = createRun(SEED, emptySave(), NONCE);
-  assertEqual(litTiles(state).length, 9, 'small torch');
+  assertEqual(ownLitTiles(state).length, 9, 'small torch');
   state.inventory.push({ id: 'torch-medium', durability: 50 });
   assert(equip(state, 1), 'equip should succeed');
-  assertEqual(litTiles(state).length, 25, 'medium torch');
+  assertEqual(ownLitTiles(state).length, 25, 'medium torch');
 });
 
 unit('inventoryStacks groups same-id copies while keeping their flat index', () => {

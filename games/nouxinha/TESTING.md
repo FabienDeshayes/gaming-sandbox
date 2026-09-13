@@ -278,14 +278,15 @@ trip through `bankRun` only has one thing worth checking (this world knows), and
 one thing worth checking back (the new world doesn't).
 
 **What earns this feature its own pure test is the light.** A wisp is the one structure in the game
-that lights tiles the character's own torch had nothing to do with, so `litTiles` is asked directly:
-stand a state next to a wisp with an empty inventory (blackout) and its little disc is still in the
-lit set; stand it `WISP_REACH` tiles further out, same blackout, and none of it is. That second half
-is not a nice-to-have — without it every wisp in the world would be marked explored, and show on the
-map, from the moment a run took its first step, and a test that only checked the near case would never
-catch that regression. The shape itself (`{ kind: 'round', radius: 1 }` is a diamond of five tiles,
-not the nine a square radius-1 light shows) is `light.test.js`'s claim, not this file's — it is a
-property of `core/light.js` and has nothing to do with where a wisp happens to stand.
+that lights tiles the character's own torch had nothing to do with, and it does that unconditionally —
+there is no proximity check — so `litTiles` is asked directly: stand a state next to a wisp with an
+empty inventory (blackout) and its own disc is in the lit set; stand it a hundred tiles further out,
+same blackout, and it still is. That second half is not a nice-to-have — a wisp that only lit up once
+approached would be exactly the regression this feature was built to fix, and a test that only checked
+the near case would never catch it coming back. The shape itself (`{ kind: 'round', radius: 2 }` is a
+13-tile disc, wider than the 9 tiles a square radius-1 light shows and still visibly round rather than
+square) is `light.test.js`'s claim, not this file's — it is a property of `core/light.js` and has
+nothing to do with where a wisp happens to stand.
 
 No browser test yet covers what a wisp actually draws or the panel it opens on a touch; the split
 would be the same as a landmark's (**What earns a browser test**, above) whenever it is worth adding.

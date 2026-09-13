@@ -16,7 +16,7 @@
 // the walks here are planted on the doorstep and only the last step is taken.
 
 import { assert, assertEqual, runIfMain, test as browserTest } from './harness.js';
-import { maxWater, spendable } from '../src/core/rules.js';
+import { createRun, maxWater, spendable, step } from '../src/core/rules.js';
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
 import { decodeExplored } from '../src/core/cartography.js';
 import { PRICES } from '../src/balance.js';
@@ -116,8 +116,15 @@ test('stopping at the hut recaps the run and writes the slot; leaving keeps only
   for (const label of [RECAP.rowExplored, RECAP.rowCoins, RECAP.rowLights, RECAP.rowFurthest, RECAP.rowSteps])
     assert(texts.includes(label), `the recap reports ${label}`);
   // The 3x3 around the start tile plus the row the step onto the hut added,
-  // in one step.
-  assert(texts.includes('12'), 'the tiles-explored figure');
+  // plus every wisp in the world, which lights its own little clearing
+  // unconditionally (DESIGN.md §4.11) — read off the pure engine rather than
+  // hardcoded, so a change to either shape moves this test with it.
+  const explored = (() => {
+    const state = createRun(SEED, emptySave(), NONCE);
+    step(state, OUT_AND_BACK[0]);
+    return state.explored.size;
+  })();
+  assert(texts.includes(String(explored)), 'the tiles-explored figure');
   assert(texts.includes('1'), 'the step count');
   assert(texts.some((t) => t.startsWith(RECAP.carrying(ITEM_TEXT['torch-small'].name))), 'what is still in hand');
   assert(await game.hasText(RECAP.rowColours), 'and what was banked');

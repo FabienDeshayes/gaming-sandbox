@@ -8,10 +8,11 @@ Big things next:
 
 Later:
 * intro to explain the story
+* add life to the world - or if there is no life, explain and search why
 * sell stuff to merchant / home
 * Nouxinha real ending
 * review all texts for consistency 
 
 ideas to explore:
-* ambient sources of light
+* dead cities with ghosts
 * carry caps on lights

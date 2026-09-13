@@ -151,17 +151,18 @@ export class WorldMap {
       parts.push(...this.buildZoomControls());
     }
 
-    parts.push(
-      makeButton(scene, GAME_WIDTH / 2, GAME_HEIGHT - 70, WORLD_MAP.close, () => this.onClose(), {
-        width: 170,
-        height: 44,
-        fontSize: 13,
-      })
-    );
+    const close = makeButton(scene, GAME_WIDTH / 2, GAME_HEIGHT - 70, WORLD_MAP.close, () => this.onClose(), {
+      width: 170,
+      height: 44,
+      fontSize: 13,
+    });
+    parts.push(close);
 
     this.container.add(parts);
     this.container.setVisible(true);
     this.open = true;
+    // Zoom buttons only exist once there is a drawing to zoom (`bounds` above).
+    scene.nav.set([...(bounds ? [this.zoomOutButton, this.fitButton, this.zoomInButton] : []), close]);
   }
 
   // Ground goes into a canvas texture a pixel per tile and is then scaled up,
@@ -503,6 +504,7 @@ export class WorldMap {
     this.zoomOutButton = null;
     this.fitButton = null;
     this.open = false;
+    this.scene.nav.clear();
   }
 }
 

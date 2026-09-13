@@ -181,6 +181,7 @@ export class ItemCard {
     }
 
     const buttonY = cy + panelH / 2 + 44;
+    const buttonObjs = [];
     if (single) {
       const equip = makeButton(
         scene,
@@ -194,18 +195,23 @@ export class ItemCard {
         { width: 160, height: 44, enabled: !single.isActive }
       );
       parts.push(equip);
+      buttonObjs.push(equip);
     }
 
-    parts.push(
-      makeButton(scene, single ? cx + 96 : cx, buttonY, CARD.close, () => this.hide(), {
-        width: 160,
-        height: 44,
-      })
-    );
+    const close = makeButton(scene, single ? cx + 96 : cx, buttonY, CARD.close, () => this.hide(), {
+      width: 160,
+      height: 44,
+    });
+    parts.push(close);
+    buttonObjs.push(close);
 
     this.container.add(parts);
     this.container.setVisible(true);
     this.open = true;
+    // The per-copy list (`multi`) stays a tap/drag list — its rows aren't
+    // separately interactive even to a pointer (ui/scroll.js) — so Tab only
+    // ever visits EQUIP and CLOSE.
+    scene.nav.set(buttonObjs);
   }
 
   hide() {
@@ -216,5 +222,6 @@ export class ItemCard {
     this.container.setVisible(false);
     this.container.removeAll(true);
     this.open = false;
+    this.scene.nav.clear();
   }
 }

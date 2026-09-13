@@ -168,13 +168,19 @@ export class InventoryPanel {
       parts.push(content, this.scrollHandle.zone);
     }
 
-    parts.push(
-      makeButton(scene, cx, top + PANEL_H - 38, INVENTORY.close, () => this.hide(), { width: 160, height: 44 })
-    );
+    const close = makeButton(scene, cx, top + PANEL_H - 38, INVENTORY.close, () => this.hide(), {
+      width: 160,
+      height: 44,
+    });
+    parts.push(close);
 
     this.container.add(parts);
     this.container.setVisible(true);
     this.open = true;
+    // The stack list is a tap/drag list, not separately-focusable rows
+    // (ui/scroll.js) — same as the item card's own per-copy list — so CLOSE
+    // is the whole of what Tab visits here.
+    scene.nav.set([close]);
   }
 
   hide() {
@@ -185,5 +191,6 @@ export class InventoryPanel {
     this.container.setVisible(false);
     this.container.removeAll(true);
     this.open = false;
+    this.scene.nav.clear();
   }
 }

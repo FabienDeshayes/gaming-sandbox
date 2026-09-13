@@ -368,8 +368,12 @@ test('the cogwheel saves the walk, and load game carries it on', async (game) =>
   await walkPath(game, ROCK_ROUTE.path);
   const walked = await game.state();
 
+  // The cogwheel opens on SETTINGS focused (DESIGN.md §7), so Tab once lands
+  // on SAVE GAME and Enter picks it — the keyboard's way of tapping a row of
+  // buttons instead of a mouse's.
   await game.tapMenuButton();
-  await game.clickText(MENU.save);
+  await game.press('Tab');
+  await game.press('Enter');
   assert(await game.hasText(SAVED.title), 'saving says so');
   const saved = await game.save();
   assertEqual(saved.run.x, walked.x, 'and the slot is holding the tile it was standing on');
@@ -377,8 +381,9 @@ test('the cogwheel saves the walk, and load game carries it on', async (game) =>
   assertEqual(saved.run.steps, walked.steps, 'with the steps it had taken');
   assertEqual(saved.runs, 0, 'but nothing is banked by saving — only the hut does that');
 
-  // The question saving asks: carry on, or stop here for now.
-  await game.clickText(MENU.keepPlaying);
+  // The question saving asks: carry on, or stop here for now. KEEP PLAYING is
+  // the first button of this new dialog, so Enter alone picks it.
+  await game.press('Enter');
   assertEqual((await game.state()).dialogOpen, false, 'keeping playing hands the world back');
   await game.tapDpad(ROCK_ROUTE.path[0]);
   await game.settle();
@@ -419,15 +424,17 @@ test('the cogwheel saves the walk, and load game carries it on', async (game) =>
 // NEW GAME draws, because what it is checking is that it draws one at all.
 browserTest('each slot is a campaign of its own, in a world of its own', async (game) => {
   // Three campaigns, and the picker says what is in all three (DESIGN.md §6.1).
-  await game.clickText(UI.newGame);
+  // The title screen opens with NEW GAME focused, so Enter alone reaches the
+  // picker — the keyboard's way of tapping the first button (DESIGN.md §7).
+  await game.press('Enter');
   await game.waitForScene('SlotScene');
   for (const slot of [1, 2, 3])
     assert(await game.hasText(SLOTS.slotName(slot)), `slot ${slot} is offered`);
   assertEqual((await game.texts()).filter((t) => t === 'EMPTY').length, 3, 'all three empty');
 
   // Bank a run in each of two slots: out one tile, back, and stop at the hut.
-  const worldOf = async (slot) => {
-    await game.clickText(slot);
+  const worldOf = async (slot, pick = () => game.clickText(slot)) => {
+    await pick();
     await game.waitForScene('ExploreScene');
     // Setting out is read its piece before it can be walked, and this test takes
     // the long way to a run rather than through `startRun`, which reads it for
@@ -441,7 +448,9 @@ browserTest('each slot is a campaign of its own, in a world of its own', async (
     return seed;
   };
 
-  const first = await worldOf('SLOT 1');
+  // SLOT 1 is the picker's own first row, focused the same way NEW GAME was,
+  // so Enter picks it too — no Tab needed to reach the first stop.
+  const first = await worldOf('SLOT 1', () => game.press('Enter'));
   await game.clickText(UI.newGame);
   await game.waitForScene('SlotScene');
   const second = await worldOf('SLOT 2');
@@ -699,7 +708,11 @@ test('the map draws the ground this run has walked', async (game) => {
   assert(await game.hasText(WORLD_MAP.title), 'the overlay');
   assert(await game.hasText(WORLD_MAP.walked(before.explored)), 'and it draws what was lit');
 
-  await game.clickText(UI.close);
+  // ZOOM IN is the map's first enabled control at the fit scale it opens on —
+  // ZOOM OUT and FIT are both disabled there — so Tab from it lands on CLOSE,
+  // skipping the two disabled stops in between (ui/keyboardNav.js).
+  await game.press('Tab');
+  await game.press('Enter');
   assertEqual((await game.state()).mapOpen, false, 'and closes again');
 }, { save: { ...emptySave(), map: true } });
 

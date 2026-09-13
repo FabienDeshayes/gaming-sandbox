@@ -27,6 +27,7 @@ import {
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
 import { makeSlider } from '../ui/slider.js';
+import { bindKeyboardNav } from '../ui/keyboardNav.js';
 import { SETTINGS } from '../text.js';
 import { startMusic, stopMusic } from '../ui/music.js';
 
@@ -78,7 +79,7 @@ export class SettingsScene extends Phaser.Scene {
     // How fast holding a D-pad arrow walks (DESIGN.md §7, dpad.js) — a slider
     // rather than a fixed rate, since "fast" is a matter of taste and thumb
     // speed both.
-    makeSlider(this, cx, 420, {
+    const moveSpeed = makeSlider(this, cx, 420, {
       width: 300,
       min: MIN_MOVE_SPEED,
       max: MAX_MOVE_SPEED,
@@ -125,8 +126,9 @@ export class SettingsScene extends Phaser.Scene {
     // playing it — so it is on screen exactly while they are, and it takes
     // effect where it is tapped, which means drawing this screen again in the
     // colours it just chose.
+    let invert = null;
     if (getCheats()) {
-      makeButton(
+      invert = makeButton(
         this,
         cx,
         610,
@@ -149,17 +151,14 @@ export class SettingsScene extends Phaser.Scene {
 
     // Back where it came from: the expedition it was opened from, or the title
     // screen.
-    makeButton(
-      this,
-      cx,
-      700,
-      SETTINGS.back,
-      () =>
-        this.opened.run
-          ? this.scene.start('ExploreScene', { run: this.opened.run })
-          : this.scene.start('TitleScene'),
-      { width: 240 }
-    );
+    const goBack = () =>
+      this.opened.run
+        ? this.scene.start('ExploreScene', { run: this.opened.run })
+        : this.scene.start('TitleScene');
+    const back = makeButton(this, cx, 700, SETTINGS.back, goBack, { width: 240 });
+
+    bindKeyboardNav(this).set([music, moveSpeed, cheats, ...(invert ? [invert] : []), back]);
+    this.input.keyboard.on('keydown-ESC', goBack);
   }
 }
 

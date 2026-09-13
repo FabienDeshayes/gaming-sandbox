@@ -11,6 +11,7 @@ import { itemDef } from '../data/items.js';
 import { STOCK, isOneOff, priceOf } from '../data/shop.js';
 import { canBuy, spendable } from '../core/rules.js';
 import { makeButton } from './button.js';
+import { makeFocusRing } from './keyboardNav.js';
 import { SHOP } from '../text.js';
 import { playTap } from './sfx.js';
 
@@ -73,6 +74,7 @@ export class Shop {
       label(cx, top + PAD + TITLE_H + PURSE_H / 2, SHOP.purse(spendable(run)), 13, 0.5)
     );
 
+    const buttonObjs = [];
     let y = top + PAD + TITLE_H + PURSE_H;
     for (const id of STOCK) {
       const def = itemDef(id);
@@ -106,31 +108,36 @@ export class Shop {
           .zone(left + PAD, y + 4, PANEL_W - PAD * 2, ROW_H - 8)
           .setOrigin(0)
           .setInteractive({ useHandCursor: true });
-        zone.on('pointerdown', () => {
+        const buy = () => {
           playTap();
           this.onBuy(id);
-        });
-        parts.push(zone);
+        };
+        zone.on('pointerdown', buy);
+        const ring = makeFocusRing(scene, left + PAD, y + 4, PANEL_W - PAD * 2, ROW_H - 8, pal.fg);
+        parts.push(zone, ring);
+        buttonObjs.push({ setFocused: (v) => ring.setVisible(v), isEnabled: () => true, activate: buy });
       }
       y += ROW_H;
     }
 
-    parts.push(
-      makeButton(scene, cx, top + panelH - PAD - BUTTON_H / 2, SHOP.leave, () => this.onLeave(), {
-        width: BUTTON_W,
-        height: BUTTON_H,
-        fontSize: 13,
-      })
-    );
+    const leave = makeButton(scene, cx, top + panelH - PAD - BUTTON_H / 2, SHOP.leave, () => this.onLeave(), {
+      width: BUTTON_W,
+      height: BUTTON_H,
+      fontSize: 13,
+    });
+    parts.push(leave);
+    buttonObjs.push(leave);
 
     this.container.add(parts);
     this.container.setVisible(true);
     this.open = true;
+    scene.nav.set(buttonObjs);
   }
 
   hide() {
     this.container.setVisible(false);
     this.container.removeAll(true);
     this.open = false;
+    this.scene.nav.clear();
   }
 }

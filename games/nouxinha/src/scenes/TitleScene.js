@@ -3,6 +3,7 @@ import { anySlotUsed } from '../core/save.js';
 import { TITLE } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
+import { bindKeyboardNav } from '../ui/keyboardNav.js';
 import { makeWizard, paintWizard } from '../ui/wizard.js';
 import { startMusic } from '../ui/music.js';
 
@@ -77,11 +78,15 @@ export class TitleScene extends Phaser.Scene {
 
     // Both ways in go through the slot picker: which of the three campaigns
     // this is has to be answered before a run can start (DESIGN.md §6.1).
-    makeButton(this, cx, 566, TITLE.newGame, () => this.scene.start('SlotScene', { mode: 'new' }), {
-      width: 240,
-      color: buttonColor,
-    });
-    makeButton(
+    const newGame = makeButton(
+      this,
+      cx,
+      566,
+      TITLE.newGame,
+      () => this.scene.start('SlotScene', { mode: 'new' }),
+      { width: 240, color: buttonColor }
+    );
+    const loadGame = makeButton(
       this,
       cx,
       632,
@@ -89,9 +94,11 @@ export class TitleScene extends Phaser.Scene {
       () => canLoad && this.scene.start('SlotScene', { mode: 'load' }),
       { width: 240, enabled: canLoad, color: buttonColor }
     );
-    makeButton(this, cx, 698, TITLE.settings, () => this.scene.start('SettingsScene'), {
+    const settings = makeButton(this, cx, 698, TITLE.settings, () => this.scene.start('SettingsScene'), {
       width: 240,
       color: buttonColor,
     });
+
+    bindKeyboardNav(this).set([newGame, loadGame, settings]);
   }
 }

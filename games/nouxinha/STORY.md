@@ -92,7 +92,7 @@ Every worked thing in the world is his, and each of them is doing a job:
   That is him, fidgeting.
 - **The landmarks.** Four of them, and they are not furniture: they are the pins he pushes into the
   map before the ground goes on, the same four in every world, because nobody moulds a world out of
-  nothing without something to measure from (`DESIGN.md` §4.10). The eight signposts pointing at
+  nothing without something to measure from (`DESIGN.md` §4.10). The twelve signposts pointing at
   them are the only writing in the world, and the only thing in it that is addressed to somebody.
 - **The hut.** One room, a flag on it so you can find it from the edge of a light, water that never
   runs out and a fresh candle waiting if you come in blind. He leaves it standing every single time.
@@ -165,15 +165,24 @@ One turn of the game, and the reason a save slot is a campaign rather than a sav
 5. **Round again**, one world better — and the fourth kind of world walked out this way is where
    the going round stops being the only thing that happens (§10).
 
-**What he takes:** the three shards, and the world. Every time.
+**What he takes:** the three shards, and the world — **and everything that came out of the world
+with them**, which is more than it sounds. Your coins were struck in his mint. Your compass and your
+map were bought at his stall or found on his ground. All of it goes. Every time.
 
-**What he leaves:** everything that is yours rather than his — the compass and the map if you have
-carried them home, your coins, the **standings** you walked back from the four landmarks with
-(`DESIGN.md` §4.10), and above all **what you know**. He can unmake ground. He has never found a way
-to unmake the fact that you have been here before.
+**What he leaves:** only what was never his to make — the **standings** you walked back from the four
+landmarks with (`DESIGN.md` §4.10), the count of worlds he has taken off you, which kinds of world
+you have walked all the way out, and above all **what you know**. He can unmake ground. He has never
+found a way to unmake the fact that you have been here before.
 
-So the campaign ramps: cycle one is the whole game learned from nothing, and cycle four opens with
-both tools in hand, a purse, a shorter world (§8) and three things to say.
+That is deliberately the harsher of the two rules available (§13), and it is the one the game
+implements. A cycle hands back nothing you can spend and nothing you can hold — you walk out of the
+door with a full tank and a candle, exactly as you did the first time. What is different is you.
+
+So the campaign ramps by **recognition rather than by inventory**: cycle one is four grey shapes in a
+black world and a name you have to be told; cycle three opens on the same four in colour, a bell you
+can hear coming, a second candle in the pack and every stall already drawn. The honest caveat is that
+this is a thin ladder, and `DESIGN.md` §12 records it as unfinished rather than settled — what
+survives a cycle is decided, what makes surviving it *feel* like progress is not.
 
 ## 8. The far dark, and the remnants
 
@@ -272,10 +281,12 @@ Ordered by how much of the existing design it moves. Items 1-5 are the restructu
 (`DESIGN.md` §4.9), as is 10; 6-9 are the content on top of it, and none of them is.
 
 1. ~~**A cycle is a new seed inside the same slot.**~~ Built. The seed is re-drawn into the slot when
-   the hall turns a cycle (`turnCycle` in `core/rules.js`), and the slot keeps only the expeditions
-   walked and the count of worlds ended — the coins and the tools go with everything else the world
-   is moulded away from. Everything in `core/` derives from the seed already, so the world cost
-   nothing to re-mould — it was a save-shape change, not a world change.
+   the hall turns a cycle (`turnCycle` in `core/rules.js`), and the slot keeps six things and no
+   others: the new seed, the count of worlds ended, the expeditions walked, how far out the campaign
+   ever got, the standings, and which kinds of world it has finished. **The coins and both tools go
+   with everything else the world is moulded away from** (§7). Everything in `core/` derives from the
+   seed already, so the world cost nothing to re-mould — it was a save-shape change, not a world
+   change.
    The one thing to remember when *adding* to a save: `writeDeposit` and `turnCycle` both rebuild
    the slot from scratch, so anything that has to survive a cycle has to be carried over by hand.
 2. ~~**The explored ground goes with it.**~~ Built, and it wipes rather than mixes: the drawing is
@@ -340,9 +351,15 @@ Written down because a good line of dialogue will happily walk into every one of
 
 ## 13. Roads not taken, and open questions
 
-- **He takes your tools and coins too.** Cleaner as a rule, worse as a game: a cycle that opens with
-  nothing is a cycle that replays the tutorial, and the whole promise of the loop is that each turn
-  round is faster than the last. He takes the shards and the ground, and that is enough.
+- **He leaves your tools and coins.** The road *not* taken, and the case for it is real: a cycle that
+  opens with nothing is a cycle that replays the opening, and there is a version of this loop whose
+  promise is that each turn round is faster than the last.
+  The case against is that it makes the sorcerer inconsistent — he unmakes the ground a landmark
+  stood in but politely leaves the shop receipts — and it puts the campaign's progression on
+  accumulation, which is the one kind of progression this story has no room for: what survives him is
+  supposed to be what you *know* (§7). So he takes the purse and the tools, and the cost of that is
+  admitted rather than hidden: the compass at 250 is about one world's entire coin income, so it is
+  bought late in a world and gone by the next. `DESIGN.md` §12 carries that as an open problem.
 - **A remnant per sanctum instead of one at the rim.** Puts the meta progression on the route you are
   already walking and makes the far dark pointless again. The remnant is out past his wall precisely
   so that going for it is a decision with a price.

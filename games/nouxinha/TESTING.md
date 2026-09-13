@@ -322,13 +322,16 @@ into a new world (DESIGN.md §4.9). Three claims, in the three places they belon
   that says his clearing holds nothing to pick up (`scatter.test.js`).
 - **The cycle is pure too**, and it is the one worth being fussy about: `turnCycle(state)` hands back
   the run it would start, so a `unit(...)` test can read straight off it what he took (the colours,
-  the keys, the chests, the drawing, the suspended walk) and what he left (the purse, the tools, the
-  runs, the count of worlds ended) — and that the seed is not the one the campaign walked in on.
-  That is `save.test.js`, because it is a claim about a slot rather than about a walk.
+  the keys, the chests, the drawing, the suspended walk — **and the purse and both tools**) and what
+  he left (the runs, the count of worlds ended, the standings, the kinds of world finished) — and
+  that the seed is not the one the campaign walked in on. The purse and the tools are the pair worth
+  asserting explicitly, because "he leaves what is yours" is the intuitive rule and it is not this
+  game's (DESIGN.md §4.9). That is `save.test.js`, because it is a claim about a slot rather than
+  about a walk.
 - **The bump, the voice and the world turning over need the browser**, and are one `test(...)` in
   `ui-campaign.test.js`: he is drawn standing there, the step into him does not happen, the panel
   comes up over the world, and reading it out leaves the page in a world with a different seed, no
-  colours, the purse intact and the counter in the HUD.
+  colours, an empty purse and the counter in the HUD.
 
 `HALL_ROUTE` in `tests/world.js` is the walk to the tile you talk to him from — his own tile can't be
 stepped on, so, like a chest, the route stops beside him and `hit` is the direction the last input

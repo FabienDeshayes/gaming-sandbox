@@ -209,7 +209,7 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
   tiles, which would break the promise that the character is never permanently stuck (§5). So a run
   flood-fills a 40-tile window from the base and rejects a seed that can't reach most of the floor in
   it, bumping to the next seed until one opens up. Rock and trees together block a bit over a quarter
-  of the world, and about one seed in eight needs a bump — a bump is cheap and one is always enough,
+  of the world, and about one seed in ten needs a bump — a bump is cheap and one is always enough,
   which is the whole reason the check exists rather than a guarantee baked into the noise. The same fill checks that every sanctum door and every
   landmark can be walked to. Carving guaranteed corridors into the noise would be the alternative,
   and it leaves a visible lattice; this keeps the terrain organic and costs a few milliseconds once
@@ -524,17 +524,40 @@ took the sun, standing dead centre of it — and the only conversation in the ga
 
 **Then the world is moulded again, and that is what a cycle is.** Everything about the world falls
 out of its seed (§4.3), so re-drawing the seed *is* the re-mould, and it happens inside the same
-save slot:
+save slot.
+
+**What turns a cycle is walking into him, not finding three colours.** Arriving with two, or one, or
+none is still a meeting, still ends the expedition and still takes the world — the three colours only
+decide whether that world counts as *finished* (below). There is no other way to turn a cycle and no
+way to decline one: the conversation is the last thing that happens in a world.
+
+**He takes everything that came out of the world, and the purse and the tools come out of the
+world.** That is the whole rule, and it is worth stating flatly because it is the harshest thing in
+the game and the easiest to assume away: **a campaign does not keep its coins or its compass and map
+across a cycle.** `turnCycle` in `core/rules.js` rebuilds the slot from `emptySave()` and copies over
+six things and no others — the seed it just drew, `cycles`, `finished`, `standings`, `runs` and
+`furthest`. Everything absent from that list is gone, coins and tools included, and
+`tests/save.test.js` asserts it outright.
 
 | He takes | He leaves |
 |---|---|
 | The three colours, banked and carried alike | The expeditions you have walked, and how far out you got |
 | The keys, and every lid you left up | The count of worlds he has taken, which is the one number that survives every one of them |
-| The purse, banked and pocketed alike | **The standings** — everywhere this campaign has ever stood (§4.10). He can unmake the ground a landmark stood in; he has never found a way to unmake having been there |
-| The compass and the map, if you own them | |
+| **The purse, banked and pocketed alike** | **The standings** — everywhere this campaign has ever stood (§4.10). He can unmake the ground a landmark stood in; he has never found a way to unmake having been there |
+| **The compass and the map, if you own them** | Which **kinds** of world the campaign has finished, which is what the ending counts (below) |
 | The ground the campaign drew, and the unique things it had laid eyes on | |
 | Which landmarks *this* world was stood at, and which posts were read in it | |
 | The expedition you were on, and any walk suspended in the slot | |
+| The bag a death left on the ground, since the new world has no tile that used to be that spot | |
+
+**So a cycle keeps what you know and nothing you own.** The four standings are deliberately not
+numbers (§4.10.4) and the purse and the tools deliberately do not survive, which means the ladder a
+campaign climbs across worlds is made of knowledge — a bell you can hear, a spare candle, a stall on
+the map, a distance on the HUD — rather than of accumulation. Whether that ladder is *enough* is an
+open design question and the honest answer today is that a second cycle plays very much like a first:
+the compass costs 250 and one world's coin income is roughly enough to buy the compass and the map
+once, so a campaign that loses both every cycle re-earns them every cycle and rarely gets there. §12
+records that as unfinished business rather than a settled design.
 
 What comes back is a **fresh expedition out of the hut door**: a full tank, a candle (two, for a
 campaign that has stood at the Lantern Tree), no colours,
@@ -717,8 +740,8 @@ colour is the progression:
 > A landmark you have never touched is a grey shape with a name you do not know. Touch it, walk it
 > home, and it is drawn in its colour **in every world after, for the rest of the campaign**.
 
-Cycle one is four grey shapes and eight grey arms in a black world. By cycle three the new dark
-arrives with four coloured pins and eight coloured arrows already in it, and is legible from the
+Cycle one is four grey shapes and twelve grey arms in a black world. By cycle three the new dark
+arrives with four coloured pins and twelve coloured arrows already in it, and is legible from the
 first step. **The colour is the meta progression**, and it costs no new vocabulary: it is the
 existing zone system with one new hue role, `'landmark'`, resolved from which landmark's tile is
 being drawn — the same way `'gem'` and `'opened'` already resolve from where a tile stands.
@@ -879,9 +902,11 @@ Three sets, and the difference between them is the whole design (§6.1):
 
 All three are banked exactly like the keys and the opened chests: a run holds them, and the hut is
 what makes them the campaign's. `bankRun`, `depositRun` and `turnCycle` all rebuild a slot from
-scratch, so the standings are carried across the cycle by hand, alongside `cycles`, the purse and
-the tools. Forgetting that would not look like a bug — it would look like the game working, one
-cycle at a time, quietly forgetting everywhere the campaign had ever stood.
+scratch, so the standings are carried across the cycle by hand, alongside `cycles`, `finished`,
+`runs` and `furthest` — the whole of what a cycle keeps (§4.9). The purse and the tools are *not* on
+that list and are meant not to be. Forgetting to carry a standing over would not look like a bug — it
+would look like the game working, one cycle at a time, quietly forgetting everywhere the campaign had
+ever stood.
 
 **The compass deliberately does not point at landmarks** (§4.6). They already have a way of being
 found, and it is the twelve posts with their names on: the compass is the instrument and a post is
@@ -991,7 +1016,7 @@ far for.
 
 ## 6. Win / lose conditions
 
-- **Win:** walking the three colours home and then carrying them out to the hall at 110, where the sorcerer takes them and moulds the world again (§4.9) — four times over, once for each kind of world, which is what ends the game: the fourth one finished is the one where he opens his hands instead, and what is on the other side of that is the light and the credits. Bringing the colours home is the middle of a cycle rather than the end of one: what it opens is the last gate and the walk behind it. The campaign does not end there either — a cycle turns, the slot keeps its purse, its tools, its standings (§4.10) and its count of worlds ended, and the whole game is walked again in a world nobody has lit.
+- **Win:** walking the three colours home and then carrying them out to the hall at 110, where the sorcerer takes them and moulds the world again (§4.9) — four times over, once for each kind of world, which is what ends the game: the fourth one finished is the one where he opens his hands instead, and what is on the other side of that is the light and the credits. Bringing the colours home is the middle of a cycle rather than the end of one: what it opens is the last gate and the walk behind it. The campaign does not end there either — a cycle turns, the slot keeps its standings (§4.10), its count of worlds ended and which kinds of world it has finished, and the whole game is walked again in a world nobody has lit. It does **not** keep its purse or its tools: those came out of the world and go with it (§4.9).
 - **Lose:** running out of water. It depletes independently of light and refills only at a water pickup or the hut, so hitting 0 out in the dark ends the run on the spot. Everything carried since the hut was last stood on — gems, keys, lights, coins, and any tool bought or found on the way — drops into a **bag** on the tile the run died on rather than into the hut's books (§6.1), with a short screen reporting tiles explored, furthest distance, and steps taken before returning to the title screen; the ground it lit goes into the slot regardless of any of that. Running out of light, by contrast, is a setback (blackout), not a failure state; nothing about light kills the character.
 - **Session end:** the player walks back to the hut and takes it up on the offer to end the expedition (§4). The HUD tracks the numbers that stand in for a score while you're out — **tiles explored** (distinct tiles the campaign has ever lit, since ground carries between runs — §6.1), **coins**, **water** remaining, and the row of **colours** recovered — and ending the expedition closes the run with a **recap**: tiles explored, **new ground** this expedition lit that no earlier one had, **coins found** — the whole walk's, since the hut empties the pocket into the bank every time it is crossed — lights found, colours saved, furthest distance reached, steps taken, and what's still in hand. The two ground numbers are both there on purpose: the total is how much of the world is drawn, the new one is what this particular walk was worth.
 
@@ -1024,14 +1049,14 @@ The one thing that outlives a run regardless is the ground it lit — cartograph
 - **What ends a saved expedition is the expedition ending.** Coming home to the hut clears it — that walk is over and banked. So does running dry: death is the one hard failure this game has, and a save you could reload out of would make it a rewind instead. Leaving by **EXIT GAME** is the one that doesn't touch it — not saving is not unsaving, so what you lose is the walking since your last save, never the save itself.
 - The hut names what it has just written down — the colour, the tool, the coins — because a player who doesn't know the rule would otherwise never learn that the risk is over.
 - A save is normalised on the way in and out, so a corrupt or hand-edited file costs the player their progress at worst — never the run's arithmetic.
-- **The hall rewrites the whole slot** (§4.9), and it is the only thing besides NEW GAME that ever does: a new seed, no colours, no keys, no chests, no drawing, and no suspended walk — with the purse, the tools, the runs and the worlds-ended count carried across by hand. A slot's world is drawn when NEW GAME claims it *and* every time a cycle turns; everything else about a campaign outlives its world.
+- **The hall rewrites the whole slot** (§4.9), and it is the only thing besides NEW GAME that ever does: a new seed, no colours, no keys, no chests, no drawing, no suspended walk — **and no purse and no tools**, since both came out of the world he just took. What is carried across by hand is `cycles`, `finished`, `standings`, `runs` and `furthest`, and nothing else. A slot's world is drawn when NEW GAME claims it *and* every time a cycle turns; what outlives a world is the tally of the campaign and what it learned, never what it was carrying.
 - **Erasing** happens by starting a **NEW GAME** over an occupied slot — there is no standalone erase control in Settings. It asks twice, on the slot's own row: the first tap arms it, the second overwrites it.
 
 ### 6.2 Cheats
 
 A developer switch in Settings, off by default, for looking at what the late game actually does without a campaign's worth of walking behind it.
 
-- A run started with cheats on opens with **the whole world revealed** — every tile out past the fourth sanctum, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **all three keys** so every gate stands open, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust. The chests themselves are left shut, so a sandbox for looking at the late game still has one to open.
+- A run started with cheats on opens with **the ground revealed out to 130 tiles** (`CHEAT_REVEAL_RADIUS`) — well past the fourth sanctum's wall at 117 though short of the rim, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **all three keys** so every gate stands open, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust. It also holds **every standing** (§4.10) and has laid eyes on every gem, site, chest, landmark and wisp, so the map opens coloured and complete the way a campaign several cycles in would. The chests and the landmarks themselves are left untouched, so a sandbox for looking at the late game still has something to walk to.
 - **A cheat run writes nothing at all.** It banks no progress at the hut, it cannot be saved mid-walk from the menu (which says so instead of writing), and it does not even keep its ground, because a run that was *handed* three gems is not a campaign and must never overwrite one. The toggle says so on itself, the title screen says so under the character, and the recap says so instead of listing what is being carried home.
 - **A cheat run opens at the end of the game.** The late game is now the ending (§4.9), so a sandbox is handed the other three kinds of world already finished: walk it into the hall carrying the three colours it started with and the sorcerer opens his hands. Like everything else a cheat run does, it writes no campaign.
 - **INVERT COLOURS lives here**, under the cheats and on screen exactly while they are on — it is the same kind of thing they are, a way of looking at the game rather than a way of playing it, and it is the colours the ending is read in (§4.9) available on demand. It draws the whole game inside out — the same two colours the other way round — and turning the cheats off turns it off with them, because a screen drawn inside out with nothing on it to undo that would be a trap rather than a setting.
@@ -1119,10 +1144,11 @@ dragging the drawing itself; **CLOSE** is the way out.
 - The hut's stop/continue question and the end-of-run recap
 - Synthesised sound throughout: pickup blips, a gem fanfare, a torch catching, a death knell, a tap on every button but the D-pad, and a loop for the walk with a smaller one for the menus (§9)
 - Four seed-derived sanctums with masonry walls and key-locked gates, guaranteed reachable (§4.4)
-- Eight seed-derived chests, opened by walking into them, holding the three keys and five hoards of coins (§4.8)
+- Nine seed-derived chests, opened by walking into them, holding the three keys and six hoards of coins — the Mint's and five loose ones (§4.8)
 - Three gems, each restoring a colour, raising the water ceiling, and revealing its tier of items
-- The hall at 110: the sorcerer standing in the fourth sanctum, the conversation, and the cycle it turns — a new world in the same slot, the colours and the ground taken, the purse, the tools and the standings kept, and a counter of worlds ended in the HUD and on the slot's row (§4.9)
+- The hall at 110: the sorcerer standing in the fourth sanctum, the conversation, and the cycle it turns — a new world in the same slot, the colours, the ground, the purse and both tools taken, the standings and the kinds of world finished kept, and a counter of worlds ended in the HUD and on the slot's row (§4.9)
 - Four landmarks per world with names, colours and a chest apiece, twelve signposts pointing at them (some naming two, and all gesturing cryptically at the hut), and the standings a campaign keeps out of them through every world after (§4.10)
+- Ten wisps per world: lights with nobody carrying them, lit and mapped from the first reveal whatever the run holds, so a blackout walk has somewhere to aim (§4.11)
 - Three save slots, picked through NEW GAME / LOAD GAME, banked by reaching the hut whether or not the expedition ends there, with progress on the title screen and a slot erased by starting a new game over it
 - Explored ground carried between runs however a run ends, so a campaign never starts from black again (§6.1)
 - A cheat toggle in Settings that opens a run on the whole map with one of everything, and banks nothing (§6.2)
@@ -1135,7 +1161,7 @@ dragging the drawing itself; **CLOSE** is the way out.
 **Nice to have (only after MVP works):**
 - Light falloff — an outer ring at partial brightness instead of a hard edge
 - More light sources (something that lights a fixed radius around a *dropped* point, a one-shot flare that reveals a wide area for one step)
-- More built things in the terrain generator: the sanctums, the landmarks, the posts, the chests and the merchant's stall are what there is, and the ground between them is still pure noise
+- More built things in the terrain generator: the sanctums, the landmarks, the posts, the chests, the wisps and the merchant's stall are what there is, and the ground between them is still pure noise
 - Screen-shake-free CRT dressing: scanline overlay, phosphor bloom on the lit ring
 
 **Explicitly out of scope:**
@@ -1307,14 +1333,14 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |
   | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js`, `src/ui/slider.js` | The D-pad, held to repeat a step at the rate `getMoveSpeed` gives; the item card overlay (single-copy or scrollable instance list); the full scrollable inventory panel, with the gem-pip row above its list; the title/rows/buttons dialog the hut, the recap and the cogwheel menu all use, its buttons in a row or stacked one per line once there are more than two; the shared bordered button; the shared drag-or-tap slider, used once for the move-speed setting |
   | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker, which says which slots are mid-expedition), `SettingsScene` (the music switch, the move-speed slider, the cheat switch, the inversion that rides with it — and, opened from a run, the way back into it), `ExploreScene` (the run, the cogwheel menu hanging off it, and the light explosion that ends the game), `CreditsScene` (what is on the other side of that explosion, and the only scene drawn with the colours inverted — §4.9) |
-  | `tests/` | `harness.js` (local server + Playwright driver + runner), `world.js` (the seed and every route BFSed out of it), thirteen `*.test.js` suites and `all.test.js`, which runs them all — see `TESTING.md` |
+  | `tests/` | `harness.js` (local server + Playwright driver + runner), `world.js` (the seed and every route BFSed out of it), fourteen `*.test.js` suites and `all.test.js`, which runs them all — see `TESTING.md` |
 
 - **Sprites are coordinates on one sheet.** `src/data/tiles.js` names a **(col, row)** of `assets/tiles.png` per sprite key; the tile is cut out as a 1-bit mask at boot, baked into a white texture and tinted at draw time. One image, no image editor to repoint a sprite, no build step — and one texture set serves all four palettes.
 
 - **Explored-tile storage:** a `Set` of `"x,y"` keys for tiles ever lit. Terrain and items are re-derived from the seed on demand, so nothing else about the world needs storing. A run additionally keeps only what the recap reports plus the water level: the coin count, the current water, the gem count, the keys held, the chests opened, the two tools, the high-water mark of distance from the base, and a tally of what it has picked up — and, per epoch, the set of consumable tiles it has emptied, which a respawn simply clears. That short list is exactly what a suspended expedition writes into its slot (§6.1), run-length encoded the same way the explored set is: saving a run is describing it, never copying a world.
-- **The structures are derived, then memoised.** Placing four sanctums, four landmarks, five sites, nine chests and twelve posts costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same thirty-four. They are placed onto one claimed list, in the order each needs: the landmarks take their quarters first, because they are the most constrained and everything else is placed against them; then the sites; then the chests, four of which want a landmark to stand beside; then the posts, which have to keep their distance from every landmark there is. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.
+- **The structures are derived, then memoised.** Placing four sanctums, four landmarks, five sites, nine chests, twelve posts and ten wisps costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same forty-four. They are placed onto one claimed list, in the order each needs: the landmarks take their quarters first, because they are the most constrained and everything else is placed against them; then the sites; then the chests, four of which want a landmark to stand beside; then the posts, which have to keep their distance from every landmark there is; and last the wisps. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.
 - **The consumable scatter is thrown, then thinned, then memoised.** A tile asks its lattice cell whether a candidate lands there, and a candidate is crowded out only by a same-kind conflict that *itself* landed — resolved by a short recursion that only ever walks to higher-priority candidates, so it terminates. Dropping every candidate that merely has a stronger neighbour would keep only local maxima and thin the world to a third of what the separation rule actually allows. The recursion is memoised per (seed, salt, gems); a respawn moves the salt, and old memos are dropped wholesale because the cache is a speed-up and never state. A full viewport repaint costs about a tenth of a millisecond.
-- **Run-start cost.** `pickSeed` flood-fills for the base pocket check and again out past the furthest sanctum for the reachability check — about 90ms in total on this machine, paid once, during a scene transition. That second fill short-circuits as soon as it has reached every door, site, landmark and chest, and never runs at all for a seed the cheaper pocket check has already rejected. Roughly one seed in five is bumped, most of them by the pocket check.
+- **Run-start cost.** `pickSeed` flood-fills for the base pocket check and again out past the furthest sanctum for the reachability check — about 90ms in total on this machine, paid once, during a scene transition. That second fill short-circuits as soon as it has reached every door, site, landmark and chest, and never runs at all for a seed the cheaper pocket check has already rejected. Roughly one seed in ten is bumped, about three in five of those by the pocket check.
 - **The page has to be the viewport.** Phaser fits the canvas to its parent element, so `#game` is sized to the full viewport and Phaser's own `autoCenter` does the centring. Centring the parent with flexbox instead leaves it shrink-to-fit — a size Phaser cannot fit into, which on a portrait phone scaled the canvas to the viewport *height* and let the width overflow: the sides of the HUD ran off screen and the page panned sideways, which ate taps, because a touch the browser is still deciding might be a pan never becomes a click. The canvas also sets `touch-action: none` so there is no pan gesture to wait on. `tests/ui-shell.test.js` pins this with a phone-sized viewport.
 - **Rendering the viewport:** the tile window is repointed around the character's coordinate each step rather than instantiating sprites for a growing world — a fixed pool of 11×15 cells (three sprites each: ground, base hut, item) whose texture and alpha are reassigned from whatever tile now sits at that screen position. Sprite count stays constant however far you walk. A step slides the whole tile container one tile and tweens it home in 90ms, so the world moves and the wizard doesn't; input is blocked for that tween so a fast tapper can't outrun the renderer.
 - **Key technical risks:**
@@ -1330,3 +1356,4 @@ Not part of the initial implementation, listed here so the MVP doesn't paint the
 
 - **Vault.** The base holds a vault; items and coins you're carrying are only truly *yours* once you've walked back and stored them. That's what turns "how far out can I get" into a decision with a cost, and it's the intended next step after the MVP proves the walk is interesting.
 - **A reason to carry a light home.** Lights bank nowhere: the recap says what you were holding and then it's gone. The vault above is one answer; selling them back to the merchant is another.
+- **What a cycle is worth.** The purse and both tools go with the world (§4.9), so the only thing a campaign accumulates across cycles is the four standings, and the four standings are deliberately not numbers (§4.10.4). The consequence, measured rather than guessed: one world's coin income is roughly 430 — about 40 piles averaging 3, plus six chests at 30-75 — against a 250 compass and a 50 map, so a campaign that loses both every cycle spends almost its whole income re-buying tools it already had, and in practice rarely reaches the compass at all. Either the cycle needs a meta-currency that is not coins, or the coins need somewhere else to go, or the tools need to survive after all. **The rule itself is settled and the code is right; what is unfinished is what fills the hole it leaves.** `STORY.md` §13 records the argument for the other answer, and why it was not taken.

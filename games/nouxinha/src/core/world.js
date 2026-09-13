@@ -58,6 +58,7 @@ import {
   SIGNPOST_SPACING,
   SITE_PLAN,
   SPAWN_CHANCE,
+  WISP_PLAN,
 } from '../balance.js';
 import { BIOME_IDS } from '../data/biomes.js';
 
@@ -79,6 +80,7 @@ const CH_BIOME = 11;
 const CH_LANDMARK = 12;
 const CH_SIGNPOST = 13;
 const CH_RICHNESS = 14;
+const CH_WISP = 15;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
@@ -550,6 +552,36 @@ function buildSignposts(seed, built, taken) {
   }).filter(Boolean);
 }
 
+// --- Wisps ---------------------------------------------------------------------
+//
+// Ten small, self-lit motes scattered through the dark (balance.js
+// `WISP_PLAN`), placed exactly like the loose coin chests — a ring of its
+// own, seed-derived, kept off everything already placed. What makes a wisp
+// different is nothing about where it stands: it is the one structure whose
+// own light doesn't wait for the character to be carrying one (`WISP_SHAPE`,
+// composed in `litTiles` in core/rules.js).
+
+function buildWisps(seed, built, taken) {
+  return WISP_PLAN.map((plan, i) => {
+    const roll = randomAt(i + 1, 0, seed, CH_WISP);
+    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_WISP) * plan.span);
+    const base = roll * Math.PI * 2;
+
+    for (const delta of HEADING_SEARCH) {
+      const spot = ringPoint(distance, base + delta * Math.PI * 2);
+      if (spotIsClear(spot, seed, built, taken)) {
+        claim(taken, spot, 1, 'wisp');
+        return { ...plan, index: i, x: spot.x, y: spot.y };
+      }
+    }
+    // Nothing in the sweep worked. Like a signpost, a wisp is placed rather
+    // than forced: ten small lights are a texture on the world, and ten
+    // (or nine) reads exactly the same as ten does. `pickSeed` never sees
+    // this one.
+    return null;
+  }).filter(Boolean);
+}
+
 // --- Chests -------------------------------------------------------------------
 //
 // A chest is placed exactly like a site — seed-derived, a forced-floor apron
@@ -626,6 +658,7 @@ function structures(seed = DEFAULT_SEED) {
     sites: buildSites(key, built, taken),
     chests: buildChests(key, built, taken, marks),
     signposts: buildSignposts(key, built, taken),
+    wisps: buildWisps(key, built, taken),
   };
   structureCache.set(key, world);
   return world;
@@ -649,6 +682,10 @@ export function signposts(seed = DEFAULT_SEED) {
 
 export function chests(seed = DEFAULT_SEED) {
   return structures(seed).chests;
+}
+
+export function wisps(seed = DEFAULT_SEED) {
+  return structures(seed).wisps;
 }
 
 export function siteNamed(id, seed = DEFAULT_SEED) {
@@ -799,6 +836,17 @@ export function signpostHutBearing(post) {
   return signpostBearing(post, { x: BASE_X, y: BASE_Y });
 }
 
+// Which wisp a tile belongs to: the wisp's own tile, or the forced-floor apron
+// around it that keeps it approachable whatever the noise did.
+export function wispAt(x, y, seed = DEFAULT_SEED) {
+  for (const wisp of wisps(seed)) {
+    const d = chebyshev(x, y, wisp.x, wisp.y);
+    if (d === 0) return { wisp, part: 'site' };
+    if (d === 1) return { wisp, part: 'apron' };
+  }
+  return null;
+}
+
 // Which chest a tile belongs to: the chest's own tile, or the forced-floor apron
 // around it that keeps every side of it approachable whatever the noise did.
 export function chestAt(x, y, seed = DEFAULT_SEED) {
@@ -835,6 +883,8 @@ export function terrainAt(x, y, seed = DEFAULT_SEED) {
   if (mark) return mark.part === 'site' ? 'landmark' : 'floor';
   const post = signpostAt(x, y, seed);
   if (post) return post.part === 'site' ? 'signpost' : 'floor';
+  const wisp = wispAt(x, y, seed);
+  if (wisp) return wisp.part === 'site' ? 'wisp' : 'floor';
   if (siteAt(x, y, seed)) return 'floor'; // the merchant, a tool on the ground, and their aprons
   const box = chestAt(x, y, seed);
   if (box) return box.part === 'site' ? 'chest' : 'floor';
@@ -857,12 +907,12 @@ export function isWalkable(x, y, seed = DEFAULT_SEED) {
   return terrainAt(x, y, seed) === 'floor';
 }
 
-// The terrains a light goes straight past: open ground, and the four things
-// that *stand* on it rather than being part of the world's shape — a chest, the
-// sorcerer, a landmark and a signpost. Every one of them is walked into rather
-// than onto, and every one of them would be a wall with a name on it if it cast
-// a shadow.
-const SEE_PAST = new Set(['floor', 'chest', 'sorcerer', 'landmark', 'signpost']);
+// The terrains a light goes straight past: open ground, and the things that
+// *stand* on it rather than being part of the world's shape — a chest, the
+// sorcerer, a landmark, a signpost and a wisp. Every one of them is walked
+// into rather than onto, and every one of them would be a wall with a name on
+// it if it cast a shadow.
+const SEE_PAST = new Set(['floor', 'chest', 'sorcerer', 'landmark', 'signpost', 'wisp']);
 
 // What stops a light rather than a step (DESIGN.md §4.1). Rock, trees and
 // masonry all stop one dead; a gate stops it only while it is shut, so the key
@@ -1103,6 +1153,7 @@ function spawnable(x, y, seed) {
   if (siteAt(x, y, seed)) return false;
   if (landmarkAt(x, y, seed)) return false;
   if (signpostAt(x, y, seed)) return false;
+  if (wispAt(x, y, seed)) return false;
   if (chestAt(x, y, seed)) return false;
   return noiseTerrain(x, y, seed) === 'floor';
 }

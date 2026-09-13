@@ -40,7 +40,7 @@
 // here defaults to that one, which is what lets a run bank itself without ever
 // knowing which slot it belongs to.
 
-import { CHEST_PLAN, SANCTUM_PLAN, SIGNPOST_PLAN } from '../balance.js';
+import { CHEST_PLAN, SANCTUM_PLAN, SIGNPOST_PLAN, WISP_PLAN } from '../balance.js';
 import { BASE_X, BASE_Y, beyondEdge, pickSeed } from './world.js';
 import { ITEMS, KEYS, TOOLS } from '../data/items.js';
 import { LANDMARK_IDS, STANDINGS } from '../data/landmarks.js';
@@ -62,6 +62,7 @@ export const MAX_GEMS = SANCTUM_PLAN.filter((s) => s.gem).length;
 // file.
 const CHEST_IDS = CHEST_PLAN.map((plan) => plan.id);
 const POST_IDS = SIGNPOST_PLAN.map((plan) => plan.id);
+const WISP_IDS = WISP_PLAN.map((plan) => plan.id);
 
 export function emptySave() {
   return {
@@ -98,6 +99,11 @@ export function emptySave() {
     // lids.
     landmarks: [],
     posts: [],
+    // The wisps put a hand on **in this world** (DESIGN.md §4.11). Belongs to
+    // the world on exactly the posts' terms: the hall takes it with the
+    // ground, and there is nothing else about a wisp for a save to carry —
+    // no gift, no standing.
+    wisps: [],
     // And the standings: what stood at a landmark once and kept it. These are
     // one of the three things besides `cycles` that survive a world being
     // moulded away — he can unmake the ground a landmark stood in, and he has
@@ -168,6 +174,7 @@ export function normaliseSave(raw, keepRun = true) {
   save.chests = ids(raw.chests, CHEST_IDS);
   save.landmarks = ids(raw.landmarks, LANDMARK_IDS);
   save.posts = ids(raw.posts, POST_IDS);
+  save.wisps = ids(raw.wisps, WISP_IDS);
   save.standings = ids(raw.standings, STANDINGS);
   save.finished = ids(raw.finished, BIOME_IDS);
   save.mapped = typeof raw.mapped === 'string' ? raw.mapped : '';
@@ -285,6 +292,7 @@ function normaliseRun(raw) {
     chests: ids(raw.chests, CHEST_IDS),
     landmarks: ids(raw.landmarks, LANDMARK_IDS),
     posts: ids(raw.posts, POST_IDS),
+    wisps: ids(raw.wisps, WISP_IDS),
     standings: ids(raw.standings, STANDINGS),
     inventory,
     // -1 is blackout, and it is the only answer for an empty inventory.

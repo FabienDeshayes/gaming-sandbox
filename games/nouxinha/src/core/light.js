@@ -38,6 +38,7 @@ export function visibleTiles(shape, x, y, facing = 'up', isOpaque = null) {
   const s = shape || BLACKOUT_SHAPE;
   let tiles;
   if (s.kind === 'radius') tiles = radiusTiles(x, y, s.radius);
+  else if (s.kind === 'round') tiles = roundTiles(x, y, s.radius);
   else if (s.kind === 'cone') tiles = coneTiles(x, y, facing, s.depth);
   else tiles = [{ x, y }];
   return isOpaque ? castLight(tiles, x, y, isOpaque) : tiles;
@@ -49,6 +50,21 @@ function radiusTiles(x, y, radius) {
   const out = [];
   for (let dy = -radius; dy <= radius; dy++)
     for (let dx = -radius; dx <= radius; dx++) out.push({ x: x + dx, y: y + dy });
+  return out;
+}
+
+// A true (Euclidean) disc rather than a Chebyshev block — every carried light
+// in the game is a square or a cone, so this is the one shape that reads as a
+// different kind of light on sight (balance.js `WISP_SHAPE`). At radius 1 that
+// is the tile itself plus its four orthogonal neighbours: a diamond, not a
+// square, because the two diagonal corners are further from the centre than
+// the radius allows.
+function roundTiles(x, y, radius) {
+  const out = [];
+  const span = Math.ceil(radius);
+  const r2 = radius * radius;
+  for (let dy = -span; dy <= span; dy++)
+    for (let dx = -span; dx <= span; dx++) if (dx * dx + dy * dy <= r2 + 1e-9) out.push({ x: x + dx, y: y + dy });
   return out;
 }
 

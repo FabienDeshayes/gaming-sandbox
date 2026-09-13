@@ -16,6 +16,7 @@ import './terrain.test.js';
 import './scatter.test.js';
 import './campaign.test.js';
 import './landmarks.test.js';
+import './wisps.test.js';
 import './save.test.js';
 import './sprites.test.js';
 

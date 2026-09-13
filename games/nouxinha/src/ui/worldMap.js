@@ -16,7 +16,7 @@
 // and any post that has been read.
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, TILE, gemColour, getPalette, hex } from '../config.js';
-import { chests, hall, landmarks, sanctums, signposts, sites, terrainAt } from '../core/world.js';
+import { chests, hall, landmarks, sanctums, signposts, sites, terrainAt, wisps } from '../core/world.js';
 import { HALL_SEEN, hasStanding, markedLandmarks } from '../core/rules.js';
 import { landmarkDef } from '../data/landmarks.js';
 import { landmarkRole } from './MapView.js';
@@ -269,6 +269,11 @@ export class WorldMap {
     for (const chest of chests(run.seed))
       if (run.seenUnique.has(chest.id))
         mark(chest.x, chest.y, run.chests.has(chest.id) ? 'chest-open' : 'chest', 0);
+    // And the wisps, once close enough to have lit their own tile (DESIGN.md
+    // §4.11). No colour of their own to earn or withhold — every one of them
+    // is plain the moment it is marked at all.
+    for (const wisp of wisps(run.seed))
+      if (run.seenUnique.has(wisp.id)) markIn(wisp.x, wisp.y, 'wisp', pal.fg);
     // And the sorcerer, once a light has actually reached him (DESIGN.md §4.9).
     // He is marked like everything else the campaign has laid eyes on, which is
     // the only thing on this map that is a person rather than a place.

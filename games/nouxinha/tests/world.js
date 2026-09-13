@@ -27,6 +27,7 @@ import {
   saltOf,
   sanctums,
   signposts,
+  wisps,
 } from '../src/core/world.js';
 import { KEYS } from '../src/data/items.js';
 import { biomeDef } from '../src/data/biomes.js';
@@ -193,6 +194,22 @@ export const POST_ROUTE = bfs(
   (x, y) => {
     const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
       ([, dx, dy]) => x + dx === FIRST_POST.x && y + dy === FIRST_POST.y
+    );
+    return into ? into[0] : null;
+  },
+  40
+);
+
+// The nearest wisp, and the walk to its doorstep — read the same way as a
+// landmark or a post: a bump, so the route stops beside it and `hit` is the
+// direction the last input bumps in. `wisp-1` is the nearest by plan
+// (`WISP_PLAN` in src/balance.js), the same way `post-1` is for the posts.
+export const FIRST_WISP = wisps(SEED).find((w) => w.id === 'wisp-1');
+export const WISP_ROUTE = bfs(
+  SEED,
+  (x, y) => {
+    const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
+      ([, dx, dy]) => x + dx === FIRST_WISP.x && y + dy === FIRST_WISP.y
     );
     return into ? into[0] : null;
   },

@@ -12,7 +12,18 @@ import { assert, assertEqual, runIfMain } from './harness.js';
 import { BLACKOUT_MEMORY_RADIUS, STARTING_LIGHT } from '../src/balance.js';
 import { HUD } from '../src/text.js';
 import { ITEMS } from '../src/data/items.js';
-import { TORCH_ROUTE, standingAt, test, walkPath } from './world.js';
+import { createRun } from '../src/core/rules.js';
+import { emptySave } from '../src/core/save.js';
+import { NONCE, SEED, TORCH_ROUTE, standingAt, test, walkPath } from './world.js';
+
+// The 3x3 block a small torch shows is no longer the whole of what a fresh
+// run has lit: every wisp in the world lights its own little clearing
+// unconditionally (DESIGN.md §4.11), wherever it stands, so a run's starting
+// count of explored tiles is the torch's block plus however many wisps this
+// seed happens to have and whatever their discs come to once shadow has cut
+// them back. Read off the pure engine rather than hardcoded, so a change to
+// either shape moves this test with it instead of breaking it.
+const FRESH_EXPLORED = createRun(SEED, emptySave(), NONCE).explored.size;
 
 test('a run starts one tile south of the base, lit by the torch it set out with', async (game) => {
   await game.startRun();
@@ -27,14 +38,19 @@ test('a run starts one tile south of the base, lit by the torch it set out with'
     [{ id: STARTING_LIGHT, durability: ITEMS[STARTING_LIGHT].maxDurability }],
     'carrying one small torch and nothing else'
   );
-  assertEqual(state.explored, 9, 'the 3x3 block around the start tile is lit');
+  assertEqual(state.explored, FRESH_EXPLORED, 'the 3x3 block around the start tile, plus every wisp, is lit');
   // Nothing is owned yet, so the navigation rail is empty (DESIGN.md §4.6).
   assertEqual(state.tools, [], 'owning nothing');
   assertEqual(state.compassShown, false, 'means no needle in the corner');
 
   const tiles = await game.visibleTiles();
-  assertEqual(tiles.filter((t) => t.alpha === 1).length, 9, 'nine tiles at full brightness');
-  assert(await game.hasText(HUD.explored(9)), 'the explored counter');
+  const lit = tiles.filter((t) => t.alpha === 1);
+  // The torch's own 3x3 is still exactly what it always was — asserted tile
+  // by tile, since other lit tiles on screen may now belong to a wisp.
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++)
+      assert(lit.some((t) => t.x === dx && t.y === 1 + dy), `(${dx}, ${1 + dy}) is lit by the torch`);
+  assert(await game.hasText(HUD.explored(FRESH_EXPLORED)), 'the explored counter');
   assertEqual(tiles.find((t) => t.x === 0 && t.y === 0).overlay, 'base', 'the hut is drawn from the start');
 });
 
@@ -104,7 +120,9 @@ test('explored ground stays on screen, dimmed, and nothing else is drawn', async
   const tiles = await game.visibleTiles();
   const lit = tiles.filter((t) => t.alpha === 1);
   const remembered = tiles.filter((t) => t.alpha === 0.3);
-  assertEqual(lit.length, 9, 'the light shape is still 9 tiles');
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++)
+      assert(lit.some((t) => t.x === 2 + dx && t.y === 1 + dy), `(${2 + dx}, ${1 + dy}) is lit by the torch`);
   assert(remembered.length > 0, 'ground walked past is still drawn, dimmed');
   // Everything drawn is either lit or remembered — unknown tiles are not drawn.
   // Those three states are the whole of what the dark means (DESIGN.md §4).

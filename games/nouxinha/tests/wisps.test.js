@@ -16,7 +16,7 @@ import {
   wispOnTile,
 } from '../src/core/rules.js';
 import { emptySave, loadSave, writeSave } from '../src/core/save.js';
-import { WISP_PLAN, WISP_REACH } from '../src/balance.js';
+import { WISP_PLAN, WISP_SHAPE } from '../src/balance.js';
 import { FIRST_WISP, NONCE, SEED, WISP_ROUTE } from './world.js';
 
 // --- Where they stand --------------------------------------------------------
@@ -133,7 +133,7 @@ unit('a wisp walked to and not walked home from was never touched', () => {
 
 // --- The light it burns on its own --------------------------------------------
 
-unit('a wisp lights its own clearing whatever the character is carrying', () => {
+unit('a wisp lights its own clearing whatever the character is carrying or wherever they stand', () => {
   const state = createRun(SEED, emptySave(), NONCE);
   const wisp = FIRST_WISP;
 
@@ -142,19 +142,28 @@ unit('a wisp lights its own clearing whatever the character is carrying', () => 
   state.inventory = [];
   state.activeIndex = -1;
 
-  // Standing right beside the wisp, well within WISP_REACH: its own disc is in
-  // the lit set even though nothing is equipped.
+  // Standing right beside the wisp: its own disc is in the lit set even
+  // though nothing is equipped.
   state.x = wisp.x + 1;
   state.y = wisp.y;
   const near = new Set(litTiles(state).map((t) => `${t.x},${t.y}`));
   assert(near.has(`${wisp.x},${wisp.y}`), "the wisp's own tile is lit");
-  assert(near.has(`${wisp.x - 1},${wisp.y}`), 'and the tile beyond it, in the wisp\'s own disc');
+  assert(near.has(`${wisp.x - 1},${wisp.y}`), "and the tile beyond it, in the wisp's own disc");
 
-  // Standing well outside WISP_REACH, in the same blackout: none of it reaches.
-  state.x = wisp.x + WISP_REACH + 5;
+  // A hundred tiles away, in the same blackout: a wisp does not wait for the
+  // character to approach it at all — every one is composed in always.
+  state.x = wisp.x + 100;
   state.y = wisp.y;
   const far = new Set(litTiles(state).map((t) => `${t.x},${t.y}`));
-  assert(!far.has(`${wisp.x},${wisp.y}`), 'too far out, the wisp is not composed in at all');
+  assert(far.has(`${wisp.x},${wisp.y}`), 'a hundred tiles out, the wisp is lit exactly the same');
+});
+
+unit("a wisp's own light is wider than a small torch's", () => {
+  // WISP_SHAPE is a round disc rather than the Chebyshev block every carried
+  // light draws (core/light.js `visibleTiles` covers the shape math itself);
+  // this only pins today's radius, since that is the number "how big is a
+  // wisp" actually means.
+  assertEqual(WISP_SHAPE, { kind: 'round', radius: 2 }, "today's wisp is a radius-2 disc");
 });
 
 runIfMain(import.meta.url);

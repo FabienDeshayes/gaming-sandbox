@@ -3,7 +3,7 @@
 // pick back up. Pure — no browser.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
-import { BASE_X, BASE_Y, DEFAULT_SEED, pickSeed } from '../src/core/world.js';
+import { BASE_X, BASE_Y, DEFAULT_SEED, pickSeed, wisps } from '../src/core/world.js';
 import {
   abandonRun,
   bankRun,
@@ -133,7 +133,12 @@ unit('a run that never gets home keeps its ground and nothing else', () => {
 
 unit('the map only marks unique objects the run has actually seen', () => {
   const state = createRun(SEED, { ...emptySave(), map: true }, NONCE);
-  assertEqual(state.seenUnique.size, 0, 'nothing seen from the doorway');
+  // Wisps are the one exception (DESIGN.md §4.11): every one of them lights
+  // its own tile always, so all ten are seen from the very first reveal.
+  // Everything else still waits for a light to actually reach it.
+  const found = wisps(SEED);
+  assertEqual(state.seenUnique.size, found.length, 'nothing but the wisps seen from the doorway');
+  for (const wisp of found) assert(state.seenUnique.has(wisp.id), `${wisp.id} is already on the map`);
 
   for (const dir of GEM_ROUTE.path) step(state, dir);
   assert(state.seenUnique.has('gem-1'), 'the gem it walked onto is on the map');

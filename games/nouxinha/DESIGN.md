@@ -935,18 +935,18 @@ far for.
   would be a contradiction standing in the world.
 - **Its own light is round, not square.** Every shape a character can carry is a Chebyshev block or a
   cone (§4.1) — flat-edged, because that is what a torch held at the centre of a grid draws. A wisp's
-  is a true (Euclidean) disc, radius 1: the tile it stands on, plus the four tiles it touches
-  orthogonally, and *not* the two diagonal corners a square light of the same radius would also
-  show. Three tiles across, so it is unmistakably a light and unmistakably a small one — worth a
-  detour of a step or two, never worth the walk a torch upgrade is.
-- **It is composed in `litTiles`, not drawn by a second renderer.** Every wisp within `WISP_REACH`
-  (3 tiles) of the character has its own disc worked out through the same shadow rule the character's
-  own light uses (`blocksSight`) and unioned into what the step reveals — so a wisp's glow never
-  reaches round a wall it has no business reaching round, and the viewport, the map and the explored
-  set all agree on the answer for free, the same way they already did for the character's own light.
-  The reach is a proximity gate and nothing more: without it, all ten wisps in the world would be
-  marked explored — and show on the map — the moment a run took its very first step, which would
-  hand over the very discovery this feature exists to reward.
+  is a true (Euclidean) disc, radius 2: the tile it stands on, its four orthogonal neighbours, the four
+  diagonal ones just past those, and the two tiles straight out on each axis — thirteen tiles, wider
+  than a small torch's own 3x3 block, and still visibly round rather than square, since the disc stops
+  short of the furthest corners a radius-2 block would also show.
+- **It is composed in `litTiles`, not drawn by a second renderer, and always — never gated by
+  distance.** Every wisp in the world has its own disc worked out through the same shadow rule the
+  character's own light uses (`blocksSight`) and unioned into what the step reveals, whatever the
+  character is carrying and wherever they are standing — so the viewport, the map and the explored set
+  all agree on the answer for free, the same way they already did for the character's own light. A
+  wisp does not wait to be approached: every one a world has is lit, and marked on the map, from the
+  very first reveal of a fresh expedition — a wisp is a fixture of the world rather than a discovery,
+  and finding one on the map is how you learn where to walk.
 - **Touching one is a bump like every other placed thing**: no water, no durability, no facing
   change. It hands back a line of flavour text on the panel and nothing else — no gift, no standing,
   no gate — so `touchWisp` in `core/rules.js` only has one thing worth reporting, which is whether
@@ -965,7 +965,7 @@ far for.
 
 | Path | Holds |
 |---|---|
-| `src/balance.js` | `WISP_PLAN`, `WISP_SHAPE`, `WISP_REACH` |
+| `src/balance.js` | `WISP_PLAN`, `WISP_SHAPE` |
 | `src/core/world.js` | `buildWisps`, `wisps()`, `wispAt()`, and the `'wisp'` terrain |
 | `src/core/light.js` | the `round` shape kind (`roundTiles`) |
 | `src/core/rules.js` | `wispOnTile`, `touchWisp`, and `wispLitTiles` inside `litTiles` |

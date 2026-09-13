@@ -450,18 +450,10 @@ export const WISP_PLAN = [
 // carrying: `round` is a true (Euclidean) disc rather than the Chebyshev
 // blocks every carried light shows (`core/light.js`), so a wisp's little
 // clearing always reads as a different kind of light from a torch's — the
-// one thing in the world that is round. Radius 1 is a diameter of three
-// tiles: the character's own tile plus the four it touches orthogonally,
-// which is "a little light" rather than a light worth walking to for reach.
-export const WISP_SHAPE = { kind: 'round', radius: 1 };
-
-// How close the character has to be before a wisp's own light is worth
-// composing into what they see (`litTiles`). It has to be a real approach
-// rather than the width of the shape alone, or every wisp in the world would
-// be marked explored — and show on the map — the moment a run took its first
-// step, which is exactly the discovery this feature is supposed to reward
-// rather than skip.
-export const WISP_REACH = 3;
+// one thing in the world that is round. Radius 2 is a diameter of five
+// tiles: the character's own tile, its four orthogonal neighbours, and the
+// ring just past those — noticeably wider than a small torch's own 3x3.
+export const WISP_SHAPE = { kind: 'round', radius: 2 };
 
 // --- The scatter --------------------------------------------------------------
 //

@@ -3,7 +3,17 @@
 // pick back up. Pure — no browser.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
-import { BASE_X, BASE_Y, DEFAULT_SEED, pickSeed, wisps } from '../src/core/world.js';
+import {
+  BASE_X,
+  BASE_Y,
+  DEFAULT_SEED,
+  chests,
+  landmarks,
+  pickSeed,
+  sanctums,
+  sites,
+  wisps,
+} from '../src/core/world.js';
 import {
   abandonRun,
   bankRun,
@@ -143,6 +153,26 @@ unit('the map only marks unique objects the run has actually seen', () => {
   for (const dir of GEM_ROUTE.path) step(state, dir);
   assert(state.seenUnique.has('gem-1'), 'the gem it walked onto is on the map');
   assert(!state.seenUnique.has('map'), 'and the map lying 90 tiles out is not');
+});
+
+unit('a slot can hold every unique object in a world without losing any', () => {
+  // `seen` is capped on load, as a bound on a hand-written save. The cap is
+  // derived from the plans rather than picked (`MAX_SEEN` in core/save.js),
+  // because a cap under what a finished campaign legitimately holds would not
+  // look like a bug — it would look like the last few markers a player earned
+  // quietly not being on the map next time they loaded. Adding anything to a
+  // world is exactly when that would happen, so the whole set goes through a
+  // real round trip here.
+  const everything = [
+    ...sanctums(SEED).filter((s) => s.gem).map((s) => s.gem),
+    ...sites(SEED).map((s) => s.id),
+    ...chests(SEED).map((c) => c.id),
+    ...landmarks(SEED).map((l) => l.id),
+    ...wisps(SEED).map((w) => w.id),
+  ];
+  const kept = normaliseSave({ ...emptySave(), seen: everything });
+  assertEqual(kept.seen.length, everything.length, 'every marker survives the load');
+  assertEqual(kept.seen, everything, 'and in the order they were written');
 });
 
 // --- Arriving at the hut ------------------------------------------------------

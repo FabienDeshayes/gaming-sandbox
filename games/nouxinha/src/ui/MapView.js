@@ -35,6 +35,7 @@ import {
 } from '../core/rules.js';
 import { itemDef } from '../data/items.js';
 import { landmarkDef } from '../data/landmarks.js';
+import { paintOf } from '../data/paint.js';
 import { biomeKey, variantKey, wallSprite } from '../data/tiles.js';
 import { makePainted, paintTile } from './painted.js';
 import { makeWizard, paintWizard } from './wizard.js';
@@ -237,8 +238,21 @@ export class MapView {
             ? { landmark: landmarkRole(run, post.post.target) }
             : {};
 
+      // A landmark with no zone map of its own is **one zone: itself**. The
+      // four in `src/data/paint.js` name the part of the tile that is doing
+      // something — the die in the press, the bell's mouth — and a landmark
+      // that hasn't been through `paint.html` yet has no such part named, so
+      // the whole silhouette takes the colour instead. Without this a landmark
+      // would simply never gain a colour, which is the one thing a campaign has
+      // to show for having stood at it (DESIGN.md §4.10). Drawing one zone in
+      // the landmark's colour keeps the two-colour rule either way.
+      const plainLandmark = mark && !paintOf(ground);
       cell.ground.setVisible(true).setAlpha(alpha);
-      paintTile(cell.ground, ground, { gems: run.gems, base: fg, roles });
+      paintTile(cell.ground, ground, {
+        gems: run.gems,
+        base: plainLandmark ? roles.landmark.colour || fg : fg,
+        roles,
+      });
 
       // Nothing lies on rock, on trees, on wall, on a chest, or in a gateway.
       if (terrain !== 'floor') {

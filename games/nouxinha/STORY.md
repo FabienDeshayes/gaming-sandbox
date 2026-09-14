@@ -90,10 +90,16 @@ Every worked thing in the world is his, and each of them is doing a job:
 - **The scatter.** Water, light and coins thrown across the ground and moved every time you turn your
   back. The status line already says it out loud: *the dark has put everything back somewhere new.*
   That is him, fidgeting.
-- **The landmarks.** Four of them, and they are not furniture: they are the pins he pushes into the
-  map before the ground goes on, the same four in every world, because nobody moulds a world out of
-  nothing without something to measure from (`DESIGN.md` §4.10). The twelve signposts pointing at
+- **The landmarks.** Seven of them, and they are not furniture: they are the pins he pushes into the
+  map before the ground goes on, the same seven in every world, because nobody moulds a world out of
+  nothing without something to measure from (`DESIGN.md` §4.10). The fourteen signposts pointing at
   them are the only writing in the world, and the only thing in it that is addressed to somebody.
+- **The eighth landmark, which is not a pin at all.** Every world also has one thing the seven have
+  no business standing next to: a plough left in a furrow, a wash frozen on a line, a caravan roped
+  and loaded and going nowhere, a second hut that is yours. One per kind of world, and the same one
+  every time that kind comes round. He does not invent a frozen world each time he needs one — he
+  reaches for the one he knows, and it comes with its furniture. It is the thinness of his memory
+  showing, and it is the only thing in the world that pays a walk nothing at all.
 - **The hut.** One room, a flag on it so you can find it from the edge of a light, water that never
   runs out and a fresh candle waiting if you come in blind. He leaves it standing every single time.
   It is a kindness and it is a cage, and it is the same object.
@@ -169,7 +175,7 @@ One turn of the game, and the reason a save slot is a campaign rather than a sav
 with them**, which is more than it sounds. Your coins were struck in his mint. Your compass and your
 map were bought at his stall or found on his ground. All of it goes. Every time.
 
-**What he leaves:** only what was never his to make — the **standings** you walked back from the four
+**What he leaves:** only what was never his to make — the **standings** you walked back from the
 landmarks with (`DESIGN.md` §4.10), the count of worlds he has taken off you, which kinds of world
 you have walked all the way out, and above all **what you know**. He can unmake ground. He has never
 found a way to unmake the fact that you have been here before.

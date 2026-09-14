@@ -108,24 +108,46 @@ export const TILES = {
   'chest-open': [27, 15],
 
   // --- Landmarks -----------------------------------------------------------
-  // The four named places (DESIGN.md §4.10), each with the ground its court is
-  // paved with. Deliberately *not* in `BIOME_KEYS` below: a biome may repoint
-  // its own rock and its own hut, but a landmark is the same object in every
-  // world the hall moulds, and a world does not get to redraw it.
+  // The named places (DESIGN.md §4.10), each with the ground its court is paved
+  // with. Deliberately *not* in `BIOME_KEYS` below: a biome may repoint its own
+  // rock and its own hut, but a landmark is the same object in every world the
+  // hall moulds, and a world does not get to redraw it.
   //
   // Every one of these is a tile the sheet already had, standing in until they
   // are drawn for this game (`draw.html`): a press, the sheet's own bell, a
-  // bare tree nothing else claims, a shaft on a stepped base, and a banner on a
-  // pole for the signposts. The courts are ground textures off the top row,
-  // drawn at half strength like every other floor (src/data/sprites.js).
+  // bare tree nothing else claims, a shaft on a stepped base, a span of arches,
+  // a spire, a beam over a shed, and a banner on a pole for the signposts. The
+  // courts are ground textures, drawn at half strength like every other floor
+  // (src/data/sprites.js).
   mint: [23, 10],
+  aqueduct: [5, 17],
   bell: [1, 12],
+  weighhouse: [2, 14],
   'lantern-tree': [1, 2],
+  watchtower: [3, 20],
   gnomon: [46, 20],
   'court-mint': [2, 0],
+  'court-aqueduct': [17, 0],
   'court-bell': [3, 0],
+  'court-weighhouse': [16, 0],
   'court-tree': [4, 0],
+  'court-watchtower': [23, 3],
   'court-gnomon': [22, 14],
+
+  // The four a single kind of world keeps to itself (DESIGN.md §4.10.3). They
+  // are not in `BIOME_KEYS` either, and for a reason that only sounds like the
+  // same one: there is nothing for a biome to repoint, because each of these
+  // only ever stands in the one world it belongs to. A frozen world never has a
+  // plough in it to draw differently.
+  plough: [16, 12],
+  washing: [22, 10],
+  caravan: [15, 13],
+  'second-hut': [0, 20],
+  'court-plough': [7, 0],
+  'court-washing': [19, 1],
+  'court-caravan': [1, 0],
+  'court-second-hut': [6, 0],
+
   signpost: [0, 7],
 
   // A wisp (DESIGN.md §4.11): the one structure whose sprite a biome *is*

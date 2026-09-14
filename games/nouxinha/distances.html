@@ -299,11 +299,17 @@ function entitiesOf(seed) {
   }
   for (const m of landmarks(seed)) {
     const def = landmarkDef(m.id);
+    // Where a landmark's bearing comes from (balance.js `LANDMARK_PLAN`): a
+    // sanctum's own spoke, or the gap halfway between two of them.
+    const spoke = Array.isArray(m.heading)
+      ? `between sanctums ${m.heading[0] + 1} and ${m.heading[1] + 1}`
+      : `inside sanctum ${m.heading + 1}, on its heading`;
     out.push({
       id: m.id,
       kind: 'landmark',
       name: def ? def.name : m.id,
-      note: `inside sanctum ${m.index + 1}, on its heading`,
+      note: m.biome ? `${spoke} — this kind of world's own` : spoke,
+      heading: m.heading,
       x: m.x,
       y: m.y,
       band: bandOf(m),
@@ -849,13 +855,15 @@ function chain(between) {
   const sanctumsOf = world.entities.filter((e) => e.kind === 'sanctum');
   const step = (a, b) => (between.get(a.id) ? between.get(a.id)[b.id] : -1);
 
-  // The plans are read against each other by index (`buildLandmarks` in
-  // core/world.js): the nth landmark stands inside the nth sanctum, on its
-  // heading, and the chest beside it is the one that holds that gate's key.
+  // The plans are read against each other through `heading` (`buildLandmarks`
+  // in core/world.js): four of the landmarks stand on a sanctum's own spoke and
+  // inside its distance, and the chest beside one of those is the one that
+  // holds that gate's key. The rest stand in the gaps between spokes and have
+  // no chest and no gate — they are not part of anybody's chain.
   const marks = world.entities.filter((e) => e.kind === 'landmark');
 
   for (const s of sanctumsOf) {
-    const mark = marks[s.sanctum.index] || null;
+    const mark = marks.find((m) => m.heading === s.sanctum.index) || null;
     const chest = world.entities.find((e) => e.kind === 'chest' && mark && e.beside === mark.id);
     const route = [
       ['hut → landmark', mark ? mark.walk : -1],

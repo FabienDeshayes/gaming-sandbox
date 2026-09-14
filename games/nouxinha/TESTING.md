@@ -42,7 +42,7 @@ at all, which is the quick way to work on the rules.
 | `terrain.test.js` | What the noise grows, where the world stops, which biome the seed makes it, and that every bit of it can be walked to |
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
 | `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall and which of its five conversations a campaign is having, the water ladder, the sites — merchant, compass, map — and the needle |
-| `landmarks.test.js` | The four landmarks and the twelve posts: where they stand, what a touch gives, and which of it survives a world |
+| `landmarks.test.js` | The eight landmarks and the fourteen posts: where they stand, what a touch gives, and which of it survives a world |
 | `wisps.test.js` | The ten wisps: where they stand, that touching one hands back nothing, and that a wisp lights its own clearing whatever the character is carrying |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, what a cycle in the hall takes and leaves, and which kinds of world a campaign has finished |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
@@ -245,23 +245,28 @@ routed to the chest's own tile would never find a path.
 The same shape as a chest, one tier up. A landmark can't be stepped on either, so `LANDMARK_ROUTE`
 BFSes to its court and `LANDMARK_ROUTE.hit` is the direction the last input bumps in. Which landmark
 it routes to is **derived, not named**: `NEAREST_LANDMARK` is the nearest one whose own colour is not
-the colour this world is drawn in, because every world has exactly one landmark at home in it
-(`DESIGN.md` §4.10) and a test about a landmark gaining its colour has no business pointing at the
-one whose colour nothing on screen could tell from the foreground.
+the colour this world is drawn in, because a few of them are always at home in a world
+(`DESIGN.md` §4.10) and a test about a landmark gaining its colour has no business pointing at one
+whose colour nothing on screen could tell from the foreground. Which also means the *gift* that
+lands is whichever that landmark's is, so the browser test asserts only that a gift landed at all —
+which one it was is `landmarks.test.js`'s business.
 
 The split to keep straight is the one the feature is about:
 
-- **Pure, in `landmarks.test.js`:** where the four stand and that no two share a quarter or a colour;
-  that a landmark blocks a step, casts no shadow and has a walkable court; that a **gift** lands on
-  every fresh touch and a **standing** once per campaign; and above all the round trip — bank, then
-  `turnCycle`, and check that the standing survived and the world's own record of it did not. That
-  last one is the assertion the whole feature rests on, because forgetting it would look exactly like
-  the game working.
+- **Pure, in `landmarks.test.js`:** where the eight stand — on a sanctum's own spoke or halfway
+  between two — and that no two bunch on the rose; that a colour is a family of at most two and the
+  world's own landmark wears none; that a landmark blocks a step, casts no shadow and has a walkable
+  court; that each **gift** is the shape its place is, that a gift lands on every fresh touch and a
+  **standing** once per campaign; that each of the three standings which are *numbers* moves the
+  number it is meant to and nothing else; and above all the round trip — bank, then `turnCycle`, and
+  check that the standing survived and the world's own record of it did not. That last one is the
+  assertion the whole feature rests on, because forgetting it would look exactly like the game
+  working.
 - **Browser, in `ui-landmarks.test.js`:** two tests, because two things need a canvas. That the bump
   is a bump, the panel comes up over the world and the landmark's colour actually reaches the screen
-  once the standing is held — read off `visibleTiles()`, where `paint[0]` is the zone the colour
-  lands in. And that a post reads out its directions the first time and flashes them to the status
-  line after.
+  once the standing is held — read off `visibleTiles()`, where the colour is in `paint[0]` for a
+  landmark with a zone map of its own and in `tint` for one drawn as a single zone. And that a post
+  reads out its directions the first time and flashes them to the status line after.
 
 A run can be handed a standing without walking to one: plant `standings: ['bell-heard']` in the save,
 the way a test plants `keys` or `compass: true`.

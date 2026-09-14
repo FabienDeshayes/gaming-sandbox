@@ -5,6 +5,9 @@ Agents, do not use this file as a list of things to implement, ignore it unless 
 Big things next:
 * meta loops: when going home, what to do?
 * feeling of progression within one run / do you need expeditions?
+* why redo another run? variations beyond a biome
+* review all sprites
+* replace chebyshev by Euclidian or alternative
 
 Later:
 * intro to explain the story
@@ -16,3 +19,4 @@ Later:
 ideas to explore:
 * dead cities with ghosts
 * carry caps on lights
+* strange creatures roaming the land

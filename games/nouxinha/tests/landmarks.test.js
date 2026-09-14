@@ -1,13 +1,16 @@
-// The four landmarks and the twelve posts that point at them: where they stand,
+// The landmarks and the fourteen posts that point at them: where they stand,
 // what putting a hand on one hands over, and which of that survives a world
 // being moulded away (DESIGN.md §4.10). Pure — no browser.
 //
 // The split this file is mostly about is the one that is easy to get wrong in
 // both directions: a **gift** is the run's and comes back every world, a
-// **standing** is the campaign's and never comes back at all.
+// **standing** is the campaign's and never comes back at all. On top of that
+// there is now a second split — the seven that stand in every world, and the
+// one each kind of world keeps to itself, which has neither of those things.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import {
+  biomeOf,
   chebyshev,
   chests,
   isWalkable,
@@ -24,11 +27,17 @@ import {
   signposts,
   terrainAt,
   blocksSight,
+  chokeAt,
 } from '../src/core/world.js';
 import {
+  chokeGrace,
   createRun,
   bankRun,
   hasStanding,
+  canBuy,
+  maxWater,
+  priceFor,
+  tankCeiling,
   itemOnTile,
   landmarkOnTile,
   markedLandmarks,
@@ -39,26 +48,44 @@ import {
   touchLandmark,
   turnCycle,
   standings,
+  tileKey,
 } from '../src/core/rules.js';
 import { emptySave, loadSave, writeSave } from '../src/core/save.js';
 import {
+  AQUEDUCT_TANK,
+  CHOKE_STEP,
+  EDGE_RADIUS,
   LANDMARK_GIFTS,
   LANDMARK_PLAN,
+  PRICES,
+  WATCHTOWER_GRACE,
+  WEIGHHOUSE_DISCOUNT,
   SIGNPOST_BANDS,
   SIGNPOST_CLEARANCE,
   SIGNPOST_PLAN,
   STARTING_WATER,
 } from '../src/balance.js';
-import { LANDMARK_IDS, landmarkDef } from '../src/data/landmarks.js';
+import { BIOME_LANDMARK_IDS, LANDMARK_IDS, biomeLandmark, landmarkDef } from '../src/data/landmarks.js';
+import { BIOMES } from '../src/data/biomes.js';
 import { PALETTES } from '../src/config.js';
 import { FIRST_POST, NONCE, POST_ROUTE, SEED } from './world.js';
 
 // --- Where they stand --------------------------------------------------------
 
-unit('there are four landmarks, one to a quarter, and none of them far out', () => {
+unit('there are eight landmarks, spread round the rose, and none of them far out', () => {
   const found = landmarks(SEED);
-  assertEqual(found.length, 4, 'four of them');
-  assertEqual(found.map((l) => l.id), LANDMARK_IDS, 'the same four, in ring order');
+  assertEqual(found.length, LANDMARK_PLAN.length, 'one per slot in the plan');
+  assertEqual(
+    found.filter((l) => !l.biome).map((l) => l.id),
+    LANDMARK_IDS,
+    'the same seven, in ring order'
+  );
+
+  // And the eighth, which is not one of the seven at all: it is whichever one
+  // this kind of world keeps, derived off the seed exactly like the ground.
+  const own = found.find((l) => l.biome);
+  assertEqual(own.id, biomeLandmark(biomeOf(SEED)), "this world's own landmark");
+  assert(!LANDMARK_IDS.includes(own.id), 'and it is never one of the seven');
 
   const angles = [];
   found.forEach((landmark, i) => {
@@ -75,50 +102,83 @@ unit('there are four landmarks, one to a quarter, and none of them far out', () 
   // somewhere, never a walk of its own.
   assert(Math.max(...found.map((l) => chebyshev(l.x, l.y))) <= 75, 'and the last one is inside 75');
 
-  // One to a quarter of the rose, and the rose itself is turned by the seed — so
+  // One to an eighth of the rose, and the rose itself is turned by the seed — so
   // what a player can rely on across worlds is not "the Mint is north", it is
   // "there is one in every direction". The claim that survives that is the
-  // spread: the four bearings are never bunched, whichever way the rose fell.
+  // spread: the eight bearings are never bunched, whichever way the rose fell.
+  // Measured across sixty worlds the tightest pair is about 21 degrees apart,
+  // which is the jitter and the bad-ground dodge eating into a 45-degree slot.
   const apart = [];
   for (let a = 0; a < angles.length; a++)
     for (let b = a + 1; b < angles.length; b++) {
       const d = Math.abs(angles[a] - angles[b]);
       apart.push(((d > Math.PI ? Math.PI * 2 - d : d) * 180) / Math.PI);
     }
-  assert(Math.min(...apart) > 45, `no two of them bunch (${Math.min(...apart).toFixed(0)}° apart)`);
+  assert(Math.min(...apart) > 15, `no two of them bunch (${Math.min(...apart).toFixed(0)}° apart)`);
 });
 
-unit('a landmark stands on the way out to its sanctum', () => {
-  // The rose the four take a quarter of each is the *sanctums'* (DESIGN.md
-  // §4.10.2): landmark N stands inside sanctum N, on that sanctum's own heading,
-  // so the walk out to a gem passes a place worth stopping at. That is what the
-  // gifts are worth anything for — a full tank at the Bell is a waystation on a
-  // route the campaign is walking anyway, where on a rose of its own it was a
-  // detour in some other direction.
+unit('a landmark stands on a spoke of the sanctums\' rose, or halfway between two', () => {
+  // The rose the eight take an eighth of each is the *sanctums'* (DESIGN.md
+  // §4.10.2): a plan's `heading` is either a sanctum's index, and then the
+  // landmark stands on that sanctum's own bearing and inside its distance, or a
+  // pair of them, and then it stands on the bearing halfway between the two.
+  // That is what the gifts are worth anything for — a full tank at the Bell is a
+  // waystation on a route the campaign is walking anyway, where on a rose of its
+  // own it was a detour in some other direction.
   //
   // Walked across many worlds rather than one, because what is being checked is
   // the placement rule and not where one seed happened to put things. Measured,
-  // a landmark sits a mean 7 degrees off its sanctum's bearing and never more
-  // than about 30; the bound here is loose enough that the search which dodges
-  // bad ground can do its job.
-  for (let i = 1; i < 40; i++) {
-    const seed = pickSeed((Math.imul(i, 2654435761) ^ 0x5bf03635) | 0);
+  // a spoke landmark sits within about 18 degrees of its sanctum's bearing and a
+  // gap landmark within about 6 of the midpoint; the bounds here are loose
+  // enough that the search which dodges bad ground can do its job.
+  //
+  // Raw seeds rather than `pickSeed`ed ones, deliberately: what a seed has to
+  // clear to be picked is that the spawn isn't sealed in and everything is
+  // walkable-to, and none of that touches where a landmark stands. The ground
+  // is real either way, so the bad-ground dodge is exercised either way — and
+  // a flood fill per world would make this the slowest test in the suite by an
+  // order of magnitude for nothing (TESTING.md).
+  const degrees = (a, b) => {
+    let off = Math.abs(a - b);
+    if (off > Math.PI) off = Math.PI * 2 - off;
+    return (off * 180) / Math.PI;
+  };
+
+  for (let i = 1; i < 60; i++) {
+    const seed = (Math.imul(i, 2654435761) ^ 0x5bf03635) | 0;
     const built = sanctums(seed);
+    const bearing = (index) => Math.atan2(built[index].centre.y, built[index].centre.x);
+
     landmarks(seed).forEach((landmark, index) => {
-      const sanctum = built[index];
-      const a = Math.atan2(landmark.y, landmark.x);
-      const b = Math.atan2(sanctum.centre.y, sanctum.centre.x);
-      let off = Math.abs(a - b);
-      if (off > Math.PI) off = Math.PI * 2 - off;
+      const { heading } = LANDMARK_PLAN[index];
+      const mine = Math.atan2(landmark.y, landmark.x);
+
+      if (!Array.isArray(heading)) {
+        assert(
+          degrees(mine, bearing(heading)) < 45,
+          `${landmark.id} is ${degrees(mine, bearing(heading)).toFixed(0)}° off sanctum ${heading}`
+        );
+      } else {
+        const from = bearing(heading[0]);
+        let arc = bearing(heading[1]) - from;
+        while (arc > Math.PI) arc -= Math.PI * 2;
+        while (arc < -Math.PI) arc += Math.PI * 2;
+        assert(
+          degrees(mine, from + arc / 2) < 25,
+          `${landmark.id} is not in the gap between sanctums ${heading[0]} and ${heading[1]}`
+        );
+      }
+
+      // And inside the sanctum it is headed towards, so it is passed on the way
+      // out rather than found beyond the thing it was meant to be on the way to.
+      // The world's own landmark is the exception and is meant to be: it is not
+      // on the way to anything, because it is not his signage and there is
+      // nothing behind it.
+      if (landmark.biome) return;
+      const outer = Array.isArray(heading) ? heading[1] : heading;
       assert(
-        (off * 180) / Math.PI < 45,
-        `${landmark.id} is ${((off * 180) / Math.PI).toFixed(0)}° off sanctum ${index}`
-      );
-      // And inside it, so it is passed on the way out rather than found beyond
-      // the thing it was meant to be on the way to.
-      assert(
-        chebyshev(landmark.x, landmark.y) < sanctum.distance,
-        `${landmark.id} stands outside sanctum ${index}`
+        chebyshev(landmark.x, landmark.y) < built[outer].distance,
+        `${landmark.id} stands outside sanctum ${outer}`
       );
     });
   }
@@ -142,17 +202,33 @@ unit('a landmark blocks a step, never a light, and stands in a court', () => {
   }
 });
 
-unit('each landmark keeps a colour of its own, and no two share one', () => {
-  const used = new Set();
+unit('a colour is a family of landmarks, and a world\'s own is the world\'s colour', () => {
+  // Seven landmarks and four palettes, so a colour cannot be a name any more
+  // (src/data/landmarks.js). It is a family: the two about water are both
+  // cathode, the two about seeing both amber, the two about money both magenta,
+  // and the Gnomon keeps phosphor on its own. Two to a colour at most, which is
+  // what keeps a colour readable as meaning something.
+  const count = {};
   for (const id of LANDMARK_IDS) {
     const def = landmarkDef(id);
     assert(
       PALETTES.some((p) => p.id === def.palette),
       `${id} keeps one of the four palettes (${def.palette})`
     );
-    assert(!used.has(def.palette), `and ${def.palette} belongs to ${id} alone`);
-    used.add(def.palette);
+    count[def.palette] = (count[def.palette] || 0) + 1;
+    assert(count[def.palette] <= 2, `${def.palette} belongs to no more than two of them`);
   }
+  assertEqual(Object.keys(count).sort(), PALETTES.map((p) => p.id).sort(), 'and all four are used');
+
+  // The four that belong to a single world take that world's own palette, which
+  // is the same as saying they are never drawn in a colour at all: they hold no
+  // standing, and a landmark reads plain until the campaign holds its standing.
+  for (const biome of BIOMES) {
+    const def = landmarkDef(biomeLandmark(biome.id));
+    assertEqual(def.palette, biome.palette, `${def.id} is the colour of the world it is in`);
+    assertEqual(def.standing, null, `and ${def.id} hands over no standing`);
+  }
+  assertEqual(new Set(BIOME_LANDMARK_IDS).size, BIOMES.length, 'one apiece, and no two the same');
 });
 
 unit('three landmarks have a key chest beside them, and the nearest a hoard', () => {
@@ -183,7 +259,7 @@ unit('three landmarks have a key chest beside them, and the nearest a hoard', ()
 
 unit('the posts spread out, stay clear of what they point at, and one is at five', () => {
   const posts = signposts(SEED);
-  assert(posts.length >= 9, `most of the twelve stood up (${posts.length})`);
+  assert(posts.length >= 11, `most of the fourteen stood up (${posts.length})`);
 
   const first = posts.find((post) => post.id === 'post-1');
   assert(first, 'the near post is one of them');
@@ -200,11 +276,23 @@ unit('the posts spread out, stay clear of what they point at, and one is at five
       );
   }
 
-  // Three apiece, so every landmark is assigned from three directions.
+  // Two apiece, so every one of the seven is pointed at from both sides of
+  // itself — one post nearer the hut than it is and one further out.
   for (const id of LANDMARK_IDS)
     assert(
-      SIGNPOST_PLAN.filter((plan) => plan.target === id).length === 3,
-      `${id} is assigned three posts`
+      SIGNPOST_PLAN.filter((plan) => plan.target === id).length === 2,
+      `${id} is assigned two posts`
+    );
+
+  // And the world's own landmark is assigned none of them, which is the point:
+  // the posts are his signage, and the thing this ground kept is not his to
+  // have written down (DESIGN.md §4.10.3). A post only ever names it by
+  // happening to land close enough (`signpostTargets`).
+  for (const id of BIOME_LANDMARK_IDS)
+    assertEqual(
+      SIGNPOST_PLAN.filter((plan) => plan.target === id).length,
+      0,
+      `no post is put up for ${id}`
     );
 });
 
@@ -346,6 +434,134 @@ unit('each landmark gives what it is about', () => {
   const given = touchLandmark(gnomon.state, gnomon.landmark);
   assert(given.gift.revealed > 100, 'the gnomon reveals the ground around it');
   assert(gnomon.state.explored.size > before, 'and it stays drawn');
+});
+
+unit('the three later gifts are the shapes their places are', () => {
+  // The Aqueduct draws a *band* rather than a clearing: the ground along the
+  // line it runs on, which is the ray out from the hut through the landmark
+  // itself. That is the whole of what makes it worth having next to the
+  // Gnomon's block of ground.
+  const aqueduct = atLandmark('aqueduct');
+  const given = touchLandmark(aqueduct.state, aqueduct.landmark);
+  const { on } = LANDMARK_GIFTS.aqueduct.corridor;
+  const reach = Math.hypot(aqueduct.landmark.x, aqueduct.landmark.y);
+  const ux = aqueduct.landmark.x / reach;
+  const uy = aqueduct.landmark.y / reach;
+  const along = {
+    x: Math.round(aqueduct.landmark.x + ux * on),
+    y: Math.round(aqueduct.landmark.y + uy * on),
+  };
+  const beside = {
+    x: Math.round(aqueduct.landmark.x - uy * on),
+    y: Math.round(aqueduct.landmark.y + ux * on),
+  };
+  assert(given.gift.revealed > 150, 'it draws a good deal of ground');
+  assert(aqueduct.state.explored.has(tileKey(along.x, along.y)), 'the far end of the channel is drawn');
+  assert(
+    !aqueduct.state.explored.has(tileKey(beside.x, beside.y)),
+    'and the ground the same distance off to the side is not — this is a direction, not a clearing'
+  );
+
+  // The Watchtower is the one thing in the game that is for seeing a long way,
+  // so what it draws dwarfs the dial's.
+  const tower = atLandmark('watchtower');
+  const seen = touchLandmark(tower.state, tower.landmark).gift.revealed;
+  const gnomon = atLandmark('gnomon');
+  assert(
+    seen > touchLandmark(gnomon.state, gnomon.landmark).gift.revealed * 3,
+    `the tower shows you more than the dial does (${seen})`
+  );
+
+  // The Weighhouse hands things over outright, and they land exactly as walking
+  // onto them would: the drop is drunk, the candle goes in the pack unlit.
+  const scales = atLandmark('weighhouse');
+  scales.state.water = 40;
+  const lights = scales.state.inventory.length;
+  const paid = touchLandmark(scales.state, scales.landmark);
+  assertEqual(paid.gift.stocked, LANDMARK_GIFTS.weighhouse.stock, 'it names what it handed over');
+  assert(scales.state.water > 40, 'the water went in the tank');
+  assertEqual(scales.state.inventory.length, lights + 1, 'and the light in the pack');
+});
+
+unit('the Aqueduct widens the tank for good, and the hall cannot take it back', () => {
+  writeSave(emptySave());
+  const { state, landmark } = atLandmark('aqueduct');
+  assertEqual(tankCeiling(state), maxWater(state.gems), 'the plain ceiling to begin with');
+
+  touchLandmark(state, landmark);
+  assertEqual(
+    tankCeiling(state),
+    maxWater(state.gems) + AQUEDUCT_TANK,
+    'and a wider one once the campaign has stood under it'
+  );
+
+  // A gem widens the tank too and the hall takes every gem back. This is the
+  // one widening it cannot, because a standing is not a thing you are carrying
+  // (DESIGN.md §4.10).
+  const banked = bankRun(state);
+  const next = createRun(undefined, banked, NONCE);
+  assertEqual(next.water, maxWater(0) + AQUEDUCT_TANK, 'a fresh walk sets out on the wider tank');
+  assertEqual(turnCycle(next).water, maxWater(0) + AQUEDUCT_TANK, 'and so does one in the next world');
+});
+
+unit('the Watchtower pushes the dark back, without moving the rim', () => {
+  const { state, landmark } = atLandmark('watchtower');
+  assertEqual(chokeGrace(state), 0, 'the dark eats a light where it always did');
+
+  touchLandmark(state, landmark);
+  assertEqual(chokeGrace(state), WATCHTOWER_GRACE, 'and waits longer once you have been up it');
+
+  // Two more steps of reach out where the choke is actually biting, and not one
+  // tile of world either way: the rim is where it was.
+  const out = EDGE_RADIUS - 10;
+  assertEqual(
+    chokeAt(out, 0, WATCHTOWER_GRACE) - chokeAt(out, 0),
+    WATCHTOWER_GRACE / CHOKE_STEP,
+    'the curve moved outward by exactly the grace'
+  );
+  assertEqual(chokeAt(0, 0, WATCHTOWER_GRACE) > 3, true, 'and nothing is eating your light at home either way');
+});
+
+unit('the Weighhouse takes a quarter off every price, for good', () => {
+  const { state, landmark } = atLandmark('weighhouse');
+  for (const id of Object.keys(PRICES))
+    assertEqual(priceFor(state, id), PRICES[id], `${id} is the shelf price to begin with`);
+
+  touchLandmark(state, landmark);
+  for (const id of Object.keys(PRICES))
+    assertEqual(
+      priceFor(state, id),
+      Math.ceil(PRICES[id] * (1 - WEIGHHOUSE_DISCOUNT)),
+      `${id} is a quarter off`
+    );
+
+  // And it is what you are charged rather than only what the shelf says: a
+  // purse holding exactly the discounted price can buy.
+  state.coins = priceFor(state, 'map');
+  state.banked.coins = 0;
+  assert(canBuy(state, 'map'), 'the discounted price is a price you can pay');
+  assert(state.coins < PRICES.map, 'on less than the shelf ever asked for');
+});
+
+unit("the world's own landmark hands over nothing, and keeps nothing", () => {
+  writeSave(emptySave());
+  const id = biomeLandmark(biomeOf(SEED));
+  const { state, landmark } = atLandmark(id);
+
+  const result = touchLandmark(state, landmark);
+  assertEqual(result.gift, null, 'there is nothing to take');
+  assertEqual(result.firstEver, false, 'and no standing to hold, ever');
+  assertEqual(hasStanding(state, id), false, 'so the campaign holds none');
+  assertEqual(standings(state), [], 'and knows nothing new');
+
+  // Banked like any landmark all the same — this world knows you stood there —
+  // and gone with the world when the hall takes it, exactly as a post is.
+  const banked = bankRun(state);
+  assertEqual(banked.landmarks, [id], 'this world knows you were there');
+  assertEqual(banked.standings, [], 'and the campaign keeps nothing of it');
+  const same = createRun(undefined, banked, NONCE);
+  assertEqual(same.landmarks.has(id), true, 'the same world, still stood at');
+  assertEqual(turnCycle(same).landmarks.size, 0, 'and the new world has never been walked');
 });
 
 unit('a standing is the campaign\'s, and the world it was won in is not', () => {

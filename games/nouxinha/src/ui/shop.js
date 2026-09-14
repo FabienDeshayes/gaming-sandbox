@@ -8,8 +8,8 @@
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
-import { STOCK, isOneOff, priceOf } from '../data/shop.js';
-import { canBuy, spendable } from '../core/rules.js';
+import { STOCK, isOneOff } from '../data/shop.js';
+import { canBuy, priceFor, spendable } from '../core/rules.js';
 import { makeButton } from './button.js';
 import { makeFocusRing } from './keyboardNav.js';
 import { SHOP } from '../text.js';
@@ -96,7 +96,7 @@ export class Shop {
       const price = label(
         left + PANEL_W - PAD - 12,
         y + ROW_H / 2,
-        owned ? SHOP.owned : SHOP.price(priceOf(id)),
+        owned ? SHOP.owned : SHOP.price(priceFor(run, id)),
         13,
         1
       ).setAlpha(alpha);

@@ -45,14 +45,17 @@ import {
 } from './world.js';
 import { decodeExplored, encodeExplored } from './cartography.js';
 import {
+  AQUEDUCT_TANK,
   CHEAT_COINS,
   CHEAT_REVEAL_RADIUS,
   LANDMARK_GIFTS,
   MOULD_ATTEMPTS,
   STARTING_LIGHT,
   STARTING_WATER,
+  WATCHTOWER_GRACE,
   WATER_PER_GEM,
   WATER_PER_STEP,
+  WEIGHHOUSE_DISCOUNT,
   WISP_SHAPE,
 } from '../balance.js';
 import { emptySave, loadSave, MAX_GEMS, normaliseSave, writeSave } from './save.js';
@@ -63,9 +66,36 @@ import { isOneOff, priceOf } from '../data/shop.js';
 
 export { DIRECTIONS, tileKey };
 
-// The leash: a full tank, widened by every gem carried (balance.js).
-export function maxWater(gems) {
-  return STARTING_WATER + gems * WATER_PER_GEM;
+// The leash: a full tank, widened by every gem carried (balance.js), and by
+// `bonus` — which is the Aqueduct's standing and nothing else. Two arguments
+// rather than one because the run is not always in hand: `createRun` is
+// building the thing that would answer, and the pure suites ask what a gem is
+// worth without a campaign behind it. Anything that *has* a run asks
+// `tankCeiling` instead, and every ceiling the game applies goes through that.
+export function maxWater(gems, bonus = 0) {
+  return STARTING_WATER + gems * WATER_PER_GEM + bonus;
+}
+
+// What a gem is worth to a campaign that has stood under the Aqueduct: a wider
+// tank for good, in every world after, and — unlike a gem — one the hall cannot
+// take back, because a standing is not a thing you are carrying (DESIGN.md
+// §4.10).
+export function waterBonus(state) {
+  return hasStanding(state, 'aqueduct') ? AQUEDUCT_TANK : 0;
+}
+
+// The one ceiling the game applies. Every refill, every cap and every HUD bar
+// reads this rather than `maxWater` directly, so a standing that widens the
+// tank widens it everywhere at once.
+export function tankCeiling(state) {
+  return maxWater(state.gems, waterBonus(state));
+}
+
+// How many tiles further out the dark waits before it starts eating a light:
+// the Watchtower's standing, and the only thing in the game that passes a
+// non-zero grace to `chokeAt` (core/world.js).
+export function chokeGrace(state) {
+  return hasStanding(state, 'watchtower') ? WATCHTOWER_GRACE : 0;
 }
 
 // The hut's other job besides writing a run down (DESIGN.md §4): reaching it
@@ -77,7 +107,7 @@ export function maxWater(gems) {
 // announcing.
 export function refillWater(state) {
   const before = state.water;
-  state.water = maxWater(state.gems);
+  state.water = tankCeiling(state);
   return state.water > before;
 }
 
@@ -200,7 +230,10 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // between this and `state.gems` to upgrade, in place, whichever kind the
     // gem retires — the one thing about the ground a gem still changes.
     scatterGems: gems,
-    water: maxWater(gems),
+    // The tank the walk sets out on, which is the gems it is carrying plus
+    // whatever the Aqueduct's standing is worth — read off the save rather than
+    // off the state, because the state is the thing being built.
+    water: maxWater(gems, waterBonus({ standings: new Set(banked.standings) })),
     // Every coin this expedition has picked up, banked or not. `coins` is only
     // what is in the pocket right now and empties every time the hut writes it
     // down, so the recap would under-report a walk that came home twice.
@@ -265,7 +298,6 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
 function applyCheats(state) {
   state.gems = MAX_GEMS;
   state.scatterGems = MAX_GEMS;
-  state.water = maxWater(state.gems);
   state.coins = CHEAT_COINS;
   for (const id of TOOLS) state.tools.add(id);
   // Every key, so every gate stands open — the chests themselves are left shut,
@@ -295,6 +327,10 @@ function applyCheats(state) {
   // this world's small lights are standing.
   for (const wisp of wisps(state.seed)) state.seenUnique.add(wisp.id);
   for (const standing of STANDINGS) state.standings.add(standing);
+  // Filled after the standings rather than before them: one of those standings
+  // is what widens the tank, so a cheat run that set out first would set out
+  // short of its own ceiling.
+  state.water = tankCeiling(state);
   // And every *other* kind of world already finished, so the sorcerer is
   // standing at the end of the last one (DESIGN.md §4.9). The switch exists to
   // look at the late game without walking to it, and the late game is the
@@ -355,7 +391,9 @@ export function inventoryStacks(state) {
 // it is as wide as it ever was.
 export function activeShape(state) {
   const light = activeLight(state);
-  return light ? chokeShape(itemDef(light.id).shape, chokeAt(state.x, state.y)) : null;
+  return light
+    ? chokeShape(itemDef(light.id).shape, chokeAt(state.x, state.y, chokeGrace(state)))
+    : null;
 }
 
 export function isBlackout(state) {
@@ -510,8 +548,13 @@ export function landmarkOnTile(state, x, y) {
 // Applied to the run and reported back, so the scene can say what happened
 // without working it out a second time.
 function giveGift(state, id) {
-  const gift = LANDMARK_GIFTS[id] || {};
-  const given = { coins: 0, water: false, relit: false, revealed: 0 };
+  const gift = LANDMARK_GIFTS[id];
+  // No entry at all is a landmark with nothing to hand over — the one a world
+  // keeps to itself (DESIGN.md §4.10.3). Null rather than an empty gift, so
+  // everything downstream can tell "gave nothing" from "gave a handful of
+  // nothing".
+  if (!gift) return null;
+  const given = { coins: 0, water: false, relit: false, revealed: 0, light: null, stocked: [] };
 
   if (gift.coins) {
     state.coins += gift.coins;
@@ -519,7 +562,7 @@ function giveGift(state, id) {
     given.coins = gift.coins;
   }
   if (gift.water) {
-    state.water = Math.min(maxWater(state.gems), state.water + gift.water);
+    state.water = Math.min(tankCeiling(state), state.water + gift.water);
     given.water = true;
   }
   if (gift.relight) {
@@ -529,6 +572,9 @@ function giveGift(state, id) {
     if (light) light.durability = itemDef(light.id).maxDurability;
     else restockLight(state);
     given.relit = true;
+    // The id, not the name: what a thing is called is src/text.js's, and
+    // core/ never spells a player-facing string.
+    given.light = (activeLight(state) || { id: STARTING_LIGHT }).id;
   }
   if (gift.reveal) {
     const mark = landmarkAt(state.x, state.y, state.seed);
@@ -542,6 +588,46 @@ function giveGift(state, id) {
         state.explored.add(tileKey(x, y));
         given.revealed += 1;
       }
+  }
+  // The corridor: the ground along the line this thing runs on, which is the
+  // ray out from the hut through the landmark itself. Drawn a short way back
+  // the way you came and a long way on into the dark, because what an aqueduct
+  // is worth looking at is where it was going.
+  if (gift.corridor) {
+    const { back, on, width } = gift.corridor;
+    const mark = landmarkAt(state.x, state.y, state.seed);
+    const centre = mark ? mark.landmark : { x: state.x, y: state.y };
+    const length = Math.hypot(centre.x - BASE_X, centre.y - BASE_Y) || 1;
+    const ux = (centre.x - BASE_X) / length;
+    const uy = (centre.y - BASE_Y) / length;
+    const seen = new Set();
+    for (let t = -back; t <= on; t++)
+      for (let across = -width; across <= width; across++) {
+        const x = Math.round(centre.x + ux * t - uy * across);
+        const y = Math.round(centre.y + uy * t + ux * across);
+        const key = tileKey(x, y);
+        // Nothing outside the world is ever drawn, here as everywhere else —
+        // and the band overlaps itself where it rounds, so count each tile once.
+        if (beyondEdge(x, y) || seen.has(key)) continue;
+        seen.add(key);
+        state.explored.add(key);
+        given.revealed += 1;
+      }
+  }
+  // The stock: consumables handed over outright, applied the way walking onto
+  // one would apply it — a drop of water is drunk against the ceiling this
+  // campaign actually has, and a candle arrives unequipped like any other light.
+  // Water and lights are the only two kinds a `stock` may name: a gift is an
+  // in-run effect (DESIGN.md §4.10.5), and a landmark handing out tools, keys or
+  // gems would be handing out the campaign's progression on a loop.
+  if (gift.stock) {
+    for (const item of gift.stock) {
+      const def = itemDef(item);
+      if (def.water) state.water = Math.min(tankCeiling(state), state.water + def.water);
+      else state.inventory.push(newLight(item));
+      state.found[item] = (state.found[item] || 0) + 1;
+    }
+    given.stocked = [...gift.stock];
   }
   return given;
 }
@@ -774,7 +860,7 @@ function collect(state, x, y) {
     // incrementing, so nothing can double-count a gem already banked.
     state.gems = Math.max(state.gems, def.gem);
   } else if (def.water) {
-    state.water = Math.min(maxWater(state.gems), state.water + def.water);
+    state.water = Math.min(tankCeiling(state), state.water + def.water);
   } else {
     // Lights arrive unequipped — swapping is the player's call.
     state.inventory.push(newLight(id));
@@ -790,8 +876,19 @@ export function spendable(state) {
   return state.coins + state.banked.coins;
 }
 
-export function canBuy(state, id) {
+// What this campaign is actually charged: the shelf price, less the Weighhouse's
+// standing if it holds it (balance.js `WEIGHHOUSE_DISCOUNT`). Rounded up, so a
+// discount never turns a price into a fraction of a coin, and the one answer the
+// shop widget, `canBuy` and `buy` all read — a shelf that showed one number and
+// charged another would be exactly the thing the Weighhouse is about.
+export function priceFor(state, id) {
   const price = priceOf(id);
+  if (price === null) return null;
+  return hasStanding(state, 'weighhouse') ? Math.ceil(price * (1 - WEIGHHOUSE_DISCOUNT)) : price;
+}
+
+export function canBuy(state, id) {
+  const price = priceFor(state, id);
   if (price === null) return false;
   if (isOneOff(id) && state.tools.has(id)) return false;
   return spendable(state) >= price;
@@ -805,7 +902,7 @@ export function buy(state, id) {
   // still cost you, so it's the half worth keeping — and because the hut writes
   // `banked.coins + state.coins`, a run that dies on the way back never wrote
   // the purchase *or* the payment. You lose the goods and keep the money.
-  const price = priceOf(id);
+  const price = priceFor(state, id);
   const fromBank = Math.min(state.banked.coins, price);
   state.banked.coins -= fromBank;
   state.coins -= price - fromBank;
@@ -813,7 +910,7 @@ export function buy(state, id) {
   if (def.tool) {
     state.tools.add(id);
   } else if (def.water) {
-    state.water = Math.min(maxWater(state.gems), state.water + def.water);
+    state.water = Math.min(tankCeiling(state), state.water + def.water);
   } else {
     state.inventory.push(newLight(id));
     // Buying a light in blackout is a rescue, so it lights up immediately
@@ -1340,7 +1437,10 @@ export function resumeRun(save = loadSave()) {
     scatterGems: suspended.scatterGems,
     // Capped rather than trusted: a save hand-edited to a tankful the gems it
     // holds could never justify would otherwise walk further than the leash.
-    water: Math.min(maxWater(suspended.gems), suspended.water),
+    water: Math.min(
+      maxWater(suspended.gems, waterBonus({ standings: new Set(suspended.standings) })),
+      suspended.water
+    ),
     furthest: suspended.furthest,
     found: suspended.found,
     inventory: suspended.inventory,

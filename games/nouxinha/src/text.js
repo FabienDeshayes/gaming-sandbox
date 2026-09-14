@@ -138,10 +138,20 @@ export const FLASH = {
   // A landmark, walked into. The panel says what it is; the status line says
   // what it just did for you, which is the half worth having in a shout.
   landmarkAgain: (name) => `${name}. NOTHING MORE TO TAKE FROM IT THIS WORLD.`,
-  landmarkCoins: (n) => `THE PRESS STRIKES YOU ${n} BLANKS.`,
-  landmarkWater: 'THE WELL UNDER IT IS DEEP. YOUR WATER IS FULL.',
-  landmarkRelit: (name) => `${name} BURNS LIKE NEW.`,
-  landmarkReveal: 'THE DIAL SHOWS YOU THE GROUND YOU CAME OVER.',
+  // One line per landmark that has a gift, because two of them reveal ground
+  // and a shared "GROUND REVEALED" would lose which place just did it. Keyed
+  // by landmark id and read through `giftLine` in ExploreScene: a landmark
+  // with no entry here is one with no gift to shout about, which is the four
+  // that belong to a single world (DESIGN.md §4.10.3).
+  landmarkGift: {
+    mint: (gift) => `THE PRESS STRIKES YOU ${gift.coins} BLANKS.`,
+    bell: () => 'THE WELL UNDER IT IS DEEP. YOUR WATER IS FULL.',
+    'lantern-tree': (gift) => `${gift.light} BURNS LIKE NEW.`,
+    gnomon: () => 'THE DIAL SHOWS YOU THE GROUND YOU CAME OVER.',
+    aqueduct: () => 'YOU FOLLOW THE CHANNEL OUT. THE GROUND UNDER IT COMES CLEAR.',
+    watchtower: () => 'FROM THE TOP OF IT, THE COUNTRY.',
+    weighhouse: (gift) => `THE EMPTY PAN HOLDS ${gift.stocked}.`,
+  },
   // A signpost, read again. The first read gets the panel; the hut's hint is
   // flavour rather than a fact worth repeating, so it isn't in this one.
   signpost: (lines) => lines.join(' / '),
@@ -523,6 +533,93 @@ export const LANDMARK_TEXT = {
     again: [
       'The dial again, in ground it was not cut into yesterday, still keeping a time this world does not have.',
       'It shows you the ground you came over.',
+    ],
+  },
+  aqueduct: {
+    name: 'THE AQUEDUCT',
+    standing: 'YOU CARRY MORE THAN YOU DID',
+    met: [
+      'A line of dry stone arches, striding out of the dark on one side and stopping in mid-air on the other.',
+      'The channel cut along the top of it is smooth as a bone and has not been wet in a very long time. It was carrying water somewhere, from somewhere, for somebody.',
+      'You stand in the shade of an arch and work out what a person actually needs. You will carry more of it than you did.',
+    ],
+    again: [
+      'The arches again, striding out of a dark they were not standing in yesterday.',
+      'You follow the channel with your eye, and the ground under it comes clear.',
+    ],
+  },
+  watchtower: {
+    name: 'THE WATCHTOWER',
+    standing: 'THE DARK TAKES YOUR LIGHT LATER',
+    met: [
+      'A tower with no door at the bottom, nothing at all at the top, and a stair going up the outside of it.',
+      'You climb. The rail at the top is worn to a shine on one side, by somebody who stood up here a great deal, watching a dark that never once changed.',
+      'You look a long way out and something in you stops flinching from it. The dark will have to come closer than that before it starts eating your light.',
+    ],
+    again: [
+      'The tower again, standing over country it was not standing over yesterday.',
+      'You go up, and the ground lays itself out underneath you.',
+    ],
+  },
+  weighhouse: {
+    name: 'THE WEIGHHOUSE',
+    standing: 'NOBODY PUTS A FALSE PRICE ON YOU AGAIN',
+    met: [
+      'A stone shed open on three sides, with a balance in it big enough to weigh a loaded cart.',
+      'One pan is heaped with blanks and the other is empty, and the beam is dead level between them. Somebody weighed nothing against nothing, and cut the answer into the beam.',
+      'You read the tables down the length of it. Nobody puts a false price on you again, in this world or any other.',
+    ],
+    again: [
+      'The balance again, level, in a shed that was not standing here yesterday.',
+      'There is something on the empty pan. There always is.',
+    ],
+  },
+  // The four that are only one world's (DESIGN.md §4.10.3). No gift, no
+  // standing, and no line about what you take, because you take nothing: what
+  // these hand over is that somebody was here doing something ordinary, and
+  // stopped.
+  plough: {
+    name: 'THE PLOUGH',
+    met: [
+      'A plough, standing in the middle of a furrow, with the share still down in the ground.',
+      'The furrow runs nine paces behind it and stops. Whoever was walking after this let go of it between one step and the next.',
+      'There is nothing to take and nothing to read. It is only that somebody was going to finish this.',
+    ],
+    again: [
+      'The plough again, in the same unfinished furrow, in ground that has never been broken.',
+    ],
+  },
+  washing: {
+    name: 'THE LINE OF WASHING',
+    met: [
+      'Two posts, a line strung between them, and a wash hung out on it — frozen through, and hanging perfectly still.',
+      'You put a hand against one of them and it does not give at all. It is holding the shape some wind left it in.',
+      'They are your size. There is nothing here to take.',
+    ],
+    again: [
+      'The line again, hung with the same frozen wash, in a cold it has not been standing out in.',
+    ],
+  },
+  caravan: {
+    name: 'THE CARAVAN',
+    met: [
+      'A line of pack-frames standing in order, roped one to the next, every one of them still loaded.',
+      'No animals. No people. Nothing dropped and nothing scattered and nothing forced: the knots are all sound and every load is square.',
+      'They were walking somewhere in good order, and then they were not walking.',
+    ],
+    again: [
+      'The caravan again, roped and loaded and going nowhere, in sand it has never crossed.',
+    ],
+  },
+  'second-hut': {
+    name: 'THE SECOND HUT',
+    met: [
+      'A hut. Your hut — the same door, the same lean in it, the same stone set against it to hold it open.',
+      'Your things are inside, in the places you leave them. The tank is dry, the hearth is cold, and the dust lies thick and even over all of it.',
+      'You do not go in. There is nothing in there that is not already yours.',
+    ],
+    again: [
+      'The hut again, still yours, still cold, standing on ground you have never lived on.',
     ],
   },
 };

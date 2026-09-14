@@ -173,9 +173,22 @@ export const POCKET_PROBE = 80;
 // How much of the floor around the hut a run has to be able to walk to, sampled
 // over a window this many tiles across, and how many bumped seeds to try before
 // giving up (`pickSeed` in core/world.js).
+//
+// The attempt count is a *budget for keeping the biome*, not a budget for
+// finding a valid seed — a valid one turns up in 2.5 looks on average, and has
+// since long before this number was last touched. What spends the rest of it is
+// the chain preferring a seed of the same kind of world: every court a landmark
+// claims is another thing a seed can fail on, and eight courts reject about a
+// quarter of raw seeds where four rejected one in eleven. Measured over 400
+// worlds: at 20 attempts, two of them ran out of chain and settled for a world
+// of the wrong kind; at 32, none did, and the mean cost was unchanged at 2.50
+// looks, because the extra budget is only ever spent on the bad cases. That
+// matters because `turnCycle` picks the kind of world it wants on `biomeOf` and
+// then hands the seed here (DESIGN.md §4.9) — a chain that runs out is a cycle
+// that hands back a world the campaign has already finished.
 export const SEED_WINDOW = 40;
 export const SEED_MIN_FRACTION = 0.6;
-export const SEED_MAX_ATTEMPTS = 20;
+export const SEED_MAX_ATTEMPTS = 32;
 
 // How many raw seeds the hall looks through for a kind of world this campaign
 // has not finished yet before it moulds whatever it has in hand (`turnCycle` in
@@ -318,29 +331,48 @@ export const SITE_PLAN = [
 
 // --- Landmarks ----------------------------------------------------------------
 //
-// Four named places per world, one per colour, and the same four in every world
-// the hall moulds (DESIGN.md §4.10). What a landmark *is* — its sprite, the
-// ground its court is paved with, the colour it keeps and what standing it
-// hands over — is `src/data/landmarks.js`; what is here is where it stands.
+// Eight named places per world in two tiers (DESIGN.md §4.10): the **seven**
+// that stand in every world the hall moulds, and **one more that belongs to
+// this kind of world alone** — a different object in a frozen world than in a
+// desert one, carrying no gift and no standing, only a piece of what this
+// ground was. What a landmark *is* — its sprite, the paving of its court, the
+// colour it keeps, the standing it hands over or doesn't — is
+// `src/data/landmarks.js`; what is here is where it stands.
 //
-// The rings are the pacing, and they are read against SANCTUM_PLAN above: each
-// landmark stands inside the sanctum of the same index, on that sanctum's own
-// heading (`buildLandmarks` in core/world.js). So the four still take a quarter
-// of the compass each with the whole rose turned by the seed — every world has
-// one in every direction, and which direction holds which changes every time
-// the world is moulded, which is what makes them orient you — and the long walk
-// out to a gem now has a place on it.
+// **The rose is the sanctums' rose.** `heading` reads against SANCTUM_PLAN
+// above: a number is that sanctum's own bearing, and a pair is the bearing
+// halfway between two of them (`buildLandmarks` in core/world.js). So four of
+// the seven stand on the four spokes and three stand in the gaps between them,
+// the whole rose is turned by the seed, and the eighth takes the one gap left
+// over. Every world therefore has a landmark in every direction, which
+// direction holds which changes every time the world is moulded — that is what
+// makes them orient you — and the long walk out to a gem has places on it.
 //
-// That is what makes the gifts (LANDMARK_GIFTS below) worth anything. A full
-// tank at the Bell and a relit torch at the Lantern Tree are waystations on the
-// route the campaign is walking anyway; on a rose of their own they were a
-// detour in another direction that only ever cost water to take. Moving one of
-// these rings past its sanctum's distance is what would undo it.
+// **The rings interleave the spokes and the gaps**, so a walk out meets them
+// one at a time — the Mint, the Aqueduct, the Bell, the Weighhouse, the Tree,
+// the Watchtower, the Gnomon — rather than in pairs, and so no two of a colour
+// (src/data/landmarks.js pairs them off) ever come up in a row. The four spoke
+// landmarks each stay inside the sanctum they share a bearing with, because
+// that is what makes the gifts (LANDMARK_GIFTS below) worth anything: a full
+// tank at the Bell and a relit torch at the Lantern Tree are waystations on a
+// route the campaign is walking anyway, where on a rose of their own they were
+// a detour in another direction that only ever cost water to take. Moving one
+// of those rings past its sanctum's distance is what would undo it.
 export const LANDMARK_PLAN = [
-  { id: 'mint', near: 12, span: 6 }, // inside sanctum 1, at 20
-  { id: 'bell', near: 28, span: 8 }, // inside sanctum 2, at 45
-  { id: 'lantern-tree', near: 48, span: 10 }, // inside sanctum 3, at 80
-  { id: 'gnomon', near: 66, span: 9 }, // inside the hall, at 110
+  { id: 'mint', near: 12, span: 6, heading: 0 }, // inside sanctum 1, at 20
+  { id: 'aqueduct', near: 20, span: 6, heading: [0, 1] },
+  { id: 'bell', near: 28, span: 8, heading: 1 }, // inside sanctum 2, at 45
+  { id: 'weighhouse', near: 38, span: 7, heading: [1, 2] },
+  { id: 'lantern-tree', near: 48, span: 9, heading: 2 }, // inside sanctum 3, at 80
+  { id: 'watchtower', near: 58, span: 7, heading: [2, 3] },
+  { id: 'gnomon', near: 66, span: 9, heading: 3 }, // inside the hall, at 110
+  // The world's own, on the one bearing the seven leave over and at a ring in
+  // the middle of them: near enough that a campaign meets it in the ordinary
+  // course of walking out, since it pays nothing and nobody would go out of
+  // their way for it twice. It carries no `id` — which one it is falls out of
+  // `biomeOf(seed)` through `BIOME_LANDMARKS` in src/data/landmarks.js, so it
+  // is derived from the seed exactly like the ground it stands in.
+  { id: null, biome: true, near: 34, span: 12, heading: [3, 0] },
 ];
 
 // The court: the ring of its own ground around a landmark, forced walkable so
@@ -353,14 +385,28 @@ export const LANDMARK_COURT = 1;
 // (DESIGN.md §4.10). Small and repeatable — a walk back to one pays again, in
 // this world or the next — so a landmark is worth the detour every time.
 //
-//   coins    — a handful of blanks, struck on the spot
-//   water    — Infinity is a full tank, the same as the spring vial's
+//   coins     — a handful of blanks, struck on the spot
+//   water     — Infinity is a full tank, the same as the spring vial's
 //   relight   — the equipped light burns back up to full
-//   reveal   — tiles of ground drawn around it, so you can see how far you came
+//   reveal    — a block of ground drawn around it, so you can see how far you came
+//   corridor  — a band of ground drawn along the line the thing runs on
+//   stock     — items handed over outright, applied exactly as picking them up would
+//
+// A landmark with no entry here hands nothing over, which is the four that
+// belong to a single world: what they are worth is what the panel says.
 export const LANDMARK_GIFTS = {
   mint: { coins: 15 },
+  // The channel, followed with your eye: the ground under the arches, a long
+  // way further out than you are standing and a short way back the way you
+  // came. The one reveal in the game that is a *direction* rather than a
+  // clearing, which is what makes it worth having next to the Gnomon's.
+  aqueduct: { corridor: { back: 10, on: 34, width: 2 } },
   bell: { water: Infinity },
+  weighhouse: { stock: ['water-drop', 'torch-small'] },
   'lantern-tree': { relight: true },
+  // Twice the Gnomon's reach and then some, because climbing a tower is the
+  // one thing in the game that is *for* seeing a long way.
+  watchtower: { reveal: 16 },
   gnomon: { reveal: 8 },
 };
 
@@ -369,41 +415,70 @@ export const LANDMARK_GIFTS = {
 // than a proximity beep — you hear it long before a light could show it.
 export const BELL_HEARING = 20;
 
+// The Aqueduct's standing: how much wider the tank is, for good, once a
+// campaign has stood under it (`tankCeiling` in core/rules.js). Half of what a
+// gem is worth (WATER_PER_GEM above), and unlike a gem it is never handed back
+// to the hall — so this is the one number in the game that a cycle cannot take
+// off you. Half, because a walk of 25 more steps is a sanctum reached a little
+// drier rather than a different game.
+export const AQUEDUCT_TANK = 25;
+
+// The Watchtower's standing: how many tiles further out the dark waits before
+// it starts eating a light (`chokeAt` in core/world.js, through `chokeGrace`).
+// Two full steps of CHOKE_STEP, so the far dark of a world is walkable with a
+// light that still reads as a light rather than a ring one tile wide.
+export const WATCHTOWER_GRACE = 20;
+
+// The Weighhouse's standing: the fraction off every price on the merchant's
+// shelf, for good (`priceFor` in core/rules.js). A quarter, which is what turns
+// the compass from about a world's entire coin income into something a campaign
+// can decide to buy — DESIGN.md §12 carries that as the open problem this is
+// the answer to.
+export const WEIGHHOUSE_DISCOUNT = 0.25;
+
 // --- Signposts ----------------------------------------------------------------
 //
-// Twelve posts, each *assigned* one landmark to name. Three per landmark: one
-// nearer than it, one about level with it, and one further out, so no post is
-// more than about 25 tiles from the thing it is assigned to and every heading
-// is worth trusting.
+// Fourteen posts, each *assigned* one of the seven landmarks to name. Two
+// apiece: one standing nearer the hut than the thing it names and one standing
+// further out, so every landmark is pointed at from both sides of itself and a
+// walk in either direction runs into its signage.
 //
 // The one at 5 is the post every campaign meets on its first expedition: near
 // enough that the opening walk cannot miss it, far enough to be outside the
 // hut's clearing, and it points at the nearest landmark there is.
 //
+// The eighth landmark — the one this kind of world keeps to itself — is named
+// by none of them, and that is the point. The posts are his signage, put up
+// with the rest of the world he moulds; the thing the ground kept is not his to
+// have written down (DESIGN.md §4.10.3).
+//
 // A post's own spot is rolled independently of its assigned landmark's
 // heading, so nothing stops it landing, by chance, close enough to a
 // *different* landmark to be worth naming too (`signpostTargets` in
-// core/world.js) — "close enough" being SIGNPOST_BANDS' own NEARBY threshold.
-// Most posts only ever name the one landmark they were assigned; a few, some
-// worlds, end up naming two.
+// core/world.js) — "close enough" being SIGNPOST_BANDS' own NEARBY threshold,
+// and that second name may be the world's own landmark, which is the one way
+// it ever gets named at all. Most posts only ever name the one landmark they
+// were assigned; a few, some worlds, end up naming two.
 export const SIGNPOST_PLAN = [
   { id: 'post-1', near: 5, span: 0, target: 'mint' },
-  { id: 'post-2', near: 12, span: 4, target: 'bell' },
-  { id: 'post-3', near: 20, span: 4, target: 'mint' },
-  { id: 'post-4', near: 28, span: 4, target: 'lantern-tree' },
-  { id: 'post-5', near: 33, span: 5, target: 'mint' },
-  { id: 'post-6', near: 38, span: 5, target: 'bell' },
-  { id: 'post-7', near: 50, span: 5, target: 'gnomon' },
-  { id: 'post-8', near: 58, span: 5, target: 'bell' },
-  { id: 'post-9', near: 62, span: 5, target: 'lantern-tree' },
-  { id: 'post-10', near: 75, span: 5, target: 'gnomon' },
-  { id: 'post-11', near: 82, span: 5, target: 'lantern-tree' },
-  { id: 'post-12', near: 90, span: 5, target: 'gnomon' },
+  { id: 'post-2', near: 13, span: 4, target: 'aqueduct' },
+  { id: 'post-3', near: 20, span: 4, target: 'bell' },
+  { id: 'post-4', near: 22, span: 4, target: 'mint' },
+  { id: 'post-5', near: 30, span: 5, target: 'weighhouse' },
+  { id: 'post-6', near: 32, span: 5, target: 'aqueduct' },
+  { id: 'post-7', near: 40, span: 5, target: 'lantern-tree' },
+  { id: 'post-8', near: 44, span: 5, target: 'bell' },
+  { id: 'post-9', near: 50, span: 5, target: 'watchtower' },
+  { id: 'post-10', near: 52, span: 5, target: 'weighhouse' },
+  { id: 'post-11', near: 58, span: 5, target: 'gnomon' },
+  { id: 'post-12', near: 66, span: 6, target: 'lantern-tree' },
+  { id: 'post-13', near: 74, span: 6, target: 'watchtower' },
+  { id: 'post-14', near: 84, span: 6, target: 'gnomon' },
 ];
 
 // How much room a post needs: clear of the landmark courts, because a signpost
 // standing next to the thing it points at is a joke the player has to walk to
-// get to, and clear of the other posts, so the twelve of them stay twelve
+// get to, and clear of the other posts, so the fourteen of them stay fourteen
 // directions rather than one crowd.
 export const SIGNPOST_CLEARANCE = 8;
 export const SIGNPOST_SPACING = 10;

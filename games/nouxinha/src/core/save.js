@@ -40,11 +40,38 @@
 // here defaults to that one, which is what lets a run bank itself without ever
 // knowing which slot it belongs to.
 
-import { CHEST_PLAN, SANCTUM_PLAN, SIGNPOST_PLAN, WISP_PLAN } from '../balance.js';
+import {
+  CHEST_PLAN,
+  LANDMARK_PLAN,
+  SANCTUM_PLAN,
+  SIGNPOST_PLAN,
+  SITE_PLAN,
+  WISP_PLAN,
+} from '../balance.js';
 import { BASE_X, BASE_Y, beyondEdge, pickSeed } from './world.js';
 import { ITEMS, KEYS, TOOLS } from '../data/items.js';
-import { LANDMARK_IDS, STANDINGS } from '../data/landmarks.js';
+import { BIOME_LANDMARK_IDS, LANDMARK_IDS, STANDINGS } from '../data/landmarks.js';
 import { BIOME_IDS } from '../data/biomes.js';
+
+// Every landmark id a slot is allowed to name as stood-at: the seven that stand
+// in every world, plus the four a single kind of world keeps to itself — only
+// one of which can ever be in any one slot, but which one falls out of the seed
+// and a save is checked without one in hand. `STANDINGS` deliberately does not
+// grow with it: the world's own landmark hands none over (DESIGN.md §4.10.3).
+const STOOD_AT = [...LANDMARK_IDS, ...BIOME_LANDMARK_IDS];
+
+// How many unique objects a world can have been laid eyes on: the gems, the
+// sites, the chests, the landmarks and the wisps. A bound on a hand-written
+// save rather than a rule about play — but it is *derived* rather than picked,
+// because a bound under what a complete campaign legitimately holds would
+// silently drop the last markers a player earned on the next load, and adding
+// anything to the world is exactly when that would happen.
+const MAX_SEEN =
+  SANCTUM_PLAN.filter((plan) => plan.gem).length +
+  SITE_PLAN.length +
+  CHEST_PLAN.length +
+  LANDMARK_PLAN.length +
+  WISP_PLAN.length;
 
 const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;
 const ACTIVE_KEY = 'nouxinha.slot';
@@ -172,7 +199,7 @@ export function normaliseSave(raw, keepRun = true) {
   save.map = !!raw.map;
   save.keys = ids(raw.keys, KEYS);
   save.chests = ids(raw.chests, CHEST_IDS);
-  save.landmarks = ids(raw.landmarks, LANDMARK_IDS);
+  save.landmarks = ids(raw.landmarks, STOOD_AT);
   save.posts = ids(raw.posts, POST_IDS);
   save.wisps = ids(raw.wisps, WISP_IDS);
   save.standings = ids(raw.standings, STANDINGS);
@@ -180,7 +207,7 @@ export function normaliseSave(raw, keepRun = true) {
   save.mapped = typeof raw.mapped === 'string' ? raw.mapped : '';
   save.mappedSeed = Number.isFinite(raw.mappedSeed) ? raw.mappedSeed | 0 : 0;
   save.seen = Array.isArray(raw.seen)
-    ? raw.seen.filter((id) => typeof id === 'string').slice(0, 32)
+    ? raw.seen.filter((id) => typeof id === 'string').slice(0, MAX_SEEN)
     : [];
   save.bag = normaliseBag(raw.bag);
   save.run = keepRun ? normaliseRun(raw.run) : null;
@@ -290,7 +317,7 @@ function normaliseRun(raw) {
     tools: Array.isArray(raw.tools) ? raw.tools.filter((id) => TOOLS.includes(id)) : [],
     keys: ids(raw.keys, KEYS),
     chests: ids(raw.chests, CHEST_IDS),
-    landmarks: ids(raw.landmarks, LANDMARK_IDS),
+    landmarks: ids(raw.landmarks, STOOD_AT),
     posts: ids(raw.posts, POST_IDS),
     wisps: ids(raw.wisps, WISP_IDS),
     standings: ids(raw.standings, STANDINGS),

@@ -61,6 +61,7 @@ import {
   WISP_PLAN,
 } from '../balance.js';
 import { BIOME_IDS } from '../data/biomes.js';
+import { biomeLandmark } from '../data/landmarks.js';
 
 export const DEFAULT_SEED = 0x6e6f7578; // "noux"
 
@@ -106,8 +107,13 @@ export function beyondEdge(x, y) {
 // How many tiles of reach the dark leaves a light standing here. Applied to
 // whatever light is burning (`activeShape` in core/rules.js), never to the light
 // itself — walk back in and it is as bright as it ever was.
-export function chokeAt(x, y) {
-  return Math.max(1, Math.floor((EDGE_RADIUS - edgeDistance(x, y)) / CHOKE_STEP));
+//
+// `grace` moves the whole curve outward: the rim stays where it is, but the dark
+// starts taking a light that many tiles later, which is the Watchtower's
+// standing and the only thing that ever passes a non-zero one (`chokeGrace` in
+// core/rules.js, balance.js `WATCHTOWER_GRACE`).
+export function chokeAt(x, y, grace = 0) {
+  return Math.max(1, Math.floor((EDGE_RADIUS + grace - edgeDistance(x, y)) / CHOKE_STEP));
 }
 
 // --- Noise ------------------------------------------------------------------
@@ -460,67 +466,84 @@ function buildSites(seed, built, taken) {
 
 // --- Landmarks -----------------------------------------------------------------
 //
-// The four named places, one per world and the same four in every world the
-// hall moulds (DESIGN.md §4.10). Each is a centrepiece you cannot step on —
-// bumped into like a chest, and like a chest it stops no light — standing in a
-// **court**, a ring of its own ground forced walkable so there is always a way
-// in and a way round whatever the noise did.
+// The eight named places of a world (DESIGN.md §4.10): the seven that stand in
+// every world the hall moulds, and the one that belongs to this *kind* of world
+// alone. Each is a centrepiece you cannot step on — bumped into like a chest,
+// and like a chest it stops no light — standing in a **court**, a ring of its
+// own ground forced walkable so there is always a way in and a way round
+// whatever the noise did.
 //
-// They take a quarter of the compass each — the *sanctums'* quarters, one
-// landmark to a sanctum, in ring order: the Mint stands inside the first
-// sanctum's distance on the first sanctum's heading, the Bell inside the
-// second's, the Lantern Tree inside the third's and the Gnomon inside the
-// hall's. So every world still has a landmark in every direction and which
-// direction holds which still changes every time the world is moulded — and on
-// top of that, the long walk out to a gem now has a place on it.
+// They take an eighth of the compass each, and the rose they take it on is the
+// *sanctums'*: a plan's `heading` is either a sanctum's index, and then the
+// landmark stands on that sanctum's own bearing and inside its distance, or a
+// pair of them, and then it stands on the bearing halfway between the two
+// (`spokeHeading` below). Four of the seven are spokes and three are gaps; the
+// eighth takes the gap left over. So every world has a landmark in every
+// direction, which direction holds which still changes every time the world is
+// moulded, and the long walk out to a gem passes places worth stopping at.
 //
 // That is what makes the gifts (DESIGN.md §4.10) worth anything: a full tank at
 // the Bell and a relit torch at the Lantern Tree are waystations on the route
 // the campaign is walking anyway, where on a rose of their own they were a
-// detour in some other direction that only ever cost water to take. The
-// signposts still point wherever they point; a post now points down a road that
-// goes somewhere.
+// detour in some other direction that only ever cost water to take.
 //
 // The stalls are unaffected and keep doing the opposite job: `SITE_PLAN` pins
 // each of the first three *opposite* its sanctum, so an expedition still has
 // two directions worth walking (DESIGN.md §4.5).
 
+// The bearing a plan asks for, off the sanctums that are already built: one of
+// their own, or the one halfway between two of them, taken round the short way
+// so the pair (3, 0) means the gap that wraps rather than three quarters of the
+// rose.
+function spokeHeading(heading, built) {
+  const angle = (i) => Math.atan2(built[i].centre.y, built[i].centre.x);
+  if (!Array.isArray(heading)) return angle(heading);
+  const from = angle(heading[0]);
+  let arc = angle(heading[1]) - from;
+  while (arc > Math.PI) arc -= Math.PI * 2;
+  while (arc < -Math.PI) arc += Math.PI * 2;
+  return from + arc / 2;
+}
+
 function buildLandmarks(seed, built, taken) {
   const spread = (Math.PI * 2) / LANDMARK_PLAN.length;
+  // Which one this world's own slot holds. Derived from the seed through the
+  // biome, like the ground it is standing in — nothing about it is stored.
+  const own = biomeLandmark(biomeOf(seed));
 
   return LANDMARK_PLAN.map((plan, i) => {
+    const id = plan.biome ? own : plan.id;
     const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_LANDMARK) * plan.span);
-    // The heading of the sanctum this one stands inside, jittered by about as
-    // much as that sanctum's own placement was — near enough to the line out to
-    // be on the way, far enough off it that a landmark is still something you
-    // come across rather than something you cannot miss.
-    const heading = Math.atan2(built[i].centre.y, built[i].centre.x);
+    // Jittered by about as much as a sanctum's own placement was — near enough
+    // to the line out to be on the way, far enough off it that a landmark is
+    // still something you come across rather than something you cannot miss.
     const jitter = (randomAt(i + 1, 0, seed, CH_LANDMARK) - 0.5) * spread * 0.24;
-    const nominal = heading + jitter;
+    const nominal = spokeHeading(plan.heading, built) + jitter;
 
     for (const delta of HEADING_SEARCH) {
       const spot = ringPoint(distance, nominal + delta * spread);
       if (spotIsClear(spot, seed, built, taken, { radius: LANDMARK_COURT })) {
         claim(taken, spot, LANDMARK_COURT, 'landmark');
-        return { ...plan, index: i, x: spot.x, y: spot.y };
+        return { ...plan, id, index: i, x: spot.x, y: spot.y };
       }
     }
-    // Nothing in the quarter worked; `pickSeed` is the backstop that rejects it.
+    // Nothing in the arc worked; `pickSeed` is the backstop that rejects it.
     const spot = ringPoint(distance, nominal);
     claim(taken, spot, LANDMARK_COURT, 'landmark');
-    return { ...plan, index: i, x: spot.x, y: spot.y };
+    return { ...plan, id, index: i, x: spot.x, y: spot.y };
   });
 }
 
 // --- Signposts -----------------------------------------------------------------
 //
-// Twelve posts, each assigned one landmark to name and point at (balance.js
-// `SIGNPOST_PLAN`) — and, occasionally, a second one it landed close enough to
-// (`signpostTargets` below). Placed like everything else here and differing in
-// what they have to stay away from: a post has to stand well clear of every
-// landmark, because directions you can read from the doorstep are not
-// directions, and well clear of the other posts, so the twelve of them stay
-// twelve bearings.
+// Fourteen posts, each assigned one of the seven landmarks to name and point at
+// (balance.js `SIGNPOST_PLAN`) — and, occasionally, a second one it landed close
+// enough to (`signpostTargets` below), which is the only way the world's own
+// eighth landmark ever gets named. Placed like everything else here and
+// differing in what they have to stay away from: a post has to stand well clear
+// of every landmark, because directions you can read from the doorstep are not
+// directions, and well clear of the other posts, so the fourteen of them stay
+// fourteen bearings.
 //
 // What a post *says* isn't stored: the heading and the distance are worked out
 // from where it stands when it is read (`signpostBearing` below), so a post is
@@ -545,9 +568,9 @@ function buildSignposts(seed, built, taken) {
       }
     }
     // Nothing in the sweep worked. A post is the one placed thing that may be
-    // dropped rather than forced: twelve of them are directions, and eleven of
-    // them are still directions, where a landmark nobody can reach is a hole in
-    // the world. `pickSeed` never sees this one.
+    // dropped rather than forced: fourteen of them are directions, and thirteen
+    // of them are still directions, where a landmark nobody can reach is a hole
+    // in the world. `pickSeed` never sees this one.
     return null;
   }).filter(Boolean);
 }

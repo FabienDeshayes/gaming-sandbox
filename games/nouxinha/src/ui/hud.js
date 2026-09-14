@@ -5,7 +5,7 @@
 import { FONT, GAME_WIDTH, HUD_Y, gemColour, getPalette, hex } from '../config.js';
 import { itemDef } from '../data/items.js';
 import { HUD } from '../text.js';
-import { activeLight, hasStanding, inventoryStacks, maxWater, spendable } from '../core/rules.js';
+import { activeLight, hasStanding, inventoryStacks, spendable, tankCeiling } from '../core/rules.js';
 import { chebyshev } from '../core/world.js';
 import { playTap } from './sfx.js';
 
@@ -119,13 +119,13 @@ export class Hud {
       hasStanding(run, 'gnomon') ? HUD.distance(chebyshev(run.x, run.y)) : ''
     );
 
-    this.waterLabel.setText(HUD.water(run.water, maxWater(run.gems)));
+    this.waterLabel.setText(HUD.water(run.water, tankCeiling(run)));
     this.waterBar.clear();
     const waterY = SLOT_Y + SLOT + 32 + 44;
     this.waterBar.lineStyle(2, pal.fg, 1);
     this.waterBar.strokeRect(PAD, waterY, BAR_W, BAR_H);
     this.waterBar.fillStyle(pal.fg, 1);
-    const waterFilled = Math.max(0, run.water / maxWater(run.gems));
+    const waterFilled = Math.max(0, run.water / tankCeiling(run));
     this.waterBar.fillRect(PAD + 2, waterY + 2, (BAR_W - 4) * waterFilled, BAR_H - 4);
 
     this.slots.removeAll(true);

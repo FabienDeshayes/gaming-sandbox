@@ -14,7 +14,6 @@ import { FLASH, SIGNPOST } from '../src/text.js';
 import { getPalette, paletteColour } from '../src/config.js';
 import { landmarkDef } from '../src/data/landmarks.js';
 import { signpostHutBearing, signpostReadings } from '../src/core/world.js';
-import { maxWater } from '../src/core/rules.js';
 import {
   FIRST_POST,
   LANDMARK_ROUTE,
@@ -31,6 +30,13 @@ import {
 const AT_LANDMARK = standingAt(LANDMARK_ROUTE, { run: { water: 60 } });
 const DEF = landmarkDef(NEAREST_LANDMARK.id);
 
+// The colour a landmark's tile is actually carrying. One with a zone map of its
+// own (`src/data/paint.js`) keeps it in that zone, with the rest of the
+// silhouette still in the world's foreground; one without is a single zone —
+// the whole shape — and keeps it in the base tint (`src/ui/MapView.js`). Which
+// of the two this world's nearest landmark is, is not what this test is about.
+const landmarkColour = (tile) => (tile.paint.length ? tile.paint[0] : tile.tint);
+
 test('walking into a landmark stands you at it, says its piece, and gives it a colour', async (game) => {
   await game.startRun();
 
@@ -39,14 +45,16 @@ test('walking into a landmark stands you at it, says its piece, and gives it a c
   const before = await game.visibleTiles();
   const plain = before.find((t) => t.x === NEAREST_LANDMARK.x && t.y === NEAREST_LANDMARK.y);
   assertEqual(plain.ground, DEF.sprite, 'the landmark is drawn');
-  assertEqual(plain.paint[0], getPalette().fg, 'and every part of it in the plain foreground');
+  assertEqual(landmarkColour(plain), getPalette().fg, 'and in the plain foreground');
   // Its court is its own paving rather than the world's floor, which is what
-  // makes arriving at one look like arriving somewhere.
-  const court = before.find((t) => t.x === NEAREST_LANDMARK.x + 1 && t.y === NEAREST_LANDMARK.y);
+  // makes arriving at one look like arriving somewhere. Read off the tile the
+  // walk is actually standing on rather than a fixed side of the landmark,
+  // since which side the route came in on is the world's business.
+  const standing = await game.state();
+  const court = before.find((t) => t.x === standing.x && t.y === standing.y);
   assertEqual(court.ground, DEF.court, 'standing on its court');
 
   // The bump: no step, no water, no facing — the same contract as a chest's.
-  const standing = await game.state();
   await game.tapDpad(LANDMARK_ROUTE.hit);
   await game.settle();
   const stood = await game.state();
@@ -56,8 +64,17 @@ test('walking into a landmark stands you at it, says its piece, and gives it a c
   assertEqual(stood.standings, [DEF.standing], 'and the campaign has the standing');
   assert((await game.sounds()).includes('landmark'), 'it was heard');
 
-  // The gift, on the spot: this one is drowned, so the tank comes back full.
-  assertEqual(stood.water, maxWater(0), 'and the gift landed');
+  // The gift, on the spot. Which gift that is depends on which landmark this
+  // world happened to put nearest — the rings make it one of the first four, so
+  // it is a handful of coins, a band of ground, a full tank or a drop and a
+  // candle — and the pure suite walks every one of them. What is checked here is
+  // the half only a browser can answer: that the bump paid something out at all.
+  assert(
+    stood.water > standing.water ||
+      stood.coins > standing.coins ||
+      stood.explored > standing.explored,
+    'and the gift landed'
+  );
 
   // The game says its piece over the world, the way a chest does.
   assert(stood.textPanelOpen, 'the text panel is up');
@@ -66,15 +83,21 @@ test('walking into a landmark stands you at it, says its piece, and gives it a c
   // And now it is the colour it keeps — absolutely, not relative to this world.
   const after = await game.visibleTiles();
   const lit = after.find((t) => t.x === NEAREST_LANDMARK.x && t.y === NEAREST_LANDMARK.y);
-  assertEqual(lit.paint[0], paletteColour(DEF.palette), 'its own colour reached the screen');
-  assertEqual(lit.tint, getPalette().fg, 'and the rest of it is still the world it stands in');
+  assertEqual(landmarkColour(lit), paletteColour(DEF.palette), 'its own colour reached the screen');
+  if (lit.paint.length)
+    assertEqual(lit.tint, getPalette().fg, 'and the rest of it is still the world it stands in');
 
   // A second visit does nothing at all, exactly like a chest with its lid up —
   // as long as no step has landed between the two bumps.
   await game.tapDpad(LANDMARK_ROUTE.hit);
   await game.settle();
   assert(await game.hasText(FLASH.landmarkAgain(DEF.name)), 'walking back into it says so');
-  assertEqual((await game.state()).water, maxWater(0), 'and hands over nothing twice');
+  const held = await game.state();
+  assertEqual(
+    { water: held.water, coins: held.coins, explored: held.explored },
+    { water: stood.water, coins: stood.coins, explored: stood.explored },
+    'and hands over nothing twice'
+  );
 
   // Step off the landmark's own tile and back onto the court — a corner of it,
   // guaranteed walkable — and the panel opens again: a real return visit reads
@@ -113,9 +136,10 @@ test('a signpost is read by walking into it, and says which way and how far', as
   assert((await game.sounds()).includes('signpost'), 'the wood was heard');
 
   // The directions themselves, worked out from where the post stands.
-  // Post-1 stands only five tiles from the hut, far too close to any landmark
-  // but Mint to ever also land within naming distance of another, so it is
-  // always exactly one reading.
+  // Post-1 stands exactly five tiles from the hut, and the nearest ring any
+  // landmark but Mint can be placed on is 20 (`LANDMARK_PLAN`) — which is
+  // SIGNPOST_BANDS' own naming distance away at the very closest, and so never
+  // inside it. It is always exactly one reading.
   const [reading] = signpostReadings(FIRST_POST, SEED);
   const line = SIGNPOST.line(
     landmarkDef(reading.target).name,

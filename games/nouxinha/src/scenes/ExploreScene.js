@@ -625,24 +625,29 @@ export class ExploreScene extends Phaser.Scene {
     // The bell answers being touched, whether or not this campaign has ever
     // been here — it is the one landmark that makes a sound of its own.
     if (result.landmark === 'bell') playBell(1);
-    this.hud.flash(this.giftLine(result.gift));
+    this.hud.flash(this.giftLine(def.id, result.gift));
     // `firstEver` is the standing: the first time this campaign has ever stood
     // here, in any world. Every world after that, and every return visit
     // within this one, reads the shorter blocks.
     this.textPanel.show(SAY.landmark(def.id, result.already || !result.firstEver));
   }
 
-  // What the gift just did, in one line. Every landmark has one, so this always
-  // has something to say.
-  giftLine(gift) {
-    if (!gift) return '';
-    if (gift.coins) return FLASH.landmarkCoins(gift.coins);
-    if (gift.water) return FLASH.landmarkWater;
-    if (gift.relit) {
-      const light = activeLight(this.run);
-      return FLASH.landmarkRelit(itemDef(light ? light.id : 'torch-small').name);
-    }
-    return FLASH.landmarkReveal;
+  // What the gift just did, in one line, in the words that landmark's own line
+  // is written in (`FLASH.landmarkGift` in src/text.js). Two of them reveal
+  // ground and a shared line would lose which place just did it — and a
+  // landmark with no line is one with no gift, which is the one a world keeps
+  // to itself (DESIGN.md §4.10.3): there the panel is the whole of it.
+  //
+  // `gift` comes out of core/ carrying item ids rather than names, because what
+  // a thing is called is src/text.js's; this is where they become words.
+  giftLine(id, gift) {
+    const line = FLASH.landmarkGift[id];
+    if (!gift || !line) return '';
+    return line({
+      ...gift,
+      light: itemDef(gift.light || 'torch-small').name,
+      stocked: CARRIED.list(gift.stocked.map((item) => itemDef(item).name)),
+    });
   }
 
   // A signpost, read by walking into it. The first read in a world gets the

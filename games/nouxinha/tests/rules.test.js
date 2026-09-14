@@ -14,13 +14,14 @@ import {
   isBlackout,
   itemOnTile,
   maxWater,
+  tankCeiling,
   refillWater,
   rememberGround,
   runSummary,
   step,
 } from '../src/core/rules.js';
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
-import { CHEAT_COINS, CHEAT_REVEAL_RADIUS, STARTING_WATER } from '../src/balance.js';
+import { AQUEDUCT_TANK, CHEAT_COINS, CHEAT_REVEAL_RADIUS, STARTING_WATER } from '../src/balance.js';
 import { ITEMS } from '../src/data/items.js';
 import { NONCE, ROCK_ROUTE, SEED, SHADOW_ROUTE, START, TORCH_ROUTE, WATER_ROUTE, bfs, scatter } from './world.js';
 
@@ -271,7 +272,10 @@ unit('cheats hand a run the whole late game, and bank none of it', () => {
   const state = createRun(SEED, emptySave(), NONCE, { cheats: true });
 
   assertEqual(state.gems, MAX_GEMS, 'every colour is back');
-  assertEqual(state.water, maxWater(MAX_GEMS), 'on the widest tank');
+  // Every standing too, one of which is the Aqueduct's — so the widest tank a
+  // cheat run sets out on is wider than three gems alone can buy.
+  assertEqual(state.water, tankCeiling(state), 'on the widest tank there is');
+  assertEqual(state.water, maxWater(MAX_GEMS) + AQUEDUCT_TANK, 'gems and the Aqueduct together');
   assertEqual(state.coins, CHEAT_COINS, 'with a purse the merchant cannot exhaust');
   assertEqual([...state.tools].sort(), ['compass', 'map'], 'and both tools');
 

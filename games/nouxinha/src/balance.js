@@ -794,6 +794,11 @@ export const LIGHTS = {
   'torch-beacon': { maxDurability: 140, shape: { kind: 'radius', radius: 3 } },
 };
 
+// The lights as a ladder, smallest first — which is also the order they are
+// worth having. Read by the burnout fallback in core/rules.js: with nothing of
+// the spent light's own kind left, the smallest thing in the bag takes over.
+export const LIGHT_ORDER = Object.keys(LIGHTS);
+
 // What a run sets out carrying.
 export const STARTING_LIGHT = 'torch-small';
 

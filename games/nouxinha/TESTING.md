@@ -8,22 +8,26 @@
 ```bash
 cd games/nouxinha
 npm install       # playwright-core + phaser, from the allowed npm registry — do NOT run `playwright install`
-npm test          # every suite, one server and one browser: about a minute
-npm run test:pure # the nine pure suites only, no browser: under ten seconds
+npm test          # every suite, one server and one browser: about a minute and a half
+npm run test:pure # the ten pure suites only, no browser: under twenty seconds
 ```
 
 The runner prints what each test cost and what the whole run cost, because a
 suite nobody can see the price of is a suite that grows into a coffee break.
-Ninety-odd pure tests account for a couple of seconds of that minute; the twenty
-browser tests account for the rest. Two numbers are the ones to watch when adding to it:
+A hundred and fifty pure tests account for about ten seconds of that; the
+twenty-seven browser tests account for the rest. Two numbers are the ones to
+watch when adding to it:
 
 - **A browser test over about five seconds** is a walk that should have been
   planted rather than taken — see **Standing where a route ends** below.
 - **A pure test over about half a second** is almost always a loop calling
-  something expensive when it meant to call something cheap. `pickSeed`
-  flood-fills a window every time it is asked, so sampling anything a thousand
-  times *through* it costs a minute; sample the cheap function directly and let
-  `pickSeed`'s own promise have its own test.
+  something expensive when it meant to call something cheap. `pickSeed` floods a
+  window per candidate it tries, and only the answer is kept — so sampling a
+  *thousand different* seeds through it still costs a minute; sample the cheap
+  function directly and let `pickSeed`'s own promise have its own test. The three
+  pure tests above the line are the ones that are genuinely about that work:
+  `pickSeed`'s own, the water ladder walked in one world of every kind, and the
+  Aqueduct's standing surviving a `turnCycle` — which moulds a world to find out.
 
 `node_modules/` is gitignored. `package.json` is test-only: the game itself has no build step and
 runs straight from `index.html` through any static server.

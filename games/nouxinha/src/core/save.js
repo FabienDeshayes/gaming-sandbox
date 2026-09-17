@@ -142,8 +142,8 @@ export function emptySave() {
     wisps: [],
     // And the standings: what stood at a landmark once and kept it. These are
     // one of the three things besides `cycles` that survive a world being
-    // moulded away — he can unmake the ground a landmark stood in, and he has
-    // never found a way to unmake the fact that you have stood there.
+    // left behind — he can carry you out of the country a landmark stood in,
+    // and he has never found a way to carry off the fact that you stood there.
     standings: [],
     // Which **kinds** of world this campaign has finished: the biomes it has
     // carried all three colours into the hall of (DESIGN.md §4.9). Kept across

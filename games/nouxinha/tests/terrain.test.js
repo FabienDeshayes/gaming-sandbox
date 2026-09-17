@@ -27,7 +27,7 @@ import {
 } from '../src/core/world.js';
 import { activeShape, createRun, litTiles, reveal, step, EDGE_SEEN } from '../src/core/rules.js';
 import { emptySave, normaliseSave } from '../src/core/save.js';
-import { CHEST_COIN_VALUES, EDGE_RADIUS, SEED_MIN_FRACTION } from '../src/balance.js';
+import { CHEST_COIN_VALUES, EDGE_RADIUS, SEED_MIN_FRACTION, SIGNPOST_PLAN } from '../src/balance.js';
 import { BIOME_IDS } from '../src/data/biomes.js';
 import { ALL_KEYS, ALL_KEYS_LIST, NONCE, ORTHOGONAL, SEED, SHUT_GATE } from './world.js';
 
@@ -444,9 +444,11 @@ unit('pickSeed rejects a world nobody could explore', () => {
           );
     // A post is the one placed thing the world may go without rather than
     // force, so what is asserted is that most of them stood up (core/world.js).
+    // Counted once: the message is built whether or not the assertion holds.
+    const posts = signposts(picked).length;
     assert(
-      signposts(picked).length >= 6,
-      `the seed picked from ${preferred} stands up its signposts (${signposts(picked).length}/8)`
+      posts >= SIGNPOST_PLAN.length - 2,
+      `the seed picked from ${preferred} stands up its signposts (${posts}/${SIGNPOST_PLAN.length})`
     );
   }
 });

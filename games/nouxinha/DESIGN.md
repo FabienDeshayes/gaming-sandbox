@@ -62,7 +62,7 @@ The world has three things in it: **terrain** (floor, two formations of rock, gr
 | Gems and gates | Three gems sit at the centres of walled **sanctums** scattered around the hut. Picking one up gives a colour back to the world and opens the gate that wants it (§4.4). | Walk onto the gem |
 | Saving | A run is banked by **reaching** the hut, whether or not the expedition ends there (§6). Dying of thirst or leaving by the menu's **EXIT GAME** banks nothing since the last time the hut was stood on, so a gem picked up but never carried back is still out there next run — though the ground the run lit is kept whichever way it ends (§6.1). Separately, the cogwheel menu's **SAVE GAME** suspends the expedition mid-walk so it can be carried on later; that is a bookmark, not a banking (§6.1). | Walk onto the hut, or **SAVE GAME** on the menu |
 | Light & visibility | The active light source defines a **shape** of tiles visible from the character's tile (see §4.1). Every tile has one of three states: **unknown** (never lit — drawn as flat background, indistinguishable from any other unknown tile), **remembered** (lit at some point — drawn dimmed), **lit** (inside the current light shape — drawn full brightness). Items and terrain are only readable in the lit state; a remembered tile keeps showing whatever was there when you last saw it. | — |
-| Durability | Each successful step costs **1 durability** off the *active* light only. Rejected steps (into rock) cost nothing. Carried-but-inactive lights never burn. At 0 the light is spent and removed from the inventory, and the next light in inventory order auto-equips. With no lights left the character is in **blackout**: the light shape shrinks to the character's own tile, and memory shrinks with it — a remembered tile more than one step away stops being drawn until it's lit again, so the screen is the character's own tile plus a small ring of fog of war. Blackout is not death — the character can still feel their way home a step at a time — but it is the moment the walk actually gets dangerous. | — |
+| Durability | Each successful step costs **1 durability** off the *active* light only. Rejected steps (into rock) cost nothing. Carried-but-inactive lights never burn. At 0 the light is spent and removed from the inventory, and another light auto-equips: another of the same kind if the run is carrying one, so a walk under a beacon carries on under a beacon, and otherwise the **smallest** light left — a burnout is not the moment to start spending the run's widest light, and the smallest is the longest leash home. With no lights left the character is in **blackout**: the light shape shrinks to the character's own tile, and memory shrinks with it — a remembered tile more than one step away stops being drawn until it's lit again, so the screen is the character's own tile plus a small ring of fog of war. Blackout is not death — the character can still feel their way home a step at a time — but it is the moment the walk actually gets dangerous. | — |
 | Water | Every successful step also costs **1 water**, independent of the light and never affected by blackout. Water starts at **200** and each gem held raises that ceiling by **50**, to 350 with all three. A water pickup refills by its own amount (§4.2), capped at the ceiling. Unlike light, water has no auto-swap or backup: hitting **0** is the run's one hard failure state — the run ends and everything it was carrying drops into a **bag** on the tile it happened on rather than the hut's books (§6). The one place it cannot happen is the hut, which fills the tank the moment it is stood on: a walk that gets to its own doorstep on its last drop has got home. The balance numbers are named constants in `src/balance.js` (`STARTING_WATER`, `WATER_PER_STEP`, `WATER_PER_GEM`) so they can be retuned without touching the mechanic itself. | — |
 | Pickup | Stepping onto a tile holding an item picks it up automatically, with a short rising blip — or, for a gem, a fanfare (§9). Lights go into the inventory unequipped; coins, water and gems apply immediately (coin counter, water level, colour restored) rather than sitting in the inventory. An item needing more gems than you hold isn't there to pick up at all (§4.3). | — |
 | Coming home | Stepping onto the base **writes the run down and fills the tank**, then says what it wrote and asks the one question left: **HEAD BACK OUT** carries the expedition on, **END HERE** closes it on a recap (§6) and returns to the title screen. Neither answer risks anything, and the panel says so — that is the whole difference between them (§6.1). Arriving still costs a step and burns durability like any other. | Tap a button on the dialog |
@@ -117,7 +117,7 @@ sharpens the walk without needing the scatter (§4.3) retuned around it.
 | Lamp torch | A cone in the facing direction: 1 tile ahead → 3 wide, 2 ahead → 5 wide, 3 ahead → 7 wide, 4 ahead → 9 wide, plus the character's own tile. Nothing behind or beside. | 60 | Reaches furthest of the three but only forward — turning re-aims it, so it rewards committing to a direction |
 | Beacon | Radius 3 — the 7×7 block centred on the character | 140 | Needs **2 gems** to be visible. The one light that breaks the "more reach, shorter leash" trade, because it exists to make the walk to the third sanctum possible at all |
 
-Only one light is active at a time. Equipping is manual (via the item card, §7) except for the auto-swap on burnout.
+Only one light is active at a time. Equipping is manual (via the item card, §7) except for the auto-swap on burnout, which prefers another of the spent light's own kind and falls back to the smallest one carried (§4.1).
 
 ### 4.2 Items that aren't light
 
@@ -516,13 +516,13 @@ took the sun, standing dead centre of it — and the only conversation in the ga
 - **He says something different every time a kind of world is finished.** Five conversations, in
   `src/text.js`, picked by how many of the four **biomes** (§4.3) this campaign has already carried
   three colours into the hall of: the first meeting, one world finished, two, three — and the one
-  after the ending, for a campaign that has watched him let go and kept walking. Inside each of
+  after the ending, for a campaign that has watched him open his hands and kept walking. Inside each of
   them the line about what you are carrying still moves with the walk you actually had, so
   arriving empty-handed never reads like arriving in full. The count is the only thing about the
   player he has to go on, and it is the whole of what makes him a person who is getting somewhere
   rather than a cutscene on a loop.
 - **He takes nothing until the last block is read.** Reading him out is what turns the world over,
-  so the ground going is something the player reads about and then sees.
+  so the crossing is something the player reads about and then sees.
 
 **Then the world is moulded again, and that is what a cycle is.** Everything about the world falls
 out of its seed (§4.3), so re-drawing the seed *is* the re-mould, and it happens inside the same
@@ -545,15 +545,15 @@ six things and no others — the seed it just drew, `cycles`, `finished`, `stand
 |---|---|
 | The three colours, banked and carried alike | The expeditions you have walked, and how far out you got |
 | The keys, and every lid you left up | The count of worlds he has taken, which is the one number that survives every one of them |
-| **The purse, banked and pocketed alike** | **The standings** — everywhere this campaign has ever stood (§4.10). He can unmake the ground a landmark stood in; he has never found a way to unmake having been there |
+| **The purse, banked and pocketed alike** | **The standings** — everywhere this campaign has ever stood (§4.10). He can carry you out of the country a landmark stood in; he has never found a way to carry off having been there |
 | **The compass and the map, if you own them** | Which **kinds** of world the campaign has finished, which is what the ending counts (below) |
 | The ground the campaign drew, and the unique things it had laid eyes on | |
 | Which landmarks *this* world was stood at, and which posts were read in it | |
 | The expedition you were on, and any walk suspended in the slot | |
 | The bag a death left on the ground, since the new world has no tile that used to be that spot | |
 
-**So a cycle keeps what you know and nothing you own.** The four standings are deliberately not
-numbers (§4.10.5) and the purse and the tools deliberately do not survive, which means the ladder a
+**So a cycle keeps what you know and nothing you own.** Four of the seven standings are
+deliberately not numbers (§4.10.5) and the purse and the tools deliberately do not survive, which means the ladder a
 campaign climbs across worlds is made of knowledge — a bell you can hear, a spare candle, a stall on
 the map, a distance on the HUD — rather than of accumulation. Whether that ladder is *enough* is an
 open design question and the honest answer today is that a second cycle plays very much like a first:
@@ -1103,7 +1103,7 @@ placement machinery is new. What is new is only what it says.
   finished** (`state.finished`, the same count the hall reads, §4.9). Nought is a stranger who may not
   know what a colour is for; one is somebody who has done it once; by three he is admitting what the
   arrangement between you actually is, and by four — a campaign that has walked every kind of world he
-  has and watched him let go — the instructions are no use to either of you and he cuts something else
+  has and watched him open his hands — the instructions are no use to either of you and he cuts something else
   underneath them instead. The stone is the same stone every time. What changes is who is standing in
   front of it. A campaign past the end of the table keeps reading the last cut.
 - **There is a set of them in every world, cut by the same hand, and the copy says so.** You walk out of
@@ -1302,7 +1302,7 @@ have nothing left to do and are skipped.
 - Tile stepping via swipe and D-pad, with facing tracked from the last step
 - Three visibility states with persistent memory of explored tiles
 - Line-of-sight occlusion: rock, trees and shut gates cast shadow, chests don't, and the thing in the way is always lit (§4.1)
-- Small torch (radius 1) equipped at start; durability ticking per step; auto-swap on burnout; blackout when nothing is left
+- Small torch (radius 1) equipped at start; durability ticking per step; auto-swap on burnout (same kind first, smallest otherwise); blackout when nothing is left
 - Medium torch and lamp torch as findable items, with distance-scaled spawning
 - Coins and a coin counter
 - Water: depletes one per step regardless of light state, starts at 200 and rises 50 per gem held, refilled by the three water pickups; hitting 0 ends the run and drops everything carried into a bag on the tile it happened on
@@ -1515,7 +1515,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
 - **The structures are derived, then memoised.** Placing four sanctums, eight landmarks, five sites, nine chests, fourteen posts, four carved stones and ten wisps costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same fifty-four. They are placed onto one claimed list, in the order each needs: the landmarks take their eighths of the rose first, because they are the most constrained and everything else is placed against them; then the sites; then the chests, four of which want a landmark to stand beside; then the posts, which have to keep their distance from every landmark there is; and last the stones and the wisps, the two things a world may go without. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.
 - **Nothing draws the world's own shape but the page that was built to.** The structures are forty-four numbers spread over six plans, and the only way to see whether they add up to a walk is to walk them: `distances.html` derives a world exactly as a run does (`pickSeed`, then the same structures), floods the ground once out of the hut door with every gate open — a byte a tile and one breadth-first pass, about eighty milliseconds — and reads every distance off that one fill. Sampling a run of worlds is the same work repeated, which is why it is a button rather than something the page does on the way in. It imports `core/world.js`, `balance.js` and `config.js` and nothing else; there is no Phaser on it and no state in it.
 - **The consumable scatter is thrown, then thinned, then memoised.** A tile asks its lattice cell whether a candidate lands there, and a candidate is crowded out only by a same-kind conflict that *itself* landed — resolved by a short recursion that only ever walks to higher-priority candidates, so it terminates. Dropping every candidate that merely has a stronger neighbour would keep only local maxima and thin the world to a third of what the separation rule actually allows. The recursion is memoised per (seed, salt, gems); a respawn moves the salt, and old memos are dropped wholesale because the cache is a speed-up and never state. A full viewport repaint costs about a tenth of a millisecond.
-- **Run-start cost.** `pickSeed` flood-fills for the base pocket check and again out past the furthest sanctum for the reachability check — about 90ms in total on this machine, paid once, during a scene transition. That second fill short-circuits as soon as it has reached every door, site, landmark and chest, and never runs at all for a seed the cheaper pocket check has already rejected. Roughly one seed in ten is bumped, about three in five of those by the pocket check.
+- **Run-start cost.** `pickSeed` flood-fills for the base pocket check and again out past the furthest sanctum for the reachability check — about 90ms in total on this machine, paid once, during a scene transition, and **memoised per preference** (`pickedCache` in `core/world.js`, the same idiom as the structures), so a slot asked the same question again — every run built off the same save — pays nothing the second time. That second fill short-circuits as soon as it has reached every door, site, landmark and chest, and never runs at all for a seed the cheaper pocket check has already rejected. Roughly one seed in ten is bumped, about three in five of those by the pocket check.
 - **The page has to be the viewport.** Phaser fits the canvas to its parent element, so `#game` is sized to the full viewport and Phaser's own `autoCenter` does the centring. Centring the parent with flexbox instead leaves it shrink-to-fit — a size Phaser cannot fit into, which on a portrait phone scaled the canvas to the viewport *height* and let the width overflow: the sides of the HUD ran off screen and the page panned sideways, which ate taps, because a touch the browser is still deciding might be a pan never becomes a click. The canvas also sets `touch-action: none` so there is no pan gesture to wait on. `tests/ui-shell.test.js` pins this with a phone-sized viewport.
 - **Rendering the viewport:** the tile window is repointed around the character's coordinate each step rather than instantiating sprites for a growing world — a fixed pool of 11×15 cells (three sprites each: ground, base hut, item) whose texture and alpha are reassigned from whatever tile now sits at that screen position. Sprite count stays constant however far you walk. A step slides the whole tile container one tile and tweens it home in 90ms, so the world moves and the wizard doesn't; input is blocked for that tween so a fast tapper can't outrun the renderer.
 - **Key technical risks:**

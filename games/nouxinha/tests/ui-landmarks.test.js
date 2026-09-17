@@ -124,10 +124,14 @@ test('walking into a landmark stands you at it, says its piece, and gives it a c
 }, { save: AT_LANDMARK.save });
 
 // The post five tiles from the hut: the one every campaign meets on its first
-// expedition, walked to from the door rather than planted.
+// expedition. Planted on its doorstep like every other route in the suite —
+// that a post stands five tiles out and can be walked to is a pure claim
+// (`landmarks.test.js`), and what this test is about is the bump at the end.
+const AT_POST = standingAt(POST_ROUTE, { back: 1 });
+
 test('a signpost is read by walking into it, and says which way and how far', async (game) => {
   await game.startRun();
-  await walkPath(game, POST_ROUTE.path);
+  await walkPath(game, AT_POST.path);
 
   const standing = await game.state();
   await game.tapDpad(POST_ROUTE.hit);
@@ -192,13 +196,14 @@ test('a signpost is read by walking into it, and says which way and how far', as
   const post = tiles.find((t) => t.x === FIRST_POST.x && t.y === FIRST_POST.y);
   assertEqual(post.ground, 'signpost', 'the post is drawn');
   assertEqual(post.paint[0], getPalette().fg, 'with a plain arm, for a place never visited');
-});
+}, { save: AT_POST.save });
 
 // --- Carved stones ------------------------------------------------------------
 //
 // The doorstep stone, five to eight tiles out: the one every campaign walks
-// into on its first expedition (DESIGN.md §4.12). Walked to from the door
-// rather than planted, like the post, because that walk is the claim.
+// into on its first expedition (DESIGN.md §4.12). Planted on its doorstep like
+// the post, for the same reason — where it stands is `stones.test.js`'s claim,
+// purely, and the input under test is the bump.
 
 // Reading the panel out block by block, the way the post test does — the
 // panel bakes its own word-wrap into real newlines (src/ui/textPanel.js),
@@ -213,9 +218,11 @@ async function panelBlocks(game) {
   return blocks;
 }
 
+const AT_STONE = standingAt(STONE_ROUTE, { back: 1 });
+
 test('a carved stone is read by walking into it, and reads what a first world reads', async (game) => {
   await game.startRun();
-  await walkPath(game, STONE_ROUTE.path);
+  await walkPath(game, AT_STONE.path);
 
   const standing = await game.state();
   await game.tapDpad(STONE_ROUTE.hit);
@@ -243,7 +250,7 @@ test('a carved stone is read by walking into it, and reads what a first world re
   const stone = tiles.find((t) => t.x === FIRST_STONE.x && t.y === FIRST_STONE.y);
   assertEqual(stone.ground, 'stone', 'the stone is drawn');
   assertEqual(stone.tint, getPalette().fg, 'in the plain foreground');
-});
+}, { save: AT_STONE.save });
 
 // The same stone, read by a campaign with one kind of world left to finish.
 // What changes is only the words, and the count they are picked off lives in

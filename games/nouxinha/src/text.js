@@ -121,10 +121,10 @@ export const FLASH = {
   gemFound: (name) => `${name} IS BACK. CARRY IT HOME TO KEEP IT.`,
   toolFound: (name) => `FOUND THE ${name}. CARRY IT HOME TO KEEP IT.`,
   burnedOutBlackout: (name) => `${name} BURNED OUT. NO LIGHT LEFT.`,
-  burnedOutSwapped: (name) => `${name} BURNED OUT. SWITCHED TO NEXT LIGHT.`,
+  burnedOutSwapped: (name, lit) => `${name} BURNED OUT. ${lit} LIT.`,
   coins: (n) => `FOUND ${n} COIN${n === 1 ? '' : 'S'}.`,
   picked: (name) => `FOUND ${name}.`,
-  respawned: 'THE DARK HAS PUT EVERYTHING BACK SOMEWHERE NEW.',
+  respawned: 'EVERYTHING LYING OUT THERE IS LYING SOMEWHERE ELSE NOW.',
   // Walking back into the bag a death left behind (DESIGN.md §6).
   bagFound: 'YOUR BAG. EVERYTHING YOU LOST IS BACK IN HAND.',
   // A shut gate bumps like rock, so it says what it wants rather than reading
@@ -163,7 +163,7 @@ export const FLASH = {
   // against it, the same debounce every other bumped thing gets.
   wispAgain: 'STILL BURNING.',
   // The edge, every time after the first — the first bump earns the EDGE dialog.
-  edge: 'THE DARK IS BLOCKING YOU.',
+  edge: 'THE DARK WILL NOT GIVE WAY.',
   bought: (name, coinsLeft) => `BOUGHT ${name}. ${coinsLeft} COINS LEFT.`,
   headBackOut: 'SAVED AT THE HUT. WATER FULL.',
 };
@@ -261,10 +261,10 @@ export const HUT = {
 // What the hall leaves you with: a world nobody has lit a tile of, and the same
 // two answers the hut asks for — carry on, or stop here (DESIGN.md §4.9).
 export const HALL = {
-  title: 'A NEW WORLD',
+  title: 'SOMEWHERE ELSE',
   moulded: (n) =>
-    `He has moulded the world ${n === 1 ? 'again' : `${n} times now`}. You are at your door with a candle and a full tank.`,
-  kept: 'He has taken everything you carried — your coins, your tools, your colours — and the ground you drew with them.',
+    `He has carried you across the realm ${n === 1 ? 'once' : `${n} times now`}. You are at your door with a candle and a full tank.`,
+  kept: 'He took the colours out of your hands. Your coins, your lights, your tools and every tile you lit stayed with the country you left — he can carry a person and nothing else.',
   cheats: 'CHEATS ON — nothing was stored, and this world is a sandbox like the last one.',
   rowWorlds: 'WORLDS ENDED',
   setOut: 'SET OUT AGAIN',
@@ -281,7 +281,7 @@ export const CREDITS = {
     'THE SUN CAME BACK',
     'FOUR WORLDS WALKED TO THE END',
     'AND EVERY COLOUR CARRIED HOME OUT OF ALL FOUR',
-    'THE DARK WAS HIS',
+    'HE DID NOT MAKE THE DARK',
     'THE LIGHT WAS ALWAYS SOMETHING YOU HAD TO CARRY',
     'THE HUT HE LEFT STANDING EVERY SINGLE TIME',
     'THANK YOU FOR WALKING BACK',
@@ -340,7 +340,7 @@ export const SAY = {
   // walk that is only being carried on (scenes/ExploreScene.js).
   expeditionStart: [
     'You venture out of the hut, and the dark is surrounding you.',
-    'You are only equipped with your torch and some water.',
+    'You have a candle lit and some water on you, and nothing else.',
     'Explore the land, and bring back colour to the world.',
   ],
   // Opening a chest. Somebody was here before you and left something behind —
@@ -354,7 +354,7 @@ export const SAY = {
   chestCoins: (coins) => [
     'The lid gives, and centuries of dust go up with it.',
     `Inside is a hoard of ${coins} coins, counted out and left for nobody.`,
-    'The merchant will not ask where you got them.',
+    'There is nobody at the stalls to ask where you got them.',
   ],
   // A landmark, walked into (DESIGN.md §4.10). The panel rather than a line in
   // the HUD for the same reason a chest gets it: this is the world telling you
@@ -390,34 +390,41 @@ export const SAY = {
     hutLine,
   ],
   // The hall (DESIGN.md §4.9). He introduces himself, he is courteous, he takes
-  // what you brought, and he moulds the world again — and what he says is a
-  // different conversation every time this campaign finishes a kind of world,
-  // because how many it has finished is the only thing he has to go on.
+  // what you brought, and he carries you to another part of the realm — and
+  // what he says is a different conversation every time this campaign finishes
+  // a kind of world, because how many it has finished is the only thing he has
+  // to go on.
   //
   // `finished` is that count, before this meeting. Nought is a campaign he has
   // never been carried a full set by; four is a campaign that has already
-  // watched him let go and come back anyway (`ending` below).
+  // watched him open his hands and come back anyway (`ending` below).
   hall: (gems, max, finished = 0) => HALL_SPEECH[Math.min(finished, HALL_SPEECH.length - 1)](gems, max),
   // The end of the game: the fourth kind of world, walked to the hall with every
-  // colour in hand, and nothing left for him to mould that you have not already
-  // finished. He is not beaten and there is no fight — he simply runs out of
-  // worlds to hand over, and says the two things the whole campaign has been
-  // walking towards.
+  // colour in hand, and nowhere left in the realm to carry you that you have not
+  // already finished. He is not beaten and there is no fight and he is not
+  // giving up — twelve pieces is enough to mend it, and the mending is the one
+  // thing he has not done in centuries: he opens his hands (STORY.md §2).
   ending: () => [
-    'The clearing holds the hall, and the hall holds him, and his hands are open before you have said a word.',
-    '"Four," he says. "Four kinds of world, walked all the way to the end, and every colour out of every one of them carried back to me. I have nothing left to hand you."',
-    '"It is going out," he says. "It has been going out the whole time I have been holding it. I called that keeping it, and you carried the pieces back so that I could go on calling it that."',
-    'There is nothing to take out of your hands. He turns his own over and looks at them.',
+    'The clearing holds the hall, and the hall holds him, and his hands are open a little before you have said a word.',
+    '"Four," he says. "Four countries, walked all the way to the end, and every colour out of every one of them carried back to me. Twelve. That is the whole sum, and there is nowhere left I could put you down that you have not already finished."',
+    'He lifts what he is holding so that you can see into it. The pieces you carried are in there, standing close around what was left, and there is no gap anywhere between them any more.',
+    '"It is whole," he says. "It has been whole for a moment now, and I am still holding it, because holding is the only thing I have done since before you were woken. What is left is to stop."',
+    'There is nothing to take out of your hands. He looks down at his own.',
     '"You kept coming back," he says. "Nobody has ever kept coming back. Stand where you are — this will be bright."',
-    'And he lets go.',
+    'And he opens his hands.',
   ],
 };
 
 // The five conversations, by how many kinds of world this campaign had finished
 // when it walked in (DESIGN.md §4.9). Each is the same shape — the clearing, his
 // name for what is happening, the one line that depends on what you are actually
-// carrying, the taking, and the ground going — and each is a man further along
-// in something he has never said out loud.
+// carrying, the taking, and the crossing — and each is a man further along in
+// something he has never said out loud.
+//
+// He never makes ground and the copy never says he does (STORY.md §2): the four
+// worlds are four countries of one realm, and what happens at the end of a
+// conversation is that he carries you to another of them, with nothing in your
+// hands, because a person is the whole of what he can carry.
 const HALL_SPEECH = [
   (gems, max) => [
     'The clearing holds no hoard. It holds a hall, and a man standing in front of it with his hands full of light.',
@@ -428,8 +435,8 @@ const HALL_SPEECH = [
         ? `"${gems === 1 ? 'One' : 'Two'} of three. Close is not the same as finished, and I will take those."`
         : '"Empty-handed. That is a long walk for a conversation, and I am glad of the conversation."',
     'He takes what you are carrying out of your hands, one piece at a time, and you let him.',
-    '"The sun went out because I caught it," he says. "I am not sorry, and I am not finished. Go home and rest."',
-    'The ground goes. When it comes back it is not the ground you learned — and your own door is behind you.',
+    '"The sun was dying before I put my hands on it," he says. "It broke in them. That much is mine, and I am not finished with it. Go home and rest."',
+    'He puts a hand out, and the country goes out from under you. What comes back around you is somewhere else entirely — and your own door is behind you.',
   ],
   (gems, max) => [
     'The clearing again, and the hall in it, and the man in front of the hall with his hands full of light.',
@@ -441,7 +448,7 @@ const HALL_SPEECH = [
         : '"Nothing in your hands at all. You came the whole way to look at me. I would have, in your place."',
     'He takes what you have, one piece at a time, and he is careful about your hands.',
     '"You will be back," he says, with no weight on it whatsoever. "Everybody is. Go home and rest."',
-    'The ground goes. When it comes back it is a different kind of dark, and your own door is behind you.',
+    'He carries you, and not one thing you were carrying. What comes back around you is a different kind of dark, and your own door is behind you.',
   ],
   (gems, max) => [
     'The hall stands where a hoard should be, in the third clearing of its kind you have walked into.',
@@ -453,11 +460,11 @@ const HALL_SPEECH = [
         : '"Empty-handed, and you knew you would be before you set out. So this is a visit."',
     'He gathers them in. His hands do not quite close any more, and you both watch them not close.',
     '"You are looking at my hands," he says. "Everyone gets there eventually. Go home."',
-    'The ground goes, and comes back as somewhere else, and your own door is behind you.',
+    'He sets you down in another country of the same realm, with nothing in your pockets, and your own door is behind you.',
   ],
   (gems, max) => [
     'The clearing, the hall, the man — the third time you have arrived already knowing what all three of them are.',
-    '"Three kinds of world walked out from under you," he says. "There is one left that you have not finished. I would rather you did not, and I am going to hand it to you anyway, because handing you a world is the only thing I still know how to do."',
+    '"Three kinds of world walked out from under you," he says. "There is one left that you have not finished. I would rather you did not, and I am going to hand it to you anyway, because carrying you somewhere is the only thing I still know how to do."',
     gems >= max
       ? '"All three. Of course. You have not missed a set since the first world."'
       : gems
@@ -465,26 +472,27 @@ const HALL_SPEECH = [
         : '"Nothing. Good — sit down. The next one will want your legs."',
     'He takes what there is. The light in his hands is thinner than it was the first time you stood here, and it is not the dark that has thinned it.',
     '"Go on," he says. "Finish it. I will be standing in the last one."',
-    'The ground goes, for what you both know is the last time but one.',
+    'He carries you across, for what you both know is the last time but one.',
   ],
   (gems) => [
     'The clearing, and the hall, and him in front of it as though the sun had never come up over any of this.',
-    '"You know how it goes now," he says. "It went out of my hands, and it came up over all of it, and here we both still are. I mould, you walk. I never minded the walking."',
+    '"You know how it goes now," he says. "It went out of my hands, and it came up over all of it, and here we both still are. I carry, you walk. I never minded the walking."',
     gems
       ? '"And you brought colour with you, out of habit. So did I, once."'
       : '"And nothing in your hands, which is the honest way to arrive."',
     'He takes what you have and sets it down beside him, where the light already is.',
     '"Again, then," he says. "You know the way."',
-    'The ground goes. It always does. Your own door is behind you.',
+    'He carries you over. He always does. Your own door is behind you.',
   ],
 ];
 
 // --- The landmarks -----------------------------------------------------------
 //
-// The four named places, one per world, the same four in every world the hall
-// moulds (DESIGN.md §4.10). A name, and what the panel reads out the first time
-// this campaign touches it — and the shorter thing it reads out in every world
-// after, once the place is one you recognise rather than one you are finding.
+// The seven he carries with him wherever he puts you down, plus the one thing
+// each kind of world keeps to itself (DESIGN.md §4.10, STORY.md §3). A name,
+// and what the panel reads out the first time this campaign touches it — and
+// the shorter thing it reads out in every world after, once the place is one
+// you recognise rather than one you are finding.
 //
 // `standing` is the line the campaign keeps: what putting a hand on this one
 // changed for good. It is copy rather than a rule — the rule is in
@@ -676,12 +684,13 @@ export const SIGNPOST = {
 // stone is the same stone every time; what changes is who he is writing to, and
 // how much of himself he is willing to cut into rock about it. Nought is a
 // stranger who may not know what a colour is for. Four is somebody who has
-// walked every kind of world he has and watched him let go, and the instructions
-// are no use to either of them any more.
+// walked every country he has and watched him open his hands, and the
+// instructions are no use to either of them any more.
 //
-// A world is moulded fresh every cycle and the stones come back standing, which
-// is the one thing here the copy is allowed to notice: he re-cuts them, every
-// time, because it is not much work and he has the time.
+// A cycle leaves one country for another and the stones are standing in that
+// one too, which is the one thing here the copy is allowed to notice: he cut
+// them in every part of the realm before any of this, because it was an hour's
+// work apiece and he had nothing but hours.
 
 export const STONE_TEXT = {
   // The doorstep stone (`STONE_PLAN` in src/balance.js): five to eight tiles
@@ -830,7 +839,10 @@ export const CARD = {
 };
 
 export const SHOP = {
-  title: 'THE MERCHANT',
+  // A counter with a canopy and nobody behind it — his, standing where a long
+  // walk needs somewhere to spend (STORY.md §3). Never "the merchant": there is
+  // no one there, and the game should not imply one.
+  title: 'THE STALL',
   purse: (coins) => `YOU HAVE ${coins} COINS`,
   owned: 'OWNED',
   price: (coins) => `${coins}`,
@@ -880,7 +892,7 @@ export const ITEM_TEXT = {
   coin: {
     name: 'COINS',
     effect:
-      'What the merchant takes. The counter shows everything you have banked plus what you are carrying.',
+      'What the stalls take. The counter shows everything you have banked plus what you are carrying.',
   },
   // The refill numbers are quoted from balance.js, so a retuned drop is never a
   // drop whose card lies about it.

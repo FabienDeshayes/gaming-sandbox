@@ -573,6 +573,9 @@ export async function openGame(
           landmarks: [...r.landmarks],
           posts: [...r.posts],
           standings: [...r.standings],
+          // And the carved stones read in this world (DESIGN.md §4.12), which
+          // belongs to the world on exactly the posts' terms.
+          stones: [...r.stones],
           // Which kinds of world this campaign has carried three colours into
           // the hall of (DESIGN.md §4.9) — what the sorcerer has to go on, and
           // what the end of the game is counted in.

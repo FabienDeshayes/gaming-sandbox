@@ -46,6 +46,7 @@ import {
   SANCTUM_PLAN,
   SIGNPOST_PLAN,
   SITE_PLAN,
+  STONE_PLAN,
   WISP_PLAN,
 } from '../balance.js';
 import { BASE_X, BASE_Y, beyondEdge, pickSeed } from './world.js';
@@ -61,16 +62,18 @@ import { BIOME_IDS } from '../data/biomes.js';
 const STOOD_AT = [...LANDMARK_IDS, ...BIOME_LANDMARK_IDS];
 
 // How many unique objects a world can have been laid eyes on: the gems, the
-// sites, the chests, the landmarks and the wisps. A bound on a hand-written
-// save rather than a rule about play — but it is *derived* rather than picked,
-// because a bound under what a complete campaign legitimately holds would
-// silently drop the last markers a player earned on the next load, and adding
-// anything to the world is exactly when that would happen.
+// sites, the chests, the landmarks, the carved stones and the wisps. A bound on
+// a hand-written save rather than a rule about play — but it is *derived*
+// rather than picked, because a bound under what a complete campaign
+// legitimately holds would silently drop the last markers a player earned on
+// the next load, and adding anything to the world is exactly when that would
+// happen.
 const MAX_SEEN =
   SANCTUM_PLAN.filter((plan) => plan.gem).length +
   SITE_PLAN.length +
   CHEST_PLAN.length +
   LANDMARK_PLAN.length +
+  STONE_PLAN.length +
   WISP_PLAN.length;
 
 const SLOT_KEY = (slot) => `nouxinha.save.${slot}`;
@@ -89,6 +92,7 @@ export const MAX_GEMS = SANCTUM_PLAN.filter((s) => s.gem).length;
 // file.
 const CHEST_IDS = CHEST_PLAN.map((plan) => plan.id);
 const POST_IDS = SIGNPOST_PLAN.map((plan) => plan.id);
+const STONE_IDS = STONE_PLAN.map((plan) => plan.id);
 const WISP_IDS = WISP_PLAN.map((plan) => plan.id);
 
 export function emptySave() {
@@ -126,6 +130,11 @@ export function emptySave() {
     // lids.
     landmarks: [],
     posts: [],
+    // The carved stones read **in this world** (DESIGN.md §4.12). The world's
+    // on the posts' terms: what a stone says is worked out from the campaign,
+    // and having read one is worked out from the world, so this goes with the
+    // ground the hall moulds away.
+    stones: [],
     // The wisps put a hand on **in this world** (DESIGN.md §4.11). Belongs to
     // the world on exactly the posts' terms: the hall takes it with the
     // ground, and there is nothing else about a wisp for a save to carry —
@@ -201,6 +210,7 @@ export function normaliseSave(raw, keepRun = true) {
   save.chests = ids(raw.chests, CHEST_IDS);
   save.landmarks = ids(raw.landmarks, STOOD_AT);
   save.posts = ids(raw.posts, POST_IDS);
+  save.stones = ids(raw.stones, STONE_IDS);
   save.wisps = ids(raw.wisps, WISP_IDS);
   save.standings = ids(raw.standings, STANDINGS);
   save.finished = ids(raw.finished, BIOME_IDS);
@@ -319,6 +329,7 @@ function normaliseRun(raw) {
     chests: ids(raw.chests, CHEST_IDS),
     landmarks: ids(raw.landmarks, STOOD_AT),
     posts: ids(raw.posts, POST_IDS),
+    stones: ids(raw.stones, STONE_IDS),
     wisps: ids(raw.wisps, WISP_IDS),
     standings: ids(raw.standings, STANDINGS),
     inventory,

@@ -155,6 +155,10 @@ export const FLASH = {
   // A signpost, read again. The first read gets the panel; the hut's hint is
   // flavour rather than a fact worth repeating, so it isn't in this one.
   signpost: (lines) => lines.join(' / '),
+  // A carved stone, bumped again with no step in between. Unlike a post there
+  // is nothing short to echo — what a stone says is paragraphs — so all the
+  // status line does is say that nothing has changed since the panel.
+  stoneAgain: 'THE SAME WORDS, CUT IN THE SAME STONE.',
   // A wisp, bumped again with no step in between — a direction key held
   // against it, the same debounce every other bumped thing gets.
   wispAgain: 'STILL BURNING.',
@@ -372,6 +376,11 @@ export const SAY = {
     'A small light, alone out here, burning on nothing you can see.',
     "It isn't yours, and it wasn't lit for you. It was already burning when you found it, and it will keep burning after you go.",
   ],
+  // A carved stone, read by walking into it (DESIGN.md §4.12). Which of the
+  // five cuts of it you get is how many kinds of world this campaign has
+  // already finished — the same count the hall reads (`SAY.hall` above) — and
+  // a campaign past the end of the table reads the last of them for good.
+  stone: (id, finished) => STONE_TEXT[id][Math.min(finished, STONE_TEXT[id].length - 1)],
   signpost: (lines, hutLine) => [
     'A post, leaning, with the ground trodden down around it.',
     lines.length > 1
@@ -651,6 +660,153 @@ export const SIGNPOST = {
   // the dark (DESIGN.md §4.10). It gets a heading and nothing else: no name,
   // no distance, just a direction that happens to be worth remembering.
   hutHint: (bearing) => `A blank stub still points ${bearing.toLowerCase()}. No name on it — but you know that way.`,
+};
+
+// --- Carved stones -----------------------------------------------------------
+//
+// The four stones Nouxinha cut and left standing in the dark (DESIGN.md §4.12),
+// and the only thing in the game he says to you when he is not in front of you.
+// A signpost is the world's own signage and a landmark is somebody's building;
+// a stone is a letter, cut in advance, addressed to whoever is walking.
+//
+// Each of them is about one thing the game will not otherwise explain — the
+// colours, the gates, the light, the walk home — and each is written **five
+// ways**, by how many kinds of world this campaign has already finished
+// (`state.finished`, the same count the hall reads: `HALL_SPEECH` above). The
+// stone is the same stone every time; what changes is who he is writing to, and
+// how much of himself he is willing to cut into rock about it. Nought is a
+// stranger who may not know what a colour is for. Four is somebody who has
+// walked every kind of world he has and watched him let go, and the instructions
+// are no use to either of them any more.
+//
+// A world is moulded fresh every cycle and the stones come back standing, which
+// is the one thing here the copy is allowed to notice: he re-cuts them, every
+// time, because it is not much work and he has the time.
+
+export const STONE_TEXT = {
+  // The doorstep stone (`STONE_PLAN` in src/balance.js): five to eight tiles
+  // out, so a first expedition cannot miss it. It says what the colours are,
+  // which is the one thing a player who has never walked this dark actually has
+  // to be told.
+  'stone-1': [
+    [
+      'A block of stone standing on end, dressed flat on the side facing your hut, with lettering cut deep enough to read with a hand.',
+      '"THREE COLOURS ARE SHUT IN THIS WORLD," it says. "THEY ARE BEHIND WALLS, AND THE WALLS HAVE DOORS, AND THE DOORS WANT KEYS AND NOT COLOURS."',
+      '"BRING THEM TO THE HALL. THE HALL IS THE LAST OF THE FOUR AND THERE IS NO HOARD IN IT."',
+      'Lower down, smaller, cut by the same hand on a different day: "NOTHING IN YOUR HANDS IS YOURS UNTIL YOUR OWN DOOR IS BEHIND YOU."',
+    ],
+    [
+      'The stone again — the same block, the same flat face, and the ground around it is nowhere you have ever been.',
+      '"THREE COLOURS. YOU KNOW THIS ONE," it says. "THERE IS ONE OF THESE OUTSIDE EVERY DOOR I HAVE EVER WOKEN ANYBODY BEHIND. I CUT THEM ALL. IT IS AN HOUR\'S WORK APIECE AND I HAVE NOTHING BUT HOURS."',
+      '"WALK FURTHER THIS TIME. THE FIRST COLOUR IS NEVER FAR, AND IT IS NOT WHAT YOU CAME FOR."',
+    ],
+    [
+      'The doorstep stone, standing where one always stands, which is the first thing about this place you recognised.',
+      '"TWO KINDS OF WORLD FINISHED," it says. "I CUT THAT IN AFTERWARDS. I KEEP THE COUNT AS WELL."',
+      '"THREE COLOURS, THEN, AND THE SAME WALK. YOU WILL FIND IT SHORTER THAN YOU REMEMBER. THAT IS YOU, NOT THE GROUND."',
+    ],
+    [
+      'The stone, the flat face, the hand you could pick out of a hundred hands by now.',
+      '"THREE COLOURS," it says, "AND I AM AWARE OF HOW THIS LOOKS. I TAKE THEM OUT OF YOUR HANDS AND THEN I PUT YOU DOWN SOMEWHERE THERE ARE THREE MORE, IN FRONT OF A STONE I CUT BEFORE EITHER OF US WAS TIRED."',
+      '"ONE PLACE LEFT THAT YOU HAVE NOT WALKED OUT OF. GO AND FINISH IT. I WOULD RATHER YOU DID NOT, AND I HAVE CUT YOU THE DIRECTIONS ANYWAY."',
+    ],
+    [
+      'The stone still stands, and the instructions on it are no use to either of you now.',
+      '"THREE COLOURS ARE SHUT IN THIS WORLD," it says, because that is what it has always said.',
+      'Under it, cut shallow and recently, in a hand that is not steady: "AND YOU KNOW THE WAY. WALK IT IF YOU WANT TO. I AM GLAD OF THE COMPANY."',
+    ],
+  ],
+  // The second: gates, keys and the named places, which is the one chain in the
+  // game a player can walk past without ever working out (DESIGN.md §4.8).
+  'stone-2': [
+    [
+      'A stone, waist high, with the face turned away from your hut — cut for somebody already on their way out.',
+      '"A DOOR IN A RING WALL WANTS ITS KEY," it says. "A KEY IS IN A BOX, AND A BOX IS A FEW PACES OFF SOMEWHERE WITH A NAME."',
+      '"SO WALK TO THE NAMES. THE POSTS ARE FULL OF THEM, AND THE NAMED PLACES PAY YOU FOR ARRIVING WHETHER OR NOT THERE IS A BOX BESIDE THEM."',
+    ],
+    [
+      'The second stone, facing out, with the same three lines and one more under them.',
+      '"A DOOR WANTS ITS KEY. THE KEY IS IN A BOX BESIDE A NAMED PLACE. THE POSTS KNOW THE NAMES."',
+      '"WHAT YOU LEARN AT A NAMED PLACE, YOU KEEP," the new line says. "I CANNOT GET AT IT. I HAVE TRIED, AND I AM TELLING YOU BECAUSE IT IS THE ONLY GOOD NEWS I HAVE."',
+    ],
+    [
+      'The stone facing out into the dark, in the third place of its own you have read it in.',
+      '"THE DOORS, THE KEYS, THE BOXES, THE NAMES," it says. "YOU HAVE THIS. I AM LEAVING IT UP FOR THE SAME REASON A MAN SWEEPS A FLOOR NOBODY WALKS ON."',
+      '"THE NAMES REPEAT AND THE PLACES DO NOT, UNDERSTAND. I BUILT ONE OF EACH IN EVERY PART OF THIS REALM, A VERY LONG TIME AGO, WHEN THERE WAS LIGHT TO BUILD BY."',
+    ],
+    [
+      'The second stone, and by now you read it the way you read a letter from somebody who writes too often.',
+      '"KEYS, BOXES, NAMES," it says. "THERE IS ALSO ONE PLACE IN EVERY WORLD I DO NOT BUILD AND CANNOT MOVE. IT IS DIFFERENT IN EVERY KIND OF WORLD AND NO POST HAS ITS NAME ON IT."',
+      '"IF YOU FIND IT, STAND THERE A MOMENT. IT WILL GIVE YOU NOTHING. IT WAS NOT PUT THERE FOR GIVING."',
+    ],
+    [
+      'The stone, still facing out, still telling a walker where the keys are.',
+      '"KEYS, BOXES, NAMES," it says, and then, cut afterwards and close underneath:',
+      '"THE PLACE THE GROUND KEEPS TO ITSELF IS STILL OUT THERE. IT WAS NEVER MINE. THAT IS WHY IT IS STILL THERE."',
+    ],
+  ],
+  // The third: light, and the dark that eats it (DESIGN.md §4.1, §4.7). Cut far
+  // enough out that a campaign reading it has met both.
+  'stone-3': [
+    [
+      'A stone out where the ground stops being anywhere in particular, cut on all four faces.',
+      '"WHAT YOU CARRY BURNS," the first face says. "ONE STEP IS ONE STEP OF IT. THERE IS NO RATIONING IT AND NO PUTTING IT OUT."',
+      '"FURTHER OUT THAN THIS THE DARK STOPS GIVING WAY AND STARTS TAKING," the second says. "IT EATS YOUR LIGHT A TILE AT A TIME UNTIL THERE IS NOTHING TO EAT. WALK BACK IN AND IT IS AS BRIGHT AS IT EVER WAS."',
+      '"THE LITTLE ROUND LIGHTS ARE NOT MINE AND NOT YOURS," says the third. "THEY BURN ON THEIR OWN ACCOUNT. USE THEM."',
+      'The fourth face is blank.',
+    ],
+    [
+      'The four-faced stone, out where the ground stops being anywhere in particular.',
+      '"WHAT YOU CARRY BURNS. THE FAR DARK EATS IT. THE LITTLE ROUND LIGHTS ARE NOBODY\'S."',
+      'The fourth face has a line on it now: "YOU CAME BACK OUT THIS FAR, WHICH MEANS YOU CAME HOME LAST TIME. GOOD. THAT IS THE HARD HALF."',
+    ],
+    [
+      'The stone with four faces, three of them the same as ever.',
+      '"WHAT YOU CARRY BURNS. THE FAR DARK EATS IT. THE LITTLE LIGHTS ARE NOBODY\'S."',
+      '"I DID NOT MAKE THE DARK," the fourth face says. "I MADE IT NECESSARY. THERE IS A DIFFERENCE AND I AM THE ONLY ONE IT MATTERS TO."',
+    ],
+    [
+      'The four faces, and you already know what three of them say.',
+      '"WHAT YOU CARRY BURNS. THE FAR DARK EATS IT. THE LITTLE LIGHTS ARE NOBODY\'S."',
+      '"THE LIGHT IN MY HANDS BURNS TOO," the fourth face says. "SLOWER THAN YOURS. NOT SO MUCH SLOWER THAT I HAVE STOPPED COUNTING."',
+    ],
+    [
+      'The stone, four faces, out past everything.',
+      '"WHAT YOU CARRY BURNS. THE FAR DARK EATS IT. THE LITTLE LIGHTS ARE NOBODY\'S."',
+      'The fourth face has been cut back to bare rock and written on once more: "IT CAME UP. I DID NOT KNOW UNTIL I OPENED MY HANDS WHETHER IT WOULD. WALK WHERE YOU LIKE."',
+    ],
+  ],
+  // The fourth: water, and that a walk only counts once it is home (DESIGN.md
+  // §6). The last of the four and the furthest out, so it is read by somebody
+  // who has already learned it the expensive way.
+  'stone-4': [
+    [
+      'A low stone, half sunk, with the lettering worn shallow on the weather side and sharp on the other.',
+      '"YOUR WATER IS YOUR DISTANCE," it says. "EVERY STEP IS A MOUTHFUL. HALF OF WHAT YOU CARRY IS THE WALK BACK, AND IT IS THE HALF PEOPLE SPEND."',
+      '"A COLOUR RAISES WHAT YOU CAN CARRY THE MOMENT IT IS IN YOUR HAND, AND KEEPS IT RAISED ONCE IT IS HOME. THAT IS THE OTHER THING A COLOUR IS FOR, AND NOBODY IS TOLD IT."',
+      '"GET HOME. A WALK THAT DOES NOT GET HOME DID NOT HAPPEN."',
+    ],
+    [
+      'The half-sunk stone, and the ground around it trodden by nobody.',
+      '"YOUR WATER IS YOUR DISTANCE. A COLOUR MAKES THE TANK DEEPER. GET HOME."',
+      '"YOU HAVE DIED OF THIRST BY NOW, OR YOU HAVE NEARLY," it goes on. "IF YOU DID, WHAT YOU WERE CARRYING IS STILL LYING ON THE TILE YOU LAY DOWN ON. IT KEEPS. NOTHING OUT HERE WANTS IT."',
+    ],
+    [
+      'The low stone, worn on the weather side. The hand on the sharp side is unhurried, which is the thing about it you notice now.',
+      '"YOUR WATER IS YOUR DISTANCE. GET HOME."',
+      '"I AM NOT TRYING TO KILL YOU," it says underneath. "IF I WERE, THE STONES WOULD SAY SOMETHING ELSE, AND THE WELLS WOULD BE FURTHER APART."',
+    ],
+    [
+      'The furthest of the four, half sunk, still telling you to turn around.',
+      '"YOUR WATER IS YOUR DISTANCE. GET HOME."',
+      '"THREE PLACES YOU HAVE WALKED OUT OF," it says. "I CUT THIS BEFORE ANY OF THEM, AND I KNEW WHAT IT WOULD SAY, WHICH IS NOT THE SAME AS KNOWING SOMEBODY WOULD BE STANDING HERE READING IT."',
+    ],
+    [
+      'The last of the four, sunk in ground as dark as it has ever been, which neither of you is going to mention.',
+      '"YOUR WATER IS YOUR DISTANCE. GET HOME."',
+      'And under it, the shallowest cutting on any of the four: "YOU ALWAYS DID. THAT IS THE WHOLE OF WHAT I LEARNED, AND IT TOOK ME EVERYTHING I WAS HOLDING."',
+    ],
+  ],
 };
 
 // --- Panels ------------------------------------------------------------------

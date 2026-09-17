@@ -307,6 +307,16 @@ export function playSignpost() {
   });
 }
 
+// Reading a carved stone: the signpost's knock with the wood taken out of it —
+// lower, shorter and with no ring after it, because what you have walked into
+// is a block of rock somebody dressed flat.
+export function playStone() {
+  play('stone', (a, bus, now) => {
+    note(a, bus, { freq: 120, glide: 96, at: now, duration: 0.11, peak: 0.05, cutoff: 500 });
+    note(a, bus, { freq: 180, at: now + 0.06, duration: 0.09, peak: 0.028, cutoff: 900 });
+  });
+}
+
 // The sun coming back (DESIGN.md §4.9): the one sound in the game that is longer
 // than a second and a half, and the only one that goes up and stays up. Air
 // catching, sweeping the whole way from the bottom of the band to the top, and

@@ -1,6 +1,6 @@
-// The landmarks and the posts, on screen: what a bump into one actually does to
-// the page (DESIGN.md §4.10). Each test drives a fresh page against the real
-// canvas.
+// The landmarks, the posts and the carved stones, on screen: what a bump into
+// one actually does to the page (DESIGN.md §4.10, §4.12). Each test drives a
+// fresh page against the real canvas.
 //
 // What a landmark *is* — where it stands, what it hands over, what survives a
 // world — is pure and lives in `landmarks.test.js`. What is here is the half
@@ -10,16 +10,18 @@
 // the whole of what a campaign has to show for having been there.
 
 import { assert, assertEqual, runIfMain } from './harness.js';
-import { FLASH, SIGNPOST } from '../src/text.js';
+import { FLASH, SAY, SIGNPOST } from '../src/text.js';
 import { getPalette, paletteColour } from '../src/config.js';
 import { landmarkDef } from '../src/data/landmarks.js';
 import { signpostHutBearing, signpostReadings } from '../src/core/world.js';
 import {
   FIRST_POST,
+  FIRST_STONE,
   LANDMARK_ROUTE,
   NEAREST_LANDMARK,
   POST_ROUTE,
   SEED,
+  STONE_ROUTE,
   standingAt,
   test,
   walkPath,
@@ -191,5 +193,76 @@ test('a signpost is read by walking into it, and says which way and how far', as
   assertEqual(post.ground, 'signpost', 'the post is drawn');
   assertEqual(post.paint[0], getPalette().fg, 'with a plain arm, for a place never visited');
 });
+
+// --- Carved stones ------------------------------------------------------------
+//
+// The doorstep stone, five to eight tiles out: the one every campaign walks
+// into on its first expedition (DESIGN.md §4.12). Walked to from the door
+// rather than planted, like the post, because that walk is the claim.
+
+// Reading the panel out block by block, the way the post test does — the
+// panel bakes its own word-wrap into real newlines (src/ui/textPanel.js),
+// which is a rendering detail rather than part of what a block says.
+async function panelBlocks(game) {
+  const blocks = [];
+  for (let taps = 0; taps < 40 && (await game.textPanel()); taps++) {
+    const panel = await game.textPanel();
+    if (panel.done) blocks.push(panel.full.replace(/\n/g, ' '));
+    await game.tapPanel();
+  }
+  return blocks;
+}
+
+test('a carved stone is read by walking into it, and reads what a first world reads', async (game) => {
+  await game.startRun();
+  await walkPath(game, STONE_ROUTE.path);
+
+  const standing = await game.state();
+  await game.tapDpad(STONE_ROUTE.hit);
+  await game.settle();
+  const read = await game.state();
+  assertEqual({ x: read.x, y: read.y }, { x: standing.x, y: standing.y }, 'reading it is a bump');
+  assertEqual(read.stones, [FIRST_STONE.id], 'and the stone is on the read list');
+  assert((await game.sounds()).includes('stone'), 'the rock was heard');
+  assert(read.textPanelOpen, 'the first read gets the panel');
+
+  // A campaign that has finished nothing reads the first cut of it, which is
+  // the one that says what the colours are.
+  assertEqual(await panelBlocks(game), SAY.stone(FIRST_STONE.id, 0), 'the whole of the first cut');
+
+  // Bumped again with no step in between, it is the status line rather than
+  // the panel: nothing has changed since it was last read out.
+  await game.tapDpad(STONE_ROUTE.hit);
+  await game.settle();
+  assertEqual((await game.state()).textPanelOpen, false, 'no second reading of the whole stone');
+  assert(await game.hasText(FLASH.stoneAgain), 'just a line saying so');
+
+  // And it is drawn: its own tile, plain, since a stone has no landmark behind
+  // it to earn a colour from.
+  const tiles = await game.visibleTiles();
+  const stone = tiles.find((t) => t.x === FIRST_STONE.x && t.y === FIRST_STONE.y);
+  assertEqual(stone.ground, 'stone', 'the stone is drawn');
+  assertEqual(stone.tint, getPalette().fg, 'in the plain foreground');
+});
+
+// The same stone, read by a campaign with one kind of world left to finish.
+// What changes is only the words, and the count they are picked off lives in
+// the slot rather than in the run — so this is a page, not a unit.
+const FINISHED_THREE = standingAt(STONE_ROUTE, {
+  back: 1,
+  save: { finished: ['frozen', 'desert', 'mystic'] },
+});
+
+test('what a stone says is how many kinds of world the campaign has finished', async (game) => {
+  await game.startRun();
+  await walkPath(game, FINISHED_THREE.path);
+  await game.tapDpad(STONE_ROUTE.hit);
+  await game.settle();
+
+  const read = await game.state();
+  assertEqual(read.finished.length, 3, 'three kinds of world behind this walk');
+  assert(read.textPanelOpen, 'the stone is read');
+  assertEqual(await panelBlocks(game), SAY.stone(FIRST_STONE.id, 3), 'and it is the fourth cut of it');
+}, { save: FINISHED_THREE.save });
 
 runIfMain(import.meta.url);

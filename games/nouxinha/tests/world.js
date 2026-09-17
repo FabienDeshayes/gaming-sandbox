@@ -27,6 +27,7 @@ import {
   saltOf,
   sanctums,
   signposts,
+  stones,
   wisps,
 } from '../src/core/world.js';
 import { KEYS } from '../src/data/items.js';
@@ -194,6 +195,22 @@ export const POST_ROUTE = bfs(
   (x, y) => {
     const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
       ([, dx, dy]) => x + dx === FIRST_POST.x && y + dy === FIRST_POST.y
+    );
+    return into ? into[0] : null;
+  },
+  40
+);
+
+// The carved stone that stands five to eight tiles from the hut — the one a
+// first expedition cannot miss (`STONE_PLAN` in src/balance.js) — and the walk
+// to its doorstep. Read by bumping, like a post, so the route stops beside it
+// and `hit` is the direction the last input bumps in.
+export const FIRST_STONE = stones(SEED).find((stone) => stone.id === 'stone-1');
+export const STONE_ROUTE = bfs(
+  SEED,
+  (x, y) => {
+    const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(
+      ([, dx, dy]) => x + dx === FIRST_STONE.x && y + dy === FIRST_STONE.y
     );
     return into ? into[0] : null;
   },

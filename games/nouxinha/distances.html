@@ -227,6 +227,7 @@ import {
   sanctums,
   signposts,
   sites,
+  stones,
   wisps,
 } from './src/core/world.js';
 import {
@@ -273,7 +274,7 @@ const inGrid = (x, y) => x >= -GRID && x <= GRID && y >= -GRID && y <= GRID;
 // the ones in balance.js, because the whole point of the page is to know which
 // line to go and edit.
 
-const KIND_ORDER = ['sanctum', 'landmark', 'chest', 'site', 'signpost', 'wisp'];
+const KIND_ORDER = ['sanctum', 'landmark', 'chest', 'site', 'stone', 'signpost', 'wisp'];
 
 function bandOf(plan) {
   if (plan.distance !== undefined) return [plan.distance, plan.distance];
@@ -347,6 +348,21 @@ function entitiesOf(seed) {
       y: s.y,
       band: bandOf(s),
       stall: !s.item,
+    });
+  }
+  // The four carved stones. Drawn with the majors rather than behind the
+  // "posts and wisps" switch: there are four of them, they are the only thing
+  // in the world that is *written to the player*, and the first one's ring is
+  // the tightest in the game (DESIGN.md §4.12).
+  for (const c of stones(seed)) {
+    out.push({
+      id: c.id,
+      kind: 'stone',
+      name: c.id.toUpperCase(),
+      note: 'something he cut for you',
+      x: c.x,
+      y: c.y,
+      band: bandOf(c),
     });
   }
   for (const p of signposts(seed)) {
@@ -689,6 +705,12 @@ function drawMark(ctx, e) {
       ctx.fillStyle = alpha(fg, 0.85);
       ctx.fillText(e.id.toUpperCase(), x + 8, y);
     }
+    return;
+  }
+  // A carved stone: an upright block, which is what it is.
+  if (e.kind === 'stone') {
+    ctx.fillStyle = alpha(fg, 0.8);
+    ctx.fillRect(x - 2, y - 4, 4, 8);
     return;
   }
   if (e.kind === 'signpost') {
@@ -1064,6 +1086,7 @@ function legend() {
     ['◻ ▪', 'a sanctum: its wall, its gem, and the gate in it'],
     ['▭', 'a chest — thick where it holds a key'],
     ['△ ◯', 'a stall · the map and the compass'],
+    ['▮', 'a carved stone, cut before you set out'],
     ['┬', 'a signpost'],
     ['◌', 'a wisp, with the ring it lights on its own'],
     ['░', 'floor, brightest where a dry walk reaches it and comes home'],

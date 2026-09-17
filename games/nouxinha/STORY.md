@@ -113,6 +113,12 @@ altogether.
 **The hut** — one room, a flag, water and a candle, and the only place where what you carry becomes
 yours. Reaching it writes everything down; leaving it takes it back out into the dark.
 
+**A carved stone** — one of four blocks he stood on end and cut, in every part of the realm, before
+any of this. They are the only thing in the dark written *to* the walker: what the colours are, what
+the gates want, what a light costs, and that water is distance. He cut them long ago and he keeps
+them standing, and what they say changes depending on how many countries the person reading them has
+already walked out of — by the fourth he has stopped explaining anything and is just talking.
+
 **A colour** — a piece of the sun, big enough to carry. Three to a country, one behind each sanctum
 gate, each of them a colour that country does not otherwise contain. Banked at the hut, a colour is
 a piece of the world come back: the water runs deeper, the ground gives up better things, and things

@@ -44,13 +44,14 @@ at all, which is the quick way to work on the rules.
 | `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall and which of its five conversations a campaign is having, the water ladder, the sites — merchant, compass, map — and the needle |
 | `landmarks.test.js` | The eight landmarks and the fourteen posts: where they stand, what a touch gives, and which of it survives a world |
 | `wisps.test.js` | The ten wisps: where they stand, that touching one hands back nothing, and that a wisp lights its own clearing whatever the character is carrying |
+| `stones.test.js` | The four carved stones: where they stand and what they keep clear of, that reading one is a post's bump, and that which of its five cuts you read is how many kinds of world the campaign has finished |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, what a cycle in the hall takes and leaves, and which kinds of world a campaign has finished |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | The canvas against a phone, the sheet actually loading, the game's own voice |
 | `ui-explore.test.js` | The controls that walk, and the three visibility states the viewport draws |
 | `ui-items.test.js` | The HUD counters, the item card, and finding a light and burning it |
 | `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, the merchant, the map, a sanctum's colour, a chest's key, the sorcerer and the world he moulds, and the last world finished ending the game in the light |
-| `ui-landmarks.test.js` | Bumping into a landmark and into a post: the panel, the gift, and the colour a standing turns on |
+| `ui-landmarks.test.js` | Bumping into a landmark, a post and a carved stone: the panel, the gift, the colour a standing turns on, and which cut of a stone a campaign reads |
 
 Suites share `tests/world.js` — the seed, the pinned nonce, and every route BFSed out of the real
 world (see below). Pure suites run first in `all.test.js`, so a broken rule fails in a couple of seconds
@@ -295,6 +296,33 @@ nothing to do with where a wisp happens to stand.
 
 No browser test yet covers what a wisp actually draws or the panel it opens on a touch; the split
 would be the same as a landmark's (**What earns a browser test**, above) whenever it is worth adding.
+
+## Testing a carved stone
+
+A stone is a post with different words on it, so `stones.test.js` is deliberately the post's tests
+again — the chest-shaped terrain claims for all four, one BFSed route to the doorstep stone
+(`STONE_ROUTE`/`FIRST_STONE` in `tests/world.js`, built exactly like `POST_ROUTE`), the bump costing
+no water, no durability and no facing, the held-key debounce, and the round trip through `bankRun`
+and `turnCycle`. None of that is where a stone can actually break.
+
+**What is worth its own thinking is the copy, and that it is indexed by something that lives in the
+slot.** Three claims, and they are cheap because the text table is data:
+
+- **The table is whole**: every id in `STONE_PLAN` has an entry in `STONE_TEXT`, five cuts each, every
+  cut a non-empty list of strings. That is the assertion that catches a stone added to the plan and
+  never written, which would otherwise be a blank panel in somebody's third world.
+- **The index is the campaign's**: `SAY.stone(id, n)` hands back the nth cut for every n the table has,
+  and clamps past the end rather than falling off it — a campaign that has finished all four kinds of
+  world and come back keeps reading the last cut.
+- **The count comes off the run, not the stone**: a run created against a save holding three finished
+  biomes reads the fourth cut. `readStone` reports `state.finished.size` and nothing else, so this is
+  where the wiring is checked rather than in the scene.
+
+The two browser claims live in `ui-landmarks.test.js`: that walking into the doorstep stone is a bump
+that opens the panel with the whole first cut in it (and the status line, not the panel, on a bump with
+no step between), and — planted with `finished: ['frozen', 'desert', 'mystic']` in the save — that the
+same stone reads the fourth cut instead. That second one earns a page because `finished` crosses
+between a slot and a run, which is exactly what a browser test is for.
 
 ## Testing the chest-and-key chain
 

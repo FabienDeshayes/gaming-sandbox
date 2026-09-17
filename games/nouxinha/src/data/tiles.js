@@ -150,6 +150,15 @@ export const TILES = {
 
   signpost: [0, 7],
 
+  // A carved stone (DESIGN.md §4.12): an upright block on a broadened foot,
+  // which is the one silhouette in the world that is stone and is standing
+  // rather than lying in the way — a boulder is a mass, this is a thing
+  // somebody stood on end. Not a biome's to repoint, for the landmarks'
+  // reason and not the wisp's: he cut these, the ground did not, and the
+  // same hand cut them in all four worlds. A tile the sheet already had,
+  // standing in until it is drawn for this game (`draw.html`).
+  stone: [19, 6],
+
   // A wisp (DESIGN.md §4.11): the one structure whose sprite a biome *is*
   // expected to repoint (`BIOME_KEYS` below) — unlike a landmark, a wisp
   // carries no identity from world to world, so there is nothing wrong with

@@ -12,11 +12,22 @@
 //
 // Items are deliberately absent. They move every time the world respawns, so a
 // map of them would be a lie by the time it was drawn; what doesn't move is the
-// ground, the hut, the merchant, the chests, the sanctums, the four landmarks
-// and any post that has been read.
+// ground, the hut, the merchant, the chests, the sanctums, the landmarks, the
+// carved stones and the wisps a light has reached, and any post that has been
+// read.
 
 import { FONT, GAME_HEIGHT, GAME_WIDTH, TILE, gemColour, getPalette, hex } from '../config.js';
-import { chests, hall, landmarks, sanctums, signposts, sites, terrainAt, wisps } from '../core/world.js';
+import {
+  chests,
+  hall,
+  landmarks,
+  sanctums,
+  signposts,
+  sites,
+  stones,
+  terrainAt,
+  wisps,
+} from '../core/world.js';
 import { HALL_SEEN, hasStanding, markedLandmarks } from '../core/rules.js';
 import { landmarkDef } from '../data/landmarks.js';
 import { landmarkRole } from './MapView.js';
@@ -270,6 +281,13 @@ export class WorldMap {
     for (const chest of chests(run.seed))
       if (run.seenUnique.has(chest.id))
         mark(chest.x, chest.y, run.chests.has(chest.id) ? 'chest-open' : 'chest', 0);
+    // The carved stones, once a light has actually reached one. Marked like a
+    // chest rather than like a post: a stone is a place you went, not a
+    // direction, and reading one tells you nothing about where anything else
+    // is (DESIGN.md §4.12). Plain, like the wisps — there is no colour here to
+    // earn or withhold.
+    for (const stone of stones(run.seed))
+      if (run.seenUnique.has(stone.id)) markIn(stone.x, stone.y, 'stone', pal.fg);
     // And the wisps, once close enough to have lit their own tile (DESIGN.md
     // §4.11). No colour of their own to earn or withhold — every one of them
     // is plain the moment it is marked at all.

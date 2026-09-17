@@ -39,6 +39,8 @@ import {
   signpostTargets,
   signposts,
   sites,
+  stoneAt,
+  stones,
   uniqueAt,
   wispAt,
   wisps,
@@ -208,6 +210,10 @@ export function createRun(seed, save = loadSave(), nonce, options = {}) {
     // landmark, and the one thing besides `cycles` that survives the hall.
     landmarks: new Set(banked.landmarks),
     posts: new Set(banked.posts),
+    // The carved stones read in **this** world, on the posts' terms exactly
+    // (DESIGN.md §4.12): what a stone says depends on the campaign, but which
+    // of them have been read is the world's, and goes when the world does.
+    stones: new Set(banked.stones),
     // Wisps touched in **this** world, on the same terms as the landmarks and
     // posts above: no gift, no standing, so nothing about a wisp survives the
     // hall taking the world with it.
@@ -326,6 +332,10 @@ function applyCheats(state) {
   // And every wisp, so a sandbox run's map already shows where all ten of
   // this world's small lights are standing.
   for (const wisp of wisps(state.seed)) state.seenUnique.add(wisp.id);
+  // And every carved stone, marked but not read: a cheat run holds three of
+  // the four kinds of world finished (below), so walking to one is the way to
+  // look at the late cut of what it says (DESIGN.md §4.12).
+  for (const stone of stones(state.seed)) state.seenUnique.add(stone.id);
   for (const standing of STANDINGS) state.standings.add(standing);
   // Filled after the standings rather than before them: one of those standings
   // is what widens the tank, so a cheat run that set out first would set out
@@ -683,6 +693,34 @@ export function readSignpost(state, post) {
   };
 }
 
+// --- Carved stones -------------------------------------------------------
+//
+// A stone is read exactly as a post is: bumped into, the panel on a fresh read
+// and the status line on a bump with no step in between. The one thing that is
+// its own is *which* of the things cut into it you are being shown, and that is
+// not about the stone at all — it is how many kinds of world this campaign has
+// already finished (DESIGN.md §4.12). He cut them long before this walk; what
+// changes is who is standing in front of them.
+
+// The carved stone standing on a tile, and whether this world has already had
+// it read, or null where there is no stone there.
+export function stoneOnTile(state, x, y) {
+  const at = stoneAt(x, y, state.seed);
+  if (!at || at.part !== 'site') return null;
+  return { stone: at.stone, read: state.stones.has(at.stone.id) };
+}
+
+// Reading a stone. Like a post, nothing about what it says is stored — the
+// words are src/text.js's and which of them is `finished`'s, so all this writes
+// down is that this world has had it read. `finished` is handed back rather
+// than looked up again by the scene: core/ knows the number, and text.js knows
+// what to do with it.
+export function readStone(state, stone) {
+  const first = !state.stones.has(stone.id);
+  state.stones.add(stone.id);
+  return { first, finished: state.finished.size };
+}
+
 // --- Wisps ---------------------------------------------------------------
 //
 // A wisp is bumped into exactly like a chest, a landmark or a post, and it is
@@ -748,6 +786,10 @@ function noteSeen(state, lit) {
     if (litKeys.has(tileKey(landmark.x, landmark.y))) state.seenUnique.add(landmark.id);
   for (const chest of chests(state.seed))
     if (litKeys.has(tileKey(chest.x, chest.y))) state.seenUnique.add(chest.id);
+  // A carved stone is marked the same way a chest is: once a light has
+  // actually reached it, and never before.
+  for (const stone of stones(state.seed))
+    if (litKeys.has(tileKey(stone.x, stone.y))) state.seenUnique.add(stone.id);
   // A wisp is marked the same way — and since every wisp's own light always
   // reaches its own tile (`wispLitTiles` below), every wisp in the world is
   // seen, and on the map, from the very first reveal.
@@ -966,6 +1008,17 @@ export function step(state, direction) {
         fresh: bumpAgain(state, 'signpost', post.post.id),
         ...readSignpost(state, post.post),
       };
+    // And walking into a carved stone is how you read it (DESIGN.md §4.12) —
+    // the post's bump exactly, down to the debounce a held key gets.
+    const stone = stoneOnTile(state, nx, ny);
+    if (stone)
+      return {
+        moved: false,
+        reason: 'stone',
+        stone: stone.stone.id,
+        fresh: bumpAgain(state, 'stone', stone.stone.id),
+        ...readStone(state, stone.stone),
+      };
     // And walking into a wisp is how you put a hand on it (DESIGN.md §4.11) —
     // a bump like the rest of them, and the only one that hands nothing back.
     const wisp = wispOnTile(state, nx, ny);
@@ -1135,6 +1188,10 @@ function writeDeposit(state, closing) {
     // here by nothing at all: `turnCycle` carries them over by hand.
     landmarks: [...state.landmarks],
     posts: [...state.posts],
+    // And the carved stones read in this world, banked on the posts' terms
+    // too — what a stone told you is the campaign's, but having read it is
+    // this world's (DESIGN.md §4.12).
+    stones: [...state.stones],
     // The wisps put a hand on in this world, banked on exactly the posts'
     // terms — they carry nothing else to bank (DESIGN.md §4.11).
     wisps: [...state.wisps],
@@ -1377,6 +1434,7 @@ export function suspendRun(state) {
       chests: [...state.chests],
       landmarks: [...state.landmarks],
       posts: [...state.posts],
+      stones: [...state.stones],
       wisps: [...state.wisps],
       standings: [...state.standings],
       inventory: state.inventory.map((light) => ({ ...light })),
@@ -1425,6 +1483,7 @@ export function resumeRun(save = loadSave()) {
     chests: new Set(suspended.chests),
     landmarks: new Set(suspended.landmarks),
     posts: new Set(suspended.posts),
+    stones: new Set(suspended.stones),
     wisps: new Set(suspended.wisps),
     standings: new Set(suspended.standings),
     // Not part of what a suspended walk writes down: finishing a world is

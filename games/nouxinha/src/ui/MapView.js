@@ -40,6 +40,15 @@ import { biomeKey, variantKey, wallSprite } from '../data/tiles.js';
 import { makePainted, paintTile } from './painted.js';
 import { makeWizard, paintWizard } from './wizard.js';
 
+// The terrains that draw one sprite with nothing to look up: the man in the
+// hall, and a carved stone (DESIGN.md §4.9, §4.12). Every other standing thing
+// on a tile has a question behind it — which landmark, which post, whether a
+// lid is up, and so what colour it is wearing — and these two have none: a
+// stone is the one bumped thing that never earns a colour, having no landmark
+// behind it to earn one from. Neither is a biome's to repoint either: the
+// sorcerer is the same man in every world, and the stones are the same hand.
+const FIXED_SPRITE = { sorcerer: 'sorcerer', stone: 'stone' };
+
 // Which piece of the wall nine-slice a sanctum's ring tile draws. The ring is a
 // square one tile thick, so where a tile sits on it is enough — no need to look
 // at what its neighbours are, which would not tell a top run from a bottom one
@@ -213,8 +222,8 @@ export class MapView {
               ? 'signpost'
               : wisp
                 ? biomeKey('wisp', biome)
-                : terrain === 'sorcerer'
-                  ? 'sorcerer'
+                : FIXED_SPRITE[terrain]
+                  ? FIXED_SPRITE[terrain]
                   : terrain === 'rock' || terrain === 'tree'
                     ? variantKey(terrain, variantAt(wx, wy, run.seed), biome)
                     : terrain === 'wall'

@@ -491,6 +491,44 @@ export const SIGNPOST_SPACING = 10;
 // isn't the one a post was assigned (see `SIGNPOST_PLAN` above).
 export const SIGNPOST_BANDS = [15, 40, 80];
 
+// --- Carved stones ------------------------------------------------------------
+//
+// Four per world, and the one thing in the dark that is *addressed to you*. A
+// signpost is somebody's directions and a landmark is somebody's building; a
+// carved stone is Nouxinha's own hand, cut before you set out and left where a
+// walk will run into it, because the man who takes your world off you every
+// time you finish one would also rather you knew how it worked (DESIGN.md
+// §4.12).
+//
+// Mechanically a stone is a post: one tile, blocking a step and never a light,
+// bumped into and read, remembered for this world and dropped with it. What is
+// different is only what it says — lore rather than a bearing, and a different
+// cut of it depending on how many kinds of world this campaign has already
+// finished (`STONE_TEXT` in src/text.js).
+//
+// The first stands where the opening walk cannot miss it, just outside the
+// hut's clearing, and it is the one that says what the colours are — which is
+// the only thing a first expedition actually has to be told. The other three
+// stand inside ring 50: far enough out to be found in the order a campaign
+// naturally pushes, near enough that every one of them is inside a fresh tank's
+// round trip: STARTING_WATER carries 200 steps, and the walk out to ring 50
+// measures about 67 of them in the median world (95 in the awkward tenth, where
+// a rock mass has sent the route the long way round — `distances.html`). A stone
+// nobody can afford to read is a stone nobody reads.
+export const STONE_PLAN = [
+  { id: 'stone-1', near: 5, span: 4 },
+  { id: 'stone-2', near: 18, span: 7 },
+  { id: 'stone-3', near: 30, span: 8 },
+  { id: 'stone-4', near: 42, span: 9 },
+];
+
+// How much room a stone needs. He cut them to be come across on the way to
+// something, not to stand in its doorway — so they keep clear of the landmark
+// courts and the posts, and further still from each other, since four stones in
+// a huddle would be one stone with four things written on it.
+export const STONE_CLEARANCE = 6;
+export const STONE_SPACING = 14;
+
 // --- Wisps ----------------------------------------------------------------
 //
 // Ten of them per world, and the answer to one thing a chest, a landmark and

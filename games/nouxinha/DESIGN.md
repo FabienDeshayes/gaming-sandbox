@@ -78,7 +78,7 @@ A light shape is defined relative to the character's tile, and — for the lamp 
 facing. What the shape says is how far the light *reaches*; what it shows is that minus whatever it
 cannot see round.
 
-**Rock, trees and masonry cast shadow; a chest, the sorcerer, a landmark, a signpost and a wisp never do.** A tile inside the shape is lit only if a
+**Rock, trees and masonry cast shadow; a chest, the sorcerer, a landmark, a signpost, a carved stone and a wisp never do.** A tile inside the shape is lit only if a
 straight line reaches it from the character's tile without crossing something solid — and what counts
 as solid is the *shape of the world*, not everything that blocks a step. A chest (§4.8) stops a step
 and stops nothing else, because a box you could hide behind would read as a wall wearing a lid; the
@@ -144,7 +144,7 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
 
 | Layer | Depends on | Holds |
 |---|---|---|
-| **Terrain** | `(x, y, seed)` | Floor, rock in two formations, groves of trees, the built walls, gates and clearings, the eight landmarks and fourteen posts set into it (§4.10), and the ten wisps (§4.11). The same every run, forever. |
+| **Terrain** | `(x, y, seed)` | Floor, rock in two formations, groves of trees, the built walls, gates and clearings, the eight landmarks and fourteen posts set into it (§4.10), the four carved stones (§4.12), and the ten wisps (§4.11). The same every run, forever. |
 | **Unique objects** | `(x, y, seed)` | The three gems, the three merchants, the nine chests, and one compass and one map lying out in the dark. Also the same every run — walk back next time and they are where you left them. |
 | **Consumables** | `(x, y, seed, salt)` | Coins, water and lights. The salt changes every run and every respawn, so these are never twice in the same places. |
 
@@ -1081,6 +1081,75 @@ far for.
 | `src/text.js` | `SAY.wisp`, `FLASH.wispAgain` |
 | `src/ui/MapView.js` / `src/ui/worldMap.js` | drawing the tile, and marking it once it has been lit |
 
+### 4.12 Carved stones
+
+**Four per world, and the only thing in the dark addressed to you.** A signpost is the world's own
+signage and a landmark is somebody's building; a carved stone is Nouxinha's own hand — a block stood
+on end, dressed flat on one face and cut deep enough to read with a hand, left standing where a walk
+will run into it. He takes your world off you every time you finish one, and he would also rather you
+knew how it worked. Both of those are true at once, and the stones are where the game says so.
+
+Mechanically a stone **is a signpost** (§4.10.7), down to the debounce: one tile, blocking a step and
+never a light, bumped into rather than stepped on, the panel on a fresh read and the status line on a
+bump with no step in between, remembered for this world and dropped with it. Nothing about the
+placement machinery is new. What is new is only what it says.
+
+- **Each stone is about one thing the game does not otherwise explain.** The first is the colours and
+  what the gates actually want; the second the keys, the boxes and the named places they stand beside;
+  the third what a light costs and what the far dark does to it; the fourth that water is distance and
+  that a walk which doesn't get home didn't happen. They are the four things a player otherwise learns
+  by losing an hour to each.
+- **Every stone is cut five ways, and which one you read is how many kinds of world this campaign has
+  finished** (`state.finished`, the same count the hall reads, §4.9). Nought is a stranger who may not
+  know what a colour is for; one is somebody who has done it once; by three he is admitting what the
+  arrangement between you actually is, and by four — a campaign that has walked every kind of world he
+  has and watched him let go — the instructions are no use to either of you and he cuts something else
+  underneath them instead. The stone is the same stone every time. What changes is who is standing in
+  front of it. A campaign past the end of the table keeps reading the last cut.
+- **There is a set of them in every world, cut by the same hand, and the copy says so.** You walk out of
+  a new hut and the four stones are standing there too. That is the one thing about the cycle the
+  stones are allowed to notice, and it is how the game says he keeps doing this on purpose — an hour's
+  work apiece, and he has nothing but hours (`STORY.md`).
+- **Where the four stand.** The first on the doorstep, five to eight tiles out (`STONE_PLAN` in
+  `src/balance.js`), so a first expedition cannot miss it and the thing it cannot miss is the one that
+  says what the colours are. The other three inside ring 50 — 18-24, 30-37 and 42-50 — which is the ring
+  a fresh tank can reach and walk back from. A ring is not a walk — the ground makes it about half again
+  as long — so the furthest stone measures about 67 steps out in the median world and 95 in the awkward
+  tenth, against a fresh tank of 200: comfortably a round trip nearly everywhere, and a walk worth
+  planning where the rock has gone against you. A stone nobody can afford to read is a stone nobody
+  reads (`distances.html` is where that was measured). Each keeps six tiles clear of the landmark courts
+  and the posts and fourteen from the other stones, because he cut them to be come across on the way to
+  something rather than to stand in its doorway.
+- **Like a signpost and a wisp, a stone is placed rather than forced**: `pickSeed` never rejects a seed
+  over one that found nowhere to stand. Three stones say three quarters of what four say, where a
+  landmark nobody can reach is a hole in the world. (In practice the sweep finds all four in every seed
+  tried.)
+- **It never wears a colour.** A post's arm is painted in the colour of the landmark it names; a stone
+  has no landmark behind it to earn one from, so it is drawn in the plain foreground for the whole
+  campaign, and is the only standing thing in the world that never changes colour. Its sprite is not a
+  biome's to repoint either, for the landmarks' reason rather than the wisps': the ground did not cut
+  these, and the same hand cut them in all four worlds.
+- **What it remembers belongs to the world**, on exactly the posts' terms: `stones` in the save is which
+  of them this world has had read, banked at the hut with the landmarks, the posts and the wisps, and
+  dropped with the ground the moment the hall moulds it again (§4.9). There is no standing here — what a
+  stone told you is already yours, and it is not the kind of thing a save can take back.
+- **On the map**, a stone is marked like a chest rather than like a post: once a light has actually
+  reached it, and never before. Reading one tells you nothing about where anything else is, so there is
+  nothing for it to pin. **The compass ignores them**, for the landmarks' reason (§4.10.8) and one of
+  their own: a stone is something you come across on the way somewhere, and four more targets on a
+  needle that already has the gems, the chests and the stalls to name would cost the needle more than
+  the stones would gain.
+
+| Path | Holds |
+|---|---|
+| `src/balance.js` | `STONE_PLAN`, `STONE_CLEARANCE`, `STONE_SPACING` |
+| `src/core/world.js` | `buildStones`, `stones()`, `stoneAt()`, and the `'stone'` terrain |
+| `src/core/rules.js` | `stoneOnTile`, `readStone`, and the `stones` set on the run |
+| `src/data/tiles.js` | the `stone` sprite, shared by all four worlds |
+| `src/text.js` | `STONE_TEXT` — four stones, five cuts each — plus `SAY.stone` and `FLASH.stoneAgain` |
+| `src/ui/MapView.js` / `src/ui/worldMap.js` | drawing the tile, and marking it once it has been lit |
+| `tests/stones.test.js` | the rules, pure; `tests/ui-landmarks.test.js` has the two claims that need a browser |
+
 ## 5. Constraints
 
 - One light active at a time. Light and water are the two consumables — no food yet (§12), no timer.
@@ -1118,7 +1187,7 @@ opposite.
 
 The one thing that outlives a run regardless is the ground it lit — cartography is not progress.
 
-- There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, the keys held, which chests have been opened, which landmarks have been stood at and which posts read in this world, the standings the campaign keeps out of them (§4.10), banked coins, runs completed, worlds ended in the hall (§4.9), the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, which unique objects have been seen (§4.6), and — when the cogwheel menu has saved one — the expedition the campaign is in the middle of. They live in `localStorage` and are the only state that outlives a run.
+- There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, the keys held, which chests have been opened, which landmarks have been stood at, which posts read and which carved stones read in this world (§4.10, §4.12), the standings the campaign keeps out of them (§4.10), banked coins, runs completed, worlds ended in the hall (§4.9), the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, which unique objects have been seen (§4.6), and — when the cogwheel menu has saved one — the expedition the campaign is in the middle of. They live in `localStorage` and are the only state that outlives a run.
 - **A run belongs to a slot before it starts.** The title screen offers **NEW GAME** and **LOAD GAME**, and both go through the slot picker: new empties the slot it is pointed at and starts a campaign there, load carries one on. The slot picked stays active, so a run banks itself without ever having to be told which campaign it is (§7). A slot holding a saved expedition says so on its row, because that is the difference between the two things **LOAD GAME** can do: set out from the hut again, or carry on from wherever you stopped. A used row also names the kind of world that campaign walks (§4.3), which is the one thing on it that is about the ground rather than about the walking — three slots read as three places rather than three numbers.
 - **Reaching the hut** is the only thing that banks, and it banks the moment the tile is stepped on. Dying of thirst banks nothing, and leaving by the menu's **EXIT GAME** abandons the run and banks nothing either — so a gem picked up but never carried back is still sitting in its sanctum next run, a compass bought but never carried back is still on the merchant's shelf, with the coins still in the bank, and a landmark stood at but not walked home from is one this campaign has never stood at (§4.10). What those two cost is always and only the walk *since the hut was last stood on*. Leaving asks before it does it, since an abandoned expedition can't be got back.
 - **Dying leaves a bag rather than simply losing everything.** The tile the run was standing on when the water ran out holds everything that run hadn't banked — coins, gems, keys, tools, every light in the inventory — the way a chest does: its own bit of terrain, walked into rather than onto, opened by the bump (§4.8). A later expedition out of the same slot can walk back to it and take all of it up again, at which point it is exactly like any other pickup — only real once carried home. It belongs to the slot, not the world the seed draws, so it is tied to the seed it was dropped in: **EXIT GAME**'s campaign keeps it, a fresh **NEW GAME** overwrites it, and the world the hall moulds next (§4.9) leaves it behind for good, since neither has a tile that used to be that spot.
@@ -1139,7 +1208,7 @@ The one thing that outlives a run regardless is the ground it lit — cartograph
 
 A developer switch in Settings, off by default, for looking at what the late game actually does without a campaign's worth of walking behind it.
 
-- A run started with cheats on opens with **the ground revealed out to 130 tiles** (`CHEAT_REVEAL_RADIUS`) — well past the fourth sanctum's wall at 117 though short of the rim, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **all three keys** so every gate stands open, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust. It also holds **every standing** (§4.10) — one of which widens the tank past what three gems alone can — and has laid eyes on every gem, site, chest, landmark and wisp, so the map opens coloured and complete the way a campaign several cycles in would. The chests and the landmarks themselves are left untouched, so a sandbox for looking at the late game still has something to walk to.
+- A run started with cheats on opens with **the ground revealed out to 130 tiles** (`CHEAT_REVEAL_RADIUS`) — well past the fourth sanctum's wall at 117 though short of the rim, drawn as remembered ground, exactly the way a long campaign would have left it — **all three colours recovered**, **all three keys** so every gate stands open, **one of every light** (the beacon lit, since it burns longest), **both tools**, the full water ceiling, and a purse the merchant cannot exhaust. It also holds **every standing** (§4.10) — one of which widens the tank past what three gems alone can — and has laid eyes on every gem, site, chest, landmark, carved stone and wisp, so the map opens coloured and complete the way a campaign several cycles in would. The chests and the landmarks themselves are left untouched, so a sandbox for looking at the late game still has something to walk to.
 - **A cheat run writes nothing at all.** It banks no progress at the hut, it cannot be saved mid-walk from the menu (which says so instead of writing), and it does not even keep its ground, because a run that was *handed* three gems is not a campaign and must never overwrite one. The toggle says so on itself, the title screen says so under the character, and the recap says so instead of listing what is being carried home.
 - **A cheat run opens at the end of the game.** The late game is now the ending (§4.9), so a sandbox is handed the other three kinds of world already finished: walk it into the hall carrying the three colours it started with and the sorcerer opens his hands. Like everything else a cheat run does, it writes no campaign.
 - **INVERT COLOURS lives here**, under the cheats and on screen exactly while they are on — it is the same kind of thing they are, a way of looking at the game rather than a way of playing it, and it is the colours the ending is read in (§4.9) available on demand. It draws the whole game inside out — the same two colours the other way round — and turning the cheats off turns it off with them, because a screen drawn inside out with nothing on it to undo that would be a trap rather than a setting.
@@ -1248,6 +1317,7 @@ have nothing left to do and are skipped.
 - The hall at 110: the sorcerer standing in the fourth sanctum, the conversation, and the cycle it turns — a new world in the same slot, the colours, the ground, the purse and both tools taken, the standings and the kinds of world finished kept, and a counter of worlds ended in the HUD and on the slot's row (§4.9)
 - Eight landmarks per world — seven that stand in every world, four of them with a chest apiece, and one more that only this kind of world has and that pays nothing but a piece of what this ground was — plus fourteen signposts pointing at the seven (some naming two, and all gesturing cryptically at the hut), and the standings a campaign keeps out of them through every world after (§4.10)
 - Ten wisps per world: lights with nobody carrying them, lit and mapped from the first reveal whatever the run holds, so a blackout walk has somewhere to aim (§4.11)
+- Four carved stones per world, read like signposts and written like letters: the colours, the keys, the light and the walk home, each cut five ways by how many kinds of world the campaign has finished (§4.12)
 - Three save slots, picked through NEW GAME / LOAD GAME, banked by reaching the hut whether or not the expedition ends there, with progress on the title screen and a slot erased by starting a new game over it
 - Explored ground carried between runs however a run ends, so a campaign never starts from black again (§6.1)
 - A cheat toggle in Settings that opens a run on the whole map with one of everything, and banks nothing (§6.2)
@@ -1260,7 +1330,7 @@ have nothing left to do and are skipped.
 **Nice to have (only after MVP works):**
 - Light falloff — an outer ring at partial brightness instead of a hard edge
 - More light sources (something that lights a fixed radius around a *dropped* point, a one-shot flare that reveals a wide area for one step)
-- More built things in the terrain generator: the sanctums, the landmarks, the posts, the chests, the wisps and the merchant's stall are what there is, and the ground between them is still pure noise
+- More built things in the terrain generator: the sanctums, the landmarks, the posts, the stones, the chests, the wisps and the merchant's stall are what there is, and the ground between them is still pure noise
 - Screen-shake-free CRT dressing: scanline overlay, phosphor bloom on the lit ring
 
 **Explicitly out of scope:**
@@ -1442,7 +1512,7 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
 - **Sprites are coordinates on one sheet.** `src/data/tiles.js` names a **(col, row)** of `assets/tiles.png` per sprite key; the tile is cut out as a 1-bit mask at boot, baked into a white texture and tinted at draw time. One image, no image editor to repoint a sprite, no build step — and one texture set serves all four palettes.
 
 - **Explored-tile storage:** a `Set` of `"x,y"` keys for tiles ever lit. Terrain and items are re-derived from the seed on demand, so nothing else about the world needs storing. A run additionally keeps only what the recap reports plus the water level: the coin count, the current water, the gem count, the keys held, the chests opened, the two tools, the high-water mark of distance from the base, and a tally of what it has picked up — and, per epoch, the set of consumable tiles it has emptied, which a respawn simply clears. That short list is exactly what a suspended expedition writes into its slot (§6.1), run-length encoded the same way the explored set is: saving a run is describing it, never copying a world.
-- **The structures are derived, then memoised.** Placing four sanctums, eight landmarks, five sites, nine chests, fourteen posts and ten wisps costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same fifty. They are placed onto one claimed list, in the order each needs: the landmarks take their eighths of the rose first, because they are the most constrained and everything else is placed against them; then the sites; then the chests, four of which want a landmark to stand beside; then the posts, which have to keep their distance from every landmark there is; and last the wisps. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.
+- **The structures are derived, then memoised.** Placing four sanctums, eight landmarks, five sites, nine chests, fourteen posts, four carved stones and ten wisps costs trig plus a bounded flood probe each, and `terrainAt` asks where they are on *every* tile lookup, so they're worked out once per seed and cached. The cache is a derivation, not world state: nothing in it is authored, and a given seed always produces the same fifty-four. They are placed onto one claimed list, in the order each needs: the landmarks take their eighths of the rose first, because they are the most constrained and everything else is placed against them; then the sites; then the chests, four of which want a landmark to stand beside; then the posts, which have to keep their distance from every landmark there is; and last the stones and the wisps, the two things a world may go without. Placement deliberately reads the noise terrain directly rather than `terrainAt`, because asking `terrainAt` where a sanctum can go would ask where the sanctums are.
 - **Nothing draws the world's own shape but the page that was built to.** The structures are forty-four numbers spread over six plans, and the only way to see whether they add up to a walk is to walk them: `distances.html` derives a world exactly as a run does (`pickSeed`, then the same structures), floods the ground once out of the hut door with every gate open — a byte a tile and one breadth-first pass, about eighty milliseconds — and reads every distance off that one fill. Sampling a run of worlds is the same work repeated, which is why it is a button rather than something the page does on the way in. It imports `core/world.js`, `balance.js` and `config.js` and nothing else; there is no Phaser on it and no state in it.
 - **The consumable scatter is thrown, then thinned, then memoised.** A tile asks its lattice cell whether a candidate lands there, and a candidate is crowded out only by a same-kind conflict that *itself* landed — resolved by a short recursion that only ever walks to higher-priority candidates, so it terminates. Dropping every candidate that merely has a stronger neighbour would keep only local maxima and thin the world to a third of what the separation rule actually allows. The recursion is memoised per (seed, salt, gems); a respawn moves the salt, and old memos are dropped wholesale because the cache is a speed-up and never state. A full viewport repaint costs about a tenth of a millisecond.
 - **Run-start cost.** `pickSeed` flood-fills for the base pocket check and again out past the furthest sanctum for the reachability check — about 90ms in total on this machine, paid once, during a scene transition. That second fill short-circuits as soon as it has reached every door, site, landmark and chest, and never runs at all for a seed the cheaper pocket check has already rejected. Roughly one seed in ten is bumped, about three in five of those by the pocket check.

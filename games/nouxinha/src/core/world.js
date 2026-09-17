@@ -58,6 +58,9 @@ import {
   SIGNPOST_SPACING,
   SITE_PLAN,
   SPAWN_CHANCE,
+  STONE_CLEARANCE,
+  STONE_PLAN,
+  STONE_SPACING,
   WISP_PLAN,
 } from '../balance.js';
 import { BIOME_IDS } from '../data/biomes.js';
@@ -82,6 +85,7 @@ const CH_LANDMARK = 12;
 const CH_SIGNPOST = 13;
 const CH_RICHNESS = 14;
 const CH_WISP = 15;
+const CH_STONE = 16;
 const CH_HOARD = 20; // + one per kind in a sanctum's cache
 const CH_SCATTER = 40; // + four per consumable kind
 
@@ -575,6 +579,49 @@ function buildSignposts(seed, built, taken) {
   }).filter(Boolean);
 }
 
+// --- Carved stones --------------------------------------------------------------
+//
+// Four per world (balance.js `STONE_PLAN`), placed exactly like the posts and
+// differing from them in nothing a tile lookup can see: a stone is one tile you
+// bump into and read, it stops a step and never a light, and it stores nothing
+// about itself. What it says is `STONE_TEXT` in src/text.js, picked off how many
+// kinds of world the campaign has already finished — so where a post is worked
+// out from where it stands, a stone is worked out from how far along the
+// campaign reading it is (DESIGN.md §4.12).
+//
+// The first one is the doorstep stone at ring 5-8 and is the reason the ring is
+// that short: a campaign that has never played this game walks into it on its
+// first expedition and is told what the colours are.
+
+function buildStones(seed, built, taken) {
+  return STONE_PLAN.map((plan, i) => {
+    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_STONE) * plan.span);
+    const base = randomAt(i + 1, 0, seed, CH_STONE) * Math.PI * 2;
+    // Clear of the landmark courts and the posts, because a stone is meant to
+    // be come across on the way to something rather than to stand in its
+    // doorway, and further still from the other stones.
+    const apart = (t) =>
+      t.kind === 'stone'
+        ? STONE_SPACING
+        : t.kind === 'landmark' || t.kind === 'signpost'
+          ? STONE_CLEARANCE
+          : 0;
+
+    for (const delta of HEADING_SEARCH) {
+      const spot = ringPoint(distance, base + delta * Math.PI * 2);
+      if (spotIsClear(spot, seed, built, taken, { apart })) {
+        claim(taken, spot, 1, 'stone');
+        return { ...plan, index: i, x: spot.x, y: spot.y };
+      }
+    }
+    // Nothing in the sweep worked. Like a signpost and a wisp, a stone is
+    // placed rather than forced — three stones say three quarters of what four
+    // say, where a landmark nobody can reach is a hole in the world — so
+    // `pickSeed` never sees this one.
+    return null;
+  }).filter(Boolean);
+}
+
 // --- Wisps ---------------------------------------------------------------------
 //
 // Ten small, self-lit motes scattered through the dark (balance.js
@@ -671,8 +718,10 @@ function structures(seed = DEFAULT_SEED) {
   // apron. The order is what each one needs to know: the landmarks take their
   // quarters first, because they are the most constrained thing in the world
   // and the chests and posts are placed *against* them; then the sites, then
-  // the chests — four of which want a landmark to stand beside — and last the
-  // posts, which have to keep their distance from every landmark there is.
+  // the chests — four of which want a landmark to stand beside — and then the
+  // posts, which have to keep their distance from every landmark there is. The
+  // stones and the wisps come last because they are the two things a world may
+  // go without: neither is ever forced, so both take what is left.
   const taken = [];
   const marks = buildLandmarks(key, built, taken);
   const world = {
@@ -681,6 +730,7 @@ function structures(seed = DEFAULT_SEED) {
     sites: buildSites(key, built, taken),
     chests: buildChests(key, built, taken, marks),
     signposts: buildSignposts(key, built, taken),
+    stones: buildStones(key, built, taken),
     wisps: buildWisps(key, built, taken),
   };
   structureCache.set(key, world);
@@ -705,6 +755,10 @@ export function signposts(seed = DEFAULT_SEED) {
 
 export function chests(seed = DEFAULT_SEED) {
   return structures(seed).chests;
+}
+
+export function stones(seed = DEFAULT_SEED) {
+  return structures(seed).stones;
 }
 
 export function wisps(seed = DEFAULT_SEED) {
@@ -859,6 +913,17 @@ export function signpostHutBearing(post) {
   return signpostBearing(post, { x: BASE_X, y: BASE_Y });
 }
 
+// Which carved stone a tile belongs to: the stone's own tile, or the
+// forced-floor apron round it that keeps it readable from every side.
+export function stoneAt(x, y, seed = DEFAULT_SEED) {
+  for (const stone of stones(seed)) {
+    const d = chebyshev(x, y, stone.x, stone.y);
+    if (d === 0) return { stone, part: 'site' };
+    if (d === 1) return { stone, part: 'apron' };
+  }
+  return null;
+}
+
 // Which wisp a tile belongs to: the wisp's own tile, or the forced-floor apron
 // around it that keeps it approachable whatever the noise did.
 export function wispAt(x, y, seed = DEFAULT_SEED) {
@@ -906,6 +971,8 @@ export function terrainAt(x, y, seed = DEFAULT_SEED) {
   if (mark) return mark.part === 'site' ? 'landmark' : 'floor';
   const post = signpostAt(x, y, seed);
   if (post) return post.part === 'site' ? 'signpost' : 'floor';
+  const stone = stoneAt(x, y, seed);
+  if (stone) return stone.part === 'site' ? 'stone' : 'floor';
   const wisp = wispAt(x, y, seed);
   if (wisp) return wisp.part === 'site' ? 'wisp' : 'floor';
   if (siteAt(x, y, seed)) return 'floor'; // the merchant, a tool on the ground, and their aprons
@@ -932,10 +999,10 @@ export function isWalkable(x, y, seed = DEFAULT_SEED) {
 
 // The terrains a light goes straight past: open ground, and the things that
 // *stand* on it rather than being part of the world's shape — a chest, the
-// sorcerer, a landmark, a signpost and a wisp. Every one of them is walked
-// into rather than onto, and every one of them would be a wall with a name on
-// it if it cast a shadow.
-const SEE_PAST = new Set(['floor', 'chest', 'sorcerer', 'landmark', 'signpost', 'wisp']);
+// sorcerer, a landmark, a signpost, a carved stone and a wisp. Every one of
+// them is walked into rather than onto, and every one of them would be a wall
+// with a name on it if it cast a shadow.
+const SEE_PAST = new Set(['floor', 'chest', 'sorcerer', 'landmark', 'signpost', 'stone', 'wisp']);
 
 // What stops a light rather than a step (DESIGN.md §4.1). Rock, trees and
 // masonry all stop one dead; a gate stops it only while it is shut, so the key
@@ -1168,14 +1235,15 @@ export function coinValue(x, y, seed = DEFAULT_SEED, salt = 0) {
 
 // Ground a consumable can lie on. Sanctum clearings are excluded because they
 // have their own rule below, and the base, the sites, the landmark courts and
-// the chest and signpost aprons because they are places to arrive at, not to
-// loot.
+// the chest, signpost, stone and wisp aprons because they are places to arrive
+// at, not to loot.
 function spawnable(x, y, seed) {
   if (chebyshev(x, y, BASE_X, BASE_Y) <= BASE_CLEARING) return false;
   if (sanctumAt(x, y, seed)) return false;
   if (siteAt(x, y, seed)) return false;
   if (landmarkAt(x, y, seed)) return false;
   if (signpostAt(x, y, seed)) return false;
+  if (stoneAt(x, y, seed)) return false;
   if (wispAt(x, y, seed)) return false;
   if (chestAt(x, y, seed)) return false;
   return noiseTerrain(x, y, seed) === 'floor';

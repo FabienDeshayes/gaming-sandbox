@@ -75,6 +75,7 @@ import {
   playLandmark,
   playPickup,
   playSignpost,
+  playStone,
   playTap,
   playTorch,
   playUnlock,
@@ -524,6 +525,8 @@ export class ExploreScene extends Phaser.Scene {
       // are worth more than a bump.
       if (result.reason === 'landmark') this.touchedLandmark(result);
       if (result.reason === 'signpost') this.readPost(result);
+      // And walking into a carved stone is how you read it (DESIGN.md §4.12).
+      if (result.reason === 'stone') this.readStone(result);
       if (result.reason === 'wisp') this.touchedWisp(result);
       // And walking into the sorcerer is how you talk to him (DESIGN.md §4.9).
       // The bump still plays — he is standing in the way like anything else —
@@ -666,6 +669,25 @@ export class ExploreScene extends Phaser.Scene {
       const hutLine = SIGNPOST.hutHint(SIGNPOST.bearings[result.hutBearing]);
       this.textPanel.show(SAY.signpost(lines, hutLine));
     } else this.hud.flash(FLASH.signpost(lines));
+  }
+
+  // A carved stone, read by walking into it (DESIGN.md §4.12) — the post's own
+  // rules, panel and all: a fresh read gets the panel, and one bumped again with
+  // no step in between gets the status line, because nothing has changed since
+  // the panel was last up.
+  //
+  // What it says is picked off how many kinds of world this campaign has
+  // finished, which core/ hands over as a number (`readStone` in core/rules.js)
+  // and src/text.js turns into the words.
+  readStone(result) {
+    this.map.refresh(this.run);
+    this.hud.update(this.run);
+    if (!result.first && !result.fresh) {
+      this.hud.flash(FLASH.stoneAgain);
+      return;
+    }
+    playStone();
+    this.textPanel.show(SAY.stone(result.stone, result.finished));
   }
 
   // A wisp, put a hand on by walking into it (DESIGN.md §4.11). It hands

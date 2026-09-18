@@ -40,6 +40,7 @@ import {
   LANDMARK_CHEST_SPAN,
   LANDMARK_COURT,
   LANDMARK_PLAN,
+  MAX_BEARING_DRIFT,
   MIN_SEPARATION,
   POCKET_PROBE,
   RICHNESS_CELL,
@@ -278,6 +279,29 @@ function ringPoint(distance, angle) {
   return { x: Math.round((distance * c) / m), y: Math.round((distance * s) / m) };
 }
 
+// Pulls an angle back toward whichever N/E/S/W direction it is nearest, if it
+// strays past MAX_BEARING_DRIFT from it — a point left free to land on a true
+// diagonal is what forces EDGE_RADIUS to sit far past the furthest content
+// (balance.js). Folded rather than flatly clamped: every placement that wants
+// a spot searches nearby headings when its first choice is blocked
+// (HEADING_SEARCH), and a flat clamp would pile every offset past the bound
+// onto the same one or two points, defeating that search. A reflecting fold
+// keeps every searched heading distinct instead.
+//
+// Every ring placement free to roll any bearing off the hut goes through
+// this before `ringPoint` — every one of them except a landmark, whose
+// bearing is not free: it is pinned to a sanctum's own direction, or halfway
+// between two (`spokeHeading`), which is the placement rule working as
+// designed even when that lands it near a diagonal.
+function cappedRingPoint(distance, angle) {
+  const axis = Math.PI / 2;
+  const nearest = Math.round(angle / axis) * axis;
+  const offset = angle - nearest;
+  const l = MAX_BEARING_DRIFT;
+  const folded = ((2 * l) / Math.PI) * Math.asin(Math.sin((Math.PI * offset) / (2 * l)));
+  return ringPoint(distance, nearest + folded);
+}
+
 // Whether a spot opens onto the cave system, or onto a pocket the noise happened
 // to seal against its own wall — a bounded probe (balance.js `POCKET_PROBE`)
 // separates the two for a few hundred lookups.
@@ -331,7 +355,7 @@ function gateOn(centre, radius) {
 }
 
 function buildSanctum(plan, index, angle) {
-  const centre = ringPoint(plan.distance, angle);
+  const centre = cappedRingPoint(plan.distance, angle);
   const { gate, out } = gateOn(centre, plan.radius);
   return {
     ...plan,
@@ -446,23 +470,25 @@ function buildSites(seed, built, taken) {
     const roll = randomAt(i + 1, 0, seed, CH_SITE);
     const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_SITE) * plan.span);
     // A site pinned `opposite` a sanctum takes that sanctum's heading plus
-    // half a turn; the rest take a heading of their own.
+    // half a turn, so — like a landmark's — its bearing is not free to cap;
+    // the rest roll a heading of their own, and are.
     const base =
       plan.opposite === null
         ? roll * Math.PI * 2
         : Math.atan2(built[plan.opposite].centre.y, built[plan.opposite].centre.x) +
           Math.PI +
           (roll - 0.5) * 0.5;
+    const place = plan.opposite === null ? cappedRingPoint : ringPoint;
 
     for (const delta of HEADING_SEARCH) {
-      const site = ringPoint(distance, base + delta * Math.PI * 2);
+      const site = place(distance, base + delta * Math.PI * 2);
       if (clear(site)) {
         claim(taken, site, 1, 'site');
         return { ...plan, index: i, x: site.x, y: site.y };
       }
     }
     // Nothing in the sweep worked; `pickSeed` is the backstop that rejects it.
-    const site = ringPoint(distance, base);
+    const site = place(distance, base);
     claim(taken, site, 1, 'site');
     return { ...plan, index: i, x: site.x, y: site.y };
   });
@@ -565,7 +591,7 @@ function buildSignposts(seed, built, taken) {
           : 0;
 
     for (const delta of HEADING_SEARCH) {
-      const spot = ringPoint(distance, base + delta * Math.PI * 2);
+      const spot = cappedRingPoint(distance, base + delta * Math.PI * 2);
       if (spotIsClear(spot, seed, built, taken, { apart })) {
         claim(taken, spot, 1, 'signpost');
         return { ...plan, index: i, x: spot.x, y: spot.y };
@@ -608,7 +634,7 @@ function buildStones(seed, built, taken) {
           : 0;
 
     for (const delta of HEADING_SEARCH) {
-      const spot = ringPoint(distance, base + delta * Math.PI * 2);
+      const spot = cappedRingPoint(distance, base + delta * Math.PI * 2);
       if (spotIsClear(spot, seed, built, taken, { apart })) {
         claim(taken, spot, 1, 'stone');
         return { ...plan, index: i, x: spot.x, y: spot.y };
@@ -638,7 +664,7 @@ function buildWisps(seed, built, taken) {
     const base = roll * Math.PI * 2;
 
     for (const delta of HEADING_SEARCH) {
-      const spot = ringPoint(distance, base + delta * Math.PI * 2);
+      const spot = cappedRingPoint(distance, base + delta * Math.PI * 2);
       if (spotIsClear(spot, seed, built, taken)) {
         claim(taken, spot, 1, 'wisp');
         return { ...plan, index: i, x: spot.x, y: spot.y };
@@ -683,9 +709,10 @@ function buildChests(seed, built, taken, marks) {
           CHEST_COIN_VALUES.length
       ];
     const holds = plan.key ? { key: plan.key } : { coins };
-    // A ring round the hut, or a ring round the landmark it belongs to.
+    // A ring round the hut, or a ring round the landmark it belongs to — only
+    // the former's bearing is free enough off the hut to need capping.
     const around = (angle) => {
-      const at = ringPoint(distance, angle);
+      const at = beside ? ringPoint(distance, angle) : cappedRingPoint(distance, angle);
       return beside ? { x: beside.x + at.x, y: beside.y + at.y } : at;
     };
 
@@ -834,12 +861,6 @@ export function landmarkAt(x, y, seed = DEFAULT_SEED) {
     if (d <= LANDMARK_COURT) return { landmark, part: 'court' };
   }
   return null;
-}
-
-// The tile a landmark is touched from. Its court is floor all the way round, so
-// any of the four would do; this one is what the reachability check aims at.
-export function landmarkApproach(landmark) {
-  return { x: landmark.x + 1, y: landmark.y };
 }
 
 // Which signpost a tile belongs to: the post, or the apron round it.
@@ -1088,11 +1109,25 @@ export function reachableFraction(seed, radius = SEED_WINDOW) {
 // clearing behind it is forced floor, so once you're through you can always
 // reach the gem. A chest is checked by its apron for the same reason in reverse:
 // its own tile is never walkable, and the apron is where you open it from.
+//
+// A landmark is checked on all eight tiles round its centre, not just one
+// approach: unlike a sanctum or a chest, its placement search can exhaust
+// every heading it is allowed (own bearing plus a small jitter) and fall back
+// to a spot it never actually verified — the only one of the four with no
+// forced-floor apron to fall back on. This is what catches that fallback
+// landing a court on a sanctum's own wall instead of bumping the seed.
+function landmarkCourt(landmark) {
+  const tiles = [];
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) if (dx || dy) tiles.push({ x: landmark.x + dx, y: landmark.y + dy });
+  return tiles;
+}
+
 export function sitesReachable(seed) {
   const targets = [
     ...sanctums(seed).map((s) => s.approach),
     ...sites(seed).map((site) => ({ x: site.x, y: site.y })),
-    ...landmarks(seed).map(landmarkApproach),
+    ...landmarks(seed).flatMap(landmarkCourt),
     ...chests(seed).map(chestApproach),
   ];
   const radius = Math.max(...targets.map((t) => chebyshev(t.x, t.y))) + 8;

@@ -149,10 +149,24 @@ export const BIOME_TERRAIN = {
 // light ever got. (The HUD's furthest-out counter stays Chebyshev — that is a
 // different question, how far out you walked, not how close to the edge.)
 //
-// 200 puts the edge well past everything the campaign is currently about: the
-// outermost sanctum wall stands at 117, so the last third of the world is
-// unspoken for, which is where a late-game area would go.
-export const EDGE_RADIUS = 200;
+// A ring placement near a true diagonal sits up to 1/cos(MAX_BEARING_DRIFT)
+// times further out in this radius than its Chebyshev `distance` alone would
+// suggest (`ringPoint` in core/world.js) — the outermost sanctum's court is
+// nominally 117, but on the diagonal that is 162 before the cap below, which
+// is the room EDGE_RADIUS used to have to hold in reserve for nothing. 175
+// covers the worst case with MAX_BEARING_DRIFT applied — the outermost court
+// at up to 128, plus the full CHOKE_STEP reach of the widest light (40) — with
+// a few tiles to spare.
+export const EDGE_RADIUS = 175;
+
+// How far off the nearest N/E/S/W direction any ring placement — sanctums,
+// sites, landmarks, chests, signposts, stones, wisps, everything `ringPoint`
+// places — may land. Without this, a placement's bearing is free, and one
+// landing near a true diagonal is what forces EDGE_RADIUS to reserve so much
+// empty room past the furthest content (see above). A tighter cap pulls the
+// scatter more visibly toward the four cardinal directions; this is loose
+// enough that most seeds never feel it.
+export const MAX_BEARING_DRIFT = (25 * Math.PI) / 180;
 
 // One tile of light lost for every ten tiles closer to the edge — so the bigger
 // the light, the sooner the dark starts eating it, and everything converges on

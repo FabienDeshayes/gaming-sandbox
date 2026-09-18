@@ -329,7 +329,7 @@ The one built structure in an otherwise noise-grown world, and the spine of the 
 
 - **The fourth is not a fourth sanctum.** Three of them are a wall around a gem; the last is a wall around a person, and what is behind its gate is a conversation rather than a hoard (§4.9). Everything else about it is the same object: the same masonry, the same one gate, the same forced-floor clearing, and its own key well inside its own distance.
 - **The chain is the pacing, and it is two chains braided.** Sanctum 1's arch is open because the first gem has to be reachable carrying nothing. Every gate after it is *locked*, and what opens it is a key in a chest (§4.8) standing well inside that gate's own distance — so the walk to a gem is always a walk to a chest first. Meanwhile each gem raises the water ceiling by 50 and upgrades the water lying around the world (§4.3), so the gem you just found is precisely what makes the next sanctum survivable — the distances above are past what a gemless run could walk home from. A key says *whether* you may go; a gem says whether you would get back.
-- **Positions are derived from the seed, not authored.** Each sanctum takes a quarter of the compass with a jitter inside it, so the four always sit in different directions at different distances (a new seed relays all four, and no two are ever within 45° of each other). Distance is Chebyshev and exact, so a sanctum's ring lands on the number the HUD's furthest-out counter reports.
+- **Positions are derived from the seed, not authored.** Each sanctum takes a quarter of the compass with a jitter inside it, so the four always sit in different directions at different distances (a new seed relays all four, and no two are ever within 45° of each other). Distance is Chebyshev and exact, so a sanctum's ring lands on the number the HUD's furthest-out counter reports — its bearing is also pulled back toward the nearest N/E/S/W if the jitter would otherwise carry it too near a diagonal, which is what keeps the edge of the world close (§4.7).
 - **A gate wears the colour of the key that opens it**, and so does the key — one colour per gate, taken from the gem of the same number. That pairing is the whole of the UI: a player who has picked up a blue key knows at a glance which arch it is for. Like every restored colour it only appears once *that gem* has been brought home (§9), so a key found before its colour is drawn in the plain foreground, exactly as its gate is.
 - **The gate always faces the hut**, on a wall *face* and never a corner — there are no diagonal steps, so a corner gate could never be walked through. The tile you approach from is therefore always orthogonally adjacent to the tile you walk into.
 - **A sanctum's clearing is forced floor**, so once you are through the gate the gem is always reachable. That is what lets the seed check below worry only about the door.
@@ -397,7 +397,7 @@ three colours and the third key are in hand — the sorcerer at 110 (§4.9), whi
 thing left in the world worth walking to.
 
 **It has a range, and that is what keeps it a compass rather than a quest marker.** Unranged it named
-the nearest unfound thing anywhere in a 200-tile world, which turned the back half of every campaign
+the nearest unfound thing anywhere in a 175-tile world, which turned the back half of every campaign
 into walking down an arrow and left the fourteen signposts (§4.10) — the game's actual wayfinding —
 with nothing to do. Ranged, it answers the question it is genuinely good at: *something is near, and
 this is which way.* Finding the far things is the walking's job and the posts'. 40 is a little under
@@ -436,15 +436,21 @@ underneath it discards the drawing rather than showing one from somewhere else.
 
 ### 4.7 The edge of the world
 
-The world is **bounded at a radius of 200 tiles** from the hut, and what bounds it is the dark
-itself. It is very large — about 88,000 walkable tiles, over 500 screenfuls, and 99% of it connects
+The world is **bounded at a radius of 175 tiles** from the hut, and what bounds it is the dark
+itself. It is large — about 67,000 walkable tiles, over 400 screenfuls, and 99% of it connects
 back to the hut on foot — but it does end, so the design has an outside to work against rather than
-an infinity to fill.
+an infinity to fill. Every ring placement free to roll its own bearing (a sanctum, a site not pinned
+opposite one, a chest, a signpost, a stone, a wisp) is pulled back toward the nearest N/E/S/W
+direction if it strays more than 25° off it (`MAX_BEARING_DRIFT`, balance.js): left free, one landing
+near a true diagonal sits up to 1.1x further out in this radius than its own Chebyshev distance from
+the hut suggests, which is the room the edge would otherwise have to hold in reserve for nothing. A
+landmark is the one exception — its bearing is pinned to a sanctum's own direction rather than free
+to begin with, which is the point of it.
 
-**The dark eats light.** Everywhere inside 170 or so, a torch is a torch. Past that the dark stops
+**The dark eats light.** Everywhere inside 145 or so, a torch is a torch. Past that the dark stops
 being something a light pushes back and becomes something that pushes back: it takes **one tile of
 reach for every ten tiles closer to the edge**, applied to whatever light is burning. A beacon shows
-49 tiles at home, 25 at 178 out, and 9 at the rim; a lamp's cone narrows the same way. Two things
+49 tiles at home, 25 at 153 out, and 9 at the rim; a lamp's cone narrows the same way. Two things
 fall out of the rule, both wanted:
 
 - **The bigger the light, the sooner the dark starts eating it** — so the last stretch is walked at
@@ -905,7 +911,7 @@ it. Every word goes in `src/text.js` like every other word in the game.
 #### 4.10.7 Signposts
 
 Fourteen of them, and they are the half that makes the other half work. Seven named places in a
-200-tile dark are seven rumours without them.
+175-tile dark are seven rumours without them.
 
 - **A post with an arm**, one tile, blocking a step and never a light, bumped into like a chest and
   costing nothing.

@@ -545,7 +545,7 @@ export class ExploreScene extends Phaser.Scene {
         else this.hud.flash(FLASH.edge);
       }
       this.animating = true;
-      this.map.bump(this, DIRECTIONS[direction], () => {
+      this.map.bump(this, direction, this.run, () => {
         this.animating = false;
       });
       return;
@@ -749,13 +749,17 @@ export class ExploreScene extends Phaser.Scene {
       ? SAY.ending()
       : SAY.hall(this.run.gems, MAX_GEMS, meeting.finished);
     this.textPanel.show(blocks, () => {
-      // The world turns over either way, and it is written down either way: the
-      // ending is the last thing that happens to this campaign's world, not
-      // instead of it — a slot that has seen it is a slot with a fresh world in
-      // it, and the biome it just finished written into its list.
+      // Every other meeting turns the cycle and writes it down: a new seed in
+      // the same slot, the biome it just finished added to the list. The last
+      // one doesn't — there is no next world for him to mould, so nothing is
+      // banked and the slot is left exactly as it was. The game just ends and
+      // hands the screen back to the title (`theEnd`).
+      if (meeting.last) {
+        this.theEnd();
+        return;
+      }
       const next = turnCycle(this.run);
-      if (meeting.last) this.theEnd();
-      else this.scene.start('ExploreScene', { run: next, moulded: true });
+      this.scene.start('ExploreScene', { run: next, moulded: true });
     });
   }
 

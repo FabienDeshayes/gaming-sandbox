@@ -344,13 +344,12 @@ test('the last world finished ends the game in the light', async (game) => {
   // (src/config.js).
   assert(!(await game.pref('nouxinha.invert')), 'and the setting behind it was never touched');
 
-  // The campaign is still a campaign: the walk into the hall was banked, the
-  // world was moulded like every other time, and the kind of world it just
-  // finished is written into the slot — which is the one thing that could never
-  // be worked out again from the seed.
+  // Unlike every other meeting, this one turns nothing over: there is no next
+  // world for him to mould, so nothing about the walk into the hall is banked
+  // and the slot is left exactly as it stood on the way in.
   const saved = await game.save();
-  assertEqual(saved.cycles, 1, 'the last world ended like all the others');
-  assertEqual(saved.finished.length, BIOME_IDS.length, 'with every kind of world walked out');
+  assertEqual(saved.cycles, 0, 'no cycle was written down');
+  assertEqual(saved.finished.length, BIOME_IDS.length - 1, 'and the slot never learns of the last one');
 
   // A tap brings the rest of it in, and the one after leaves — back to a title
   // screen in the colours the game has always been in, because the light was the

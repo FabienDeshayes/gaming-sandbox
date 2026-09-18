@@ -21,6 +21,7 @@ import {
   getPalette,
   paletteColour,
 } from '../config.js';
+import { DIRECTIONS } from '../core/light.js';
 import { courtAt, isBase, isMerchant, sanctumAt, signpostAt, terrainAt, variantAt } from '../core/world.js';
 import {
   chestOnTile,
@@ -319,8 +320,14 @@ export class MapView {
     });
   }
 
-  // A blocked step doesn't move anything, so the wizard bumps into the rock instead.
-  bump(scene, dir, onDone) {
+  // A blocked step doesn't move anything, so the wizard bumps into whatever is
+  // there instead — turned to face it first, so the bump reads as looking at
+  // the thing rather than flinching in place. Purely cosmetic: `run.facing`
+  // itself is untouched (core/rules.js step()), so the next real step repaints
+  // the wizard back to the way the run is actually facing.
+  bump(scene, direction, run, onDone) {
+    const dir = DIRECTIONS[direction];
+    paintWizard(this.wizard, direction, run.gems);
     scene.tweens.add({
       targets: this.wizard,
       x: VIEW_CX + dir.dx * 7,

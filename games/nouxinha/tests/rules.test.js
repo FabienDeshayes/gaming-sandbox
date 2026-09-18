@@ -166,16 +166,31 @@ unit('walking into rock is rejected and costs nothing', () => {
   assertEqual(state.steps, steps, 'step count unchanged');
 });
 
-unit('a spent light is removed and the next one auto-equips', () => {
+unit('a spent light is replaced by another of its own kind', () => {
   const state = createRun(SEED, emptySave(), NONCE);
-  state.inventory.push({ id: 'torch-medium', durability: 50 });
+  // A wider light and a second of the kind that is burning: the shape the walk
+  // is being made under shouldn't change underneath it (DESIGN.md §4.1).
+  state.inventory.push({ id: 'torch-beacon', durability: 140 });
+  state.inventory.push({ id: 'torch-small', durability: 100 });
 
   const burnout = pace(state, ITEMS['torch-small'].maxDurability).find((r) => r.burnedOut);
   assert(burnout, 'the small torch should burn out within its own durability');
   assertEqual(burnout.burnedId, 'torch-small', 'which light burned out');
   assertEqual(burnout.blackout, false, 'a spare light means no blackout');
-  assertEqual(state.inventory.length, 1, 'the spent light is gone');
-  assertEqual(activeLight(state).id, 'torch-medium', 'the spare is now equipped');
+  assertEqual(state.inventory.length, 2, 'the spent light is gone');
+  assertEqual(activeLight(state).id, 'torch-small', 'another of its own kind is equipped');
+});
+
+unit('with none of its kind left, the smallest light takes over', () => {
+  const state = createRun(SEED, emptySave(), NONCE);
+  // Neither is a small torch, and the beacon is carried first — so inventory
+  // order alone would hand the walk the widest light in the game.
+  state.inventory.push({ id: 'torch-beacon', durability: 140 });
+  state.inventory.push({ id: 'torch-medium', durability: 50 });
+
+  const burnout = pace(state, ITEMS['torch-small'].maxDurability).find((r) => r.burnedOut);
+  assert(burnout, 'the small torch should burn out within its own durability');
+  assertEqual(activeLight(state).id, 'torch-medium', 'the smallest light left is equipped');
 });
 
 unit('with no lights left you see only your own tile, and can still walk', () => {

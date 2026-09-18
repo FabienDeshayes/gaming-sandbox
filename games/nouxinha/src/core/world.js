@@ -1128,11 +1128,30 @@ export function sitesReachable(seed) {
 // beats a world with the spawn sealed into a pocket. The common case costs
 // nothing: the preferred seed is its own kind, so a valid one returns on the
 // first look exactly as it always did.
+//
+// The answer is kept per preference, the same way the structures are: the walk
+// down the chain is the most expensive thing in this file — a flood fill per
+// candidate it tries — and the same question is asked over and over, every time
+// a run is built off the same slot. A derivation, never state: a preference
+// always picks the same seed.
+const pickedCache = new Map();
+
 export function pickSeed(
   preferred = DEFAULT_SEED,
   minFraction = SEED_MIN_FRACTION,
   maxAttempts = SEED_MAX_ATTEMPTS
 ) {
+  const cacheKey = `${preferred | 0},${minFraction},${maxAttempts}`;
+  const cached = pickedCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const picked = walkToSeed(preferred, minFraction, maxAttempts);
+  pickedCache.set(cacheKey, picked);
+  return picked;
+}
+
+// The walk itself: the preferred seed, then the chain, and the first one that
+// clears both bars — preferring one of the same kind (above).
+function walkToSeed(preferred, minFraction, maxAttempts) {
   const wanted = biomeOf(preferred | 0);
   let seed = preferred | 0;
   let fallback = null;

@@ -970,7 +970,10 @@ export class ExploreScene extends Phaser.Scene {
     if (result.burnedOut) {
       const burned = itemDef(result.burnedId).name;
       if (result.blackout) this.hud.flash(FLASH.burnedOutBlackout(burned));
-      else this.hud.flash(FLASH.burnedOutSwapped(burned));
+      // The light that took over is named rather than called "the next one":
+      // what auto-equips is another of the same kind, or the smallest thing
+      // left, so its shape is worth reading off the line (DESIGN.md §4.1).
+      else this.hud.flash(FLASH.burnedOutSwapped(burned, itemDef(activeLight(this.run).id).name));
       return;
     }
     if (result.picked === 'coin') {

@@ -51,6 +51,7 @@ import {
   CHEAT_COINS,
   CHEAT_REVEAL_RADIUS,
   LANDMARK_GIFTS,
+  LIGHT_ORDER,
   MOULD_ATTEMPTS,
   STARTING_LIGHT,
   STARTING_WATER,
@@ -837,9 +838,34 @@ export function litTiles(state) {
   ].filter(({ x, y }) => !beyondEdge(x, y));
 }
 
+// Where a light stands on the ladder (balance.js `LIGHT_ORDER`), smallest
+// first. Anything not on it — nothing today — sorts last, so it is never what
+// a burnout falls back to.
+function lightRank(id) {
+  const rank = LIGHT_ORDER.indexOf(id);
+  return rank === -1 ? Infinity : rank;
+}
+
+// Which light takes over when the active one is spent: another of the same kind
+// if the run is carrying one, so a walk under a beacon carries on under a
+// beacon and the shape of what you can see doesn't change underneath you.
+// Failing that, the smallest thing left — a burnout is not the moment to start
+// spending the run's widest light, and the smallest is also the longest leash
+// home. Returns -1 for an empty bag, which is blackout.
+function successorIndex(inventory, spentId) {
+  const same = inventory.findIndex((slot) => slot.id === spentId);
+  if (same !== -1) return same;
+  let best = -1;
+  inventory.forEach((slot, index) => {
+    if (best === -1 || lightRank(slot.id) < lightRank(inventory[best].id)) best = index;
+  });
+  return best;
+}
+
 // Burns one durability off the active light. When it hits zero the light is
-// spent and removed, and the next light in inventory order auto-equips; with
-// nothing left the character is in blackout, which is a setback, not a death.
+// spent and removed, and another of its own kind auto-equips — or, with none
+// left, the smallest light in the bag (`successorIndex`); with nothing left at
+// all the character is in blackout, which is a setback, not a death.
 function burnActiveLight(state) {
   const light = activeLight(state);
   if (!light) return { burnedOut: false, burnedId: null, blackout: true };
@@ -848,10 +874,7 @@ function burnActiveLight(state) {
   if (light.durability > 0) return { burnedOut: false, burnedId: null, blackout: false };
 
   state.inventory.splice(state.activeIndex, 1);
-  // After the splice the same index *is* the next light in order; only when the
-  // spent one was last does it wrap round to the start.
-  if (state.inventory.length === 0) state.activeIndex = -1;
-  else if (state.activeIndex >= state.inventory.length) state.activeIndex = 0;
+  state.activeIndex = successorIndex(state.inventory, light.id);
 
   return {
     burnedOut: true,

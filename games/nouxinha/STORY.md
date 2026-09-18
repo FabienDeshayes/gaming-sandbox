@@ -183,16 +183,3 @@ you wherever you are standing. The two tools are the **map**, which draws everyw
 walked, and the **compass**, which turns towards whatever is worth walking to next and, with nothing
 in range, turns for home. All of it is bought at a stall or found on the ground, and all of it stays
 behind at the crossing.
-
-## 4. Where the shipped copy disagrees
-
-`src/text.js` was written against an older reading of him and two pieces of it now say the wrong
-thing. Both want rewriting; neither is a rule, so neither is urgent.
-
-- **`SAY.ending`** has him call the whole fetch a self-deception — *"you carried the pieces back so
-  that I could go on calling it that"* — and then simply let go. He is not giving up in this story.
-  He has finally been brought enough to mend it, and the opening of his hands is the mending.
-- **`HALL_SPEECH` and `HALL.moulded`** say he *moulds* a world and that *the ground goes*. He does
-  not make ground. He moves you across the realm, and it is the leaving that costs you everything
-  you were carrying. The first speech's *"the sun went out because I caught it"* is close but not
-  right: it was going out before he touched it.

@@ -149,10 +149,29 @@ export const BIOME_TERRAIN = {
 // light ever got. (The HUD's furthest-out counter stays Chebyshev — that is a
 // different question, how far out you walked, not how close to the edge.)
 //
-// 200 puts the edge well past everything the campaign is currently about: the
-// outermost sanctum wall stands at 117, so the last third of the world is
-// unspoken for, which is where a late-game area would go.
-export const EDGE_RADIUS = 200;
+// A ring placement near a true diagonal sits up to 1/cos(MAX_BEARING_DRIFT)
+// times further out in this radius than its Chebyshev `distance` alone would
+// suggest (`ringPoint` in core/world.js) — the outermost sanctum's court is
+// nominally 117, but on the diagonal that is 162 before the cap below, which
+// is the room EDGE_RADIUS used to have to hold in reserve for nothing. With
+// the cap applied, the furthest anything ever lands is the loose coin chests'
+// own worst case, about 130 — measured across seeds, since it depends on
+// rounding as well as the cap. 155 covers that with a 20-or-so tile reserve
+// for the dark's own reach (CHOKE_STEP below) and a few tiles to spare.
+export const EDGE_RADIUS = 155;
+
+// How far off the nearest N/E/S/W direction a *freely rolled* ring placement
+// — a sanctum, a site not pinned opposite one, a chest, a signpost, a stone,
+// a wisp — may land. Without this, a placement's bearing is free, and one
+// landing near a true diagonal is what forces EDGE_RADIUS to reserve so much
+// empty room past the furthest content (see above). A landmark is the one
+// exception (`cappedRingPoint` in core/world.js): its bearing is pinned to a
+// sanctum's own direction rather than free to begin with, including the gap
+// landmarks that are meant to sit near a diagonal between two sanctums, so
+// capping it would fight the placement rule instead of just bounding it. A
+// tighter cap pulls the scatter more visibly toward the four cardinal
+// directions; this is loose enough that most seeds never feel it.
+export const MAX_BEARING_DRIFT = (25 * Math.PI) / 180;
 
 // One tile of light lost for every ten tiles closer to the edge — so the bigger
 // the light, the sooner the dark starts eating it, and everything converges on

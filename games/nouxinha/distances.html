@@ -19,12 +19,24 @@
        never the same number, and the gap between them is most of what a
        biome does to the pacing. Everything here shows both.
 
+       Two things about a ring are worth knowing before reading the rose. A
+       bearing is *not* free: every placement that rolls one off the hut —
+       a sanctum, an unpinned site, a chest, a signpost, a stone, a wisp — is
+       folded back to within `MAX_BEARING_DRIFT` of the nearest N/E/S/W
+       direction (`cappedRingPoint` in core/world.js), which is why a world
+       from above hugs the four axes. Only a landmark is exempt, its bearing
+       being a sanctum's own to begin with. The fold turns the angle and
+       never the distance, so it moves no number on this page — only the
+       picture. And the world *ends*: past `EDGE_RADIUS` the ground is dark
+       and a step is refused, which the rose draws as the circle it is.
+
        Four views, in the order a balance question is usually asked in:
 
          THE ROSE     — where things are, hut-centred, over the ground itself,
-                        with the water leash drawn as the brightness of the
-                        floor: how far out a dry walk can get and still come
-                        home, at nought, one, two and three gems.
+                        out to the edge of the world, with the water leash
+                        drawn as the brightness of the floor: how far out a
+                        dry walk can get and still come home, at nought, one,
+                        two and three gems.
          THE LADDER   — how far out, as one axis. A lane per kind, the band the
                         plan authored behind each mark, and the leash as rules
                         across it. Sampling a run of worlds puts the spread of
@@ -231,6 +243,7 @@ import {
   wisps,
 } from './src/core/world.js';
 import {
+  EDGE_RADIUS,
   LANDMARK_CHEST_NEAR,
   LANDMARK_CHEST_SPAN,
   STARTING_WATER,
@@ -242,12 +255,20 @@ import { landmarkDef } from './src/data/landmarks.js';
 import { KEYS } from './src/data/items.js';
 import { gemColour, getPalette, hex, paletteColour, setDefaultPalette } from './src/config.js';
 
-// How far out the page looks. Everything a plan places is inside 120 (the
-// hall's wall at 117, the last coin chest at 118), so the rose draws 132 and
-// the flood fill walks a little further than that, because a path round a rock
-// mass may bulge well outside the ring of the thing it is walking to.
-const VIEW = 132;
-const GRID = 156;
+// How far out the page looks, which is now the whole world: `EDGE_RADIUS` is a
+// true radius and `beyondEdge` refuses a step past it, so a square grid of that
+// half-width holds every tile a walk could ever stand on — the fill needs no
+// margin of its own, and the rose drawn to the same bound is the world entire.
+//
+// Taken off balance.js rather than typed, because that number has moved twice:
+// it used to sit far past the furthest content to reserve room for a placement
+// that landed near a true diagonal, and capping the bearing drift took that
+// reserve away with it. What a plan places still stops around 117 Chebyshev
+// (the outermost sanctum's wall, the last coin chest); everything past that is
+// the margin the dark eats into (`chokeAt`), and how wide it is, is exactly the
+// kind of thing a world is looked at from above to judge.
+const VIEW = EDGE_RADIUS;
+const GRID = EDGE_RADIUS;
 const SPAN = GRID * 2 + 1;
 
 // A walk is measured with every gate open. Only the four gates want a key, and
@@ -610,6 +631,22 @@ function drawRose() {
     ctx.fillStyle = alpha(fg, 0.45);
     ctx.fillText(String(d), sx(0) + 3, sy(-d) - 1);
   }
+
+  // The edge of the world, and the one distance on this page that is *not*
+  // Chebyshev: `beyondEdge` in core/world.js measures a true radius, so the
+  // ground stops on a circle rather than on a square. Drawn as one, which is
+  // also what makes the ring nearest it readable — a square ring whose corners
+  // fall outside this circle is a ring with its corners past the end of the
+  // world, and there is nothing standing on them.
+  ctx.strokeStyle = alpha(fg, 0.38);
+  ctx.setLineDash([2, 5]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(sx(0), sy(0), EDGE_RADIUS * scale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = alpha(fg, 0.45);
+  ctx.fillText(`EDGE ${EDGE_RADIUS}`, sx(0) + 3, sy(-EDGE_RADIUS) + 12);
 
   // A spoke out to each sanctum: the four headings the whole world is hung on,
   // since a landmark takes its sanctum's heading and three of the stalls take
@@ -1092,6 +1129,7 @@ function legend() {
     ['░', 'floor, brightest where a dry walk reaches it and comes home'],
     ['▁', 'the bright contour: where one more gem is what gets you back'],
     ['·', 'darkest floor: reachable, but past every tank in the game'],
+    ['⌒', `the edge at ${EDGE_RADIUS}: a true radius, not a Chebyshev ring`],
   ];
   el('legend').innerHTML = rows.map(([g, t]) => `<div><b>${g}</b> ${t}</div>`).join('');
 }
@@ -1116,7 +1154,8 @@ function refresh() {
   el('blurb').textContent =
     `Everything this world stands up, measured from the hut door. A ring is the Chebyshev distance the plans in ` +
     `src/balance.js are written in; a walk is what it costs to get there over the ground this seed grew. ` +
-    `The leash is ${LEASH.join(' / ')} steps out and home again, at nought to three gems.`;
+    `The leash is ${LEASH.join(' / ')} steps out and home again, at nought to three gems, and the ground ` +
+    `itself stops at ${EDGE_RADIUS} — a true radius, so the rose is the whole world and not a window on it.`;
   legend();
   drawRose();
   ladder();

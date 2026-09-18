@@ -286,9 +286,6 @@ export const CREDITS = {
     'THE HUT HE LEFT STANDING EVERY SINGLE TIME',
     'THANK YOU FOR WALKING BACK',
   ],
-  // The one thing on this screen that is about the game rather than the story:
-  // the light it is being read in is a switch of its own (src/config.js).
-  setting: 'INVERT COLOURS IS IN SETTINGS, UNDER THE CHEATS',
   back: 'TAP TO GO ON',
 };
 
@@ -396,8 +393,9 @@ export const SAY = {
   // to go on.
   //
   // `finished` is that count, before this meeting. Nought is a campaign he has
-  // never been carried a full set by; four is a campaign that has already
-  // watched him open his hands and come back anyway (`ending` below).
+  // never been carried a full set by; the meeting that reaches four is the
+  // ending (`ending` below) instead, and never lands here — the clamp exists
+  // only for a slot that already says four some other way.
   hall: (gems, max, finished = 0) => HALL_SPEECH[Math.min(finished, HALL_SPEECH.length - 1)](gems, max),
   // The end of the game: the fourth kind of world, walked to the hall with every
   // colour in hand, and nowhere left in the realm to carry you that you have not

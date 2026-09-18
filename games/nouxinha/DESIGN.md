@@ -515,12 +515,13 @@ took the sun, standing dead centre of it — and the only conversation in the ga
   because a walk that arrives one short is a walk that happened.
 - **He says something different every time a kind of world is finished.** Five conversations, in
   `src/text.js`, picked by how many of the four **biomes** (§4.3) this campaign has already carried
-  three colours into the hall of: the first meeting, one world finished, two, three — and the one
-  after the ending, for a campaign that has watched him open his hands and kept walking. Inside each of
-  them the line about what you are carrying still moves with the walk you actually had, so
-  arriving empty-handed never reads like arriving in full. The count is the only thing about the
-  player he has to go on, and it is the whole of what makes him a person who is getting somewhere
-  rather than a cutscene on a loop.
+  three colours into the hall of: the first meeting, one world finished, two, three — and a fifth,
+  clamped to for a slot that already has every kind of world finished (`SAY.hall`), which the
+  ending itself never produces since it writes nothing to reach. Inside each of them the line
+  about what you are carrying still moves with the walk you actually had, so arriving
+  empty-handed never reads like arriving in full. The count is the only thing about the player he
+  has to go on, and it is the whole of what makes him a person who is getting somewhere rather
+  than a cutscene on a loop.
 - **He takes nothing until the last block is read.** Reading him out is what turns the world over,
   so the crossing is something the player reads about and then sees.
 
@@ -571,7 +572,9 @@ with the new world already written into the slot.
 
 - **The walk into the hall counts as an expedition finished**, because it is one — it ended
   somewhere other than the hut, but it ended, and everything it was carrying was written down by
-  the only thing that ever writes anything down: him.
+  the only thing that ever writes anything down: him. The one exception is the meeting that ends
+  the game (below): there is no next world for him to mould, so he writes nothing and this walk
+  is never banked either.
 - **Nothing about it is a death.** The run isn't lost, the world is. Only water kills (§6).
 - **The counter is the reminder.** Worlds ended shows in the HUD's counter row while a campaign has
   any, and on the slot's own row in **LOAD GAME** — a campaign three worlds in reads as a campaign
@@ -610,10 +613,11 @@ says the two things the whole campaign has been walking towards, and he opens hi
   sun is back, and it costs one line of arithmetic because every colour in the game comes out of
   three accessors in `src/config.js`.
 - **Then the credits**, in that light, a line at a time, tapped through like the text panel.
-- **And the world turns over anyway.** The ending is the last thing that happens to this
-  campaign's world, not instead of it: the walk is banked, the cycle counts, the seed is re-drawn
-  and the slot is written before the first credit appears. A campaign that has seen the ending
-  carries on into a world it has already finished the kind of, and gets the fifth conversation.
+- **And the cycle never turns.** Every other meeting moulds a new world and writes it into the
+  slot; this one doesn't — there is nothing left for him to mould, so `turnCycle` is never called,
+  nothing about the walk into the hall is banked, and the slot is left exactly as it already stood.
+  The credits hand the screen straight back to the title screen, over whatever was last saved
+  there.
 - **The colours it is read in are a switch of their own**, INVERT COLOURS in Settings (§6.2) —
   always there while the cheats are on, and off until it is asked for. The inversion the ending
   itself draws is *not* that switch: it is an override that is dropped on the way back to the

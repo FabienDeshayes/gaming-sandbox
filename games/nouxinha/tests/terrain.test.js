@@ -225,10 +225,13 @@ unit('the world ends at a fixed radius, and the dark there is solid', () => {
   assertEqual(entryKey(EDGE_RADIUS + 5, 0, SEED), false, 'nothing carried opens it');
 
   // Everything the campaign is currently about is comfortably inside, with room
-  // left over — the outermost sanctum wall against the rim.
+  // left over — the outermost sanctum wall against the rim. The margin is
+  // tighter than it looks: MAX_BEARING_DRIFT bounds the worst case at about
+  // 128 (balance.js), which is most of what EDGE_RADIUS has to spare once the
+  // dark's own reach (CHOKE_STEP) is set aside, so 0.75 no longer holds.
   for (const sanctum of sanctums(SEED)) {
     const out = Math.hypot(sanctum.centre.x, sanctum.centre.y) + sanctum.radius;
-    assert(out < EDGE_RADIUS * 0.75, `sanctum ${sanctum.index} sits well inside (${out.toFixed(0)})`);
+    assert(out < EDGE_RADIUS * 0.85, `sanctum ${sanctum.index} sits well inside (${out.toFixed(0)})`);
   }
 });
 

@@ -397,7 +397,7 @@ three colours and the third key are in hand — the sorcerer at 110 (§4.9), whi
 thing left in the world worth walking to.
 
 **It has a range, and that is what keeps it a compass rather than a quest marker.** Unranged it named
-the nearest unfound thing anywhere in a 175-tile world, which turned the back half of every campaign
+the nearest unfound thing anywhere in a 155-tile world, which turned the back half of every campaign
 into walking down an arrow and left the fourteen signposts (§4.10) — the game's actual wayfinding —
 with nothing to do. Ranged, it answers the question it is genuinely good at: *something is near, and
 this is which way.* Finding the far things is the walking's job and the posts'. 40 is a little under
@@ -436,8 +436,8 @@ underneath it discards the drawing rather than showing one from somewhere else.
 
 ### 4.7 The edge of the world
 
-The world is **bounded at a radius of 175 tiles** from the hut, and what bounds it is the dark
-itself. It is large — about 67,000 walkable tiles, over 400 screenfuls, and 99% of it connects
+The world is **bounded at a radius of 155 tiles** from the hut, and what bounds it is the dark
+itself. It is large — about 53,000 walkable tiles, over 300 screenfuls, and 99% of it connects
 back to the hut on foot — but it does end, so the design has an outside to work against rather than
 an infinity to fill. Every ring placement free to roll its own bearing (a sanctum, a site not pinned
 opposite one, a chest, a signpost, a stone, a wisp) is pulled back toward the nearest N/E/S/W
@@ -447,11 +447,14 @@ the hut suggests, which is the room the edge would otherwise have to hold in res
 landmark is the one exception — its bearing is pinned to a sanctum's own direction rather than free
 to begin with, which is the point of it.
 
-**The dark eats light.** Everywhere inside 145 or so, a torch is a torch. Past that the dark stops
+**The dark eats light.** Everywhere inside 125 or so, a torch is a torch. Past that the dark stops
 being something a light pushes back and becomes something that pushes back: it takes **one tile of
 reach for every ten tiles closer to the edge**, applied to whatever light is burning. A beacon shows
-49 tiles at home, 25 at 153 out, and 9 at the rim; a lamp's cone narrows the same way. Two things
-fall out of the rule, both wanted:
+49 tiles at home, 25 at 133 out, and 9 at the rim; a lamp's cone narrows the same way. The reserve
+between the furthest anything is placed (about 130, with the bearing cap applied) and the rim is
+tight now — about 25 tiles — so the widest lights are already a little short of their full reach by
+the time a walk reaches the outermost court, rather than staying full-strength until well past it.
+Two things fall out of the rule, both wanted:
 
 - **The bigger the light, the sooner the dark starts eating it** — so the last stretch is walked at
   the same guttering ring whatever you set out carrying, and the beacon's advantage is a reason to
@@ -911,7 +914,7 @@ it. Every word goes in `src/text.js` like every other word in the game.
 #### 4.10.7 Signposts
 
 Fourteen of them, and they are the half that makes the other half work. Seven named places in a
-175-tile dark are seven rumours without them.
+155-tile dark are seven rumours without them.
 
 - **A post with an arm**, one tile, blocking a step and never a light, bumped into like a chest and
   costing nothing.

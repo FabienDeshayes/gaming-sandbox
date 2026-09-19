@@ -7,7 +7,7 @@
 // Flags (all optional):
 //
 //   --seeds=N         how many campaigns per cell (default 8)
-//   --expeditions=N   the cap on walks per campaign (default 120)
+//   --expeditions=N   the cap on walks per campaign (default 60)
 //   --steps=N         the cap on steps per campaign (default 60000)
 //   --style=id        one of conservative | normal | eager, or all (default all)
 //   --roses=a,b,...   `metric`, `metric:scale` or `metric:scale:drift` —
@@ -70,20 +70,33 @@ function parseRose(text) {
 // Every campaign of one rose in one style. The bot's own rolls are seeded off
 // the campaign index alone, so the same campaign starts from the same decisions
 // under every rose it is walked in.
+// Progress goes to stderr, so the tables on stdout stay pipeable. A sweep is
+// tens of thousands of steps a campaign and can run for the better part of an
+// hour; a tool that prints nothing until it is finished is a tool nobody can
+// tell has hung.
+function note(text) {
+  process.stderr.write(`${text}\n`);
+}
+
 function walk(rose, style, opts) {
   setRingMetric(rose.metric, rose.scale, rose.drift);
   const records = [];
+  const started = Date.now();
   for (let i = 0; i < opts.seeds; i++) {
     resetStorage();
     const roll = seedRandom(opts.base + i);
-    records.push(
-      playCampaign({
-        seed: seedFor(opts.base, i),
-        style,
-        roll,
-        maxExpeditions: opts.expeditions,
-        stepBudget: opts.steps,
-      })
+    const record = playCampaign({
+      seed: seedFor(opts.base, i),
+      style,
+      roll,
+      maxExpeditions: opts.expeditions,
+      stepBudget: opts.steps,
+    });
+    records.push(record);
+    note(
+      `  ${rose.label} / ${style.id} ${i + 1}/${opts.seeds}: ` +
+        `${record.steps} steps, ${record.gemsSeen} gems, ${record.deaths} deaths` +
+        `${record.completed ? ', finished' : ''} — ${((Date.now() - started) / 1000).toFixed(0)}s`
     );
   }
   restoreRandom();
@@ -244,7 +257,7 @@ function main() {
   const f = flags(rest);
   const opts = {
     seeds: Number(f.seeds || 8),
-    expeditions: Number(f.expeditions || 120),
+    expeditions: Number(f.expeditions || 60),
     steps: Number(f.steps || 60000),
     base: Number(f.base || 20260919),
     styles: f.style && f.style !== 'all' ? f.style.split(',') : STYLE_IDS,

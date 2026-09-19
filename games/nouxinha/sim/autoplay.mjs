@@ -68,9 +68,16 @@ const GOAL_EVERY = 8;
 // and cannot pick anything up off.
 const LOOK = 4;
 
-// A sanity rail, not a rule: an expedition that has taken this many turns
-// without dying or getting home is stuck on something, and is counted as such.
+// Two sanity rails, not rules. An expedition that has taken this many turns
+// without dying or getting home is stuck on something and is counted as such —
+// and so is one whose turns have run far ahead of its steps, which is the shape
+// every stuck walk actually has: a bump costs no step, so a bot pinned against
+// something can burn a search a turn for ever while the step count stands
+// still. Bounding the ratio is what keeps one bad campaign from costing a sweep
+// an afternoon.
 const MAX_TURNS = 4000;
+const TURNS_PER_STEP = 3;
+const TURN_ALLOWANCE = 200;
 
 // How many bearings out of the hut the bot keeps a frontier for.
 const SECTORS = 8;
@@ -519,8 +526,10 @@ function playExpedition(state, nav, style, bot, tally) {
   bot.bearing = ((thinnest + 0.5) / SECTORS) * Math.PI * 2 + (bot.roll() - 0.5) * (Math.PI / SECTORS);
 
   let turns = 0;
+  let walked = 0;
   let last = tileKey(state.x, state.y);
   while (turns++ < MAX_TURNS) {
+    if (turns > walked * TURNS_PER_STEP + TURN_ALLOWANCE) return 'stranded';
     if (state.water <= 0) return 'died';
     equipBest(state, bot);
 
@@ -552,6 +561,7 @@ function playExpedition(state, nav, style, bot, tally) {
     const res = step(state, dir);
     if (res.moved) {
       bot.path.shift();
+      walked += 1;
       tally.steps += 1;
       bot.sinceHome += 1;
       // What turning back would cost, which is the number every decision about

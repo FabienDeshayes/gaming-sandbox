@@ -18,13 +18,18 @@ Flags go after `--`, e.g. `npm run sim:compare -- --seeds=20 --expeditions=150`.
 | flag | what it does |
 |---|---|
 | `--seeds=N` | campaigns per cell (default 8) |
-| `--expeditions=N` | cap on walks per campaign (default 120) |
+| `--expeditions=N` | cap on walks per campaign (default 60) |
 | `--steps=N` | cap on steps per campaign (default 60000) |
 | `--style=id` | `conservative`, `normal`, `eager`, a comma list, or `all` |
 | `--roses=a,b` | `metric` or `metric:scale` — e.g. `chebyshev,manhattan,manhattan:1.3` |
 | `--base=N` | the number every campaign seed comes from, so a run can be repeated |
 
-## The two roses
+A sweep is slow — tens of thousands of steps a campaign, and a campaign needs forty to eighty walks
+to get three colours home — so progress goes to stderr as it runs and the tables go to stdout at the
+end. `--seeds=6 --expeditions=50` is a few minutes and enough to see the shape of an answer;
+`--seeds=20` and up is an overnight sort of question.
+
+## The three roses
 
 `ringPoint` in `src/core/world.js` turns a plan's `distance` and a bearing into
 a tile. Which ring it places on is `RING_METRIC` in `src/balance.js`, and
@@ -34,8 +39,16 @@ itself never calls that, and boots on the balance value at a scale of one.
 * **chebyshev** — the square ring: `max(|x|, |y|)` is the distance. A thing at
   ring 110 is 110 steps away on an axis and 220 on a diagonal, because there
   are no diagonal steps.
+* **euclidean** — the true circle, which is the shape `EDGE_RADIUS` is already
+  measured in. The same thing is 110 steps away on an axis and 156 on a
+  diagonal.
 * **manhattan** — the diamond ring: `|x| + |y|` is the distance, which *is* the
   walk. Every bearing costs the same.
+
+A third part of a rose is `MAX_BEARING_DRIFT` in degrees — `manhattan:1:90`
+means no bearing cap at all. That bound exists only to hold the square rose's
+diagonal blowup in, so a rose without one reopens the question of whether it
+earns its keep.
 
 A scale multiplies every plan distance, which is how the two are compared at a
 walk of the same length rather than at a plan of the same number: the same

@@ -329,13 +329,15 @@ The one built structure in an otherwise noise-grown world, and the spine of the 
 
 - **The fourth is not a fourth sanctum.** Three of them are a wall around a gem; the last is a wall around a person, and what is behind its gate is a conversation rather than a hoard (§4.9). Everything else about it is the same object: the same masonry, the same one gate, the same forced-floor clearing, and its own key well inside its own distance.
 - **The chain is the pacing, and it is two chains braided.** Sanctum 1's arch is open because the first gem has to be reachable carrying nothing. Every gate after it is *locked*, and what opens it is a key in a chest (§4.8) standing well inside that gate's own distance — so the walk to a gem is always a walk to a chest first. Meanwhile each gem raises the water ceiling by 50 and upgrades the water lying around the world (§4.3), so the gem you just found is precisely what makes the next sanctum survivable — the distances above are past what a gemless run could walk home from. A key says *whether* you may go; a gem says whether you would get back.
-- **Positions are derived from the seed, not authored.** Each sanctum takes a quarter of the compass with a jitter inside it, so the four always sit in different directions at different distances (a new seed relays all four, and no two are ever within 45° of each other). Distance is Chebyshev and exact, so a sanctum's ring lands on the number the HUD's furthest-out counter reports — its bearing is also pulled back toward the nearest N/E/S/W if the jitter would otherwise carry it too near a diagonal, which is what keeps the edge of the world close (§4.7).
+- **Positions are derived from the seed, not authored.** Each sanctum takes a quarter of the compass with a jitter inside it, so the four always sit in different directions at different distances (a new seed relays all four, and no two are ever within 45° of each other). Distance is **Manhattan** and exact: `|x| + |y|` is the plan's number, and since there are no diagonal steps that is the walk, so a sanctum at ring 110 is 110 steps out whichever bearing it happens to roll. Its bearing is otherwise free — there is nothing to cap, because on a diamond a placement near a diagonal sits *closer* to the hut than one on an axis rather than further (§4.7).
 - **A gate wears the colour of the key that opens it**, and so does the key — one colour per gate, taken from the gem of the same number. That pairing is the whole of the UI: a player who has picked up a blue key knows at a glance which arch it is for. Like every restored colour it only appears once *that gem* has been brought home (§9), so a key found before its colour is drawn in the plain foreground, exactly as its gate is.
 - **The gate always faces the hut**, on a wall *face* and never a corner — there are no diagonal steps, so a corner gate could never be walked through. The tile you approach from is therefore always orthogonally adjacent to the tile you walk into.
 - **A sanctum's clearing is forced floor**, so once you are through the gate the gem is always reachable. That is what lets the seed check below worry only about the door.
 - **The clearing is a hoard, and the hoard is fixed.** Each gem-keeping sanctum holds a named cache — coins, water and lights of its own tier — laid out **two of each**, ranked rather than rolled, so opening a gate always pays the same amount and a clearing can never turn into a pile of one thing. Unlike the open world it doesn't upgrade with your gems: what a sanctum holds is what it was built holding.
-- **The distances are looked at, not only written.** Every number above is a *ring* — Chebyshev from the hut, which is what `ringPoint` places on — and none of them is what the walk costs, because the walk goes round the rock. `distances.html`, opened through the same server the game runs on, draws the gap: **the rose** puts the world from above — all of it, out to `EDGE_RADIUS`, drawn as the circle it is rather than as another Chebyshev ring — with the water leash drawn as the brightness of the floor, so how much of a world is open to a run at nought, one, two and three gems is a picture rather than a sum, and so is how much room the edge keeps past the furthest thing any plan places; **the ladder** puts every placed thing on one axis of steps walked, each over the band its plan in `src/balance.js` authored, and will walk a run of fresh worlds of the same biome to put the spread of that band next to it; **the chain** walks the campaign's own route leg by leg — hut to landmark to its chest to the gate to the gem — against the tank the run is carrying at that point, which is the one table that says outright whether a sanctum can be reached dry; and **the matrix** is every pair in walking steps. It is where a `near`/`span` is decided, and where a biome's ground shows what it costs: the same plan is a different walk in each of the four (§4.3).
-- **And they are walked, not only looked at.** `sim/` is a headless bot that plays whole campaigns against the real `src/core/` under three playstyles and reports what the walking cost — steps, deaths, how far into a campaign each colour came home. It exists because a ring is a number and a walk is an experience, and the gap between them is the thing every distance here is actually tuned on. Which ring a plan's `distance` names is `RING_METRIC` in `src/balance.js`: **Chebyshev** today, so a thing at ring 110 is 110 steps away on an axis and up to 160 off one, since there are no diagonal steps. `sim/run.mjs compare` is what puts that against the alternative — the Manhattan diamond, where the ring *is* the walk whichever way the thing lies — and `sim/README.md` says how to read it.
+- **The distances are looked at, not only written.** Every number above is a *ring* — Manhattan from the hut, which is what `ringPoint` places on — and none of them is quite what the walk costs, because the walk goes round the rock. `distances.html`, opened through the same server the game runs on, draws the gap: **the rose** puts the world from above — all of it, out to `EDGE_RADIUS`, drawn as the circle it is rather than as another Chebyshev ring — with the water leash drawn as the brightness of the floor, so how much of a world is open to a run at nought, one, two and three gems is a picture rather than a sum, and so is how much room the edge keeps past the furthest thing any plan places; **the ladder** puts every placed thing on one axis of steps walked, each over the band its plan in `src/balance.js` authored, and will walk a run of fresh worlds of the same biome to put the spread of that band next to it; **the chain** walks the campaign's own route leg by leg — hut to landmark to its chest to the gate to the gem — against the tank the run is carrying at that point, which is the one table that says outright whether a sanctum can be reached dry; and **the matrix** is every pair in walking steps. It is where a `near`/`span` is decided, and where a biome's ground shows what it costs: the same plan is a different walk in each of the four (§4.3).
+- **And they are walked, not only looked at.** `sim/` is a headless bot that plays whole campaigns against the real `src/core/` under three playstyles and reports what the walking cost — steps, deaths, how far into a campaign each colour came home. It exists because a ring is a number and a walk is an experience, and the gap between them is the thing every distance here is actually tuned on. Which ring a plan's `distance` names is `RING_METRIC` in `src/balance.js`, and `npm run sim:compare` is what puts one rose against another; `sim/README.md` says how to read it.
+
+  **It is the reason these are Manhattan rings.** They were Chebyshev, which in a game with no diagonal steps meant a plan's number was the *cheapest* a thing could cost and twice it was the dearest: the Watchtower's plan said ring 62 and its walk, measured over 24 worlds, averaged 106 steps. Worse, the third sanctum's round trip ran past its own tank in about one world in twelve — a gem the campaign could reach and never carry home, which is the one thing §4.4 promises cannot happen. On the diamond the four sanctums' walks vary by nothing at all from bearing to bearing, the Watchtower costs 65, and the dead end is gone. The `near`/`span` bands are untouched: a thing still turns up anywhere in the range its plan authored, it just no longer costs twice as much for having rolled a corner.
 
 - **Reachability is guaranteed by placement, then by the seed.** Roughly one seed in ten drops a given sanctum where a rock blob seals its door into a pocket against its own wall. Rather than reroll the whole world for it, the sanctum is *turned* a few degrees around the hut until its door opens onto the cave system — measured with a bounded flood probe, which separates the two cases cleanly (a sealed door measures 6–22 tiles, a real one runs past the 80-tile limit). `pickSeed` then rejects any seed that still leaves a door sealed, which after placement is about 2 seeds in 120. Carving corridors to each gate was the alternative and was rejected twice over: it leaves the visible lattice §4.3 avoids, and a road pointing at each gem removes the search that makes finding one worth anything.
 
@@ -398,7 +400,7 @@ three colours and the third key are in hand — the sorcerer at 110 (§4.9), whi
 thing left in the world worth walking to.
 
 **It has a range, and that is what keeps it a compass rather than a quest marker.** Unranged it named
-the nearest unfound thing anywhere in a 155-tile world, which turned the back half of every campaign
+the nearest unfound thing anywhere in a 140-tile world, which turned the back half of every campaign
 into walking down an arrow and left the fourteen signposts (§4.10) — the game's actual wayfinding —
 with nothing to do. Ranged, it answers the question it is genuinely good at: *something is near, and
 this is which way.* Finding the far things is the walking's job and the posts'. 40 is a little under
@@ -437,24 +439,22 @@ underneath it discards the drawing rather than showing one from somewhere else.
 
 ### 4.7 The edge of the world
 
-The world is **bounded at a radius of 155 tiles** from the hut, and what bounds it is the dark
-itself. It is large — about 53,000 walkable tiles, over 300 screenfuls, and 99% of it connects
+The world is **bounded at a radius of 140 tiles** from the hut, and what bounds it is the dark
+itself. It is large — about 43,000 walkable tiles, over 250 screenfuls, and 99% of it connects
 back to the hut on foot — but it does end, so the design has an outside to work against rather than
-an infinity to fill. Every ring placement free to roll its own bearing (a sanctum, a site not pinned
-opposite one, a chest, a signpost, a stone, a wisp) is pulled back toward the nearest N/E/S/W
-direction if it strays more than 25° off it (`MAX_BEARING_DRIFT`, balance.js): left free, one landing
-near a true diagonal sits up to 1.1x further out in this radius than its own Chebyshev distance from
-the hut suggests, which is the room the edge would otherwise have to hold in reserve for nothing. A
-landmark is the one exception — its bearing is pinned to a sanctum's own direction rather than free
-to begin with, which is the point of it.
+an infinity to fill. Every bearing is free: on a diamond ring (§4.4) a placement near a true diagonal
+sits *closer* to the hut in this radius than one on an axis, so there is nothing to pull it back
+from. The furthest anything ever lands is the hall's own outer wall, measured at 117 across 150
+worlds, which is what 140 is set to clear.
 
-**The dark eats light.** Everywhere inside 125 or so, a torch is a torch. Past that the dark stops
+**The dark eats light.** Everywhere inside 110 or so, a torch is a torch. Past that the dark stops
 being something a light pushes back and becomes something that pushes back: it takes **one tile of
 reach for every ten tiles closer to the edge**, applied to whatever light is burning. A beacon shows
-49 tiles at home, 25 at 133 out, and 9 at the rim; a lamp's cone narrows the same way. The reserve
-between the furthest anything is placed (about 130, with the bearing cap applied) and the rim is
-tight now — about 25 tiles — so the widest lights are already a little short of their full reach by
-the time a walk reaches the outermost court, rather than staying full-strength until well past it.
+49 tiles at home, 25 at 118 out, and 9 at the rim; a lamp's cone narrows the same way. The reserve
+between the furthest anything is placed (117) and the rim is deliberately tight — about 23 tiles, the
+same reserve the world kept when it was 155 across — so the widest lights are already a little short
+of their full reach by the time a walk reaches the outermost court, rather than staying
+full-strength until well past it.
 Two things fall out of the rule, both wanted:
 
 - **The bigger the light, the sooner the dark starts eating it** — so the last stretch is walked at
@@ -476,15 +476,17 @@ After that it is a line in the HUD, because by then the player knows. The fact i
 things the campaign has laid eyes on, so it is written down whichever way the expedition ends and
 never offered twice.
 
-**It is a circle, not a box.** Measured as a true radius, unlike the Chebyshev distance the rest of
-the game counts in, because this is the one boundary the player will see the shape of — on the map,
-where the drawing's own outline becomes the shape of the world. A square edge would read as an
-authored wall around a level. The HUD's furthest-out counter stays Chebyshev: how far out you walked
-is a different question from how close to the edge you got.
+**It is a circle, not a box.** Measured as a true radius, unlike the Manhattan rings the plans are
+written in (§4.4) or the square regions a court and an apron are, because this is the one boundary
+the player will see the shape of — on the map, where the drawing's own outline becomes the shape of
+the world. A square edge would read as an authored wall around a level. The HUD's furthest-out
+counter is a third measure again and stays Chebyshev: how far out you walked is a different question
+from how close to the edge you got, and it is the one number in the game that is a boast rather than
+a budget.
 
 **There is room past the content.** The hall's wall — the outermost of the four — stands at 117, so
-the last third of the world is still unspoken for: nothing out there is placed, nothing out there is
-generated differently, and the edge is far enough out that reaching it is a 400-step round trip and
+the last sixth of the world is still unspoken for: nothing out there is placed, nothing out there is
+generated differently, and the edge is far enough out that reaching it is a 280-step round trip and
 therefore a late-campaign expedition in its own right rather than something stumbled into. What
 `STORY.md` §8 wants to put there (a thinner ground, and one remnant near the rim) is not built.
 
@@ -919,7 +921,7 @@ it. Every word goes in `src/text.js` like every other word in the game.
 #### 4.10.7 Signposts
 
 Fourteen of them, and they are the half that makes the other half work. Seven named places in a
-155-tile dark are seven rumours without them.
+140-tile dark are seven rumours without them.
 
 - **A post with an arm**, one tile, blocking a step and never a light, bumped into like a chest and
   costing nothing.

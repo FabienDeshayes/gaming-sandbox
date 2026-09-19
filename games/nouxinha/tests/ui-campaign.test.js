@@ -19,7 +19,7 @@ import { assert, assertEqual, runIfMain, test as browserTest } from './harness.j
 import { createRun, maxWater, spendable, step } from '../src/core/rules.js';
 import { emptySave, MAX_GEMS } from '../src/core/save.js';
 import { decodeExplored } from '../src/core/cartography.js';
-import { PRICES } from '../src/balance.js';
+import { PRICES, STARTING_WATER } from '../src/balance.js';
 import { gemColour, getPalette, invertColour } from '../src/config.js';
 import { BIOME_IDS } from '../src/data/biomes.js';
 import {
@@ -95,7 +95,11 @@ test('reaching the hut banks the walk and fills the tank, and the run goes on', 
   await game.clickText(HUT.headBackOut);
   assertEqual((await game.state()).dialogOpen, false, 'dismissed');
   assert(await game.hasText(FLASH.headBackOut), 'the status line says so');
-  assert((await game.texts()).includes('WATER 200/200'), 'the HUD counter agrees');
+  // Asked of `HUD.water` rather than spelled out: what the counter says is
+  // src/text.js's, and a test that restates it is a test that goes quietly
+  // wrong the next time the game is reworded (CLAUDE.md).
+  const full = HUD.water(STARTING_WATER, maxWater(0));
+  assert((await game.texts()).includes(full), `the HUD counter agrees (${full})`);
 
   await game.tapDpad('right');
   await game.settle();

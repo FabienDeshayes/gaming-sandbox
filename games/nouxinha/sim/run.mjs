@@ -10,8 +10,7 @@
 //   --expeditions=N   the cap on walks per campaign (default 60)
 //   --steps=N         the cap on steps per campaign (default 60000)
 //   --style=id        one of conservative | normal | eager, or all (default all)
-//   --roses=a,b,...   `metric`, `metric:scale` or `metric:scale:drift` —
-//                     e.g. chebyshev,manhattan,manhattan:1.25,manhattan:1:90
+//   --roses=a,b,...   `metric` or `metric:scale` — e.g. manhattan,chebyshev,chebyshev:0.8
 //   --base=N          the number every campaign seed is derived from, for a re-run
 //
 // A rose written `manhattan:1.25` is the diamond with every plan distance in
@@ -19,15 +18,11 @@
 // the same length rather than at a plan of the same number: the diamond puts a
 // thing at ring 110 exactly 110 steps away, where the square puts it anywhere
 // from 110 to 160, so the same numbers are not the same world.
-//
-// A third part is `MAX_BEARING_DRIFT` in degrees, and `90` means no cap at all.
-// That bound exists only to hold the square rose's diagonal blowup in — on the
-// diamond a diagonal placement sits closer than an axial one — so whether it is
-// still worth having is a question the diamond reopens.
+
 
 import { resetStorage, restoreRandom, seedRandom } from './env.mjs';
 import { setRingMetric } from '../src/core/world.js';
-import { MAX_BEARING_DRIFT, RING_METRIC } from '../src/balance.js';
+import { EDGE_RADIUS, RING_METRIC } from '../src/balance.js';
 import { playCampaign } from './autoplay.mjs';
 import { STYLES, STYLE_IDS } from './styles.mjs';
 import { aggregate, delta, num, percent, spread, table } from './report.mjs';
@@ -52,18 +47,14 @@ function seedFor(base, index) {
   return (h ^ (h >>> 16)) | 0;
 }
 
-// `metric`, `metric:scale`, or `metric:scale:drift` — the last in degrees, and
-// 90 for no bearing cap at all.
+// `metric`, or `metric:scale`.
 function parseRose(text) {
-  const [metric, scale, drift] = text.split(':');
-  const parts = [];
-  if (scale && Number(scale) !== 1) parts.push(`×${scale}`);
-  if (drift) parts.push(`${drift}°`);
+  const [metric, scale] = text.split(':');
+  const stretched = scale && Number(scale) !== 1;
   return {
     metric,
     scale: scale ? Number(scale) : 1,
-    drift: drift ? (Number(drift) * Math.PI) / 180 : MAX_BEARING_DRIFT,
-    label: parts.length ? `${metric} ${parts.join(' ')}` : metric,
+    label: stretched ? `${metric} ×${scale}` : metric,
   };
 }
 
@@ -79,7 +70,7 @@ function note(text) {
 }
 
 function walk(rose, style, opts) {
-  setRingMetric(rose.metric, rose.scale, rose.drift);
+  setRingMetric(rose.metric, rose.scale);
   const records = [];
   const started = Date.now();
   for (let i = 0; i < opts.seeds; i++) {
@@ -204,7 +195,7 @@ function compare(opts, roses) {
 
 function geometry(opts, roses) {
   for (const rose of roses) {
-    setRingMetric(rose.metric, rose.scale, rose.drift);
+    setRingMetric(rose.metric, rose.scale);
     const surveys = [];
     for (let i = 0; i < opts.seeds; i++) surveys.push(survey(seedFor(opts.base, i)));
     const sum = summarise(surveys);
@@ -239,8 +230,15 @@ function geometry(opts, roses) {
     );
     console.log(
       `\nfurthest anything stands from the hut, as a true radius: ${spread(sum.rim, 1)} ` +
-        `(max ${num(sum.rim.max, 1)}); unreachable placements: ${sum.unreachable}/${sum.total}`
+        `(max ${num(sum.rim.max, 1)}, against an EDGE_RADIUS of ${EDGE_RADIUS}); ` +
+        `placed outside the world: ${sum.outside}/${sum.total}; unreachable: ${sum.unreachable}/${sum.total}`
     );
+    if (sum.outside)
+      console.log(
+        `  ${rose.label} puts content past the rim. EDGE_RADIUS is set against the rose the game is\n` +
+          '  actually on (balance.js), so another rose is being measured in a world that was not built\n' +
+          '  for it — scale it down to compare fairly, e.g. chebyshev:0.8.'
+      );
   }
   console.log(
     '\n"straight line" is |x| + |y|: the walk if the ground were empty, and so the rose\'s own doing.\n' +
@@ -264,7 +262,7 @@ function main() {
   };
   for (const id of opts.styles) if (!STYLES[id]) throw new Error(`no such style: ${id}`);
 
-  const roses = (f.roses || (command === 'play' ? RING_METRIC : 'chebyshev,manhattan')).split(',').map(parseRose);
+  const roses = (f.roses || (command === 'play' ? RING_METRIC : 'manhattan,chebyshev')).split(',').map(parseRose);
   const t0 = Date.now();
   if (command === 'play') play(opts, roses);
   else if (command === 'compare') compare(opts, roses);

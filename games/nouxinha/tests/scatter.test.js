@@ -185,8 +185,10 @@ unit('picking up a gem upgrades the ground already lying about, in place', () =>
   for (let y = -40; y <= 40; y++)
     for (let x = -40; x <= 40; x++) {
       // The sanctum hoards are their own rule (`a sanctum clearing is a hoard`
-      // below) — this is a claim about the open world's ground alone.
-      if (sanctumAt(x, y, SEED)) continue;
+      // below), and a unique object never upgrades at all — this is a claim
+      // about the open world's *consumable* ground alone, and `itemOnTile`
+      // answers the unique layer first.
+      if (sanctumAt(x, y, SEED) || uniqueAt(x, y, SEED)) continue;
       const before = consumableAt(x, y, SEED, SALT, 0);
       checked += 1;
       if (before === 'water-drop') upgradedCount += 1;
@@ -200,7 +202,7 @@ unit('picking up a gem upgrades the ground already lying about, in place', () =>
 
   for (let y = -40; y <= 40; y++)
     for (let x = -40; x <= 40; x++) {
-      if (sanctumAt(x, y, SEED)) continue;
+      if (sanctumAt(x, y, SEED) || uniqueAt(x, y, SEED)) continue;
       const before = consumableAt(x, y, SEED, SALT, 0);
       const after = itemOnTile(state, x, y);
       if (before === 'water-drop')

@@ -17,7 +17,7 @@ import {
 } from '../src/core/rules.js';
 import { emptySave, loadSave, writeSave } from '../src/core/save.js';
 import { WISP_PLAN, WISP_SHAPE } from '../src/balance.js';
-import { FIRST_WISP, NONCE, SEED, WISP_ROUTE } from './world.js';
+import { FIRST_WISP, NONCE, ringOf, SEED, WISP_ROUTE } from './world.js';
 
 // --- Where they stand --------------------------------------------------------
 
@@ -28,7 +28,7 @@ unit('most of the ten wisps stand up, each its own terrain with a floor apron', 
 
   for (const wisp of found) {
     const plan = WISP_PLAN.find((p) => p.id === wisp.id);
-    const distance = chebyshev(wisp.x, wisp.y);
+    const distance = ringOf(wisp.x, wisp.y);
     assert(
       distance >= plan.near && distance <= plan.near + plan.span,
       `${wisp.id} stands in its band (${distance}, wanted ${plan.near}-${plan.near + plan.span})`

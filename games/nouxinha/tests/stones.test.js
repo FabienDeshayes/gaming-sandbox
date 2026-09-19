@@ -26,7 +26,7 @@ import {
 import { emptySave, loadSave, writeSave } from '../src/core/save.js';
 import { LANDMARK_COURT, STONE_CLEARANCE, STONE_PLAN, STONE_SPACING } from '../src/balance.js';
 import { SAY, STONE_TEXT } from '../src/text.js';
-import { FIRST_STONE, NONCE, SEED, STONE_ROUTE } from './world.js';
+import { FIRST_STONE, NONCE, ringOf, SEED, STONE_ROUTE } from './world.js';
 
 // --- Where they stand --------------------------------------------------------
 
@@ -37,7 +37,7 @@ unit('the four stones stand up, each its own terrain with a floor apron', () => 
 
   for (const stone of found) {
     const plan = STONE_PLAN.find((p) => p.id === stone.id);
-    const distance = chebyshev(stone.x, stone.y);
+    const distance = ringOf(stone.x, stone.y);
     const furthest = plan.near + plan.span - 1;
     assert(
       distance >= plan.near && distance <= furthest,

@@ -21,7 +21,7 @@ Flags go after `--`, e.g. `npm run sim:compare -- --seeds=20 --expeditions=150`.
 | `--expeditions=N` | cap on walks per campaign (default 60) |
 | `--steps=N` | cap on steps per campaign (default 60000) |
 | `--style=id` | `conservative`, `normal`, `eager`, a comma list, or `all` |
-| `--roses=a,b` | `metric` or `metric:scale` — e.g. `chebyshev,manhattan,manhattan:1.3` |
+| `--roses=a,b` | `metric` or `metric:scale` — e.g. `manhattan,chebyshev,chebyshev:0.8` |
 | `--base=N` | the number every campaign seed comes from, so a run can be repeated |
 
 A sweep is slow — tens of thousands of steps a campaign, and a campaign needs forty to eighty walks
@@ -36,19 +36,19 @@ a tile. Which ring it places on is `RING_METRIC` in `src/balance.js`, and
 `setRingMetric(metric, scale)` is what this tool sweeps it with — the game
 itself never calls that, and boots on the balance value at a scale of one.
 
+* **manhattan** — the diamond ring: `|x| + |y|` is the distance, which *is* the
+  walk. Every bearing costs the same. **This is what the game is placed on**,
+  and this tool is why.
 * **chebyshev** — the square ring: `max(|x|, |y|)` is the distance. A thing at
   ring 110 is 110 steps away on an axis and 220 on a diagonal, because there
-  are no diagonal steps.
-* **euclidean** — the true circle, which is the shape `EDGE_RADIUS` is already
-  measured in. The same thing is 110 steps away on an axis and 156 on a
-  diagonal.
-* **manhattan** — the diamond ring: `|x| + |y|` is the distance, which *is* the
-  walk. Every bearing costs the same.
+  are no diagonal steps. What the game used to be placed on.
+* **euclidean** — the true circle, which is the shape `EDGE_RADIUS` is measured
+  in. The same thing is 110 steps away on an axis and 156 on a diagonal.
 
-A third part of a rose is `MAX_BEARING_DRIFT` in degrees — `manhattan:1:90`
-means no bearing cap at all. That bound exists only to hold the square rose's
-diagonal blowup in, so a rose without one reopens the question of whether it
-earns its keep.
+**`EDGE_RADIUS` is set against the rose the game is on**, and does not move when you sweep. So the
+square rose now throws the odd placement past the rim of a world built for the diamond — the geometry
+survey counts those and says so. Scale it down to compare fairly (`chebyshev:0.8` is about right); the
+numbers in the table above were taken before the world shrank, when 155 covered both.
 
 A scale multiplies every plan distance, which is how the two are compared at a
 walk of the same length rather than at a plan of the same number: the same
@@ -58,6 +58,33 @@ Two things stay Chebyshev whichever rose is picked, and should: the square
 regions — a sanctum's wall, a landmark's court, an apron, `MIN_SEPARATION` —
 which are shapes rather than rings, and the HUD's furthest-out counter, which
 answers a different question.
+
+## What it found
+
+Measured over 24 worlds with `sim:geometry`, and this is why the game moved off the square ring:
+
+| | plan says | chebyshev walk | manhattan walk |
+|---|---|---|---|
+| gem‑1 sanctum | 20 | 26 | 23 |
+| gem‑3 sanctum | 80 | 104 | 89 |
+| the hall | 110 | 145 | 119 |
+| the Watchtower | 62 | **106** | 65 |
+
+The Watchtower is a *gap* landmark — it stands between two sanctums, which is to say near a diagonal,
+which is where a square ring is at its worst. The four sanctums' bearing-to-bearing spread went from
+7–11% to exactly zero; the landmarks' and chests', which have a `span` in their plans and are meant
+to vary, roughly halved.
+
+The one that actually mattered was not a spread at all. Walking the third sanctum's round trip in 12
+worlds of each biome, the square ring put it **past its own tank in about one world in twelve** —
+a gem the campaign could reach and never carry home — and left half of all worlds under the 50-step
+margin the suite asks for. On the diamond: none unwalkable, one in forty-eight under the margin.
+
+Two costs came with it, both measured and both accepted. Drawing a world got slower (about 240ms to
+about 730ms) because the diamond concentrates every plan onto one circle instead of spreading it over
+a band, so placements collide more and `pickSeed` looks at more seeds; `SEED_MAX_ATTEMPTS` went from
+32 to 64 to buy back the biome preference that budget exists for. And the HUD's furthest-out counter
+is still Chebyshev, so a plan's ring no longer reads back off it.
 
 ## How the comparison is paired
 

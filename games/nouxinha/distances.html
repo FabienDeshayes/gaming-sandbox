@@ -20,15 +20,17 @@
        biome does to the pacing. Everything here shows both.
 
        Two things about a ring are worth knowing before reading the rose. A
-       bearing is *not* free: every placement that rolls one off the hut —
-       a sanctum, an unpinned site, a chest, a signpost, a stone, a wisp — is
-       folded back to within `MAX_BEARING_DRIFT` of the nearest N/E/S/W
-       direction (`cappedRingPoint` in core/world.js), which is why a world
-       from above hugs the four axes. Only a landmark is exempt, its bearing
-       being a sanctum's own to begin with. The fold turns the angle and
-       never the distance, so it moves no number on this page — only the
-       picture. And the world *ends*: past `EDGE_RADIUS` the ground is dark
-       and a step is refused, which the rose draws as the circle it is.
+       ring is a **diamond**: a plan's distance is `|x| + |y|` (`RING_METRIC`
+       in balance.js), and since there are no diagonal steps that is the walk
+       itself, so a thing at ring 60 is sixty steps out whichever bearing it
+       rolled. That is what makes the gap this page draws the *ground's* gap
+       and nothing else's — it used to be a square ring, where the same plan
+       was sixty steps on an axis and a hundred and twenty off one, and most
+       of what the ladder showed was that. Bearings are free: on a diamond a
+       placement near a diagonal sits closer to the hut than one on an axis,
+       so there is nothing to fold it back from. And the world *ends*: past
+       `EDGE_RADIUS` the ground is dark and a step is refused, which the rose
+       draws as the circle it is.
 
        Four views, in the order a balance question is usually asked in:
 

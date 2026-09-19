@@ -36,6 +36,7 @@ import {
   wisps,
 } from '../src/core/world.js';
 import { KEYS } from '../src/data/items.js';
+import { EDGE_RADIUS } from '../src/balance.js';
 import { manhattan, STEPS } from './nav.mjs';
 
 const ALL_KEYS = new Set(KEYS);
@@ -122,7 +123,18 @@ export function survey(preferred) {
       radius,
     });
   }
-  return { seed, rows, rim, reachable: rows.filter((r) => r.walk !== null).length, placed: rows.length };
+  return {
+    seed,
+    rows,
+    rim,
+    reachable: rows.filter((r) => r.walk !== null).length,
+    // Anything the rose has thrown past the rim. Zero for the rose the world is
+    // sized for, and the first thing to look at for any other: `EDGE_RADIUS` is
+    // set against one rose's reach (balance.js), so a rose that reaches further
+    // is being measured in a world that was not built for it.
+    outside: rows.filter((r) => r.radius > EDGE_RADIUS).length,
+    placed: rows.length,
+  };
 }
 
 // --- Summarising -----------------------------------------------------------------
@@ -178,6 +190,7 @@ export function summarise(surveys) {
     entries: entries.sort((a, b) => (a.ring || 0) - (b.ring || 0)),
     rim: stats(surveys.map((s) => s.rim)),
     unreachable: all.filter((r) => r.walk === null).length,
+    outside: all.filter((r) => r.radius > EDGE_RADIUS).length,
     total: all.length,
   };
 }

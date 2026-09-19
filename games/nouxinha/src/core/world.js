@@ -40,7 +40,6 @@ import {
   LANDMARK_CHEST_SPAN,
   LANDMARK_COURT,
   LANDMARK_PLAN,
-  MAX_BEARING_DRIFT,
   MIN_SEPARATION,
   POCKET_PROBE,
   RICHNESS_CELL,
@@ -278,7 +277,6 @@ function noiseTerrain(x, y, seed) {
 // hand back two different worlds for the one seed.
 let ringMetric = RING_METRIC;
 let ringScale = 1;
-let ringDrift = MAX_BEARING_DRIFT;
 
 // A point at exactly `distance` out on the heading `angle`, on whichever ring
 // the metric names. What separates the three is how much the walk to a thing
@@ -286,14 +284,17 @@ let ringDrift = MAX_BEARING_DRIFT;
 // steps and so the walk is |x| + |y|:
 //
 //   'chebyshev' — the square ring, max(|x|, |y|): the walk is the distance on
-//                 an axis and twice it on a diagonal. It is what keeps
-//                 "distance from the hut" the same number the HUD's
-//                 furthest-out counter reports.
+//                 an axis and twice it on a diagonal.
 //   'euclidean' — the true circle: the walk is the distance on an axis and
 //                 1.41 times it on a diagonal. The shape `EDGE_RADIUS` is
-//                 already measured in.
+//                 measured in.
 //   'manhattan' — the diamond, |x| + |y|: the distance *is* the walk, whichever
-//                 way the thing lies.
+//                 way the thing lies. What the game is placed on (balance.js).
+//
+// The HUD's furthest-out counter is still `chebyshev` and stays that way: it
+// answers how far out you walked, not what the walk cost, and it is the one
+// number in the game that is a boast rather than a budget. So a plan's ring no
+// longer reads back off it — the number that now matches a plan is the steps.
 function ringPoint(distance, angle, scale = ringScale) {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
@@ -312,49 +313,17 @@ function ringPoint(distance, angle, scale = ringScale) {
 // own `RING_METRIC` at a scale of one. `scale` multiplies every plan distance,
 // which is how a diamond world is compared against the square one at a walk of
 // the same length rather than at a plan of the same number (`sim/README.md`).
-// `drift` replaces `MAX_BEARING_DRIFT`, because that bound exists only to hold
-// the square rose's diagonal blowup in: on the diamond a diagonal placement
-// sits *closer* than an axial one, so the cap has nothing left to bound, and
-// whether it is still worth having is a question the diamond reopens.
 // The structure cache is emptied on the way through: a seed's world is only a
 // pure function of the seed while the rose it is placed on holds still.
-export function setRingMetric(metric = RING_METRIC, scale = 1, drift = MAX_BEARING_DRIFT) {
+export function setRingMetric(metric = RING_METRIC, scale = 1) {
   ringMetric = metric;
   ringScale = scale;
-  ringDrift = drift;
   structureCache.clear();
   // And with it the seeds that were validated against those structures: what
   // `pickSeed` bumps a seed for is a sanctum door or a landmark court it
   // cannot reach, and both of those have just moved.
   pickedCache.clear();
-  return { metric: ringMetric, scale: ringScale, drift: ringDrift };
-}
-
-// Pulls an angle back toward whichever N/E/S/W direction it is nearest, if it
-// strays past MAX_BEARING_DRIFT from it — a point left free to land on a true
-// diagonal is what forces EDGE_RADIUS to sit far past the furthest content
-// (balance.js). Folded rather than flatly clamped: every placement that wants
-// a spot searches nearby headings when its first choice is blocked
-// (HEADING_SEARCH), and a flat clamp would pile every offset past the bound
-// onto the same one or two points, defeating that search. A reflecting fold
-// keeps every searched heading distinct instead.
-//
-// Every ring placement free to roll any bearing off the hut goes through
-// this before `ringPoint` — every one of them except a landmark, whose
-// bearing is not free: it is pinned to a sanctum's own direction, or halfway
-// between two (`spokeHeading`), which is the placement rule working as
-// designed even when that lands it near a diagonal.
-function cappedRingPoint(distance, angle) {
-  const axis = Math.PI / 2;
-  const nearest = Math.round(angle / axis) * axis;
-  const offset = angle - nearest;
-  const l = ringDrift;
-  // A cap of a quarter turn is no cap at all: every bearing is already inside
-  // it and the fold hands the angle straight back, which is what `sim/` sets it
-  // to when it wants to see the rose with the bound taken off.
-  if (l >= axis) return ringPoint(distance, angle);
-  const folded = ((2 * l) / Math.PI) * Math.asin(Math.sin((Math.PI * offset) / (2 * l)));
-  return ringPoint(distance, nearest + folded);
+  return { metric: ringMetric, scale: ringScale };
 }
 
 // Whether a spot opens onto the cave system, or onto a pocket the noise happened
@@ -410,7 +379,7 @@ function gateOn(centre, radius) {
 }
 
 function buildSanctum(plan, index, angle) {
-  const centre = cappedRingPoint(plan.distance, angle);
+  const centre = ringPoint(plan.distance, angle);
   const { gate, out } = gateOn(centre, plan.radius);
   return {
     ...plan,
@@ -525,25 +494,23 @@ function buildSites(seed, built, taken) {
     const roll = randomAt(i + 1, 0, seed, CH_SITE);
     const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_SITE) * plan.span);
     // A site pinned `opposite` a sanctum takes that sanctum's heading plus
-    // half a turn, so — like a landmark's — its bearing is not free to cap;
-    // the rest roll a heading of their own, and are.
+    // half a turn; the rest roll a heading of their own.
     const base =
       plan.opposite === null
         ? roll * Math.PI * 2
         : Math.atan2(built[plan.opposite].centre.y, built[plan.opposite].centre.x) +
           Math.PI +
           (roll - 0.5) * 0.5;
-    const place = plan.opposite === null ? cappedRingPoint : ringPoint;
 
     for (const delta of HEADING_SEARCH) {
-      const site = place(distance, base + delta * Math.PI * 2);
+      const site = ringPoint(distance, base + delta * Math.PI * 2);
       if (clear(site)) {
         claim(taken, site, 1, 'site');
         return { ...plan, index: i, x: site.x, y: site.y };
       }
     }
     // Nothing in the sweep worked; `pickSeed` is the backstop that rejects it.
-    const site = place(distance, base);
+    const site = ringPoint(distance, base);
     claim(taken, site, 1, 'site');
     return { ...plan, index: i, x: site.x, y: site.y };
   });
@@ -646,7 +613,7 @@ function buildSignposts(seed, built, taken) {
           : 0;
 
     for (const delta of HEADING_SEARCH) {
-      const spot = cappedRingPoint(distance, base + delta * Math.PI * 2);
+      const spot = ringPoint(distance, base + delta * Math.PI * 2);
       if (spotIsClear(spot, seed, built, taken, { apart })) {
         claim(taken, spot, 1, 'signpost');
         return { ...plan, index: i, x: spot.x, y: spot.y };
@@ -689,7 +656,7 @@ function buildStones(seed, built, taken) {
           : 0;
 
     for (const delta of HEADING_SEARCH) {
-      const spot = cappedRingPoint(distance, base + delta * Math.PI * 2);
+      const spot = ringPoint(distance, base + delta * Math.PI * 2);
       if (spotIsClear(spot, seed, built, taken, { apart })) {
         claim(taken, spot, 1, 'stone');
         return { ...plan, index: i, x: spot.x, y: spot.y };
@@ -719,7 +686,7 @@ function buildWisps(seed, built, taken) {
     const base = roll * Math.PI * 2;
 
     for (const delta of HEADING_SEARCH) {
-      const spot = cappedRingPoint(distance, base + delta * Math.PI * 2);
+      const spot = ringPoint(distance, base + delta * Math.PI * 2);
       if (spotIsClear(spot, seed, built, taken)) {
         claim(taken, spot, 1, 'wisp');
         return { ...plan, index: i, x: spot.x, y: spot.y };
@@ -764,12 +731,11 @@ function buildChests(seed, built, taken, marks) {
           CHEST_COIN_VALUES.length
       ];
     const holds = plan.key ? { key: plan.key } : { coins };
-    // A ring round the hut, or a ring round the landmark it belongs to — only
-    // the former's bearing is free enough off the hut to need capping.
+    // A ring round the hut, or a ring round the landmark it belongs to.
     const around = (angle) => {
       // A landmark's own little ring is three to five tiles across and is not
       // a distance from the hut at all, so the scale above never touches it.
-      const at = beside ? ringPoint(distance, angle, 1) : cappedRingPoint(distance, angle);
+      const at = ringPoint(distance, angle, beside ? 1 : ringScale);
       return beside ? { x: beside.x + at.x, y: beside.y + at.y } : at;
     };
 

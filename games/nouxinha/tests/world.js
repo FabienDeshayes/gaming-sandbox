@@ -34,7 +34,7 @@ import { KEYS } from '../src/data/items.js';
 import { biomeDef } from '../src/data/biomes.js';
 import { landmarkDef } from '../src/data/landmarks.js';
 import { emptySave } from '../src/core/save.js';
-import { LIGHTS, STARTING_LIGHT, STARTING_WATER } from '../src/balance.js';
+import { LIGHTS, RING_METRIC, STARTING_LIGHT, STARTING_WATER } from '../src/balance.js';
 import { setDefaultPalette } from '../src/config.js';
 
 export const SEED = pickSeed(DEFAULT_SEED);
@@ -58,6 +58,23 @@ export const SALT = saltOf(NONCE, 0);
 export const scatter = (x, y, gems = 0, salt = SALT) => itemAt(x, y, SEED, { salt, gems });
 
 export const ORTHOGONAL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// How far out a tile is, measured the way a plan's `distance` in `src/balance.js`
+// means it. Which ring that is, is `RING_METRIC`, so a test can say "it landed
+// on the ring its plan asked for" without restating which shape of ring the
+// world is currently placed on — and a change of rose moves every one of those
+// assertions with it instead of quietly making them vacuous (TESTING.md).
+//
+// This is *not* the measure for how far two placed things stand from each
+// other. A clearance, an apron, a court and `MIN_SEPARATION` are square regions
+// rather than rings, and those stay `chebyshev` whatever the rose is.
+export function ringOf(x, y, ox = 0, oy = 0) {
+  const dx = Math.abs(x - ox);
+  const dy = Math.abs(y - oy);
+  if (RING_METRIC === 'manhattan') return dx + dy;
+  if (RING_METRIC === 'euclidean') return Math.round(Math.hypot(dx, dy));
+  return Math.max(dx, dy);
+}
 
 // Where a run actually starts (core/rules.js `createRun`): one tile south of
 // the hut, not on it, so every route BFSed against it walks the same tiles a

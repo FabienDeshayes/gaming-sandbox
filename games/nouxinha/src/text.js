@@ -75,13 +75,13 @@ export const SETTINGS = {
   cheats: (on) => `CHEATS: ${on ? 'ON' : 'OFF'}`,
   cheatNote: (on) =>
     on
-      ? 'WHOLE MAP REVEALED, ONE OF EVERYTHING. NOTHING SAVES.'
+      ? 'WHOLE MAP REVEALED. NOTHING SAVES.'
       : 'REVEALS THE MAP AND HANDS YOU EVERY ITEM.',
   // The switch the ending leaves behind (DESIGN.md §4.9). Only on this screen
   // for a player who has seen the light come back, and only while the cheats are
   // on: it is a way of looking at the game rather than a way of playing it.
   invert: (on) => `INVERT COLOURS: ${on ? 'ON' : 'OFF'}`,
-  invertNote: 'THE WORLD DRAWN INSIDE OUT, THE WAY IT ENDED.',
+  invertNote: 'THE WORLD DRAWN INVERTED.',
   back: UI.back,
 };
 
@@ -96,16 +96,16 @@ export const BIOME_NAMES = {
 // --- HUD ---------------------------------------------------------------------
 
 export const HUD = {
-  explored: (tiles) => `EXPLORED ${tiles}`,
-  coins: (coins) => `COINS ${coins}`,
-  water: (water, ceiling) => `WATER ${water}/${ceiling}`,
+  explored: (tiles) => `EXPLORED: ${tiles}`,
+  coins: (coins) => `COINS: ${coins}`,
+  water: (water, ceiling) => `WATER: ${water}/${ceiling}`,
   // How many worlds the hall has taken off this campaign (DESIGN.md §4.9).
   // Only on screen once there is one to count.
-  cycles: (n) => `WORLDS ${n}`,
+  cycles: (n) => `WORLDS: ${n}`,
   // How far from the hut you are standing *now* — the Gnomon's standing, and so
   // only on screen for a campaign that has put a hand on it (DESIGN.md §4.10).
-  distance: (n) => `OUT ${n}`,
-  light: (name, durability, max) => `${name}  ${durability}/${max}`,
+  distance: (n) => `OUT: ${n}`,
+  light: (name, durability, max) => `${name}:  ${durability}/${max}`,
   noLight: 'NO LIGHT',
   blackout: 'BLACKOUT. ONLY WHAT IS RIGHT AROUND YOU IS VISIBLE.',
   // Badge on a slot holding more than one copy of the same light.
@@ -118,39 +118,39 @@ export const HUD = {
 // (ExploreScene `announce`). Every one of these is a shout, and every one of
 // them is transient — the line is blank the rest of the time.
 export const FLASH = {
-  gemFound: (name) => `${name} IS BACK. CARRY IT HOME TO KEEP IT.`,
-  toolFound: (name) => `FOUND THE ${name}. CARRY IT HOME TO KEEP IT.`,
+  gemFound: (name) => `YOU FOUND ${name}! SOMEHOW, THINGS ARE LOOKING BRIGHTER AROUND YOU.`,
+  toolFound: (name) => `YOU FOUND THE ${name}!`,
   burnedOutBlackout: (name) => `${name} BURNED OUT. NO LIGHT LEFT.`,
   burnedOutSwapped: (name, lit) => `${name} BURNED OUT. ${lit} LIT.`,
-  coins: (n) => `FOUND ${n} COIN${n === 1 ? '' : 'S'}.`,
-  picked: (name) => `FOUND ${name}.`,
-  respawned: 'EVERYTHING LYING OUT THERE IS LYING SOMEWHERE ELSE NOW.',
+  coins: (n) => `YOU FOUND ${n} COIN${n === 1 ? '' : 'S'}.`,
+  picked: (name) => `YOU FOUND ${name}.`,
+  respawned: 'THE WORLD HAS SHIFTED. EVERYTHING LYING OUT THERE IS LYING SOMEWHERE ELSE NOW.',
   // Walking back into the bag a death left behind (DESIGN.md §6).
   bagFound: 'YOUR BAG. EVERYTHING YOU LOST IS BACK IN HAND.',
   // A shut gate bumps like rock, so it says what it wants rather than reading
   // as a wall with a pattern on it. It names the key by colour, because the key
   // and the gate are drawn in the same one.
-  gateLocked: (keyName) => `LOCKED. IT WANTS THE ${keyName}.`,
+  gateLocked: (keyName) => `LOCKED. IT NEEDS THE ${keyName}.`,
   gateOpened: (keyName) => `THE ${keyName} TURNS. THE GATE IS OPEN.`,
-  keyFound: (name) => `FOUND THE ${name}. CARRY IT HOME TO KEEP IT.`,
+  keyFound: (name) => `YOU FOUND THE ${name}. WHAT WILL IT OPEN?`,
   chestCoins: (n) => `THE CHEST HELD ${n} COINS.`,
   chestEmpty: 'THE CHEST IS ALREADY OPEN.',
   // A landmark, walked into. The panel says what it is; the status line says
   // what it just did for you, which is the half worth having in a shout.
-  landmarkAgain: (name) => `${name}. NOTHING MORE TO TAKE FROM IT THIS WORLD.`,
+  landmarkAgain: (name) => `${name}. NOTHING MORE TO TAKE FROM IT IN THIS WORLD.`,
   // One line per landmark that has a gift, because two of them reveal ground
   // and a shared "GROUND REVEALED" would lose which place just did it. Keyed
   // by landmark id and read through `giftLine` in ExploreScene: a landmark
   // with no entry here is one with no gift to shout about, which is the four
   // that belong to a single world (DESIGN.md §4.10.3).
   landmarkGift: {
-    mint: (gift) => `THE PRESS STRIKES YOU ${gift.coins} BLANKS.`,
+    mint: (gift) => `THE PRESS STRIKES YOU ${gift.coins} COINS.`,
     bell: () => 'THE WELL UNDER IT IS DEEP. YOUR WATER IS FULL.',
     'lantern-tree': (gift) => `${gift.light} BURNS LIKE NEW.`,
     gnomon: () => 'THE DIAL SHOWS YOU THE GROUND YOU CAME OVER.',
     aqueduct: () => 'YOU FOLLOW THE CHANNEL OUT. THE GROUND UNDER IT COMES CLEAR.',
-    watchtower: () => 'FROM THE TOP OF IT, THE COUNTRY.',
-    weighhouse: (gift) => `THE EMPTY PAN HOLDS ${gift.stocked}.`,
+    watchtower: () => 'FROM THE TOP OF IT, YOU CAN CLEARLY SEE AROUND.',
+    weighhouse: (gift) => `IN THE HOUSE, YOU FIND ${gift.stocked}.`,
   },
   // A signpost, read again. The first read gets the panel; the hut's hint is
   // flavour rather than a fact worth repeating, so it isn't in this one.
@@ -164,8 +164,8 @@ export const FLASH = {
   wispAgain: 'STILL BURNING.',
   // The edge, every time after the first — the first bump earns the EDGE dialog.
   edge: 'THE DARK WILL NOT GIVE WAY.',
-  bought: (name, coinsLeft) => `BOUGHT ${name}. ${coinsLeft} COINS LEFT.`,
-  headBackOut: 'SAVED AT THE HUT. WATER FULL.',
+  bought: (name, coinsLeft) => `YOU BOUGHT ${name}. ${coinsLeft} COINS LEFT.`,
+  headBackOut: 'GAME SAVED. YOUR WATER HAS REPLENISHED.',
 };
 
 // --- What a run is carrying --------------------------------------------------
@@ -195,9 +195,9 @@ export const CARRIED = {
 // Walking into the edge of the world (DESIGN.md §4). The only thing in the game
 // that explains itself, because the edge is invisible by design.
 export const EDGE = {
-  title: 'THE DARK IS TOO STRONG',
+  title: 'THE DARK IS TOO STRONG.',
   lines: [
-    'Out here the dark stops giving way. It has been eating your light for a while now and this is where it has eaten all of it.',
+    'Out here, the dark engulfs you. It has been eating your light for a while now and this is where it has eaten all of it.',
     'Nothing goes further. Turn around.',
   ],
   back: UI.back,
@@ -217,9 +217,9 @@ export const MENU = {
 export const SAVED = {
   title: 'EXPEDITION SAVED',
   titleCheats: 'NOTHING SAVED',
-  lineCheats: 'Cheats are on, so this run was never for real and nothing was written.',
+  lineCheats: 'Cheats are on, so this run was never for real and nothing was saved.',
   lines: (slot) => [
-    `Slot ${slot} is holding this walk exactly where you are standing.`,
+    `Slot ${slot} is holding this game exactly where you are standing.`,
     'LOAD GAME picks it up from here.',
   ],
   rowFurthest: 'FURTHEST OUT',
@@ -263,8 +263,8 @@ export const HUT = {
 export const HALL = {
   title: 'SOMEWHERE ELSE',
   moulded: (n) =>
-    `He has carried you across the realm ${n === 1 ? 'once' : `${n} times now`}. You are at your door with a candle and a full tank.`,
-  kept: 'He took the colours out of your hands. Your coins, your lights, your tools and every tile you lit stayed with the country you left — he can carry a person and nothing else.',
+    `He has guided you across the realm ${n === 1 ? 'once' : \`${n} times now\`}. You are at your door with a candle and a full reserve of water.`,
+  kept: 'He took the gems out of your hands. Your coins, your lights and your items stayed with the land you left. Only you have moved on.',
   cheats: 'CHEATS ON — nothing was stored, and this world is a sandbox like the last one.',
   rowWorlds: 'WORLDS ENDED',
   setOut: 'SET OUT AGAIN',
@@ -337,21 +337,21 @@ export const SAY = {
   // walk that is only being carried on (scenes/ExploreScene.js).
   expeditionStart: [
     'You venture out of the hut, and the dark is surrounding you.',
-    'You have a candle lit and some water on you, and nothing else.',
+    'You have a candle lit and some water on you, but nothing else.',
     'Explore the land, and bring back colour to the world.',
   ],
   // Opening a chest. Somebody was here before you and left something behind —
   // which is the only story the world tells about itself, so it gets the panel
   // rather than a line in the HUD.
   chestKey: (keyName) => [
-    'The lid gives, and centuries of dust go up with it.',
-    `Inside, on a bed of rotted cloth, lies the ${keyName.toLowerCase()}.`,
+    'The lid gives, and layers of dust go up with it.',
+    `Inside lies the ${keyName.toLowerCase()}.`,
     'Somewhere out there is a gate cut in the same colour.',
   ],
   chestCoins: (coins) => [
-    'The lid gives, and centuries of dust go up with it.',
-    `Inside is a hoard of ${coins} coins, counted out and left for nobody.`,
-    'There is nobody at the stalls to ask where you got them.',
+    'The lid gives, and layers of dust go up with it.',
+    `Inside is a hoard of ${coins} coins.`,
+    'Nobody will ask where you got them.',
   ],
   // A landmark, walked into (DESIGN.md §4.10). The panel rather than a line in
   // the HUD for the same reason a chest gets it: this is the world telling you
@@ -381,8 +381,8 @@ export const SAY = {
   signpost: (lines, hutLine) => [
     'A post, leaning, with the ground trodden down around it.',
     lines.length > 1
-      ? 'One of its three arms is a blank stub. The other two have names burned into the wood.'
-      : 'One of its three arms is gone outright. Another is a blank stub. The last has a name burned into the wood.',
+      ? 'One of its three arms is a blank panel. The other two have names burned into the wood.'
+      : 'One of its three arms is gone outright. Another is a blank panel. The last has a name burned into the wood.',
     ...lines,
     hutLine,
   ],
@@ -403,13 +403,13 @@ export const SAY = {
   // giving up — twelve pieces is enough to mend it, and the mending is the one
   // thing he has not done in centuries: he opens his hands (STORY.md §2).
   ending: () => [
-    'The clearing holds the hall, and the hall holds him, and his hands are open a little before you have said a word.',
-    '"Four," he says. "Four countries, walked all the way to the end, and every colour out of every one of them carried back to me. Twelve. That is the whole sum, and there is nowhere left I could put you down that you have not already finished."',
-    'He lifts what he is holding so that you can see into it. The pieces you carried are in there, standing close around what was left, and there is no gap anywhere between them any more.',
-    '"It is whole," he says. "It has been whole for a moment now, and I am still holding it, because holding is the only thing I have done since before you were woken. What is left is to stop."',
-    'There is nothing to take out of your hands. He looks down at his own.',
-    '"You kept coming back," he says. "Nobody has ever kept coming back. Stand where you are — this will be bright."',
-    'And he opens his hands.',
+    'As expected, Nouxinha awaits you in the hall, hands slightly opened.',
+    '"Four," he says. "Four lands, walked all the way to the end, and every colour out of every one of them carried back to me. There is nowhere left I could put you down that you have not already finished."',
+    'He takes the last gems from you. The pieces you carried are in between his fingers, and a pure light seems to emerge from it.',
+    '"It is whole," he says. "I have been holding it together since before you were woken. What is left is to stop."',
+    'He looks down at his hands and slowly opens them. A flashing light starts to appear, powerful and warm at the same time.',
+    '"You kept coming back," he says. "Nobody has ever kept coming back. Thank you. Stand where you are — this will be bright."',
+    'And he opens his hands fully, and the colour claimed back the land.',
   ],
 };
 
@@ -425,58 +425,58 @@ export const SAY = {
 // hands, because a person is the whole of what he can carry.
 const HALL_SPEECH = [
   (gems, max) => [
-    'The clearing holds no hoard. It holds a hall, and a man standing in front of it with his hands full of light.',
-    '"Nouxinha," he says, as though you had asked. "You have come a long way, and not for the first time — though you would not remember that."',
+    'In the middle of the hall, there is a man standing in front of you, with his hands closed and strangely shining.',
+    '"I am Nouxinha," he says, as though you had asked for his name. "You have come a long way, and not for the first time — though you would not remember that."',
     gems >= max
       ? '"All three. Good — they are flakes off what I am holding, and my hands are rather full."'
       : gems
-        ? `"${gems === 1 ? 'One' : 'Two'} of three. Close is not the same as finished, and I will take those."`
-        : '"Empty-handed. That is a long walk for a conversation, and I am glad of the conversation."',
+        ? `"${gems === 1 ? 'One' : 'Two'} of three. I will need more before you can move on to the next land."`
+        : '"Empty-handed. That is a long walk for a conversation, but I am glad for it."',
     'He takes what you are carrying out of your hands, one piece at a time, and you let him.',
-    '"The sun was dying before I put my hands on it," he says. "It broke in them. That much is mine, and I am not finished with it. Go home and rest."',
-    'He puts a hand out, and the country goes out from under you. What comes back around you is somewhere else entirely — and your own door is behind you.',
+    '"The sun was dying before I put my hands on it," he says. "I can\'t heal it without those gems of colour. Now, go home and rest."',
+    'He puts a hand out, and the land goes out from under you. What comes back is somewhere else entirely — and your own door is behind you.',
   ],
   (gems, max) => [
-    'The clearing again, and the hall in it, and the man in front of the hall with his hands full of light.',
-    '"Nouxinha," he says. "Which you knew. You walked one of my worlds all the way to the end, and something of it stayed on you — that is new, and I have not decided whose it is."',
+    'The hall again, and the same man, with his hands shining strangely.',
+    '"I am Nouxinha," he says. "Which you knew. You walked one of my worlds all the way to the end, and something of it stayed on you — that is new."',
     gems >= max
       ? '"All three again, and faster. You are learning the shape of what I build."'
       : gems
         ? `"${gems === 1 ? 'One' : 'Two'} of three, this time. You came anyway. Last time you came with everything, and I am not going to ask."`
         : '"Nothing in your hands at all. You came the whole way to look at me. I would have, in your place."',
     'He takes what you have, one piece at a time, and he is careful about your hands.',
-    '"You will be back," he says, with no weight on it whatsoever. "Everybody is. Go home and rest."',
+    '"You will be back," he says, with no weight on it whatsoever. "Go home and rest."',
     'He carries you, and not one thing you were carrying. What comes back around you is a different kind of dark, and your own door is behind you.',
   ],
   (gems, max) => [
-    'The hall stands where a hoard should be, in the third clearing of its kind you have walked into.',
-    '"Two of them finished, and here is the next," he says. "I keep the count as well. It is most of the arithmetic I have left."',
+    'The hall stands in the third clearing of its kind you have walked into.',
+    '"Two of them finished, and here is the next," Nouxinha says. "I keep the count as well. Not that I can do much else from here."',
     gems >= max
-      ? '"All three. You do this well now — better than I built it to be done."'
+      ? '"All three. You do this well now — better than I expected."'
       : gems
         ? `"${gems === 1 ? 'One' : 'Two'} of three. You are not here for the fetching any more, are you."`
         : '"Empty-handed, and you knew you would be before you set out. So this is a visit."',
-    'He gathers them in. His hands do not quite close any more, and you both watch them not close.',
-    '"You are looking at my hands," he says. "Everyone gets there eventually. Go home."',
-    'He sets you down in another country of the same realm, with nothing in your pockets, and your own door is behind you.',
+    'He gathers the gems in. Somehow you get a glimpse of an incredible source of light between his fingers.',
+    '"You are looking at my hands," he says. "You will see soon, hopefully. Go home."',
+    'He sets you down in another land, with nothing in your pockets, and your own door is behind you.',
   ],
   (gems, max) => [
     'The clearing, the hall, the man — the third time you have arrived already knowing what all three of them are.',
-    '"Three kinds of world walked out from under you," he says. "There is one left that you have not finished. I would rather you did not, and I am going to hand it to you anyway, because carrying you somewhere is the only thing I still know how to do."',
+    '"You explored three kinds of lands," he says. "There is one left that you have not finished."',
     gems >= max
       ? '"All three. Of course. You have not missed a set since the first world."'
       : gems
         ? `"${gems === 1 ? 'One' : 'Two'} of three. Not this time, then. Neither of us is in a hurry."`
-        : '"Nothing. Good — sit down. The next one will want your legs."',
-    'He takes what there is. The light in his hands is thinner than it was the first time you stood here, and it is not the dark that has thinned it.',
+        : '"Nothing. Good — sit down. Or not. Come back once you\'ve found the gems."',
+    'He takes what there is. The light in his hands is brighter than it was the first time you stood here.',
     '"Go on," he says. "Finish it. I will be standing in the last one."',
     'He carries you across, for what you both know is the last time but one.',
   ],
   (gems) => [
     'The clearing, and the hall, and him in front of it as though the sun had never come up over any of this.',
-    '"You know how it goes now," he says. "It went out of my hands, and it came up over all of it, and here we both still are. I carry, you walk. I never minded the walking."',
+    '"You know how it goes now," he says. "I carry, you walk. I never minded the walking."',
     gems
-      ? '"And you brought colour with you, out of habit. So did I, once."'
+      ? '"And you brought colour with you, out of habit. Very nice."'
       : '"And nothing in your hands, which is the honest way to arrive."',
     'He takes what you have and sets it down beside him, where the light already is.',
     '"Again, then," he says. "You know the way."',

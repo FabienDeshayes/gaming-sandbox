@@ -348,9 +348,9 @@ unit('a place-dependent hue waits for the gem it names', () => {
 
   // An unpainted tile is one colour, whatever it is handed.
   assertEqual(
-    zoneTints('merchant', { gems: 3, roles: { gem: 1 } }),
+    zoneTints('coin', { gems: 3, roles: { gem: 1 } }),
     [fg, fg, fg, fg],
-    'the stall is one colour'
+    'the coin is one colour'
   );
 });
 

@@ -263,7 +263,7 @@ export const HUT = {
 export const HALL = {
   title: 'SOMEWHERE ELSE',
   moulded: (n) =>
-    `He has guided you across the realm ${n === 1 ? 'once' : \`${n} times now\`}. You are at your door with a candle and a full reserve of water.`,
+    `He has guided you across the realm ${n === 1 ? 'once' : `${n} times now`}. You are at your door with a candle and a full reserve of water.`,
   kept: 'He took the gems out of your hands. Your coins, your lights and your items stayed with the land you left. Only you have moved on.',
   cheats: 'CHEATS ON — nothing was stored, and this world is a sandbox like the last one.',
   rowWorlds: 'WORLDS ENDED',

@@ -5,14 +5,16 @@ Agents, do not use this file as a list of things to implement, ignore it unless 
 Big things next:
 * review all sprites
 * review all texts
-* review and maybe replace chebyshev by Euclidian or alternative
+* check why four sanctuaries/halls seem to be in the four cardinal directions 
 
 small things:
+* tutorial
 * better intro to explain the story
 * better transition when finishing one world
 * I never find the map and the compass, always end up buying them. do something about it.
 
 fixes:
+* tree painting bug
 * review colours changing, mapping gems to their hall, landmarks, etc. this needs to make strong sense both in game and for the gameplay
 * balance things: water and light (after world generation is reviewed)
 

@@ -159,13 +159,12 @@ export const TILES = {
   // standing in until it is drawn for this game (`draw.html`).
   stone: [19, 6],
 
-  // A wisp (DESIGN.md §4.11): the one structure whose sprite a biome *is*
-  // expected to repoint (`BIOME_KEYS` below) — unlike a landmark, a wisp
-  // carries no identity from world to world, so there is nothing wrong with
-  // four worlds drawing it four different ways. This is temperate's own and
-  // every other biome's fallback: a small four-point glint, standing in
-  // until it is drawn for this game like every other provisional sprite here.
-  wisp: [16, 2],
+  // A wisp (DESIGN.md §4.11): a biome *is* allowed to repoint this sprite
+  // (`BIOME_KEYS` below) — unlike a landmark, a wisp carries no identity from
+  // world to world, so there would be nothing wrong with four worlds drawing
+  // it four different ways. Drawn for this game (`draw.html`), and every
+  // biome shares the one tile until one earns a version of its own.
+  wisp: [15, 10],
 
   // --- Items ---------------------------------------------------------------
   // The four lights climb a silhouette: candle, lantern, candelabra, and a
@@ -254,9 +253,6 @@ export const BIOME_TILES = {
       [3, 2],
       [1, 1],
     ],
-    // A ringed glass orb rather than temperate's glint — a lamp with frost on
-    // it, standing in until it is drawn for this game.
-    wisp: [13, 2],
   },
   desert: {
     floor: [[1, 0]],
@@ -270,9 +266,6 @@ export const BIOME_TILES = {
       [6, 1],
       [7, 2],
     ],
-    // A small flame rather than a glint or an orb — an ember burning on its
-    // own over the sand, standing in until it is drawn for this game.
-    wisp: [14, 10],
   },
   mystic: {
     floor: [[2, 0]],
@@ -282,12 +275,10 @@ export const BIOME_TILES = {
       [5, 2],
     ],
     tree: [
-      [2, 1],
-      [4, 1],
+      [0, 2],
+      [2, 2],
+      [6, 2],
     ],
-    // A scatter of motes rather than one point of light — sparkle dust,
-    // standing in until it is drawn for this game.
-    wisp: [17, 0],
   },
 };
 

@@ -143,9 +143,9 @@ unit('every biome names tiles that are on the sheet, and only terrain', () => {
 });
 
 unit('a biome only pays for a sprite of its own where it actually draws differently', () => {
-  // Rock is the same three tiles in every biome today, so it costs one cut,
-  // not four. Floor, tree and wisp are where the four worlds actually differ.
-  const sharedKeys = BIOME_KEYS.filter((key) => !['floor', 'tree', 'wisp'].includes(key));
+  // Rock and wisp are the same tile in every biome today, so each costs one
+  // cut, not four. Floor and tree are where the four worlds actually differ.
+  const sharedKeys = BIOME_KEYS.filter((key) => !['floor', 'tree'].includes(key));
   for (const biome of BIOME_IDS)
     for (const key of sharedKeys) assertEqual(biomeKey(key, biome), key, `${biome} shares the ${key} sprite`);
 
@@ -155,12 +155,6 @@ unit('a biome only pays for a sprite of its own where it actually draws differen
   for (const biome of BIOME_IDS.filter((b) => b !== 'temperate'))
     assertEqual(biomeKey('floor', biome), `floor@${biome}`, `${biome}'s floor is its own`);
   for (const biome of BIOME_IDS) assertEqual(biomeKey('tree', biome), `tree@${biome}`, `${biome}'s trees are its own`);
-
-  // Temperate's wisp is the shared default too; the other three each draw
-  // their own (DESIGN.md §4.11).
-  assertEqual(biomeKey('wisp', 'temperate'), 'wisp', "temperate's wisp is the shared tile");
-  for (const biome of BIOME_IDS.filter((b) => b !== 'temperate'))
-    assertEqual(biomeKey('wisp', biome), `wisp@${biome}`, `${biome}'s wisp is its own`);
 });
 
 unit('a biome that repoints a tile gets its own sprite, painted like the tile it came from', () => {

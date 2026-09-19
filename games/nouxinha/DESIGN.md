@@ -1077,12 +1077,11 @@ far for.
   posts, and dropped with the ground the moment the hall moulds the world again (§4.9). There is
   nothing here for a standing to keep, because there is nothing about a wisp that outlasts knowing
   where it stood.
-- **A different sprite per biome, and that is the point of it being a biome's to repoint at all**
+- **One sprite for every biome, though a biome is free to repoint it**
   (`BIOME_KEYS` in `src/data/tiles.js`). Unlike a landmark, a wisp carries no identity from world to
-  world — nothing recognises it, nothing colours it — so four worlds are free to draw it four
-  different ways: temperate's own small four-point glint, a ringed glass orb for the frozen world, a
-  low ember for the desert, a scatter of motes for the mystical realm. All four are tiles the sheet
-  already had, standing in until they are drawn for this game like the landmarks once were (§4.10).
+  world — nothing recognises it, nothing colours it — so there is nothing wrong with a biome drawing
+  it its own way; today none does, and all four worlds draw the same small glint, drawn for this
+  game (`draw.html`).
 
 | Path | Holds |
 |---|---|
@@ -1090,7 +1089,7 @@ far for.
 | `src/core/world.js` | `buildWisps`, `wisps()`, `wispAt()`, and the `'wisp'` terrain |
 | `src/core/light.js` | the `round` shape kind (`roundTiles`) |
 | `src/core/rules.js` | `wispOnTile`, `touchWisp`, and `wispLitTiles` inside `litTiles` |
-| `src/data/tiles.js` | the shared `wisp` sprite and each biome's own |
+| `src/data/tiles.js` | the shared `wisp` sprite |
 | `src/text.js` | `SAY.wisp`, `FLASH.wispAgain` |
 | `src/ui/MapView.js` / `src/ui/worldMap.js` | drawing the tile, and marking it once it has been lit |
 

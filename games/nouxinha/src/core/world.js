@@ -46,6 +46,7 @@ import {
   RICHNESS_CELL,
   RICHNESS_MAX,
   RICHNESS_MIN,
+  RING_METRIC,
   ROCK_THRESHOLD,
   SANCTUM_PLAN,
   SCATTER,
@@ -269,14 +270,51 @@ function noiseTerrain(x, y, seed) {
 
 // --- Placement ---------------------------------------------------------------
 
-// A point at exactly `distance` in Chebyshev terms, on the heading `angle`.
-// Projecting the circle onto the square ring keeps "distance from the hut" the
-// same number the HUD's furthest-out counter reports.
-function ringPoint(distance, angle) {
+// Which ring a plan's `distance` names, and how much every one of them is
+// stretched — the two knobs `sim/` sweeps to compare one placement rose
+// against another (balance.js `RING_METRIC`). Held here rather than read live
+// off balance.js because the structures they place are cached per seed
+// (`structureCache` below), and a metric that changed under the cache would
+// hand back two different worlds for the one seed.
+let ringMetric = RING_METRIC;
+let ringScale = 1;
+let ringDrift = MAX_BEARING_DRIFT;
+
+// A point at exactly `distance` out on the heading `angle`, on whichever ring
+// the metric names: the square ring, where max(|x|, |y|) is the distance and
+// the walk to it is anything from one to two times that depending on the
+// bearing, or the diamond, where |x| + |y| is the distance and the walk is
+// that number whichever way the thing lies. The square is what keeps "distance
+// from the hut" the same number the HUD's furthest-out counter reports.
+function ringPoint(distance, angle, scale = ringScale) {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
-  const m = Math.max(Math.abs(c), Math.abs(s));
-  return { x: Math.round((distance * c) / m), y: Math.round((distance * s) / m) };
+  const m = ringMetric === 'manhattan' ? Math.abs(c) + Math.abs(s) : Math.max(Math.abs(c), Math.abs(s));
+  const d = distance * scale;
+  return { x: Math.round((d * c) / m), y: Math.round((d * s) / m) };
+}
+
+// Puts every ring placement on another rose, for the comparison tool and for
+// nothing else — the game itself never calls this, and boots on balance.js's
+// own `RING_METRIC` at a scale of one. `scale` multiplies every plan distance,
+// which is how a diamond world is compared against the square one at a walk of
+// the same length rather than at a plan of the same number (`sim/README.md`).
+// `drift` replaces `MAX_BEARING_DRIFT`, because that bound exists only to hold
+// the square rose's diagonal blowup in: on the diamond a diagonal placement
+// sits *closer* than an axial one, so the cap has nothing left to bound, and
+// whether it is still worth having is a question the diamond reopens.
+// The structure cache is emptied on the way through: a seed's world is only a
+// pure function of the seed while the rose it is placed on holds still.
+export function setRingMetric(metric = RING_METRIC, scale = 1, drift = MAX_BEARING_DRIFT) {
+  ringMetric = metric;
+  ringScale = scale;
+  ringDrift = drift;
+  structureCache.clear();
+  // And with it the seeds that were validated against those structures: what
+  // `pickSeed` bumps a seed for is a sanctum door or a landmark court it
+  // cannot reach, and both of those have just moved.
+  pickedCache.clear();
+  return { metric: ringMetric, scale: ringScale, drift: ringDrift };
 }
 
 // Pulls an angle back toward whichever N/E/S/W direction it is nearest, if it
@@ -297,7 +335,11 @@ function cappedRingPoint(distance, angle) {
   const axis = Math.PI / 2;
   const nearest = Math.round(angle / axis) * axis;
   const offset = angle - nearest;
-  const l = MAX_BEARING_DRIFT;
+  const l = ringDrift;
+  // A cap of a quarter turn is no cap at all: every bearing is already inside
+  // it and the fold hands the angle straight back, which is what `sim/` sets it
+  // to when it wants to see the rose with the bound taken off.
+  if (l >= axis) return ringPoint(distance, angle);
   const folded = ((2 * l) / Math.PI) * Math.asin(Math.sin((Math.PI * offset) / (2 * l)));
   return ringPoint(distance, nearest + folded);
 }
@@ -712,7 +754,9 @@ function buildChests(seed, built, taken, marks) {
     // A ring round the hut, or a ring round the landmark it belongs to — only
     // the former's bearing is free enough off the hut to need capping.
     const around = (angle) => {
-      const at = beside ? ringPoint(distance, angle) : cappedRingPoint(distance, angle);
+      // A landmark's own little ring is three to five tiles across and is not
+      // a distance from the hut at all, so the scale above never touches it.
+      const at = beside ? ringPoint(distance, angle, 1) : cappedRingPoint(distance, angle);
       return beside ? { x: beside.x + at.x, y: beside.y + at.y } : at;
     };
 

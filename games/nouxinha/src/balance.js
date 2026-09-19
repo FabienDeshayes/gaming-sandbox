@@ -173,6 +173,22 @@ export const EDGE_RADIUS = 155;
 // directions; this is loose enough that most seeds never feel it.
 export const MAX_BEARING_DRIFT = (25 * Math.PI) / 180;
 
+// Which ring a `distance` in a plan names, and so the shape every placement
+// rose is projected onto (`ringPoint` in core/world.js).
+//
+//   'chebyshev' — the square ring: max(|x|, |y|) is the distance. What a plan
+//                 reads as is "this far out in the HUD's own counter".
+//   'manhattan' — the diamond ring: |x| + |y| is the distance. What a plan
+//                 reads as is "this many steps of walking", because there are
+//                 no diagonal steps — so the walk to a thing stops depending
+//                 on which way it happens to lie.
+//
+// The two are the same number on an axis and differ by up to a factor of two
+// on a diagonal, which under 'chebyshev' is the whole spread between the
+// cheapest and dearest bearing a plan can roll. `sim/` measures what that is
+// worth in play; `npm run sim:geometry` is the picture of the placement itself.
+export const RING_METRIC = 'chebyshev';
+
 // One tile of light lost for every ten tiles closer to the edge — so the bigger
 // the light, the sooner the dark starts eating it, and everything converges on
 // the same guttering ring by the end. Never all the way to nothing: a tile of

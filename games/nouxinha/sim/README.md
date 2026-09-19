@@ -46,6 +46,17 @@ regions — a sanctum's wall, a landmark's court, an apron, `MIN_SEPARATION` —
 which are shapes rather than rings, and the HUD's furthest-out counter, which
 answers a different question.
 
+## How the comparison is paired
+
+Campaign `i` is handed the same *preferred* seed under every rose, and the bot's own rolls are
+seeded off `i` alone, so the same campaign starts from the same decisions in each. What it is handed
+after that is `pickSeed`'s answer, and `pickSeed` can bump a seed the rose has made unwalkable — a
+sanctum door backed into a pocket, a landmark court that will not fit. Measured over 24 campaigns,
+two thirds come out on the *identical* world seed under both roses, which is the same ground tile
+for tile; every one of the rest still comes out in the same **biome**, because the chain `pickSeed`
+walks prefers one (DESIGN.md §4.3). So the pairing is exact for most campaigns and matched on the
+thing that decides what walking costs for the rest.
+
 ## What the bot is
 
 `autoplay.mjs` drives `createRun`, `step`, `openChest`, `bankRun` and

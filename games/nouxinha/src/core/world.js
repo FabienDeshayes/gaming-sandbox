@@ -281,15 +281,28 @@ let ringScale = 1;
 let ringDrift = MAX_BEARING_DRIFT;
 
 // A point at exactly `distance` out on the heading `angle`, on whichever ring
-// the metric names: the square ring, where max(|x|, |y|) is the distance and
-// the walk to it is anything from one to two times that depending on the
-// bearing, or the diamond, where |x| + |y| is the distance and the walk is
-// that number whichever way the thing lies. The square is what keeps "distance
-// from the hut" the same number the HUD's furthest-out counter reports.
+// the metric names. What separates the three is how much the walk to a thing
+// depends on which way it happens to lie, given that there are no diagonal
+// steps and so the walk is |x| + |y|:
+//
+//   'chebyshev' — the square ring, max(|x|, |y|): the walk is the distance on
+//                 an axis and twice it on a diagonal. It is what keeps
+//                 "distance from the hut" the same number the HUD's
+//                 furthest-out counter reports.
+//   'euclidean' — the true circle: the walk is the distance on an axis and
+//                 1.41 times it on a diagonal. The shape `EDGE_RADIUS` is
+//                 already measured in.
+//   'manhattan' — the diamond, |x| + |y|: the distance *is* the walk, whichever
+//                 way the thing lies.
 function ringPoint(distance, angle, scale = ringScale) {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
-  const m = ringMetric === 'manhattan' ? Math.abs(c) + Math.abs(s) : Math.max(Math.abs(c), Math.abs(s));
+  const m =
+    ringMetric === 'manhattan'
+      ? Math.abs(c) + Math.abs(s)
+      : ringMetric === 'euclidean'
+        ? 1
+        : Math.max(Math.abs(c), Math.abs(s));
   const d = distance * scale;
   return { x: Math.round((d * c) / m), y: Math.round((d * s) / m) };
 }

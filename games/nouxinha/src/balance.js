@@ -178,15 +178,19 @@ export const MAX_BEARING_DRIFT = (25 * Math.PI) / 180;
 //
 //   'chebyshev' — the square ring: max(|x|, |y|) is the distance. What a plan
 //                 reads as is "this far out in the HUD's own counter".
+//   'euclidean' — the true circle, which is the shape EDGE_RADIUS is already
+//                 measured in.
 //   'manhattan' — the diamond ring: |x| + |y| is the distance. What a plan
 //                 reads as is "this many steps of walking", because there are
 //                 no diagonal steps — so the walk to a thing stops depending
 //                 on which way it happens to lie.
 //
-// The two are the same number on an axis and differ by up to a factor of two
-// on a diagonal, which under 'chebyshev' is the whole spread between the
-// cheapest and dearest bearing a plan can roll. `sim/` measures what that is
-// worth in play; `npm run sim:geometry` is the picture of the placement itself.
+// All three are the same number on an axis. Off one they part: the walk to a
+// thing on a true diagonal is twice its plan under 'chebyshev', 1.41 times it
+// under 'euclidean' and exactly it under 'manhattan' — and under the first two
+// that spread is the whole difference between the cheapest and the dearest
+// bearing a plan can roll. `sim/` measures what that is worth in play; `npm run
+// sim:geometry` is the picture of the placement itself.
 export const RING_METRIC = 'chebyshev';
 
 // One tile of light lost for every ten tiles closer to the edge — so the bigger

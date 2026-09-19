@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nouxinha — the words</title>
+  <style>
+    /* A development page, not part of the game. It reads `src/text.js` as
+       source, finds every string in it, and puts each one in a box with a
+       legend saying where the player meets it — so the whole voice of the game
+       can be reviewed in the order it is heard rather than in the order it is
+       declared.
+
+       It edits the *source* and nothing else: every string is recorded by its
+       offset in the file, so exporting is the same file back with the edited
+       strings swapped in at their offsets. A string nobody touched is written
+       out byte for byte, comments and all, which is what makes the export safe
+       to drop straight over `src/text.js`.
+
+       The page is drawn in a biome's colour, like the other five, since that
+       is the colour the words will be read in; there is no palette to pick, in
+       here or in the game — a world's colour is its biome's. */
+    :root { --bg: #0b1a0b; --fg: #33ff66; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 monospace;
+      -webkit-font-smoothing: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      position: sticky; top: 0; z-index: 3;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+    }
+    .title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    h1 { font-size: 15px; margin: 0; letter-spacing: 2px; }
+    a { color: var(--fg); }
+    .navlink { opacity: 0.65; text-decoration: none; }
+    .navlink:hover { opacity: 1; text-decoration: underline; }
+    .controls { display: flex; gap: 14px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    label { opacity: 0.65; }
+    select, button, input {
+      font: inherit; color: var(--fg); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+      padding: 6px 10px; cursor: pointer;
+      min-height: 32px;
+    }
+    input[type=search] { cursor: text; min-width: 220px; }
+    button:hover, select:hover { background: color-mix(in srgb, var(--fg) 14%, transparent); }
+    button[disabled] { opacity: 0.3; cursor: default; }
+    button[disabled]:hover { background: transparent; }
+    .check { display: flex; gap: 6px; align-items: center; cursor: pointer; opacity: 0.65; }
+    .check:hover { opacity: 1; }
+    .check input { min-height: 0; width: auto; cursor: pointer; accent-color: var(--fg); }
+    .tally { margin-left: auto; opacity: 0.65; }
+    .tally b { opacity: 1; }
+    .blurb { padding: 12px 16px 0; max-width: 78ch; opacity: 0.6; }
+    .jump { padding: 10px 16px 0; display: flex; gap: 6px 16px; flex-wrap: wrap; }
+    .jump a { text-decoration: none; opacity: 0.6; font-size: 12px; }
+    .jump a:hover { opacity: 1; text-decoration: underline; }
+
+    main { padding: 16px 16px 120px; }
+
+    /* A group is one part of the game: the HUD, the stones, the items. */
+    .group { margin: 34px 0 0; }
+    .group > h2 {
+      font-size: 13px; margin: 0 0 2px; letter-spacing: 2px;
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+      padding-bottom: 6px;
+      display: flex; gap: 12px; align-items: baseline;
+    }
+    .group > h2 .count { margin-left: auto; opacity: 0.45; font-weight: normal; letter-spacing: 0; }
+    .group > .note { opacity: 0.55; margin: 8px 0 0; max-width: 78ch; }
+
+    /* A subject is one thing inside it: one landmark, one stone, one item. */
+    .subject { margin: 18px 0 0; padding-left: 12px; border-left: 1px solid color-mix(in srgb, var(--fg) 22%, transparent); }
+    .subject > h3 { font-size: 13px; margin: 0; letter-spacing: 1px; }
+    .subject > h3 .sub { opacity: 0.45; letter-spacing: 0; font-weight: normal; margin-left: 10px; }
+    .subject > .note { opacity: 0.55; margin: 4px 0 0; max-width: 78ch; }
+
+    /* A sequence is text the player meets in order — one array in the source.
+       The rail down its left is what says "these are read one after another". */
+    .seq { margin: 12px 0 0; padding: 8px 0 8px 14px; position: relative; }
+    .seq::before {
+      content: ''; position: absolute; left: 3px; top: 12px; bottom: 12px; width: 1px;
+      background: color-mix(in srgb, var(--fg) 40%, transparent);
+    }
+    .seq > .seqhead { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+    .seq > .seqhead b { letter-spacing: 1px; }
+    .seq > .seqhead .kind {
+      font-size: 11px; letter-spacing: 1px; padding: 1px 6px;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+    }
+    .seq > .note { opacity: 0.55; margin: 4px 0 0; max-width: 78ch; }
+
+    .entry { margin: 14px 0 0; padding-left: 10px; border-left: 3px solid transparent; }
+    .entry.edited { border-left-color: color-mix(in srgb, var(--fg) 55%, transparent); }
+    .field { margin: 10px 0 0; padding-left: 8px; border-left: 3px solid transparent; }
+    .field.edited { border-left-color: var(--fg); }
+    .entry .meta { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .entry .block {
+      font-size: 11px; letter-spacing: 1px; opacity: 0.85;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+      padding: 0 5px; flex: none;
+    }
+    .entry .label { letter-spacing: 1px; }
+    .entry .path { opacity: 0.4; font-size: 11px; }
+    .entry .badge {
+      font-size: 11px; letter-spacing: 1px; padding: 0 6px;
+      background: var(--fg); color: var(--bg);
+    }
+    .entry .badge.warn { background: transparent; color: var(--fg); border: 1px dashed var(--fg); }
+    .entry .badge.stale { background: transparent; color: var(--fg); border: 1px dotted var(--fg); }
+    .entry .when { opacity: 0.55; margin: 2px 0 4px; max-width: 78ch; }
+    .entry .when.missing { opacity: 0.8; font-style: italic; }
+    .field .meta { margin-bottom: 3px; }
+    .entry textarea {
+      display: block; width: 100%; max-width: 92ch;
+      font: 13px/1.55 monospace; color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent);
+      border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+      padding: 7px 9px; resize: vertical; overflow: hidden;
+    }
+    .field.edited textarea { border-color: color-mix(in srgb, var(--fg) 70%, transparent); }
+    .entry textarea:focus { outline: none; border-color: var(--fg); background: color-mix(in srgb, var(--fg) 12%, transparent); }
+    .entry .was {
+      max-width: 92ch; margin-top: 4px; padding: 5px 9px;
+      border-left: 1px solid color-mix(in srgb, var(--fg) 35%, transparent);
+      opacity: 0.55; white-space: pre-wrap;
+    }
+    .entry .was b { opacity: 0.8; font-weight: normal; letter-spacing: 1px; }
+    .entry .tools { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+    .entry .tools button { padding: 2px 8px; min-height: 0; font-size: 11px; letter-spacing: 1px; }
+    /* A ${…} in the text: the value the game drops in at that point. */
+    .hole { background: color-mix(in srgb, var(--fg) 22%, transparent); padding: 0 2px; }
+    .preview { max-width: 92ch; margin-top: 4px; opacity: 0.75; white-space: pre-wrap; }
+
+    dialog {
+      background: var(--bg); color: var(--fg);
+      border: 1px solid var(--fg); max-width: 96vw; width: 900px;
+      font: 13px/1.5 monospace; padding: 16px;
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+    dialog h2 { font-size: 13px; margin: 0 0 4px; letter-spacing: 2px; }
+    dialog .note { opacity: 0.6; margin: 0 0 10px; }
+    dialog textarea {
+      width: 100%; height: 40vh; font: 11px/1.45 monospace;
+      color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent);
+      border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent); padding: 8px;
+    }
+    dialog .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    .tabs { display: flex; gap: 10px; margin-bottom: 8px; }
+    .tabs button[aria-selected=true] { background: var(--fg); color: var(--bg); }
+    .empty { opacity: 0.5; padding: 40px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>NOUXINHA — THE WORDS</h1>
+      <a class="navlink" href="tiles.html">← browse tile sheet</a>
+      <a class="navlink" href="distances.html">measure the world →</a>
+      <a class="navlink" href="paint.html">paint a tile's zones →</a>
+      <a class="navlink" href="draw.html">draw a tile's pixels →</a>
+      <a class="navlink" href="biomes.html">assign tiles to biomes →</a>
+    </div>
+    <div class="controls">
+      <label>biome <select id="biome"></select></label>
+      <input type="search" id="search" placeholder="search the words, a path, a legend" />
+      <label class="check"><input type="checkbox" id="onlyEdited" /> only what I changed</label>
+      <button id="export">EXPORT</button>
+      <button id="revertAll">REVERT ALL</button>
+      <span class="tally" id="tally"></span>
+    </div>
+  </header>
+
+  <p class="blurb" id="blurb"></p>
+  <nav class="jump" id="jump"></nav>
+  <main id="main"></main>
+
+  <dialog id="exportDialog">
+    <h2>EXPORT</h2>
+    <p class="note" id="exportNote"></p>
+    <div class="tabs">
+      <button id="tabFile" aria-selected="true">THE WHOLE FILE</button>
+      <button id="tabEdits" aria-selected="false">JUST THE CHANGES</button>
+    </div>
+    <textarea id="exportText" readonly></textarea>
+    <div class="row">
+      <button id="copyExport">COPY</button>
+      <button id="downloadExport">DOWNLOAD text.js</button>
+      <button id="closeExport">CLOSE</button>
+      <span id="exportStatus" style="opacity:0.6"></span>
+    </div>
+  </dialog>
+
+<script type="module">
+import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
+import { getPalette, hex, setDefaultPalette } from './src/config.js';
+
+const SOURCE = './src/text.js';
+const STORE = 'nouxinha.textReview';
+
+// --- Reading the source ------------------------------------------------------
+//
+// A scanner rather than a parser: it walks the file, skips comments, consumes
+// every string literal whole, and keeps a stack of the braces and brackets it
+// is inside so it can say which key each literal sits under. That gives every
+// string a *path* — `SLOTS.empty`, `LANDMARK_TEXT.mint.met[0]` — which is both
+// what the page groups on and what the export names a change by.
+//
+// Three things it is deliberate about:
+//
+//   - a template literal is one string, `${...}` and all. The bits inside an
+//     interpolation are code, not words, and splitting them out would offer
+//     `'S'` and `''` as things to review.
+//   - a `[` straight after a value is a lookup, not an array, so the strings in
+//     `LANDMARK_TEXT[id][again ? 'again' : 'met']` are code and never listed.
+//   - several strings can share a path — the branches of a ternary. They are
+//     kept in order as *variants* of the same entry rather than merged.
+//
+// Every literal records its offsets, and nothing else in the file is touched,
+// so a scan followed by a rebuild is byte-identical. If the scanner is ever
+// confused by a shape this file does not use today, it mislabels a path — it
+// cannot misplace an edit.
+
+function scanSource(src) {
+  const out = [];
+  const stack = [];
+  const ords = new Map();
+  let root = null;
+  let pendingKey = null;
+  let prev = 'op'; // 'word' | 'close' | 'string' | 'op' — enough to tell a lookup from an array
+  let i = 0;
+
+  const isIdStart = (c) => /[A-Za-z_$]/.test(c);
+  const isId = (c) => /[A-Za-z0-9_$]/.test(c);
+  const top = () => (stack.length ? stack[stack.length - 1] : null);
+  const inCode = () => stack.some((f) => f.code);
+
+  function pathHere() {
+    let s = root || '';
+    for (const f of stack) {
+      if (f.key != null) s += (s ? '.' : '') + f.key;
+      if (f.kind === 'array') s += `[${f.index}]`;
+    }
+    if (pendingKey != null) s += (s ? '.' : '') + pendingKey;
+    return s;
+  }
+
+  // Consume a string or template starting at `start`; returns the index past it.
+  function readString(start) {
+    const q = src[start];
+    let j = start + 1;
+    while (j < src.length) {
+      const c = src[j];
+      if (c === '\\') { j += 2; continue; }
+      if (c === q) return j + 1;
+      if (q === '`' && c === '$' && src[j + 1] === '{') { j = readBraces(j + 2); continue; }
+      j++;
+    }
+    return j;
+  }
+  // Consume a `${ ... }`, strings and comments and nested braces included.
+  function readBraces(start) {
+    let j = start;
+    let depth = 1;
+    while (j < src.length && depth > 0) {
+      const c = src[j];
+      if (c === "'" || c === '"' || c === '`') { j = readString(j); continue; }
+      if (c === '/' && src[j + 1] === '/') { while (j < src.length && src[j] !== '\n') j++; continue; }
+      if (c === '/' && src[j + 1] === '*') { j = src.indexOf('*/', j + 2) + 2; continue; }
+      if (c === '{') depth++;
+      if (c === '}') depth--;
+      j++;
+    }
+    return j;
+  }
+
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+    if (c === '/' && src[i + 1] === '*') { i = src.indexOf('*/', i + 2) + 2; continue; }
+    if (/\s/.test(c)) { i++; continue; }
+
+    if (c === "'" || c === '"' || c === '`') {
+      const end = readString(i);
+      const raw = src.slice(i + 1, end - 1);
+      // A quoted key — `'stone-1': [...]` — is a name, not a line of dialog.
+      let k = end;
+      while (k < src.length && /\s/.test(src[k])) k++;
+      if (src[k] === ':' && top() && top().kind === 'object' && top().expectKey) {
+        pendingKey = raw;
+        top().expectKey = false;
+        i = k + 1;
+        prev = 'op';
+        continue;
+      }
+      if (root && !inCode()) {
+        const path = pathHere();
+        const ord = ords.get(path) || 0;
+        ords.set(path, ord + 1);
+        out.push({ path, ord, quote: src[i], raw, start: i + 1, end: end - 1 });
+      }
+      i = end;
+      prev = 'string';
+      continue;
+    }
+
+    if (isIdStart(c)) {
+      let j = i;
+      while (j < src.length && isId(src[j])) j++;
+      const word = src.slice(i, j);
+      let k = j;
+      while (k < src.length && /\s/.test(src[k])) k++;
+      // The one import at the top of the file: a module path, not words.
+      if (word === 'import' && !stack.length) {
+        const semi = src.indexOf(';', j);
+        i = semi < 0 ? src.length : semi + 1;
+        prev = 'op';
+        continue;
+      }
+      if (src[k] === ':' && src[k + 1] !== ':' && top() && top().kind === 'object' && top().expectKey) {
+        pendingKey = word;
+        top().expectKey = false;
+        i = k + 1;
+        prev = 'op';
+        continue;
+      }
+      if ((word === 'const' || word === 'let' || word === 'var') && !stack.length) {
+        let m = j;
+        while (m < src.length && /\s/.test(src[m])) m++;
+        let n = m;
+        while (n < src.length && isId(src[n])) n++;
+        root = src.slice(m, n);
+        i = n;
+        prev = 'word';
+        continue;
+      }
+      i = j;
+      prev = 'word';
+      continue;
+    }
+
+    if (c === '{' || c === '[' || c === '(') {
+      // `x[...]` is a lookup and `(a, b) =>` is a parameter list: neither names
+      // anything, and a lookup's contents are code.
+      const code = c === '[' && (prev === 'word' || prev === 'close' || prev === 'string');
+      const owns = !code && (c === '{' || c === '[');
+      stack.push({
+        kind: c === '{' ? 'object' : c === '[' ? 'array' : 'group',
+        key: owns ? pendingKey : null,
+        index: 0,
+        expectKey: c === '{',
+        savedKey: pendingKey,
+        code,
+      });
+      if (owns) pendingKey = null;
+      i++;
+      prev = 'op';
+      continue;
+    }
+    if (c === '}' || c === ']' || c === ')') {
+      const frame = stack.pop();
+      // A group or a lookup hands the key it was standing in back: the value of
+      // `suspended: (a, b) => \`...\`` is still `suspended`.
+      pendingKey = frame && (frame.kind === 'group' || frame.code) ? frame.savedKey : null;
+      i++;
+      prev = 'close';
+      continue;
+    }
+    if (c === ',') {
+      const f = top();
+      if (f && f.kind === 'object') f.expectKey = true;
+      if (f && f.kind === 'array') f.index++;
+      if (!f || f.kind !== 'group') pendingKey = null;
+      i++;
+      prev = 'op';
+      continue;
+    }
+    if (c === ';' && !stack.length) { root = null; i++; prev = 'op'; continue; }
+    i++;
+    prev = 'op';
+  }
+  return out;
+}
+
+// The source's escapes, in and out. Only the ones this file uses: a `\$` is
+// left alone so an escaped interpolation could never be quietly unescaped.
+function decode(raw, quote) {
+  return raw.replace(/\\(['"`\\nrt])/g, (_, c) => ({ n: '\n', r: '\r', t: '\t' }[c] || c));
+}
+function encode(text, quote) {
+  let s = text.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+  if (quote === '`') s = s.replace(/`/g, '\\`');
+  else s = s.split(quote).join('\\' + quote);
+  return s;
+}
+
+// The `${...}` spans in a string, whole and in order. Used to show them and to
+// notice when an edit has dropped or invented one.
+function holesIn(text) {
+  const out = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '$' || text[i + 1] !== '{') continue;
+    let j = i + 2;
+    let depth = 1;
+    while (j < text.length && depth > 0) {
+      if (text[j] === '{') depth++;
+      else if (text[j] === '}') depth--;
+      else if (text[j] === "'" || text[j] === '"' || text[j] === '`') {
+        const q = text[j++];
+        while (j < text.length && text[j] !== q) j += text[j] === '\\' ? 2 : 1;
+      }
+      j++;
+    }
+    out.push(text.slice(i, j));
+    i = j - 1;
+  }
+  return out;
+}
+
+// --- The legends -------------------------------------------------------------
+//
+// What the page knows that the source cannot say for itself: where the player
+// meets a string. A group is a part of the game, a subject is one thing inside
+// it — a landmark, a stone, an item — and a legend is one line about when a
+// string is on screen.
+//
+// Nothing here is loaded by the game, and nothing in `src/text.js` depends on
+// it. A string with no legend still shows up, flagged, so the list can never
+// quietly go out of date with the file it is describing.
+
+const GROUPS = [
+  {
+    id: 'shared', name: 'WORDS USED MORE THAN ONCE', roots: ['UI'],
+    note: 'One word, several screens. Editing one of these lands everywhere it is used at once.',
+  },
+  {
+    id: 'title', name: 'THE TITLE SCREEN', roots: ['TITLE'],
+    note: 'The first thing on screen, and what the game calls itself.',
+  },
+  {
+    id: 'slots', name: 'THE SAVE SLOTS', roots: ['SLOTS', 'progressLine', 'BIOME_NAMES'],
+    note: 'The three rows behind NEW GAME and LOAD GAME, and what each row says a campaign has to show for itself.',
+  },
+  {
+    id: 'settings', name: 'SETTINGS', roots: ['SETTINGS'],
+    note: 'Every row is a switch that says its own state, so the copy and the setting can never drift apart.',
+  },
+  {
+    id: 'hud', name: 'THE HUD', roots: ['HUD'],
+    note: 'The counters under the world, on screen for the whole walk.',
+  },
+  {
+    id: 'flash', name: 'THE STATUS LINE', roots: ['FLASH'],
+    note: 'One transient shout under the HUD, said by the step just taken and then gone. All caps: this is the game’s chrome, not the game talking.',
+  },
+  {
+    id: 'carried', name: 'WHAT A RUN IS CARRYING', roots: ['CARRIED'],
+    note: 'Not lines of their own — fragments the hut, the menu and the death screen build one sentence out of: “The colour, the compass and 30 coins”.',
+  },
+  {
+    id: 'dialogs', name: 'THE DIALOGS', roots: ['EDGE', 'MENU', 'SAVED', 'LEAVING', 'HUT', 'HALL', 'RECAP', 'DEATH'],
+    note: 'A bordered box over the world with a title, a few lines, sometimes a table of numbers, and its buttons. Sentence case in the body is the game talking to you; the rest is chrome.',
+  },
+  {
+    id: 'say', name: 'THE TEXT PANEL', roots: ['SAY'],
+    note: 'The game’s own voice: a box across the bottom that types itself out a character at a time and takes one tap per block. Everything here is read in blocks, in order.',
+  },
+  {
+    id: 'hall', name: 'THE HALL — FIVE CONVERSATIONS', roots: ['HALL_SPEECH'],
+    note: 'Nouxinha, on the text panel, at the end of a world. Which conversation you get is how many kinds of world this campaign had already finished when it walked in, so he says something different every time that count goes up.',
+    depth: 1,
+  },
+  {
+    id: 'landmarks', name: 'THE LANDMARKS', roots: ['LANDMARK_TEXT'],
+    note: 'The seven that stand in every world, and the four that belong to one kind of world each. Walking into one reads it out on the text panel — at length the first time this campaign ever touches it, shorter in every world after.',
+    depth: 2,
+  },
+  {
+    id: 'signposts', name: 'THE SIGNPOSTS', roots: ['SIGNPOST'],
+    note: 'What a post has burned into its arms. A reading is built from these at the moment it is read — a name, a heading and how far — so nothing here is a whole line on its own.',
+  },
+  {
+    id: 'stones', name: 'THE CARVED STONES', roots: ['STONE_TEXT'],
+    note: 'Four stones per world, cut by Nouxinha before any of this and read by walking into them. Each is written five ways: which cut you get is how many kinds of world this campaign has finished, and a campaign past the end keeps reading the last one.',
+    depth: 2,
+  },
+  {
+    id: 'panels', name: 'THE PANELS', roots: ['INVENTORY', 'CARD', 'SHOP', 'WORLD_MAP', 'COMPASS'],
+    note: 'The things the rail opens over the world: what you are carrying, one item’s card, the stall, the map, and the badge the compass stands on.',
+  },
+  {
+    id: 'items', name: 'THE ITEMS', roots: ['ITEM_TEXT'],
+    note: 'What each item is called, and the one line its card says it does. A name is read in the HUD, the status line, the inventory and the stall, so it is the most reused string in the game.',
+    depth: 2,
+  },
+  {
+    id: 'credits', name: 'THE ENDING', roots: ['CREDITS'],
+    note: 'After he opens his hands: the whole game drawn inside out, in the light, one line at a time. Credits are neither chrome nor the game talking — they are the game signing what it just did, so they are set the way the title screen is.',
+  },
+];
+
+// One line per string: what it is called, and when the player is looking at it.
+const LEGEND = {
+  'UI.back': ['BACK', 'Out of Settings, out of the slot picker, and out of the dialog the edge of the world puts up.'],
+  'UI.close': ['CLOSE', 'Shuts the inventory panel, an item’s card and the map.'],
+  'UI.home': ['HOME', 'Leaves the recap and the death screen for the title screen.'],
+  'UI.settings': ['SETTINGS', 'The title screen’s third button, and the first thing in the cogwheel menu.'],
+  'UI.newGame': ['NEW GAME', 'The title screen’s first button, and the heading over the slot picker it opens.'],
+  'UI.loadGame': ['LOAD GAME', 'The title screen’s second button, its heading over the slot picker, and what the save dialog says will pick the walk up again.'],
+
+  progressLine: ['THE PROGRESS LINE', 'Along the bottom of every occupied row in the slot picker: what that campaign is worth so far.'],
+
+  'TITLE.name': ['THE TITLE', 'Across the title screen.'],
+  'TITLE.tagline': ['THE TAGLINE', 'Under the title, and the only place the game states its own aim outright.'],
+  'TITLE.cheatsWarning': ['CHEATS WARNING', 'On the title screen for as long as cheats are on in Settings.'],
+
+  'SLOTS.hintNew': ['HINT — NEW GAME', 'Under the heading when the picker was opened by NEW GAME.'],
+  'SLOTS.hintLoad': ['HINT — LOAD GAME', 'Under the heading when it was opened by LOAD GAME.'],
+  'SLOTS.slotName': ['A ROW’S NAME', 'The name of each of the three rows, whether or not anything is in it.'],
+  'SLOTS.empty': ['AN EMPTY SLOT', 'A slot nobody has claimed yet.'],
+  'SLOTS.confirmOverwrite': ['OVERWRITE WARNING', 'On an occupied row tapped once under NEW GAME. The next tap destroys that campaign, so the row says what the next tap does rather than asking in a dialog.'],
+  'SLOTS.neverWalked': ['CLAIMED, NEVER WALKED', 'A claimed slot whose campaign has not been out of the hut door yet.'],
+  'SLOTS.suspended': ['A SUSPENDED WALK', 'A slot holding an expedition put down mid-walk by SAVE GAME — LOAD GAME carries it on rather than setting out again.'],
+  'SLOTS.cycles': ['WORLDS ENDED', 'How many worlds the hall has taken off this campaign. Only on a row that has lost one.'],
+  'SLOTS.furthest': ['FURTHEST OUT', 'How far that campaign has ever stood from its hut, on a row with no suspended walk in it.'],
+
+  'BIOME_NAMES.temperate': ['TEMPERATE', 'The kind of world a slot is standing in, on its row in the picker.'],
+  'BIOME_NAMES.frozen': ['FROZEN', 'The kind of world a slot is standing in, on its row in the picker.'],
+  'BIOME_NAMES.desert': ['DESERT', 'The kind of world a slot is standing in, on its row in the picker.'],
+  'BIOME_NAMES.mystic': ['MYSTICAL REALM', 'The kind of world a slot is standing in, on its row in the picker.'],
+
+  'SETTINGS.music': ['MUSIC', 'The first row of Settings, saying its own state.'],
+  'SETTINGS.moveSpeed': ['MOVE SPEED', 'The slider row, in steps a second.'],
+  'SETTINGS.cheats': ['CHEATS', 'The cheats row, saying its own state.'],
+  'SETTINGS.cheatNote': ['THE CHEATS NOTE', 'Under the cheats row: what the switch does, or what it is doing.'],
+  'SETTINGS.invert': ['INVERT COLOURS', 'On screen only while cheats are on — the switch the ending leaves behind.'],
+  'SETTINGS.invertNote': ['THE INVERT NOTE', 'Under the invert row, whenever that row is on screen.'],
+
+  'HUD.explored': ['TILES EXPLORED', 'The counter row, for the whole walk.'],
+  'HUD.coins': ['COINS', 'The counter row: everything banked plus everything in hand.'],
+  'HUD.water': ['WATER', 'The counter row, against the ceiling the colours have raised.'],
+  'HUD.cycles': ['WORLDS', 'The counter row, once the hall has taken a world off this campaign.'],
+  'HUD.distance': ['HOW FAR OUT', 'The counter row — but only for a campaign that has put a hand on the Gnomon.'],
+  'HUD.light': ['THE LIT LIGHT', 'The light slot: what is burning and how much of it is left.'],
+  'HUD.noLight': ['NOTHING LIT', 'The light slot with nothing burning in it.'],
+  'HUD.blackout': ['BLACKOUT', 'Across the HUD when the last light has burned out and there is nothing to swap in.'],
+  'HUD.stackCount': ['A STACK BADGE', 'On a slot holding more than one copy of the same light.'],
+  'HUD.items': ['THE ITEMS SLOT', 'The slot on the rail that opens the inventory.'],
+
+  'FLASH.gemFound': ['A COLOUR FOUND', 'The step that picks a colour up. It outranks everything else that could have happened on that step.'],
+  'FLASH.toolFound': ['A TOOL FOUND', 'The step that picks up the compass or the map.'],
+  'FLASH.burnedOutBlackout': ['BURNED OUT, NOTHING LEFT', 'The step a light runs out on with nothing to take over.'],
+  'FLASH.burnedOutSwapped': ['BURNED OUT, SWAPPED', 'The step a light runs out on with something else to take over, which is named because its shape is worth reading off the line.'],
+  'FLASH.coins': ['COINS PICKED UP', 'The step that walks onto coins.'],
+  'FLASH.picked': ['ANYTHING ELSE PICKED UP', 'The step that picks up a light or a water — the catch-all under the four lines above.'],
+  'FLASH.respawned': ['THE SCATTER MOVED', 'Everything lying out there has been re-rolled somewhere else.'],
+  'FLASH.bagFound': ['YOUR BAG', 'Walking back into the bag a death left behind: a whole run’s worth of things at once, so it gets its own line.'],
+  'FLASH.gateLocked': ['A GATE, SHUT', 'Bumping a gate you have no key for. It names the key by colour, because the gate and the key are drawn in the same one.'],
+  'FLASH.gateOpened': ['A GATE, TURNING', 'The step that walks through a gate you do have the key for.'],
+  'FLASH.keyFound': ['A KEY FOUND', 'Opening a chest with a key in it. The panel tells the story; this is the half worth shouting.'],
+  'FLASH.chestCoins': ['A CHEST OF COINS', 'Opening a chest with coins in it.'],
+  'FLASH.chestEmpty': ['A CHEST ALREADY OPEN', 'Bumping a lid this campaign has already lifted. A chest opens once, forever.'],
+  'FLASH.landmarkAgain': ['A LANDMARK, SPENT', 'Walking into a landmark that has nothing left to give this world.'],
+  'FLASH.signpost': ['A POST, READ AGAIN', 'Bumping a post already read: its named arms, joined, with the hut’s hint left off — flavour is not a fact worth repeating.'],
+  'FLASH.stoneAgain': ['A STONE, BUMPED AGAIN', 'A direction key held against a stone with no step in between. What a stone says is paragraphs, so there is nothing short to echo.'],
+  'FLASH.wispAgain': ['A WISP, BUMPED AGAIN', 'A direction key held against a wisp with no step in between.'],
+  'FLASH.edge': ['THE EDGE, AGAIN', 'Every bump into the edge of the world after the first. The first one earns the dialog below.'],
+  'FLASH.bought': ['BOUGHT', 'Buying something at the stall.'],
+  'FLASH.headBackOut': ['SET OUT AGAIN', 'Leaving the hut by HEAD BACK OUT, with the walk banked and the tank full behind you.'],
+
+  'FLASH.landmarkGift.mint': ['THE MINT’S GIFT', 'Standing at the Mint. One line per landmark that gives something, because a shared “GROUND REVEALED” would lose which place just did it.'],
+  'FLASH.landmarkGift.bell': ['THE BELL’S GIFT', 'Standing at the Drowned Bell.'],
+  'FLASH.landmarkGift.lantern-tree': ['THE LANTERN TREE’S GIFT', 'Standing at the Lantern Tree.'],
+  'FLASH.landmarkGift.gnomon': ['THE GNOMON’S GIFT', 'Standing at the Gnomon.'],
+  'FLASH.landmarkGift.aqueduct': ['THE AQUEDUCT’S GIFT', 'Standing at the Aqueduct.'],
+  'FLASH.landmarkGift.watchtower': ['THE WATCHTOWER’S GIFT', 'Standing at the Watchtower.'],
+  'FLASH.landmarkGift.weighhouse': ['THE WEIGHHOUSE’S GIFT', 'Standing at the Weighhouse.'],
+
+  'CARRIED.list': ['THE JOINER', 'How the fragments below are strung together — “a, b and c”. A sentence, not a list.'],
+  'CARRIED.oneGem': ['ONE COLOUR', 'A fragment, when the run is carrying exactly one colour home.'],
+  'CARRIED.manyGems': ['SEVERAL COLOURS', 'A fragment, when it is carrying more than one.'],
+  'CARRIED.tool': ['A TOOL', 'A fragment, once per tool in hand.'],
+  'CARRIED.key': ['A KEY', 'A fragment, once per key in hand.'],
+  'CARRIED.coins': ['COINS', 'A fragment, when there are coins in hand.'],
+  'CARRIED.landmarkStored': ['A LANDMARK, KEPT', 'A whole line of its own at the hut: standing somewhere is not a thing in your hands, so it never joins the sentence.'],
+  'CARRIED.landmarkLost': ['A LANDMARK, AT RISK', 'The same line on the way out by EXIT GAME, where the walk is not banked.'],
+
+  'EDGE.title': ['TITLE', 'The dialog the first bump into the edge of the world puts up — the one thing in the game that explains itself, because the edge is invisible by design.'],
+  'MENU.title': ['TITLE', 'The cogwheel menu.'],
+  'MENU.line': ['THE LINE', 'Under the title of the cogwheel menu.'],
+  'MENU.save': ['SAVE GAME', 'Suspends the whole expedition into the slot: a bookmark, not a banking.'],
+  'MENU.exit': ['EXIT GAME', 'Leaves without banking anything.'],
+  'MENU.keepPlaying': ['KEEP PLAYING', 'Shuts the menu, and the way out of the two dialogs it opens.'],
+
+  'SAVED.title': ['TITLE', 'The dialog SAVE GAME puts up.'],
+  'SAVED.titleCheats': ['TITLE, UNDER CHEATS', 'The same dialog on a cheat run, which never writes to a slot.'],
+  'SAVED.lineCheats': ['THE LINE, UNDER CHEATS', 'What that dialog says instead of the two lines below.'],
+  'SAVED.rowFurthest': ['ROW — FURTHEST OUT', 'The table of numbers under the lines.'],
+  'SAVED.rowSteps': ['ROW — STEPS TAKEN', 'The table of numbers under the lines.'],
+  'SAVED.rowCoins': ['ROW — COINS CARRIED', 'The table of numbers under the lines.'],
+
+  'LEAVING.title': ['TITLE', 'The dialog EXIT GAME puts up before it leaves.'],
+  'LEAVING.fallsBackToSave': ['THERE IS A SAVE TO FALL BACK TO', 'When the slot is holding a suspended walk, which is what leaving will drop you back to.'],
+  'LEAVING.savesNothing': ['THERE IS NOTHING TO FALL BACK TO', 'When it is not.'],
+  'LEAVING.atRisk': ['WHAT LEAVING COSTS', 'Built round the carried sentence: what goes back where you found it.'],
+  'LEAVING.groundKept': ['WHAT LEAVING KEEPS', 'When there is nothing in hand to lose. Also the same line on the death screen.'],
+  'LEAVING.leave': ['LEAVE', 'The button that does it.'],
+
+  'HUT.title': ['TITLE', 'The dialog stepping onto the hut puts up. Arriving has already banked the walk, so neither answer can cost you anything.'],
+  'HUT.written': ['WHAT WAS STORED', 'Built round the carried sentence.'],
+  'HUT.nothingNew': ['NOTHING NEW TO STORE', 'Coming home empty-handed.'],
+  'HUT.cheats': ['UNDER CHEATS', 'Coming home on a cheat run, which stores nothing.'],
+  'HUT.headBackOut': ['HEAD BACK OUT', 'Carries the expedition on, out of the door again.'],
+  'HUT.endHere': ['END HERE', 'Stops, and counts the run up on the recap.'],
+
+  'HALL.title': ['TITLE', 'The dialog after the sorcerer lets go: a world nobody has lit a tile of.'],
+  'HALL.moulded': ['HOW MANY TIMES', 'How many worlds he has carried this campaign across.'],
+  'HALL.kept': ['WHAT HE KEPT', 'What a cycle costs, said outright: a campaign keeps what it knows and nothing it owns.'],
+  'HALL.cheats': ['UNDER CHEATS', 'The same dialog on a cheat run.'],
+  'HALL.rowWorlds': ['ROW — WORLDS ENDED', 'The one number under the lines.'],
+  'HALL.setOut': ['SET OUT AGAIN', 'Out of the new hut’s door.'],
+  'HALL.endHere': ['END HERE', 'Stops instead.'],
+
+  'RECAP.title': ['TITLE', 'The dialog END HERE puts up: the run, counted up.'],
+  'RECAP.rowExplored': ['ROW — TILES EXPLORED', 'The table of numbers.'],
+  'RECAP.rowNewGround': ['ROW — NEW GROUND', 'The table of numbers.'],
+  'RECAP.rowCoins': ['ROW — COINS FOUND', 'The table of numbers.'],
+  'RECAP.rowLights': ['ROW — LIGHTS FOUND', 'The table of numbers.'],
+  'RECAP.rowColours': ['ROW — COLOURS SAVED', 'The table of numbers.'],
+  'RECAP.rowFurthest': ['ROW — FURTHEST OUT', 'The table of numbers.'],
+  'RECAP.rowSteps': ['ROW — STEPS TAKEN', 'The table of numbers.'],
+  'RECAP.colours': ['THE COLOURS FIGURE', 'What goes in that row: saved against the most there are.'],
+  'RECAP.carriedLight': ['A LIGHT STILL IN HAND', 'One per light left at the end, named with what is left of it.'],
+  'RECAP.carrying': ['STILL CARRYING', 'Under the table, when there is anything left in hand.'],
+  'RECAP.carryingNothing': ['CARRYING NOTHING', 'Under the table, when there is not.'],
+  'RECAP.cheats': ['UNDER CHEATS', 'Under the table on a cheat run.'],
+
+  'DEATH.title': ['TITLE', 'Running dry: the run’s one hard failure state.'],
+  'DEATH.collapsed': ['WHAT YOU DROPPED', 'Built round the carried sentence — and it says where to walk to get it back.'],
+  'DEATH.collapsedEmptyHanded': ['DYING EMPTY-HANDED', 'The same, with nothing worth naming in hand.'],
+
+  'CREDITS.title': ['THE TITLE', 'Over the credits, set the way the title screen is.'],
+  'CREDITS.back': ['THE WAY ON', 'Under the last line: the tap that hands the screen back to the title.'],
+
+  'SIGNPOST.line': ['HOW AN ARM READS', 'The shape of one named arm: a name, a heading and how far, in that order and in that many words.'],
+  'SIGNPOST.hutHint': ['THE BLANK STUB', 'The third arm, which every post has. Cryptic on purpose — a post that knew the way to your hut would be a strange thing to find lying in the dark.'],
+
+  'INVENTORY.title': ['TITLE', 'The panel the ITEMS slot opens.'],
+  'INVENTORY.empty': ['CARRYING NOTHING', 'The panel with nothing in it.'],
+  'INVENTORY.carrying': ['HOW MANY', 'Under the title.'],
+  'INVENTORY.equippedSuffix': ['THE EQUIPPED SLOT', 'On the slot holding the light that is actually burning.'],
+
+  'CARD.durability': ['DURABILITY', 'On the card one item opens onto.'],
+  'CARD.instance': ['ONE COPY OF IT', 'One row per copy, when a slot is holding several of the same light.'],
+  'CARD.equip': ['EQUIP', 'The button that lights it.'],
+  'CARD.equipped': ['EQUIPPED', 'The same button on the light already burning.'],
+
+  'SHOP.title': ['TITLE', 'The stall: a counter with a canopy and nobody behind it. Never “the merchant” — there is no one there, and the game should not imply one.'],
+  'SHOP.purse': ['THE PURSE', 'Under the title: what there is to spend.'],
+  'SHOP.owned': ['OWNED', 'On a row for something you already have.'],
+  'SHOP.price': ['A PRICE', 'On a row for something you do not.'],
+  'SHOP.leave': ['LEAVE', 'Out of the stall.'],
+
+  'WORLD_MAP.title': ['TITLE', 'The map panel.'],
+  'WORLD_MAP.empty': ['NOTHING WALKED', 'The map of a campaign that has not been anywhere.'],
+  'WORLD_MAP.walked': ['HOW MUCH GROUND', 'Under the title.'],
+  'WORLD_MAP.zoomOut': ['ZOOM OUT', 'The map’s controls.'],
+  'WORLD_MAP.zoomIn': ['ZOOM IN', 'The map’s controls.'],
+  'WORLD_MAP.fit': ['FIT', 'Puts the whole walked world back in the window.'],
+  'WORLD_MAP.button': ['THE MAP BUTTON', 'The slot on the rail that opens it.'],
+
+  'COMPASS.here': ['HERE', 'The compass badge, standing on the thing it was pointing at.'],
+};
+
+// Several strings at one path are the branches of a ternary: one string, picked
+// at the moment it is said. These name the branches in the order they are
+// written.
+const VARIANTS = {
+  'SETTINGS.cheatNote': ['cheats on', 'cheats off'],
+  'CARRIED.list': ['one thing, or nothing at all', 'two or more'],
+  'SAY.signpost[1]': ['two arms have names on them', 'only one has'],
+  'HALL_SPEECH[][2]': ['carrying all three colours', 'carrying one or two', 'carrying nothing'],
+  'HALL_SPEECH[4][2]': ['carrying any colour at all', 'carrying nothing'],
+};
+
+// Text the player meets in order: one array in the source. `mode` is how the
+// game puts it on screen, which is the thing a reviewer most needs to know and
+// the thing the source cannot say.
+const SEQUENCES = {
+  'EDGE.lines': ['THE LINES', 'The body of the dialog.', 'lines'],
+  'SAVED.lines': ['THE LINES', 'The body of the dialog, on a run that is not a cheat run.', 'lines'],
+  'HUT.bothWays': ['THE TWO ANSWERS', 'Under the line about what was stored: what each button does.', 'lines'],
+  'HUT.bothWaysCheats': ['THE TWO ANSWERS, UNDER CHEATS', 'The same, on a cheat run, in one line rather than two.', 'lines'],
+  'CREDITS.lines': ['THE CREDITS', 'After he opens his hands, over the world drawn inside out.', 'ticker'],
+  'SIGNPOST.bearings': ['THE HEADINGS', 'North first, then clockwise. Eight of them, because a post is somebody’s directions rather than an instrument — the compass is the instrument, and it draws four.', 'pick'],
+  'SIGNPOST.far': ['HOW FAR', 'The four bands a distance is rounded into, nearest first.', 'pick'],
+  'SAY.expeditionStart': ['SETTING OUT', 'Once, at the top of a fresh expedition. A walk merely carried on — resumed off a slot, or back from Settings mid-run — is never read it again.', 'blocks'],
+  'SAY.chestKey': ['A CHEST WITH A KEY IN IT', 'Opening a chest that holds a key. Somebody was here before you and left something behind, which is the only story the world tells about itself.', 'blocks'],
+  'SAY.chestCoins': ['A CHEST OF COINS', 'Opening a chest that holds coins instead.', 'blocks'],
+  'SAY.wisp': ['A WISP', 'Putting a hand on a wisp — the first time or the tenth. It has nothing to give and nothing to remember about you, so every fresh touch reads the same.', 'blocks'],
+  'SAY.signpost': ['A POST, READ', 'The first read of a post. The named arms are spliced in between these blocks, and the hut’s blank stub comes last.', 'blocks'],
+  'SAY.ending': ['THE END OF THE GAME', 'The fourth kind of world, walked to the hall with every colour in hand and nowhere left to be carried. He is not beaten, there is no fight, and he is not giving up: twelve pieces is enough to mend it, and the mending is the one thing he has not done in centuries.', 'blocks'],
+};
+
+// One thing inside a group: a landmark, a stone, an item. What the note says is
+// the context the words were written for.
+const SUBJECTS = {
+  HALL_SPEECH: ['THE FIVE CONVERSATIONS', 'Every one is the same shape — the clearing, his name for what is happening, the one line that depends on what you are actually carrying, the taking, and the crossing — and every one is a man further along in something he has never said out loud.'],
+
+  'LANDMARK_TEXT.mint': ['One of the seven that stand in every world. Its gift lands on every fresh touch; its standing — the stall on your map — lands once and is kept for the whole campaign, world after world.'],
+  'LANDMARK_TEXT.bell': ['One of the seven. The gift is a full tank; the standing is hearing it wherever it stands.'],
+  'LANDMARK_TEXT.lantern-tree': ['One of the seven. The gift is the lit light back to full; the standing is never setting out with one light again.'],
+  'LANDMARK_TEXT.gnomon': ['One of the seven. The gift is the ground you came over; the standing puts how far out you are in the HUD, for good.'],
+  'LANDMARK_TEXT.aqueduct': ['One of the seven. The gift is the ground under the channel; the standing raises the water ceiling by twenty-five for the rest of the campaign.'],
+  'LANDMARK_TEXT.watchtower': ['One of the seven. The gift is the country from the top; the standing buys twenty tiles of grace against the dark eating your light.'],
+  'LANDMARK_TEXT.weighhouse': ['One of the seven. The gift is something on the empty pan; the standing takes a quarter off the stall’s prices for good.'],
+  'LANDMARK_TEXT.plough': ['The temperate world’s own, and one of the four you can only see all of by finishing the game. No gift, no standing, no colour, and no line about what you take — because you take nothing. What it hands over is that somebody was here doing something ordinary, and stopped.'],
+  'LANDMARK_TEXT.washing': ['The frozen world’s own. No gift and no standing: one panel of text about somebody who stopped mid-gesture.'],
+  'LANDMARK_TEXT.caravan': ['The desert’s own. No gift and no standing.'],
+  'LANDMARK_TEXT.second-hut': ['The mystical realm’s own. No gift and no standing.'],
+
+  'STONE_TEXT.stone-1': ['THE DOORSTEP STONE', 'Five to eight tiles out, so a first expedition cannot miss it. It says what the colours are, which is the one thing a player who has never walked this dark actually has to be told.'],
+  'STONE_TEXT.stone-2': ['THE SECOND STONE', 'Gates, keys and the named places — the one chain in the game a player can walk past without ever working out. Its face is turned away from the hut, cut for somebody already on their way out.'],
+  'STONE_TEXT.stone-3': ['THE THIRD STONE', 'Light, and the dark that eats it. Cut far enough out that a campaign reading it has met both.'],
+  'STONE_TEXT.stone-4': ['THE FOURTH STONE', 'Water, and that a walk only counts once it is home. The furthest out of the four, so it is read by somebody who has already learned it the expensive way.'],
+
+  'ITEM_TEXT.torch-small': ['The light every expedition sets out with.'],
+  'ITEM_TEXT.torch-medium': ['Bought at the stall, or found lying out.'],
+  'ITEM_TEXT.torch-lamp': ['Bought at the stall, or found lying out.'],
+  'ITEM_TEXT.torch-beacon': ['The best light in the game — the stall only stocks it once two colours are home.'],
+  'ITEM_TEXT.coin': ['Not an item you carry so much as a counter, but it is drawn and named like one.'],
+  'ITEM_TEXT.water-drop': ['The commonest thing lying out there. Its card quotes the refill straight out of balance.js, so a retuned drop is never a drop whose card lies about it.'],
+  'ITEM_TEXT.water-flask': ['The same, twice over.'],
+  'ITEM_TEXT.spring-vial': ['The rare one: a full tank wherever you are standing.'],
+  'ITEM_TEXT.gem-1': ['A colour, behind the first sanctum’s gate. Named in the status line the moment it is picked up, and on the recap.'],
+  'ITEM_TEXT.gem-2': ['The second colour.'],
+  'ITEM_TEXT.gem-3': ['The third and last.'],
+  'ITEM_TEXT.key-1': ['A key is named for the gate it opens, because that is the only thing a player ever has to know about it — and the two are drawn in the same colour. Read out of a chest, and on the gate that wants it.'],
+  'ITEM_TEXT.key-2': ['The second key.'],
+  'ITEM_TEXT.key-3': ['The third key.'],
+  'ITEM_TEXT.compass': ['A tool. Found lying out or bought at the stall, and lost with the world at a cycle.'],
+  'ITEM_TEXT.map': ['A tool. The panel it opens is under THE PANELS above.'],
+  'ITEM_TEXT.bag': ['A death’s own drop, never part of the seed. Walked back into to get everything back.'],
+};
+
+// The families: text laid out the same way for every member, where a legend per
+// string would be the same line eleven or twenty times over.
+function sequenceInfo(seq, count) {
+  let m;
+  if ((m = seq.match(/^LANDMARK_TEXT\.[^.]+\.met$/))) {
+    return ['THE FIRST TIME EVER', 'The text panel, the first time this campaign puts a hand on this place in any world. The last block is where it says what you are taking away.', 'blocks'];
+  }
+  if ((m = seq.match(/^LANDMARK_TEXT\.[^.]+\.again$/))) {
+    return ['EVERY WORLD AFTER', 'The text panel, meeting it again in a world that has never seen it. Shorter, because the second time you are not discovering it — you are recognising it.', 'blocks'];
+  }
+  if ((m = seq.match(/^STONE_TEXT\.[^.]+\[(\d+)\]$/))) {
+    const n = Number(m[1]);
+    const when = [
+      'Read by a campaign that has finished no kind of world yet — a stranger who may not know what a colour is for.',
+      'Read once one kind of world has been finished.',
+      'Read once two have.',
+      'Read once three have.',
+      'Read by somebody who has walked every country he has. A campaign past the end keeps reading this one for good.',
+    ][n];
+    return [`CUT ${n + 1} OF 5`, when, 'blocks'];
+  }
+  if ((m = seq.match(/^HALL_SPEECH\[(\d+)\]$/))) {
+    const n = Number(m[1]);
+    const when = [
+      'The first time he is met: a campaign he has never been carried a full set by.',
+      'Met with one kind of world finished.',
+      'Met with two finished.',
+      'Met with three finished — one left, and he would rather you did not.',
+      'Met with four or more behind it. The meeting that would reach four carrying every colour is the ending instead, and never lands here.',
+    ][n];
+    return [`CONVERSATION ${n + 1} OF 5`, when, 'blocks'];
+  }
+  return SEQUENCES[seq];
+}
+
+function entryInfo(path) {
+  let m;
+  if ((m = path.match(/^LANDMARK_TEXT\.[^.]+\.name$/))) {
+    return ['THE NAME', 'Read on the status line when the place is spent, on a signpost’s arm pointing at it, and in the sentence the hut reads back.'];
+  }
+  if ((m = path.match(/^LANDMARK_TEXT\.[^.]+\.standing$/))) {
+    return ['THE STANDING', 'What putting a hand on this one changed for good. Copy rather than a rule — the rule is in src/core/rules.js — but the two are written to say the same thing.'];
+  }
+  if ((m = path.match(/^ITEM_TEXT\.[^.]+\.name$/))) {
+    return ['THE NAME', 'The HUD, the status line, the inventory, the item card and the stall all read this one string.'];
+  }
+  if ((m = path.match(/^ITEM_TEXT\.[^.]+\.effect$/))) {
+    return ['THE CARD', 'The line under the name on the card this item opens onto.'];
+  }
+  return LEGEND[path];
+}
+
+// What one place in a sequence is called, when the string standing in it has
+// nothing of its own to be called. A list the game picks one out of needs no
+// word at all: the position is the whole of what there is to say about it.
+const BLOCK_WORD = { blocks: 'BLOCK', lines: 'LINE', ticker: 'LINE', pick: '' };
+
+const MODE_KIND = {
+  blocks: (n) => `TEXT PANEL · ${n} BLOCK${n === 1 ? '' : 'S'} · ONE TAP EACH`,
+  lines: (n) => `${n} LINE${n === 1 ? '' : 'S'} · ALL ON SCREEN AT ONCE`,
+  ticker: (n) => `${n} LINES · ONE AT A TIME`,
+  pick: (n) => `ONE OF THESE ${n}`,
+};
+
+// --- State -------------------------------------------------------------------
+//
+// One list of entries, each holding the string as the source has it and the
+// string as this page has it. An edit is the difference between the two, and it
+// is kept in localStorage against the value it was made from, so a review
+// survives a reload and can say so when `src/text.js` has moved under it.
+
+const el = (id) => document.getElementById(id);
+
+let rawSrc = '';
+let entries = [];
+const nodes = new Map();
+let biome = DEFAULT_BIOME;
+
+const idOf = (e) => `${e.path}#${e.ord}`;
+const isEdited = (e) => e.value !== e.original;
+const normalise = (path) => path.replace(/\[\d+\]/g, '[]');
+
+function loadEdits() {
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch { stored = {}; }
+  let dropped = 0;
+  const live = new Set(entries.map(idOf));
+  for (const id of Object.keys(stored)) if (!live.has(id)) dropped++;
+  for (const e of entries) {
+    const hit = stored[idOf(e)];
+    if (!hit) continue;
+    e.value = hit.v;
+    // The source moved under this edit: both are worth seeing, so the edit
+    // stands and the entry says so.
+    e.stale = hit.b !== e.original;
+  }
+  return dropped;
+}
+
+function saveEdits() {
+  const out = {};
+  for (const e of entries) if (isEdited(e)) out[idOf(e)] = { v: e.value, b: e.original };
+  try { localStorage.setItem(STORE, JSON.stringify(out)); } catch { /* a review that cannot be stored is still a review */ }
+}
+
+// --- Putting the file back together ------------------------------------------
+
+function buildFile() {
+  let out = '';
+  let at = 0;
+  for (const e of entries) {
+    out += rawSrc.slice(at, e.start);
+    // An untouched string goes back exactly as it came out, so a file with no
+    // edits in it exports byte for byte identical to the one on disk.
+    out += isEdited(e) ? encode(e.value, e.quote) : e.raw;
+    at = e.end;
+  }
+  return out + rawSrc.slice(at);
+}
+
+// The export's own check: read the file this page just wrote the same way it
+// read the one on disk, and make sure every string is still where it was. It
+// will not catch every way an edit could go wrong, but it catches the one that
+// matters — an edit that closed a string early and took the rest of the file
+// with it.
+function checkFile(text) {
+  const again = scanSource(text);
+  if (again.length !== entries.length) return `the rebuilt file holds ${again.length} strings, not ${entries.length}`;
+  for (let i = 0; i < again.length; i++) {
+    if (again[i].path !== entries[i].path || again[i].ord !== entries[i].ord) {
+      return `the rebuilt file reads ${again[i].path} where ${entries[i].path} should be`;
+    }
+  }
+  return null;
+}
+
+function buildEditList() {
+  const changed = entries.filter(isEdited);
+  if (!changed.length) return 'Nothing has been changed.\n';
+  const lines = [
+    `# ${changed.length} text change${changed.length === 1 ? '' : 's'} for games/nouxinha/src/text.js`,
+    '',
+    'Each heading is the path of a string literal in that file. Replace the string at that path with `now`; leave everything else alone.',
+    '',
+  ];
+  for (const e of changed) {
+    const variants = entries.filter((o) => o.path === e.path).length;
+    lines.push(`## ${e.path}${variants > 1 ? ` (variant ${e.ord + 1} of ${variants})` : ''}`);
+    const info = entryInfo(e.path);
+    if (info) lines.push(`_${info[1]}_`, '');
+    lines.push('- was: ' + JSON.stringify(e.original));
+    lines.push('- now: ' + JSON.stringify(e.value));
+    if (e.stale) lines.push('- NOTE: this edit was made against a different version of that string.');
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+// --- Drawing -----------------------------------------------------------------
+
+const text = (tag, cls, s) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (s != null) n.textContent = s;
+  return n;
+};
+
+// A string with its `${...}` picked out, so what the game drops in at that point
+// is visible without pretending to be a word.
+function withHoles(s) {
+  const wrap = text('div', 'preview');
+  let at = 0;
+  for (const hole of holesIn(s)) {
+    const i = s.indexOf(hole, at);
+    if (i > at) wrap.append(s.slice(at, i));
+    wrap.append(text('span', 'hole', hole));
+    at = i + hole.length;
+  }
+  if (at < s.length) wrap.append(s.slice(at));
+  return wrap;
+}
+
+function autosize(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = `${ta.scrollHeight + 2}px`;
+}
+
+function rootOf(path) {
+  return path.split('.')[0].replace(/\[\d+\].*$/, '');
+}
+function subjectOf(path, depth) {
+  return path
+    .split('.')
+    .slice(0, depth)
+    .map((seg) => seg.replace(/\[\d+\]/g, ''))
+    .join('.');
+}
+function seqOf(path) {
+  const m = path.match(/^(.*)\[(\d+)\]$/);
+  return m ? { seq: m[1], index: Number(m[2]) } : null;
+}
+
+function matches(e, q) {
+  if (!q) return true;
+  const info = entryInfo(e.path);
+  return (
+    e.value.toLowerCase().includes(q) ||
+    e.original.toLowerCase().includes(q) ||
+    e.path.toLowerCase().includes(q) ||
+    (info ? (info[0] + ' ' + info[1]).toLowerCase().includes(q) : false)
+  );
+}
+
+// One string and everything the page knows about it. `place` is the sequence it
+// stands in, if it stands in one: a block of a dialog carries its position and
+// leans on the sequence's own legend rather than repeating it.
+function drawEntry(list, slot, place) {
+  const [first] = slot;
+  const info = entryInfo(first.path);
+  const seq = seqOf(first.path);
+  const box = text('div', 'entry');
+  const meta = text('div', 'meta');
+  if (seq && place) meta.append(text('span', 'block', `${seq.index + 1}/${place.count}`));
+  const label = info
+    ? info[0]
+    : place
+      ? BLOCK_WORD[place.mode] ?? BLOCK_WORD.lines
+      : first.path.split('.').pop().toUpperCase();
+  if (label) meta.append(text('b', 'label', label));
+  meta.append(text('code', 'path', first.path));
+  box.append(meta);
+  // A block of a sequence with nothing of its own to say is not missing a
+  // legend: the sequence above it is its legend.
+  if (info) box.append(text('div', 'when', info[1]));
+  else if (!place) {
+    box.append(text('div', 'when missing',
+      'No legend for this one yet — say what it is in the LEGEND table in text.html.'));
+  }
+  for (const e of slot) box.append(drawField(e, slot.length));
+  box.classList.toggle('edited', slot.some(isEdited));
+  list.append(box);
+}
+
+function drawField(e, variants) {
+  const wrap = text('div', 'field');
+  nodes.set(idOf(e), wrap);
+  if (variants > 1) {
+    const names = VARIANTS[e.path] || VARIANTS[normalise(e.path)];
+    const meta = text('div', 'meta');
+    meta.append(text('span', 'path', `variant ${e.ord + 1} of ${variants}${names && names[e.ord] ? ` — ${names[e.ord]}` : ''}`));
+    wrap.append(meta);
+  }
+  const ta = document.createElement('textarea');
+  ta.value = e.value;
+  ta.spellcheck = true;
+  ta.addEventListener('input', () => {
+    e.value = ta.value;
+    autosize(ta);
+    saveEdits();
+    mark(e);
+    tally();
+  });
+  wrap.append(ta);
+  wrap.append(text('div', 'tools'));
+  mark(e, wrap);
+  requestAnimationFrame(() => autosize(ta));
+  return wrap;
+}
+
+// The cue that a string is no longer the one in the file: a bar down its side,
+// a badge, and the string it used to be, kept underneath where it can be read
+// against the new one.
+function mark(e, node) {
+  const wrap = node || nodes.get(idOf(e));
+  if (!wrap) return;
+  wrap.classList.toggle('edited', isEdited(e));
+  // The legend around it carries a fainter bar, so a changed string is visible
+  // from the group's own heading and not only from the box it is in.
+  const owner = wrap.parentElement && wrap.parentElement.closest('.entry');
+  const meta = wrap.querySelector('.meta');
+  for (const b of wrap.querySelectorAll(':scope > .meta > .badge')) b.remove();
+  for (const w of wrap.querySelectorAll(':scope > .was, :scope > .preview')) w.remove();
+  const tools = wrap.querySelector('.tools');
+  tools.replaceChildren();
+
+  const holes = holesIn(e.original);
+  const now = holesIn(e.value);
+  const lost = holes.slice().sort().join('\u0000') !== now.slice().sort().join('\u0000');
+  const badges = [];
+  if (isEdited(e)) badges.push(['badge', 'EDITED']);
+  if (isEdited(e) && lost) badges.push(['badge warn', '⚠ PLACEHOLDERS']);
+  if (e.stale) badges.push(['badge stale', 'SOURCE MOVED']);
+  if (badges.length) {
+    const bar = meta || (() => { const m = text('div', 'meta'); wrap.prepend(m); return m; })();
+    for (const [cls, label] of badges) bar.append(text('span', cls, label));
+  }
+
+  // The string as it will read, with what the game drops in picked out.
+  if (holes.length || now.length) wrap.insertBefore(withHoles(e.value), tools);
+  if (isEdited(e)) {
+    const was = text('div', 'was');
+    was.append(text('b', null, 'was  '), e.original);
+    wrap.insertBefore(was, tools);
+    if (lost) {
+      const warn = text('div', 'was');
+      warn.append(text('b', null, 'the source holds  '), holes.length ? holes.join('  ') : 'no placeholders at all');
+      wrap.insertBefore(warn, tools);
+    }
+    const revert = text('button', null, 'REVERT');
+    revert.addEventListener('click', () => {
+      e.value = e.original;
+      e.stale = false;
+      const ta = wrap.querySelector('textarea');
+      ta.value = e.value;
+      autosize(ta);
+      saveEdits();
+      mark(e);
+      tally();
+    });
+    tools.prepend(revert);
+  }
+  if (owner) owner.classList.toggle('edited', !!owner.querySelector('.field.edited'));
+}
+
+function render() {
+  const q = el('search').value.trim().toLowerCase();
+  const onlyEdited = el('onlyEdited').checked;
+  const main = el('main');
+  main.replaceChildren();
+  nodes.clear();
+  const jump = el('jump');
+  jump.replaceChildren();
+  let shown = 0;
+
+  for (const group of GROUPS) {
+    const depth = group.depth || 1;
+    const mine = [];
+    for (const root of group.roots) {
+      for (const e of entries) {
+        if (rootOf(e.path) !== root) continue;
+        if (onlyEdited && !isEdited(e)) continue;
+        if (!matches(e, q)) continue;
+        mine.push(e);
+      }
+    }
+    const total = entries.filter((e) => group.roots.includes(rootOf(e.path)));
+    const edited = total.filter(isEdited).length;
+    const link = text('a', null, `${group.name}${edited ? ` (${edited})` : ''}`);
+    link.href = `#g-${group.id}`;
+    jump.append(link);
+    if (!mine.length) continue;
+    shown += mine.length;
+
+    const sect = text('section', 'group');
+    sect.id = `g-${group.id}`;
+    const h2 = text('h2', null, group.name);
+    h2.append(text('span', 'count', `${mine.length} of ${total.length}${edited ? ` · ${edited} changed` : ''}`));
+    sect.append(h2);
+    sect.append(text('p', 'note', group.note));
+
+    let subject = null;
+    let subjectBox = null;
+    let seq = null;
+    let seqBox = null;
+    let place = null;
+    let slot = [];
+
+    const flush = () => {
+      if (!slot.length) return;
+      drawEntry(seqBox || subjectBox || sect, slot, seqBox ? place : null);
+      slot = [];
+    };
+
+    for (const e of mine) {
+      if (slot.length && slot[0].path !== e.path) flush();
+
+      const nextSubject = subjectOf(e.path, depth);
+      if (nextSubject !== subject) {
+        flush();
+        subject = nextSubject;
+        seq = null;
+        seqBox = null;
+        const info = SUBJECTS[subject];
+        if (depth > 1 || info) {
+          subjectBox = text('div', 'subject');
+          const named = entries.find((o) => o.path === `${subject}.name`);
+          const label = info && info.length > 1 ? info[0] : named ? named.value : subject;
+          const h3 = text('h3', null, label);
+          h3.append(text('span', 'sub', subject));
+          subjectBox.append(h3);
+          const note = info ? info[info.length - 1] : null;
+          if (note && (!info || info.length > 1 || note !== label)) subjectBox.append(text('p', 'note', note));
+          sect.append(subjectBox);
+        } else subjectBox = null;
+      }
+
+      const s = seqOf(e.path);
+      if (!s) { seq = null; seqBox = null; place = null; }
+      else if (s.seq !== seq) {
+        flush();
+        seq = s.seq;
+        const count = new Set(
+          entries.filter((o) => seqOf(o.path) && seqOf(o.path).seq === seq).map((o) => seqOf(o.path).index),
+        ).size;
+        const info = sequenceInfo(seq, count);
+        place = { mode: (info && info[2]) || 'lines', count };
+        seqBox = text('div', 'seq');
+        const head = text('div', 'seqhead');
+        head.append(text('b', null, info ? info[0] : seq.split('.').pop().toUpperCase()));
+        head.append(text('span', 'kind', (MODE_KIND[info && info[2]] || MODE_KIND.lines)(count)));
+        head.append(text('code', 'path', seq));
+        seqBox.append(head);
+        if (info) seqBox.append(text('p', 'note', info[1]));
+        (subjectBox || sect).append(seqBox);
+      }
+      slot.push(e);
+    }
+    flush();
+    main.append(sect);
+  }
+
+  if (!shown) main.append(text('p', 'empty', q || onlyEdited ? 'Nothing here matches.' : 'Nothing to show.'));
+  tally();
+}
+
+function tally() {
+  const edited = entries.filter(isEdited).length;
+  el('tally').innerHTML = `<b>${entries.length}</b> strings · <b>${edited}</b> changed`;
+  el('revertAll').disabled = !edited;
+  for (const group of GROUPS) {
+    // The jump row keeps its own count, so a change is visible from the top of
+    // the page without scrolling to the group it is in.
+    const n = entries.filter((e) => group.roots.includes(rootOf(e.path)) && isEdited(e)).length;
+    const link = [...el('jump').children].find((a) => a.getAttribute('href') === `#g-${group.id}`);
+    if (link) link.textContent = `${group.name}${n ? ` (${n})` : ''}`;
+  }
+}
+
+// --- Export ------------------------------------------------------------------
+
+let exportTab = 'file';
+
+function showExport() {
+  const changed = entries.filter(isEdited);
+  const file = buildFile();
+  const problem = changed.length ? checkFile(file) : null;
+  el('exportText').value = exportTab === 'file' ? file : buildEditList();
+  el('tabFile').setAttribute('aria-selected', String(exportTab === 'file'));
+  el('tabEdits').setAttribute('aria-selected', String(exportTab === 'edits'));
+  el('downloadExport').disabled = exportTab !== 'file';
+  el('exportNote').textContent = !changed.length
+    ? 'Nothing has been changed, so this is src/text.js exactly as it is on disk.'
+    : problem
+      ? `⚠ ${changed.length} change${changed.length === 1 ? '' : 's'}, but the rebuilt file does not read back cleanly: ${problem}. Find the edit that broke it before saving this over anything.`
+      : `${changed.length} change${changed.length === 1 ? '' : 's'}. THE WHOLE FILE is src/text.js with those swapped in — every other byte, comments included, is untouched, and it reads back clean. JUST THE CHANGES is the same edits written out by path, to hand to Claude Code.`;
+  el('exportStatus').textContent = '';
+  if (!el('exportDialog').open) el('exportDialog').showModal();
+}
+
+async function copyExport() {
+  const value = el('exportText').value;
+  try {
+    await navigator.clipboard.writeText(value);
+    el('exportStatus').textContent = 'copied';
+  } catch {
+    el('exportText').select();
+    el('exportStatus').textContent = 'select and copy';
+  }
+}
+
+function downloadFile() {
+  const blob = new Blob([buildFile()], { type: 'text/javascript' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'text.js';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  el('exportStatus').textContent = 'saved as text.js — it goes at games/nouxinha/src/text.js';
+}
+
+// --- The page ----------------------------------------------------------------
+
+function paint() {
+  setDefaultPalette(biomeDef(biome).palette);
+  const palette = getPalette();
+  document.documentElement.style.setProperty('--bg', hex(palette.bg));
+  document.documentElement.style.setProperty('--fg', hex(palette.fg));
+}
+
+async function boot() {
+  // Read as source rather than imported as a module: the page edits the strings
+  // where they are written, and an import would only hand back their values.
+  rawSrc = await fetch(`${SOURCE}?t=${Date.now()}`).then((r) => {
+    if (!r.ok) throw new Error(`${SOURCE} came back ${r.status}`);
+    return r.text();
+  });
+  entries = scanSource(rawSrc).map((e) => {
+    const original = decode(e.raw, e.quote);
+    return { ...e, original, value: original, stale: false };
+  });
+  const dropped = loadEdits();
+
+  const groups = GROUPS.length;
+  const missing = entries.filter((e) => !entryInfo(e.path) && !seqOf(e.path)).length;
+  el('blurb').textContent =
+    `Every string in src/text.js, in ${groups} groups, each with a line saying when the player is looking at it. ` +
+    `Editing one here changes nothing on disk: EXPORT hands back the same file with the edited strings swapped in at their ` +
+    `offsets — comments and all — to save over src/text.js, or the changes on their own to hand to Claude Code. ` +
+    `A changed string keeps a bar down its side and the words it used to be underneath it, and the review is kept in this ` +
+    `browser, so a reload carries on where you left off.` +
+    (missing ? ` ${missing} string${missing === 1 ? ' has' : 's have'} no legend yet, flagged where they stand.` : '') +
+    (dropped ? ` ${dropped} stored edit${dropped === 1 ? '' : 's'} no longer matched anything in the file and ${dropped === 1 ? 'was' : 'were'} dropped.` : '');
+
+  const select = el('biome');
+  for (const b of BIOMES) {
+    const option = document.createElement('option');
+    option.value = b.id;
+    option.textContent = b.name.toLowerCase();
+    select.append(option);
+  }
+  select.value = biome;
+  select.addEventListener('change', () => { biome = select.value; paint(); });
+
+  el('search').addEventListener('input', render);
+  el('onlyEdited').addEventListener('change', render);
+  el('export').addEventListener('click', showExport);
+  el('tabFile').addEventListener('click', () => { exportTab = 'file'; showExport(); });
+  el('tabEdits').addEventListener('click', () => { exportTab = 'edits'; showExport(); });
+  el('copyExport').addEventListener('click', copyExport);
+  el('downloadExport').addEventListener('click', downloadFile);
+  el('closeExport').addEventListener('click', () => el('exportDialog').close());
+  el('revertAll').addEventListener('click', () => {
+    const n = entries.filter(isEdited).length;
+    if (!confirm(`Put all ${n} changed string${n === 1 ? '' : 's'} back the way src/text.js has them?`)) return;
+    for (const e of entries) { e.value = e.original; e.stale = false; }
+    saveEdits();
+    render();
+  });
+
+  paint();
+  render();
+}
+
+boot().catch((err) => {
+  el('main').textContent = `Could not read ${SOURCE}: ${err.message}. This page has to be opened through a web server, like the game.`;
+});
+</script>
+</body>
+</html>

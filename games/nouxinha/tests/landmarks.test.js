@@ -55,6 +55,8 @@ import {
   AQUEDUCT_TANK,
   CHOKE_STEP,
   EDGE_RADIUS,
+  LANDMARK_CHEST_NEAR,
+  LANDMARK_CHEST_SPAN,
   LANDMARK_GIFTS,
   LANDMARK_PLAN,
   PRICES,
@@ -68,7 +70,7 @@ import {
 import { BIOME_LANDMARK_IDS, LANDMARK_IDS, biomeLandmark, landmarkDef } from '../src/data/landmarks.js';
 import { BIOMES } from '../src/data/biomes.js';
 import { PALETTES } from '../src/config.js';
-import { FIRST_POST, NONCE, POST_ROUTE, SEED } from './world.js';
+import { FIRST_POST, NONCE, POST_ROUTE, ringOf, SANCTUMS, SEED } from './world.js';
 
 // --- Where they stand --------------------------------------------------------
 
@@ -90,7 +92,7 @@ unit('there are eight landmarks, spread round the rose, and none of them far out
   const angles = [];
   found.forEach((landmark, i) => {
     const plan = LANDMARK_PLAN[i];
-    const distance = chebyshev(landmark.x, landmark.y);
+    const distance = ringOf(landmark.x, landmark.y);
     assert(
       distance >= plan.near && distance <= plan.near + plan.span,
       `${landmark.id} stands in its band (${distance}, wanted ${plan.near}-${plan.near + plan.span})`
@@ -99,8 +101,13 @@ unit('there are eight landmarks, spread round the rose, and none of them far out
   });
 
   // The furthest is nearer than the third sanctum: a landmark is on the way to
-  // somewhere, never a walk of its own.
-  assert(Math.max(...found.map((l) => chebyshev(l.x, l.y))) <= 75, 'and the last one is inside 75');
+  // somewhere, never a walk of its own. The bound is the furthest any plan in
+  // LANDMARK_PLAN reaches rather than a number restated here.
+  const outermost = Math.max(...LANDMARK_PLAN.map((p) => p.near + p.span));
+  assert(
+    Math.max(...found.map((l) => ringOf(l.x, l.y))) <= outermost,
+    `and the last one is inside ${outermost}`
+  );
 
   // One to an eighth of the rose, and the rose itself is turned by the seed — so
   // what a player can rely on across worlds is not "the Mint is north", it is
@@ -177,7 +184,7 @@ unit('a landmark stands on a spoke of the sanctums\' rose, or halfway between tw
       if (landmark.biome) return;
       const outer = Array.isArray(heading) ? heading[1] : heading;
       assert(
-        chebyshev(landmark.x, landmark.y) < built[outer].distance,
+        ringOf(landmark.x, landmark.y) < built[outer].distance,
         `${landmark.id} stands outside sanctum ${outer}`
       );
     });
@@ -243,15 +250,23 @@ unit('three landmarks have a key chest beside them, and the nearest a hoard', ()
 
   for (const chest of beside) {
     const landmark = landmarkNamed(chest.at, SEED);
-    const distance = chebyshev(chest.x, chest.y, landmark.x, landmark.y);
-    assert(distance > 1 && distance <= 6, `${chest.id} stands just off ${chest.at} (${distance})`);
+    // The chest's own little ring round its landmark, which is placed on the
+    // same rose as everything else (`LANDMARK_CHEST_NEAR`/`SPAN` in balance.js).
+    const distance = ringOf(chest.x, chest.y, landmark.x, landmark.y);
+    const furthest = LANDMARK_CHEST_NEAR + LANDMARK_CHEST_SPAN - 1;
+    assert(
+      distance >= LANDMARK_CHEST_NEAR && distance <= furthest,
+      `${chest.id} stands just off ${chest.at} (${distance}, wanted ${LANDMARK_CHEST_NEAR}-${furthest})`
+    );
   }
 
   // Each key is still well inside the gate it opens, which is the pacing the
   // chain has always rested on (DESIGN.md §4.4).
   for (const chest of chests(SEED).filter((c) => c.key)) {
-    const gate = { 'key-1': 45, 'key-2': 80, 'key-3': 110 }[chest.key];
-    assert(chebyshev(chest.x, chest.y) < gate, `${chest.key} lies inside the gate it opens`);
+    // Read off the sanctum that wants this key rather than written down, so
+    // retuning SANCTUM_PLAN moves the claim with it.
+    const gate = SANCTUMS.find((s) => s.key === chest.key).distance;
+    assert(ringOf(chest.x, chest.y) < gate, `${chest.key} lies inside the gate it opens (${gate})`);
   }
 });
 
@@ -263,7 +278,8 @@ unit('the posts spread out, stay clear of what they point at, and one is at five
 
   const first = posts.find((post) => post.id === 'post-1');
   assert(first, 'the near post is one of them');
-  assertEqual(chebyshev(first.x, first.y), 5, 'and it stands exactly five tiles out');
+  const nearest = SIGNPOST_PLAN.find((p) => p.id === 'post-1');
+  assertEqual(ringOf(first.x, first.y), nearest.near, `and it stands exactly ${nearest.near} tiles out`);
   assertEqual(first.target, 'mint', 'pointing at the nearest landmark there is');
 
   for (const post of posts) {

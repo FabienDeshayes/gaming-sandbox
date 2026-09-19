@@ -149,29 +149,45 @@ export const BIOME_TERRAIN = {
 // light ever got. (The HUD's furthest-out counter stays Chebyshev — that is a
 // different question, how far out you walked, not how close to the edge.)
 //
-// A ring placement near a true diagonal sits up to 1/cos(MAX_BEARING_DRIFT)
-// times further out in this radius than its Chebyshev `distance` alone would
-// suggest (`ringPoint` in core/world.js) — the outermost sanctum's court is
-// nominally 117, but on the diagonal that is 162 before the cap below, which
-// is the room EDGE_RADIUS used to have to hold in reserve for nothing. With
-// the cap applied, the furthest anything ever lands is the loose coin chests'
-// own worst case, about 130 — measured across seeds, since it depends on
-// rounding as well as the cap. 155 covers that with a 20-or-so tile reserve
-// for the dark's own reach (CHOKE_STEP below) and a few tiles to spare.
-export const EDGE_RADIUS = 155;
+// How far out anything is ever placed is the hall's own outer wall — a plan
+// distance of 110 plus its radius of 7 — and on the diamond rose (RING_METRIC
+// below) that is what it costs in this radius too, whichever bearing it rolls.
+// Measured across 150 worlds, the furthest corner of the furthest thing lands
+// at 117. 140 covers that with a 20-or-so tile reserve for the dark's own reach
+// (CHOKE_STEP below) and a few tiles to spare, which puts the outermost content
+// under exactly the two tiles of choke it stood under when the world was a
+// square ring 155 across.
+export const EDGE_RADIUS = 140;
 
-// How far off the nearest N/E/S/W direction a *freely rolled* ring placement
-// — a sanctum, a site not pinned opposite one, a chest, a signpost, a stone,
-// a wisp — may land. Without this, a placement's bearing is free, and one
-// landing near a true diagonal is what forces EDGE_RADIUS to reserve so much
-// empty room past the furthest content (see above). A landmark is the one
-// exception (`cappedRingPoint` in core/world.js): its bearing is pinned to a
-// sanctum's own direction rather than free to begin with, including the gap
-// landmarks that are meant to sit near a diagonal between two sanctums, so
-// capping it would fight the placement rule instead of just bounding it. A
-// tighter cap pulls the scatter more visibly toward the four cardinal
-// directions; this is loose enough that most seeds never feel it.
-export const MAX_BEARING_DRIFT = (25 * Math.PI) / 180;
+// Which ring a `distance` in a plan names, and so the shape every placement
+// rose is projected onto (`ringPoint` in core/world.js).
+//
+//   'chebyshev' — the square ring: max(|x|, |y|) is the distance.
+//   'euclidean' — the true circle, which is the shape EDGE_RADIUS is measured
+//                 in.
+//   'manhattan' — the diamond ring: |x| + |y| is the distance.
+//
+// All three are the same number on an axis. Off one they part, and what parts
+// them is the thing this game is: **there are no diagonal steps**, so what a
+// walk costs is |x| + |y| and nothing else. A thing on a true diagonal costs
+// twice its plan under 'chebyshev', 1.41 times it under 'euclidean', and
+// exactly it under 'manhattan'.
+//
+// So the diamond is the one where a plan's number means something. The square
+// was the original, and the square is why the Watchtower — a landmark whose
+// plan says ring 62 — was a 106-step walk: it stands in the gap between two
+// sanctums, which is to say near a diagonal, which is where a square ring is at
+// its worst. Measured over 24 worlds (`npm run sim:geometry`), moving to the
+// diamond took the four sanctums' bearing-to-bearing spread to **zero** and
+// roughly halved the landmarks' and the chests', while leaving every `span` in
+// this file doing exactly what it was doing: a thing still turns up anywhere in
+// the band its plan authored, it just no longer costs twice as much to reach
+// for having rolled a corner. It also shortened every walk in the game by about
+// a fifth, which is what EDGE_RADIUS above has come in to meet.
+//
+// The numbers here were not rescaled to take that back. They are read as steps
+// now, which is what they always looked like.
+export const RING_METRIC = 'manhattan';
 
 // One tile of light lost for every ten tiles closer to the edge — so the bigger
 // the light, the sooner the dark starts eating it, and everything converges on
@@ -194,20 +210,32 @@ export const POCKET_PROBE = 80;
 // giving up (`pickSeed` in core/world.js).
 //
 // The attempt count is a *budget for keeping the biome*, not a budget for
-// finding a valid seed — a valid one turns up in 2.5 looks on average, and has
-// since long before this number was last touched. What spends the rest of it is
-// the chain preferring a seed of the same kind of world: every court a landmark
-// claims is another thing a seed can fail on, and eight courts reject about a
-// quarter of raw seeds where four rejected one in eleven. Measured over 400
-// worlds: at 20 attempts, two of them ran out of chain and settled for a world
-// of the wrong kind; at 32, none did, and the mean cost was unchanged at 2.50
-// looks, because the extra budget is only ever spent on the bad cases. That
-// matters because `turnCycle` picks the kind of world it wants on `biomeOf` and
-// then hands the seed here (DESIGN.md §4.9) — a chain that runs out is a cycle
-// that hands back a world the campaign has already finished.
+// finding a valid seed. What spends it is the chain preferring a seed of the
+// same kind of world: every court a landmark claims is another thing a seed can
+// fail on. That matters because `turnCycle` picks the kind of world it wants on
+// `biomeOf` and then hands the seed here (DESIGN.md §4.9) — a chain that runs
+// out is a cycle that hands back a world the campaign has already finished.
+//
+// How much budget that takes went up when the world moved onto the diamond
+// (RING_METRIC above), and for a reason worth knowing: the square ring spread a
+// plan's ring 60 over a true radius of 60 to 85, and the diamond puts every one
+// of them on the same circle. Things that used to miss each other radially now
+// have to miss each other sideways, so where 65 of every hundred raw seeds used
+// to place cleanly, 30 do. The seeds themselves are no scarcer — what is scarcer
+// is a clean one *of the kind that was asked for*.
+//
+// Measured over 300 worlds, the same way this was measured before: at 32
+// attempts, 22 ran out of chain and settled for a world of the wrong kind; at
+// 48, eight; at 64, one; at 96, none. The mean cost barely moves across all of
+// them (506ms to 542ms a seed) because the extra budget is only ever spent on
+// the bad cases. 64 is where that curve flattens.
+//
+// The cost this does not buy back is drawing a world at all: two looks became
+// three and a bit, so NEW GAME and the hall's re-mould went from about 240ms to
+// about 730ms. Both are one-offs behind a screen the player is already reading.
 export const SEED_WINDOW = 40;
 export const SEED_MIN_FRACTION = 0.6;
-export const SEED_MAX_ATTEMPTS = 32;
+export const SEED_MAX_ATTEMPTS = 64;
 
 // How many raw seeds the hall looks through for a kind of world this campaign
 // has not finished yet before it moulds whatever it has in hand (`turnCycle` in

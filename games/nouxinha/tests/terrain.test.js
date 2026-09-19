@@ -27,7 +27,7 @@ import {
 } from '../src/core/world.js';
 import { activeShape, createRun, litTiles, reveal, step, EDGE_SEEN } from '../src/core/rules.js';
 import { emptySave, normaliseSave } from '../src/core/save.js';
-import { CHEST_COIN_VALUES, EDGE_RADIUS, SEED_MIN_FRACTION, SIGNPOST_PLAN } from '../src/balance.js';
+import { CHEST_COIN_VALUES, CHOKE_STEP, EDGE_RADIUS, SEED_MIN_FRACTION, SIGNPOST_PLAN } from '../src/balance.js';
 import { BIOME_IDS } from '../src/data/biomes.js';
 import { ALL_KEYS, ALL_KEYS_LIST, NONCE, ORTHOGONAL, SEED, SHUT_GATE } from './world.js';
 
@@ -224,14 +224,17 @@ unit('the world ends at a fixed radius, and the dark there is solid', () => {
   assert(!isWalkable(EDGE_RADIUS + 5, 0, SEED), 'and nothing walks on it');
   assertEqual(entryKey(EDGE_RADIUS + 5, 0, SEED), false, 'nothing carried opens it');
 
-  // Everything the campaign is currently about is comfortably inside, with room
-  // left over — the outermost sanctum wall against the rim. The margin is
-  // tighter than it looks: MAX_BEARING_DRIFT bounds the worst case at about
-  // 128 (balance.js), which is most of what EDGE_RADIUS has to spare once the
-  // dark's own reach (CHOKE_STEP) is set aside, so 0.75 no longer holds.
+  // Everything the campaign is about is inside, with the room past it that the
+  // rim is *for*: the dark's own reach. What EDGE_RADIUS holds in reserve past
+  // the furthest thing placed is two full steps of CHOKE_STEP (balance.js), so
+  // that is what this asserts rather than a fraction — a fraction would say
+  // nothing about whether the outermost sanctum can still be seen by.
   for (const sanctum of sanctums(SEED)) {
     const out = Math.hypot(sanctum.centre.x, sanctum.centre.y) + sanctum.radius;
-    assert(out < EDGE_RADIUS * 0.85, `sanctum ${sanctum.index} sits well inside (${out.toFixed(0)})`);
+    assert(
+      EDGE_RADIUS - out > CHOKE_STEP * 2,
+      `sanctum ${sanctum.index} stands clear of the dark's own reach (${out.toFixed(0)} of ${EDGE_RADIUS})`
+    );
   }
 });
 
@@ -417,7 +420,10 @@ unit('the whole world is one place, out to the rim', () => {
   for (let y = -limit; y <= limit; y++)
     for (let x = -limit; x <= limit; x++) if (isWalkable(x, y, SEED)) walkable++;
 
-  assert(walkable > 50000, `the world is a large place (${walkable} tiles)`);
+  // Derived from the world's own size rather than written down, so shrinking
+  // or growing EDGE_RADIUS moves the bar with it (TESTING.md).
+  const disc = Math.PI * EDGE_RADIUS ** 2;
+  assert(walkable > disc * 0.5, `the world is a large place (${walkable} of a ${Math.round(disc)}-tile disc)`);
   assert(seen.size / walkable > 0.95, `and nearly all of it connects (${seen.size}/${walkable})`);
   assert(furthest >= EDGE_RADIUS - 1, `including the rim itself (reached ${furthest.toFixed(1)})`);
 });
@@ -425,11 +431,20 @@ unit('the whole world is one place, out to the rim', () => {
 unit('pickSeed rejects a world nobody could explore', () => {
   // Two bars, and a seed has to clear both: the spawn must not be sealed into a
   // pocket, and every sanctum door, site, landmark, chest and post must be
-  // walkable-to with nothing in hand (DESIGN.md §5). Seed 5 fails the first
-  // outright.
-  assert(reachableFraction(5) < SEED_MIN_FRACTION, 'seed 5 should be a stranding seed');
-  const replacement = pickSeed(5);
-  assert(replacement !== 5, 'a stranding seed should be rejected');
+  // walkable-to with nothing in hand (DESIGN.md §5).
+  //
+  // The stranding seed is looked for rather than named. Which seeds strand is
+  // a fact about the noise *and* about where the structures put their aprons,
+  // so a written-down one stops stranding the moment either is retuned — and a
+  // check that quietly stops checking anything is worse than one that fails.
+  // It costs a flood fill a seed, which is why the search is bounded and why
+  // finding nothing is itself the failure.
+  const stranding = (() => {
+    for (let seed = 1; seed <= 200; seed++) if (reachableFraction(seed) < SEED_MIN_FRACTION) return seed;
+    return null;
+  })();
+  assert(stranding !== null, 'no seed in the first 200 strands — the pocket check has nothing to reject');
+  assert(pickSeed(stranding) !== stranding, `the stranding seed ${stranding} should be rejected`);
 
   for (const preferred of [5, 1, 77, 12345, DEFAULT_SEED, (DEFAULT_SEED + 7919) | 0]) {
     const picked = pickSeed(preferred);

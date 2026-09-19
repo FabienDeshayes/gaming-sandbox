@@ -581,6 +581,25 @@ seconds forever, and fails one day for a reason that has nothing to do with the 
 a fix is worth holding on to, hold on to it as a rule in the pure suite; if it can't be stated as a
 rule, let git history be the record of it.
 
+## What `sim/` is, and why no test covers it
+
+`sim/` is a bot that plays whole campaigns against the real `src/core/` and reports what the walking
+cost — steps, deaths, how far a colour was from the hut — so a placement rule can be compared against
+another by playing both rather than by arguing about them. It is the same kind of thing
+`distances.html` is: a tool for looking at the world, not a claim about it.
+
+Nothing in `npm test` runs it, and nothing in it should ever be asserted on. Its numbers are a
+*measurement*, and a measurement that a test pins is a measurement that can never move — the whole
+point of it is that it changes when the world is retuned. What belongs in the suite is the rules the
+measuring rests on, and those are already there: `tests/campaign.test.js` asserts every sanctum is
+reachable in every kind of world, `tests/terrain.test.js` asserts what is walkable, and
+`tests/scatter.test.js` asserts the separation rule. The bot can only be wrong about how hard the
+game is; it cannot be wrong about whether the game works.
+
+The one thing `sim/` does touch in the game is `setRingMetric` in `src/core/world.js`, which is the
+knob it sweeps. The game never calls it: it boots on `RING_METRIC` in `src/balance.js` at a scale of
+one, and the pure suite runs in exactly that world.
+
 ## Keeping it deterministic
 
 Nothing in this suite may depend on how fast the machine is. Three rules keep it that way, and every

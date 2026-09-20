@@ -904,8 +904,10 @@ export const COMPASS_RANGE = 40;
 // --- Cheats -------------------------------------------------------------------
 //
 // The Settings switch that hands a run the whole late game to look at
-// (DESIGN.md §6.2). The reveal reaches past the fourth sanctum's ring (110 + 7)
-// and every landmark, with room to spare — the whole of the world the game
-// actually has anything in.
+// (DESIGN.md §6.2). A Chebyshev square rather than a ring of the world's own
+// shape, and it reaches past the furthest thing any plan places (117 as a true
+// radius) with room to spare — the whole of the world the game actually has
+// anything in. Where the square hangs past the rim it is clipped, because
+// nothing outside the world is ever explored (`applyCheats` in core/rules.js).
 export const CHEAT_REVEAL_RADIUS = 130;
 export const CHEAT_COINS = 9999;

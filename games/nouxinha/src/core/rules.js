@@ -319,9 +319,12 @@ function applyCheats(state) {
   state.inventory = lights.map((def) => newLight(def.id));
   state.activeIndex = 0;
 
+  // Nothing outside the world is ever explored, here as everywhere else
+  // (DESIGN.md §4.7) — the reveal is a square and the world is a disc, so its
+  // corners hang well past the rim and both map renderers draw off this set.
   for (let y = -CHEAT_REVEAL_RADIUS; y <= CHEAT_REVEAL_RADIUS; y++)
     for (let x = -CHEAT_REVEAL_RADIUS; x <= CHEAT_REVEAL_RADIUS; x++)
-      state.explored.add(tileKey(x, y));
+      if (!beyondEdge(x, y)) state.explored.add(tileKey(x, y));
   for (const sanctum of sanctums(state.seed)) if (sanctum.gem) state.seenUnique.add(sanctum.gem);
   for (const site of sites(state.seed)) state.seenUnique.add(site.id);
   for (const chest of chests(state.seed)) state.seenUnique.add(chest.id);

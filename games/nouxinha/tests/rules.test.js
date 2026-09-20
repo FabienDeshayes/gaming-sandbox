@@ -307,7 +307,15 @@ unit('cheats hand a run the whole late game, and bank none of it', () => {
     state.explored.has(tileKey(furthest.centre.x, furthest.centre.y)),
     'the furthest sanctum is already drawn'
   );
-  assert(state.explored.has(tileKey(CHEAT_REVEAL_RADIUS, CHEAT_REVEAL_RADIUS)), 'out to the corner');
+  // Out to the reveal's own edge on an axis, but *not* to the corner of its
+  // square: the world is a disc and the corner is well outside it, so the
+  // reveal is clipped there like every other thing that writes to `explored`
+  // (DESIGN.md §4.7). `terrain.test.js` is where that rule is asserted whole.
+  assert(state.explored.has(tileKey(CHEAT_REVEAL_RADIUS, 0)), 'out to its own edge on an axis');
+  assert(
+    !state.explored.has(tileKey(CHEAT_REVEAL_RADIUS, CHEAT_REVEAL_RADIUS)),
+    'and never to the corner, which is outside the world'
+  );
   assert(state.seenUnique.has('gem-3'), 'and every unique object is markable on the map');
 
   // A run handed its gems is a sandbox, not a campaign, so nothing it does

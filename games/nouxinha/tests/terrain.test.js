@@ -337,6 +337,15 @@ unit('the three keys are in three chests, each inside the gate it opens', () => 
       assert(CHEST_COIN_VALUES.includes(chest.coins), `${chest.id} holds a hoard the table names`);
 });
 
+// Everything that writes to `explored` has to keep it inside the world, and
+// there are two such things: a light, and the cheat switch's reveal.
+const allInside = (state, what) => {
+  for (const key of state.explored) {
+    const [x, y] = key.split(',').map(Number);
+    assert(!beyondEdge(x, y), `${what} put (${x},${y}) outside the world`);
+  }
+};
+
 unit('light never reveals what is outside the world', () => {
   // Otherwise the explored set would carry tiles that are not there, and both
   // maps draw off that set.
@@ -345,10 +354,22 @@ unit('light never reveals what is outside the world', () => {
   state.y = 0;
   reveal(state);
   for (const { x, y } of litTiles(state)) assert(!beyondEdge(x, y), `lit (${x},${y}) is inside`);
-  for (const key of state.explored) {
-    const [x, y] = key.split(',').map(Number);
-    assert(!beyondEdge(x, y), `explored (${x},${y}) is inside`);
-  }
+  allInside(state, 'a light');
+});
+
+unit('the cheat reveal never draws what is outside the world either', () => {
+  // The reveal is a Chebyshev square and the world is a disc, so its corners
+  // hang a long way past the rim — a fifth of the square, at the radius the
+  // world is now. Clipped, or a sandbox run's map is mostly dark that is not
+  // there (DESIGN.md §4.7, §6.2).
+  const state = createRun(SEED, emptySave(), NONCE, { cheats: true });
+  allInside(state, 'the cheat reveal');
+  // And it still covers what it is for: everything any plan places.
+  for (const sanctum of sanctums(SEED))
+    assert(
+      state.explored.has(`${sanctum.centre.x},${sanctum.centre.y}`),
+      `sanctum ${sanctum.index} is drawn`
+    );
 });
 
 unit('walking into the end of the world says so, once', () => {

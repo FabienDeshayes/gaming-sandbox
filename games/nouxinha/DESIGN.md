@@ -1165,10 +1165,71 @@ placement machinery is new. What is new is only what it says.
 | `src/ui/MapView.js` / `src/ui/worldMap.js` | drawing the tile, and marking it once it has been lit |
 | `tests/stones.test.js` | the rules, pure; `tests/ui-landmarks.test.js` has the two claims that need a browser |
 
+### 4.13 The tutorial
+
+**A first game is walked through its opening by the game itself**, in one fixed world, and then left
+alone. It is a switch in Settings (§7): on for a player who has never stored a save,
+turned off by reading its last lesson, and turned back on by hand for anybody who wants it again.
+Turning it on starts it from the top.
+
+- **The tutorial has a world of its own.** With it on, **NEW GAME** claims `TUTORIAL_SEED`
+  (`src/balance.js`) instead of drawing a seed, so every first game walks the same ground. It is an
+  ordinary campaign in every other respect — it banks, dies, saves and turns a cycle exactly like any
+  other slot — which is why finishing the tutorial leaves the player *in* their first world rather
+  than moving them somewhere else. A cheat run never gets it.
+- **It is walked on a route, and the route is worked out rather than written down.** Every world
+  stands the doorstep post, the Mint, the Mint's chest and the first sanctum in the same arrangement
+  (§4.10.6, §4.8, §4.4); the tutorial's seed is only the one where they stand in the tidiest line —
+  five steps west of the hut, then straight south past the chest (ring 5) and the Mint (9) into the
+  sanctum, the gem 27 steps from the door. `tutorialPlan` in `src/core/tutorial.js` BFSes that route
+  out of the real world the way a test route is, so retuning the noise can move it but never
+  invalidate it; `tests/tutorial.test.js` walks it with the real rules.
+- **A step off the route is refused.** Anything more than `TUTORIAL_LEASH` (3) tiles, Chebyshev, from
+  every tile of the route — the first sanctum's clearing and the hut excepted — is ground the
+  tutorial will not step onto: the step bumps like rock, costs nothing, and the status line says where
+  the arrow is pointing and which way it lies ("NOT THAT WAY. THE CHEST IS SOUTH."). A step *into*
+  something solid is always let through, since that is how a post is read and a chest is opened; and a
+  walk already standing off the route is never held, because the one thing the tutorial must never do
+  is be what leaves a player stuck (§5).
+- **An arrow points at what each lesson is about.** A bobbing arrow over the thing on screen, or on the
+  edge of the viewport pointing its way when it is off it; a blinking box round the part of the HUD a
+  lesson is about. A block about the HUD is read from the top of the screen rather than the bottom,
+  because the bottom band of the text panel *is* the HUD.
+- **Seven lessons, each done by doing the thing.** Whether a lesson has been done is read off the run —
+  a post read, a lid lifted, a landmark stood at, a second light carried, a gem in hand — never kept
+  by a script, so the tutorial cannot disagree with the game about what happened. What the player
+  sees:
+
+  | Lesson | Said | Pointing at | Done when |
+  |---|---|---|---|
+  | The walk out | The dark and the candle, the hut, water and a step costing one, running dry, the candle burning down, walking and holding an arrow | The character, the hut, the water bar, the light bar, the D-pad | Read — and read *instead of* the usual setting-out blocks |
+  | The post | Walk into it | The post | It has been read — then: what signposts are for |
+  | The chest | Walk into it | The chest | Its lid is up — then: the coin counter, the explored counter, the cogwheel menu |
+  | The landmark | Walk into it | The Mint | It has been stood at — then: a gift every visit, something for good the first time |
+  | The torch | Pick one up in the sanctum | The nearest torch left in the hoard | A second light is carried |
+  | Equipping | Tap it, then EQUIP; a bigger light burns faster | The inventory strip | A light has been chosen off its card |
+  | The gem | Take it | The gem | It is in hand — then: what a gem does, that there are more to bring to the one who waits in the far dark, that only the hut keeps it, and that the tutorial can be turned back on |
+
+- **Each lesson waits its turn.** A lesson is said the moment nothing else is on screen — so the chest's
+  own panel is read first and the tutorial's explanation after it — and a lesson that is already done
+  when it comes up (the gem picked up before the torch was equipped) is never asked for. Which lesson
+  is next is kept beside the switch rather than in a slot (`getTutorialStep`), since it is the
+  player's; a walk that dies or is left part-way through carries on from the lesson it was on, read
+  again as a reminder.
+
+| Path | Holds |
+|---|---|
+| `src/balance.js` | `TUTORIAL_SEED`, `TUTORIAL_LEASH` |
+| `src/core/tutorial.js` | `tutorialPlan` (the route and the ground either side of it), `tutorialAllows`, `tutorialTarget`, `tutorialDone` — the lessons, read off a run. Pure |
+| `src/ui/tutorial.js` | The lessons on screen: the state machine, which block points at what, the arrow and the box |
+| `src/config.js` | `getTutorial`/`setTutorial` and `getTutorialStep`/`setTutorialStep`, persisted like the other switches |
+| `src/text.js` | `TUTORIAL`, and `SETTINGS.tutorial`/`tutorialNote` |
+| `tests/tutorial.test.js` / `tests/ui-tutorial.test.js` | The world, the route and the lessons, pure; opening on the first lesson, a refused step and the last lesson turning it off, in a browser |
+
 ## 5. Constraints
 
 - One light active at a time. Light and water are the two consumables — no food yet (§12), no timer.
-- The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off. A chest can't wall anything off either: its own tile is solid, but the forced-floor apron round it means there is always a way past.
+- The character can never be permanently stuck: blackout still allows movement, the base's neighbourhood is always walkable, and no gate ever seals a run *in* — gates only ever hold ground back, never fence it off. The tutorial's leash (§4.13) only ever refuses a step off its route, never one back onto it. A chest can't wall anything off either: its own tile is solid, but the forced-floor apron round it means there is always a way past.
 - The only conversation in the game is at the hall (§4.9), and it is never a fight: he takes the world, never the run and never your life.
 - **Nothing a step away is ever hidden.** Shadow (§4.1) can darken any tile a light reaches except the ones the character could walk onto next, so no arrangement of rock can leave a player unable to see where to go.
 - Water is the one thing that can actually end a run: it depletes every step regardless of light state, and hitting zero is fatal (§6).
@@ -1203,7 +1264,7 @@ opposite.
 The one thing that outlives a run regardless is the ground it lit — cartography is not progress.
 
 - There are **three save slots**, so more than one campaign can be walked at a time. A slot holds the gem count, the keys held, which chests have been opened, which landmarks have been stood at, which posts read and which carved stones read in this world (§4.10, §4.12), the standings the campaign keeps out of them (§4.10), banked coins, runs completed, worlds ended in the hall (§4.9), the furthest distance ever reached, which of the two tools are owned, the ground the campaign has drawn, which unique objects have been seen (§4.6), and — when the cogwheel menu has saved one — the expedition the campaign is in the middle of. They live in `localStorage` and are the only state that outlives a run.
-- **A run belongs to a slot before it starts.** The title screen offers **NEW GAME** and **LOAD GAME**, and both go through the slot picker: new empties the slot it is pointed at and starts a campaign there, load carries one on. The slot picked stays active, so a run banks itself without ever having to be told which campaign it is (§7). A slot holding a saved expedition says so on its row, because that is the difference between the two things **LOAD GAME** can do: set out from the hut again, or carry on from wherever you stopped. A used row also names the kind of world that campaign walks (§4.3), which is the one thing on it that is about the ground rather than about the walking — three slots read as three places rather than three numbers.
+- **A run belongs to a slot before it starts.** The title screen offers **NEW GAME** and **LOAD GAME**, and both go through the slot picker: new empties the slot it is pointed at and starts a campaign there — in the tutorial's own world while the tutorial is on (§4.13), in a freshly drawn one otherwise — load carries one on. The slot picked stays active, so a run banks itself without ever having to be told which campaign it is (§7). A slot holding a saved expedition says so on its row, because that is the difference between the two things **LOAD GAME** can do: set out from the hut again, or carry on from wherever you stopped. A used row also names the kind of world that campaign walks (§4.3), which is the one thing on it that is about the ground rather than about the walking — three slots read as three places rather than three numbers.
 - **Reaching the hut** is the only thing that banks, and it banks the moment the tile is stepped on. Dying of thirst banks nothing, and leaving by the menu's **EXIT GAME** abandons the run and banks nothing either — so a gem picked up but never carried back is still sitting in its sanctum next run, a compass bought but never carried back is still on the merchant's shelf, with the coins still in the bank, and a landmark stood at but not walked home from is one this campaign has never stood at (§4.10). What those two cost is always and only the walk *since the hut was last stood on*. Leaving asks before it does it, since an abandoned expedition can't be got back.
 - **Dying leaves a bag rather than simply losing everything.** The tile the run was standing on when the water ran out holds everything that run hadn't banked — coins, gems, keys, tools, every light in the inventory — the way a chest does: its own bit of terrain, walked into rather than onto, opened by the bump (§4.8). A later expedition out of the same slot can walk back to it and take all of it up again, at which point it is exactly like any other pickup — only real once carried home. It belongs to the slot, not the world the seed draws, so it is tied to the seed it was dropped in: **EXIT GAME**'s campaign keeps it, a fresh **NEW GAME** overwrites it, and the world the hall moulds next (§4.9) leaves it behind for good, since neither has a tile that used to be that spot.
 - **The hut fills the tank on arrival too**, for the same reason and in the same moment — so a walk that gets to its own doorstep on its last drop of water has got home. Dying in the doorway of the one place with water in it was the cruellest outcome the game had, and it is now impossible.
@@ -1266,6 +1327,7 @@ would have been.
 | Back out of the slot picker | Tap **BACK** | Tab to it and press Enter/Space, click, or press Esc |
 | Turn the music off | Settings → **MUSIC** (§9), which silences both loops | Tab to it and press Enter/Space, or click |
 | Set the walking speed | Settings → drag or tap the **MOVE SPEED** slider (2-10 steps/second) | Tab to it, Left/Right to change it, or drag/click |
+| Turn the tutorial on or off | Settings → **TUTORIAL** (§4.13) — on, the next NEW GAME walks it from the top | Tab to it and press Enter/Space, or click |
 | Turn cheats on or off | Settings → **CHEATS** (§6.2) | Tab to it and press Enter/Space, or click |
 | Open the in-run menu | Tap the **cogwheel** in the top right of the map | Click it, or press Esc |
 | Save the expedition | Menu → **SAVE GAME**, then **KEEP PLAYING** or **EXIT GAME** | Tab between the menu's four choices and press Enter/Space, or click |
@@ -1295,7 +1357,7 @@ have nothing left to do and are skipped.
 
 **The dialog** is the other overlay: a title, a line or a two-column readout, and a row of buttons — stacked one per line once there are more than two of them. It has no close control of its own: every way out is one of its buttons, because all of its uses (the hut's out-or-over question, the recap, the death screen, and the cogwheel menu) are decisions rather than inspections. Like the item card it owns the whole screen while it's up: nothing behind it steps, swipes, or answers a key — though its own buttons do, from Tab (or the arrows) and Enter or Space (§7), and it opens with the first one already focused.
 
-**The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and Space, Enter or Esc do the same from a keyboard, all three reading it on rather than closing it, since there is nothing behind it to go back to (§7). Like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is one: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again. **Opening a chest** (§4.8) is the second, and the reason the panel leaves the world on screen: the lid is visibly up behind the words. **The sorcerer** (§4.9) is the third and the longest, and the only one whose callback does something the player cannot undo — the world turns over when his last block has been read.
+**The text panel** is the game's own voice, and the one overlay that leaves the world on screen: a bordered box across the bottom band of the screen — flush with the HUD divider, whose rule its own top edge becomes — covering the HUD and nothing above it. It reads a few sentences out **a character at a time**, with a blip every couple of characters, one **block** per tap: a tap mid-sentence puts the rest of that block up at once, a tap on a finished block moves to the next, and a tap on the last closes the panel. A blinking caret in the corner is what says a block has finished rather than got stuck. Anywhere on the screen is its tap target — hunting for a button to advance a text box is the one thing a text box must never ask for — and Space, Enter or Esc do the same from a keyboard, all three reading it on rather than closing it, since there is nothing behind it to go back to (§7). Like every other overlay it owns the input while it is up, so nothing behind it steps. It says nothing specific to any one moment: it takes a list of blocks and a callback, and setting out is only its first use. **Setting out** is one: a fresh expedition opens with three blocks about walking into the dark, and a walk merely being *carried on* — resumed from a slot, or coming back from Settings mid-run — is not read them again. **Opening a chest** (§4.8) is the second, and the reason the panel leaves the world on screen: the lid is visibly up behind the words. **The sorcerer** (§4.9) is the third and the longest, and the only one whose callback does something the player cannot undo — the world turns over when his last block has been read. **The tutorial** (§4.13) is the fourth, and the one that moves the panel: a block about the HUD is read from a box of the same size at the top of the screen, so it isn't covering what it is about.
 
 **The cogwheel menu** is a dialog with four choices — **SETTINGS**, **SAVE GAME**, **EXIT GAME** and **KEEP PLAYING**. Settings is the same screen the title screen opens and comes straight back to the tile you were standing on. Saving reports what it wrote and then asks the one question that follows from it: keep playing, or leave now. Leaving asks first, and says what it is about to cost, because an abandoned expedition can't be got back (§6.1).
 
@@ -1341,6 +1403,7 @@ have nothing left to do and are skipped.
 - The compass, pointing at the next unique object worth walking to
 - The map, drawing the run's explored ground and remembering it between runs
 - `?seed=&nonce=` on the URL, to walk a named world twice
+- A tutorial for a first game: its own world, a route it keeps the player on, an arrow at each thing it explains, and a switch in Settings to walk it again (§4.13)
 
 **Nice to have (only after MVP works):**
 - Light falloff — an outer ring at partial brightness instead of a hard edge
@@ -1493,8 +1556,9 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/main.js` | `Phaser.Game` config and scene registration — boot only |
   | `src/balance.js` | **Every number the game is balanced on, and nothing else**: terrain thresholds, the edge of the world and its choke, seed validation, the sanctum, site, landmark, signpost and chest plans (and what a landmark hands over), the scatter lattice (`MIN_SEPARATION`, `SCATTER`, the per-band spawn chance and the gem density taper), coin values, water and the leash, light durability and shapes, the merchant's prices and the cheat switch's reach. Imports nothing — it is a table, not code |
   | `src/text.js` | **Every word the game says to the player, and nothing else**: the title screen and its tagline, the slot picker, Settings, the HUD's counters and status line, every dialog — the hut, the recap, the death screen, the menu, the edge — the merchant, the map, the panels, and each item's name and card copy. Anything that varies is a function of what it varies on, so copy and the number it quotes cannot drift apart. Imports only `src/balance.js`, for the refill figures the water cards quote. No layout, no logic — a scene never spells a player-facing string itself. Reviewed through `text.html` rather than read down (§11) |
-  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor and `setDefaultPalette` — which sets it from a run's biome, the only way it is ever set (§4.3) — `invertColour` and the two ways the game is drawn inside out (§4.9): the Settings switch and the override the ending itself draws with, both of which reach the whole screen because every colour in the game comes out of `getPalette`, `gemColour` and `paletteColour` — the music and cheat switches (§9, §6.2, persisted to `localStorage`), the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
+  | `src/config.js` | Screen/HUD/tile layout constants, the palette table, the active-palette accessor and `setDefaultPalette` — which sets it from a run's biome, the only way it is ever set (§4.3) — `invertColour` and the two ways the game is drawn inside out (§4.9): the Settings switch and the override the ending itself draws with, both of which reach the whole screen because every colour in the game comes out of `getPalette`, `gemColour` and `paletteColour` — the music, tutorial and cheat switches (§9, §4.13, §6.2, persisted to `localStorage`) and which lesson the tutorial is on, the move-speed setting (`getMoveSpeed`/`setMoveSpeed`, 2-10 steps/second, persisted the same way — §7), `FLOOR_TEXTURE_LEVEL` — how strongly ground texture is drawn — and `gemColour`, which colour each recovered gem paints in. Holds no gameplay numbers; those are `src/balance.js`'s |
   | `src/core/world.js` | The three layers (§4.3): seeded hash → terrain; the seed-derived sanctums, sites, landmarks, signposts and chests (`sanctums`, `sanctumAt`, `sites`, `siteAt`, `isMerchant`, `landmarks`, `landmarkAt`, `signposts`, `signpostAt`, `signpostTargets`/`signpostReadings`/`signpostHutBearing`, `chests`, `chestAt`, `entryKey`/`canEnter` — which key a tile wants — and `blocksSight`, what stops a light rather than a step); `uniqueAt` and the separation-thinned `consumableAt`, composed by `itemAt`; and `reachableFraction`/`sitesReachable`/`pickSeed` for the run-start seed validation, plus `variantAt` — which of a terrain's tiles a square draws — and `biomeOf`, which kind of world a seed is (§9, §4.3). The machinery only: every number it is tuned on comes from `src/balance.js`, where `MIN_SEPARATION` and the `SCATTER` table are the two things to retune. Pure, no Phaser |
+  | `src/core/tutorial.js` | The tutorial's route through its world, the ground either side of it a step may land on, and whether each lesson has been done — read off the run (§4.13). Pure |
   | `src/core/compass.js` | Which unique object the compass points at, and the heading to draw, snapped to the four the needle has sprites for. Pure |
   | `src/core/cartography.js` | Run-length encoding the explored set into something a save slot can hold, and back. Pure |
   | `src/core/light.js` | Light shapes: given a light, a tile, and a facing, the set of visible tiles — and, handed a predicate saying what is opaque, the same set with its shadows cut out of it (§4.1). Knows what a shadow is and nothing at all about rock, which is what keeps it pure |
@@ -1521,9 +1585,10 @@ An explorer leaving a small base to map an unknown dark. The framing is delibera
   | `src/ui/shop.js` | The merchant's counter: a row per line of stock, over the purse it's paid from |
   | `src/ui/worldMap.js` | The map overlay: explored ground baked into a canvas texture a pixel a tile, plus markers — and the pinch/drag/wheel/button zoom and pan over the top of it, which are one container's scale and position |
   | `src/ui/compassBadge.js` | The needle and target icon in the navigation rail |
+  | `src/ui/tutorial.js` | The tutorial on screen: which lesson is next, the blocks it reads and what each points at, the arrow and the HUD box, and the step it refuses (§4.13) |
   | `src/ui/dpad.js`, `src/ui/itemCard.js`, `src/ui/inventoryPanel.js`, `src/ui/dialog.js`, `src/ui/button.js`, `src/ui/slider.js` | The D-pad, held to repeat a step at the rate `getMoveSpeed` gives; the item card overlay (single-copy or scrollable instance list); the full scrollable inventory panel, with the gem-pip row above its list; the title/rows/buttons dialog the hut, the recap and the cogwheel menu all use, its buttons in a row or stacked one per line once there are more than two; the shared bordered button; the shared drag-or-tap slider, used once for the move-speed setting |
-  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker, which says which slots are mid-expedition), `SettingsScene` (the music switch, the move-speed slider, the cheat switch, the inversion that rides with it — and, opened from a run, the way back into it), `ExploreScene` (the run, the cogwheel menu hanging off it, and the light explosion that ends the game), `CreditsScene` (what is on the other side of that explosion, and the only scene drawn with the colours inverted — §4.9) |
-  | `tests/` | `harness.js` (local server + Playwright driver + runner), `world.js` (the seed and every route BFSed out of it), fourteen `*.test.js` suites and `all.test.js`, which runs them all — see `TESTING.md` |
+  | `src/scenes/` | `TitleScene`, `SlotScene` (the NEW GAME / LOAD GAME picker, which says which slots are mid-expedition), `SettingsScene` (the music switch, the move-speed slider, the tutorial switch, the cheat switch, the inversion that rides with it — and, opened from a run, the way back into it), `ExploreScene` (the run, the cogwheel menu hanging off it, and the light explosion that ends the game), `CreditsScene` (what is on the other side of that explosion, and the only scene drawn with the colours inverted — §4.9) |
+  | `tests/` | `harness.js` (local server + Playwright driver + runner), `world.js` (the seed and every route BFSed out of it), seventeen `*.test.js` suites and `all.test.js`, which runs them all — see `TESTING.md` |
 
 - **Sprites are coordinates on one sheet.** `src/data/tiles.js` names a **(col, row)** of `assets/tiles.png` per sprite key; the tile is cut out as a 1-bit mask at boot, baked into a white texture and tinted at draw time. One image, no image editor to repoint a sprite, no build step — and one texture set serves all four palettes.
 

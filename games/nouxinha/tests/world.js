@@ -358,8 +358,9 @@ export function stepsAfter(route, tile, start = START) {
 //
 // Nothing about the world is stored, so the scatter the run walks out onto is
 // the one the seed and salt derive — which is why the nonce here is the same
-// NONCE every route above was BFSed against.
-export function standingAt(route, { back = 0, save = {}, run = {} } = {}) {
+// NONCE every route above was BFSed against. `seed` is for the one route that
+// isn't walked in the suite's own world: the tutorial's (tutorial.test.js).
+export function standingAt(route, { back = 0, save = {}, run = {}, seed = SEED } = {}) {
   const walked = back ? route.path.slice(0, route.path.length - back) : route.path;
   const at = follow(walked);
   const steps = walked.length;
@@ -369,9 +370,10 @@ export function standingAt(route, { back = 0, save = {}, run = {} } = {}) {
       ...emptySave(),
       ...save,
       started: true,
-      seed: SEED,
+      seed,
       run: {
         ...FRESH_RUN,
+        seed,
         ...at,
         steps,
         furthest: Math.max(Math.abs(at.x - BASE_X), Math.abs(at.y - BASE_Y)),

@@ -9,7 +9,7 @@
 cd games/nouxinha
 npm install       # playwright-core + phaser, from the allowed npm registry — do NOT run `playwright install`
 npm test          # every suite, one server and one browser: about a minute and a half
-npm run test:pure # the ten pure suites only, no browser: under twenty seconds
+npm run test:pure # the eleven pure suites only, no browser: under twenty seconds
 ```
 
 The runner prints what each test cost and what the whole run cost, because a
@@ -50,11 +50,13 @@ at all, which is the quick way to work on the rules.
 | `wisps.test.js` | The ten wisps: where they stand, that touching one hands back nothing, and that a wisp lights its own clearing whatever the character is carrying |
 | `stones.test.js` | The four carved stones: where they stand and what they keep clear of, that reading one is a post's bump, and that which of its five cuts you read is how many kinds of world the campaign has finished |
 | `save.test.js` | The three slots, the ground a run keeps however it ends, suspend and resume, what a cycle in the hall takes and leaves, and which kinds of world a campaign has finished |
+| `tutorial.test.js` | The tutorial's world and its route: that the seed is one `pickSeed` hands back, that the route walks past every thing a lesson is about, that a step off it is refused and a walker off it never held, and that every lesson is done by doing the thing |
 | `sprites.test.js` | The tile sheet table, the derived sprites, the biome tiles, the wall nine-slice, the palette rules |
 | `ui-shell.test.js` | The canvas against a phone, the sheet actually loading, the game's own voice |
 | `ui-explore.test.js` | The controls that walk, and the three visibility states the viewport draws |
 | `ui-items.test.js` | The HUD counters, the item card, and finding a light and burning it |
 | `ui-campaign.test.js` | The hut, the recap, the slots, save/load, death, the merchant, the map, a sanctum's colour, a chest's key, the sorcerer and the world he moulds, and the last world finished ending the game in the light |
+| `ui-tutorial.test.js` | A first game opening on the tutorial's world and its first lesson, a step off its route refused, and the last lesson turning it off |
 | `ui-landmarks.test.js` | Bumping into a landmark, a post and a carved stone: the panel, the gift, the colour a standing turns on, and which cut of a stone a campaign reads |
 
 Suites share `tests/world.js` — the seed, the pinned nonce, and every route BFSed out of the real
@@ -126,7 +128,8 @@ reaches in to *set* game state.
 | `wizardTexture()` / `wizardZoneTints()` | Which of the four facing sprites is showing, and the tint of each of its colour-zone layers — the silhouette the character set out in, plus the hood, robe and staff that turn the colours of gems one, two and three |
 | `tapShopRow(i)` / `tapMapButton()` | Taps a line of the merchant's stock, or the **MAP** button in the navigation rail |
 | `tapMenuButton()` | Taps the **cogwheel** in the top right, which opens the in-run menu (SETTINGS, SAVE GAME, EXIT GAME, KEEP PLAYING) |
-| `textPanel()` | What the text panel is showing: which block of how many, the characters of it on screen so far, and whether that block has finished typing — `null` while the panel is closed |
+| `tutorial()` | Which lesson the tutorial is on, whether it has finished, what its pointer is showing and the tile its lesson is sending the player to — `null` on a run with no tutorial |
+| `textPanel()` | What the text panel is showing: which block of how many, the characters of it on screen so far, whether that block has finished typing, and whether it is reading from the bottom of the screen or the top — `null` while the panel is closed |
 | `tapPanel()` / `readPanel()` | One tap on the panel, or as many as it takes to read it out and close it |
 | `tapScreen()` | A tap on the middle of the screen and nothing else — the credits' only control (DESIGN.md §4.9) |
 | `background()` | The colour whichever scene is on top is clearing to. The ending inverts every colour in the game, and this is the half of that a test can read with no tile on screen to look at |
@@ -451,6 +454,15 @@ The `cheats` page option is the same idea for the Settings switch (DESIGN.md §6
 on before the page loads, so a test can open straight onto a run holding everything. What cheats
 actually do to a run — the whole map revealed, one of everything, and a slot that is never written
 to — is pure, and is asserted in `rules.test.js` and `save.test.js` rather than driven.
+
+The `tutorial` page option is the tutorial's switch (DESIGN.md §4.13), and it is **off unless a test
+asks for it**. A page that has never stored the switch is a first game, and every page the suite opens
+looks exactly like one — so without the option defaulting off, every **NEW GAME** in the suite would
+walk the tutorial's world instead of the one its routes were BFSed in. `tutorial: true` turns it on
+from the first lesson; a number turns it on *at* that lesson (an index into `TUTORIAL_STEPS`), which is
+how `ui-tutorial.test.js` plants a player one step short of the end. A tutorial test opens on no
+`?seed=` at all, since a seed in the URL walks that world instead, and plants its walk with
+`standingAt(route, { seed: TUTORIAL_SEED })`.
 
 ## Standing where a route ends
 

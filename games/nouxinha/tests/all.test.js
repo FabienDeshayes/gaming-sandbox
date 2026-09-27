@@ -20,11 +20,13 @@ import './wisps.test.js';
 import './stones.test.js';
 import './save.test.js';
 import './sprites.test.js';
+import './tutorial.test.js';
 
 import './ui-shell.test.js';
 import './ui-explore.test.js';
 import './ui-items.test.js';
 import './ui-campaign.test.js';
 import './ui-landmarks.test.js';
+import './ui-tutorial.test.js';
 
 run();

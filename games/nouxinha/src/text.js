@@ -82,6 +82,10 @@ export const SETTINGS = {
   // on: it is a way of looking at the game rather than a way of playing it.
   invert: (on) => `INVERT COLOURS: ${on ? 'ON' : 'OFF'}`,
   invertNote: 'THE WORLD DRAWN INVERTED.',
+  // The tutorial's switch (DESIGN.md §4.13): on for a first game, turned off by
+  // finishing it, and turned back on here for the next NEW GAME.
+  tutorial: (on) => `TUTORIAL: ${on ? 'ON' : 'OFF'}`,
+  tutorialNote: (on) => (on ? 'THE NEXT NEW GAME STARTS WITH IT.' : 'TURN ON TO WALK IT AGAIN.'),
   back: UI.back,
 };
 
@@ -814,6 +818,74 @@ export const STONE_TEXT = {
       'And under it, the shallowest cutting on any of the four: "YOU ALWAYS DID. THAT IS THE WHOLE OF WHAT I LEARNED, AND IT TOOK ME EVERYTHING I WAS HOLDING."',
     ],
   ],
+};
+
+// --- The tutorial ------------------------------------------------------------
+//
+// What the tutorial says on the text panel (DESIGN.md §4.13, ui/tutorial.js),
+// lesson by lesson, one string per block. Which thing on screen a block points
+// at is the scene's business rather than the words', so each list here lines up
+// block for block with its row in `POINTS` in ui/tutorial.js — add a block to
+// one and add its pointer to the other.
+//
+// Short on purpose. A first game is for walking, and every block is a tap
+// between the player and the next step. Headings and names come in as
+// arguments, because the route is worked out of the world rather than written
+// down (core/tutorial.js).
+
+export const TUTORIAL = {
+  // Out of the hut door, the first time. Read instead of the usual setting-out
+  // blocks (`SAY.expeditionStart`), which say the same thing less usefully.
+  intro: [
+    'This is you. It is dark out here: your candle only lights the tiles right around you.',
+    'Behind you is your hut. Come back to it to refill your water and keep what you have found.',
+    'Your water. Every step costs one.',
+    'If it runs dry, you die out there. Keep an eye on it.',
+    'Your candle. It burns down a step at a time too, and when it goes out you walk blind.',
+    'Swipe, or tap the arrows, to walk. Hold an arrow down to walk faster.',
+  ],
+  post: (bearing) => [`A signpost stands a few steps ${bearing.toLowerCase()}. Follow the arrow, and walk into it to read it.`],
+  // After the post's own panel has been read.
+  postRead: ['Signposts name the landmarks around them, and which way to walk.'],
+  chest: (bearing, landmark) => [
+    `There is a chest ${bearing.toLowerCase()} of here, on the way to ${landmark}. Walk into it to open it.`,
+  ],
+  // After the chest's own panel: the rest of the HUD, while there is a coin in
+  // it to point at.
+  chestOpened: [
+    'Your coins. Spend them at a stall.',
+    'Next to them, how much ground you have explored.',
+    'And up here, the menu: save your game, change the settings, or leave.',
+  ],
+  landmark: (landmark) => [`Just past the chest stands ${landmark}, a landmark. Walk into it.`],
+  // After the landmark's own panel.
+  landmarkTouched: ['A landmark gives you something every time you come back. The first visit leaves you something for good.'],
+  torch: (bearing) => [
+    `Further ${bearing.toLowerCase()} stands a sanctum. Somebody left supplies inside it: pick up a torch.`,
+  ],
+  equip: [
+    'Your lights. Tap the new torch here, then EQUIP.',
+    'A bigger light shows you more of the dark, but burns out faster.',
+  ],
+  gem: ['Now take the gem at the centre of the sanctum.'],
+  // The end of it: the gem in hand, and what the rest of the game is.
+  end: [
+    'A gem. It gives a colour back to the world, and lets you carry more water.',
+    'There are more of them out there. Find them, and bring them to the one who waits in the far dark.',
+    'But carry this one home first. Nothing you find is yours until the hut has it.',
+    'That is the end of the tutorial. You can turn it back on in the settings.',
+  ],
+  // The status line, when a step off the route is refused: what the arrow is
+  // pointing at, and which way it lies.
+  offPath: (thing, bearing) => `NOT THAT WAY. ${thing} IS ${bearing}.`,
+  // The same, on the one lesson that is about the HUD rather than the ground.
+  offPathEquip: 'NOT THAT WAY. EQUIP THE NEW TORCH FIRST.',
+  things: {
+    post: 'THE SIGNPOST',
+    chest: 'THE CHEST',
+    torch: 'THE TORCH',
+    gem: 'THE GEM',
+  },
 };
 
 // --- Panels ------------------------------------------------------------------

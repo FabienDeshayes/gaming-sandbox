@@ -470,10 +470,13 @@ export function drawSeed() {
 // the active one, so a campaign started here banks here. Overwriting an occupied
 // slot is the picker's decision, not this function's — by the time it is called
 // the player has already been asked twice.
-export function startSlot(slot) {
+//
+// `seed` is for the one campaign whose world is not drawn: the tutorial's
+// (DESIGN.md §4.13), which the picker hands in while the tutorial is on.
+export function startSlot(slot, seed) {
   const picked = setActiveSlot(slot);
   clearSave(picked);
-  return writeSave({ ...emptySave(), seed: drawSeed() }, picked);
+  return writeSave({ ...emptySave(), seed: seed === undefined ? drawSeed() : pickSeed(seed) }, picked);
 }
 
 // LOAD GAME: nothing is written, the slot simply becomes the one the next run

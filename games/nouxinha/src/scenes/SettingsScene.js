@@ -1,4 +1,4 @@
-// Settings: the music and cheat switches, the move-speed slider, and — for a
+// Settings: the music, tutorial and cheat switches, the move-speed slider, and — for a
 // player who has finished all four worlds — the switch that draws the game
 // inside out (DESIGN.md §4.9). There is no palette picker here: a world's colour
 // comes from its biome (§4.3, src/data/biomes.js), not from a choice a player
@@ -18,11 +18,13 @@ import {
   getMoveSpeed,
   getMusic,
   getPalette,
+  getTutorial,
   hex,
   setCheats,
   setInvert,
   setMoveSpeed,
   setMusic,
+  setTutorial,
 } from '../config.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { makeButton } from '../ui/button.js';
@@ -65,7 +67,7 @@ export class SettingsScene extends Phaser.Scene {
     const music = makeButton(
       this,
       cx,
-      320,
+      270,
       musicLabel(getMusic()),
       () => {
         const on = setMusic(!getMusic());
@@ -79,7 +81,7 @@ export class SettingsScene extends Phaser.Scene {
     // How fast holding a D-pad arrow walks (DESIGN.md §7, dpad.js) — a slider
     // rather than a fixed rate, since "fast" is a matter of taste and thumb
     // speed both.
-    const moveSpeed = makeSlider(this, cx, 420, {
+    const moveSpeed = makeSlider(this, cx, 360, {
       width: 300,
       min: MIN_MOVE_SPEED,
       max: MAX_MOVE_SPEED,
@@ -88,6 +90,30 @@ export class SettingsScene extends Phaser.Scene {
       onChange: (v) => setMoveSpeed(v),
     });
 
+    // The tutorial (DESIGN.md §4.13): on for a first game, turned off by
+    // finishing it, and turned back on here — which starts it again from the
+    // top, and makes the next NEW GAME the tutorial's world.
+    const tutorial = makeButton(
+      this,
+      cx,
+      450,
+      tutorialLabel(getTutorial()),
+      () => {
+        const on = setTutorial(!getTutorial());
+        tutorial.setLabel(tutorialLabel(on));
+        tutorialNoteText.setText(tutorialNote(on)).setAlpha(on ? 0.8 : 0.5);
+      },
+      { width: 300, fontSize: 14 }
+    );
+    const tutorialNoteText = this.add
+      .text(cx, 490, tutorialNote(getTutorial()), {
+        fontFamily: FONT,
+        fontSize: '11px',
+        color: hex(pal.fg),
+      })
+      .setOrigin(0.5)
+      .setAlpha(getTutorial() ? 0.8 : 0.5);
+
     // The cheat switch (DESIGN.md §6.2): a run started with it on opens with the
     // map revealed and one of everything, which is how the late game gets looked
     // at without a campaign's worth of walking behind it. It says what it costs
@@ -95,7 +121,7 @@ export class SettingsScene extends Phaser.Scene {
     const cheats = makeButton(
       this,
       cx,
-      520,
+      550,
       cheatLabel(getCheats()),
       () => {
         const on = setCheats(!getCheats());
@@ -112,7 +138,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
     const note = this.add
-      .text(cx, 560, cheatNote(getCheats()), {
+      .text(cx, 590, cheatNote(getCheats()), {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -131,7 +157,7 @@ export class SettingsScene extends Phaser.Scene {
       invert = makeButton(
         this,
         cx,
-        610,
+        640,
         invertLabel(getInvert()),
         () => {
           setInvert(!getInvert());
@@ -140,7 +166,7 @@ export class SettingsScene extends Phaser.Scene {
         { width: 300, fontSize: 14 }
       );
       this.add
-        .text(cx, 648, SETTINGS.invertNote, {
+        .text(cx, 678, SETTINGS.invertNote, {
           fontFamily: FONT,
           fontSize: '11px',
           color: hex(pal.fg),
@@ -155,14 +181,16 @@ export class SettingsScene extends Phaser.Scene {
       this.opened.run
         ? this.scene.start('ExploreScene', { run: this.opened.run })
         : this.scene.start('TitleScene');
-    const back = makeButton(this, cx, 700, SETTINGS.back, goBack, { width: 240 });
+    const back = makeButton(this, cx, 750, SETTINGS.back, goBack, { width: 240 });
 
-    bindKeyboardNav(this).set([music, moveSpeed, cheats, ...(invert ? [invert] : []), back]);
+    bindKeyboardNav(this).set([music, moveSpeed, tutorial, cheats, ...(invert ? [invert] : []), back]);
     this.input.keyboard.on('keydown-ESC', goBack);
   }
 }
 
 const musicLabel = SETTINGS.music;
+const tutorialLabel = SETTINGS.tutorial;
+const tutorialNote = SETTINGS.tutorialNote;
 const cheatLabel = SETTINGS.cheats;
 const cheatNote = SETTINGS.cheatNote;
 const invertLabel = SETTINGS.invert;

@@ -211,6 +211,13 @@ export function launchBrowser() {
 // then takes that slot up through LOAD GAME instead of NEW GAME.
 //
 // `cheats` turns the Settings switch on before the page loads, the same way.
+//
+// `tutorial` is the tutorial switch, and it is *off* unless a test asks: a page
+// that has never stored it is a first game, which is exactly what every page
+// the suite opens looks like — so without this every NEW GAME in the suite
+// would walk the tutorial's world instead of the one its routes were BFSed in.
+// A number turns it on *at* that lesson (`TUTORIAL_STEPS` in
+// src/core/tutorial.js), which is how a test plants a player part-way through.
 
 export async function openGame(
   browser,
@@ -220,6 +227,7 @@ export async function openGame(
     query = '',
     save = null,
     cheats = false,
+    tutorial = false,
   } = {}
 ) {
   const errors = [];
@@ -242,6 +250,19 @@ export async function openGame(
         /* a page that can't store one just runs without it */
       }
     }, save);
+
+  await page.addInitScript((on) => {
+    try {
+      // Only the first load: a test that finishes the tutorial and then reloads
+      // wants to see it stay finished.
+      if (localStorage.getItem('nouxinha.tutorial') === null) {
+        localStorage.setItem('nouxinha.tutorial', on === false ? '0' : '1');
+        if (typeof on === 'number') localStorage.setItem('nouxinha.tutorialStep', String(on));
+      }
+    } catch (e) {
+      /* a page that can't store one just runs without it */
+    }
+  }, tutorial);
 
   if (cheats)
     await page.addInitScript(() => {
@@ -421,6 +442,14 @@ export async function openGame(
       page.evaluate(() => {
         const s = window.__game.scene.getScene('ExploreScene');
         return s && s.textPanel ? s.textPanel.viewState() : null;
+      }),
+
+    // Which lesson the tutorial is on and what its pointer is showing, or null
+    // on a run with no tutorial (src/ui/tutorial.js).
+    tutorial: () =>
+      page.evaluate(() => {
+        const s = window.__game.scene.getScene('ExploreScene');
+        return s && s.tutorial ? s.tutorial.viewState() : null;
       }),
 
     // Taps the panel, which is the only thing a player can do to it: finish the

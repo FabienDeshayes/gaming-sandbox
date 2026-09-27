@@ -8,6 +8,7 @@ import {
   VIEW_H,
   getCheats,
   getPalette,
+  getTutorial,
   hex,
   invertColour,
   overrideInvert,
@@ -36,6 +37,7 @@ import {
 } from '../core/rules.js';
 import { activeSlot, loadSave, MAX_GEMS } from '../core/save.js';
 import { chebyshev, landmarkNamed } from '../core/world.js';
+import { isTutorialWorld } from '../core/tutorial.js';
 import { BELL_HEARING } from '../balance.js';
 import { biomeDef } from '../data/biomes.js';
 import { itemDef } from '../data/items.js';
@@ -67,6 +69,7 @@ import { Shop } from '../ui/shop.js';
 import { WorldMap } from '../ui/worldMap.js';
 import { CompassBadge, BADGE_H, BADGE_W } from '../ui/compassBadge.js';
 import { makeDpad } from '../ui/dpad.js';
+import { Tutorial } from '../ui/tutorial.js';
 import {
   playBell,
   playChest,
@@ -254,10 +257,26 @@ export class ExploreScene extends Phaser.Scene {
     this.hud.update(this.run);
     this.layOutRail();
 
+    // The tutorial (DESIGN.md §4.13), for a player who has it on and is walking
+    // its world. It says its first lesson over the screen drawn above, from
+    // the first frame, and keeps a walk on its route until the last.
+    this.tutorial =
+      getTutorial() && isTutorialWorld(this.run) ? new Tutorial(this, { fresh: !handed }) : null;
+
     // Last, over a screen that is already drawn: the panel leaves the viewport
-    // showing, so what it covers has to be there to be covered.
+    // showing, so what it covers has to be there to be covered. The tutorial's
+    // opening lesson is read *instead* of the usual setting-out blocks, which
+    // say the same thing less usefully.
     if (asked.moulded) this.showMoulded();
-    else if (settingOut) this.textPanel.show(SAY.expeditionStart);
+    else if (settingOut && !(this.tutorial && this.tutorial.speaksFirst()))
+      this.textPanel.show(SAY.expeditionStart);
+  }
+
+  // The tutorial is the one thing that runs off the frame loop: a lesson waits
+  // for whatever else is on screen to close before it says its piece
+  // (ui/tutorial.js).
+  update() {
+    if (this.tutorial) this.tutorial.update();
   }
 
   // The compass badge and the map button, both built once and shown only for the
@@ -512,6 +531,18 @@ export class ExploreScene extends Phaser.Scene {
     if (this.animating || this.modalOpen()) return;
     unlockAudio();
     this.resumeMusic();
+
+    // A step off the tutorial's route is refused before it is taken, and the
+    // status line says which way the thing the arrow is pointing at lies. It
+    // bumps like rock — the step really didn't happen.
+    if (this.tutorial && !this.tutorial.allows(direction)) {
+      this.hud.flash(this.tutorial.offPathLine());
+      this.animating = true;
+      this.map.bump(this, direction, this.run, () => {
+        this.animating = false;
+      });
+      return;
+    }
 
     const result = step(this.run, direction);
     if (!result.moved) {
@@ -1012,7 +1043,10 @@ export class ExploreScene extends Phaser.Scene {
     if (!equip(this.run, index)) return;
     // Only when a different light actually took over: re-equipping the one
     // already burning is a no-op, and it should sound like one.
-    if (this.run.activeIndex !== was) playTorch();
+    if (this.run.activeIndex !== was) {
+      playTorch();
+      if (this.tutorial) this.tutorial.noteEquip();
+    }
     this.map.refresh(this.run);
     this.hud.update(this.run);
   }

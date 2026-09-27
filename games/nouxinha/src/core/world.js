@@ -4,12 +4,13 @@
 //
 //   terrain    — noise plus everything built into it: the sanctums, the four
 //                landmarks and their courts, the signposts, and the aprons
-//                round the sites and chests. A pure function of (x, y, seed):
+//                round the merchants and chests. A pure function of (x, y, seed):
 //                the same every run, forever. Floor, two formations of rock,
 //                groves of trees, and the built walls.
-//   unique     — the gems, the merchant, the chests, and the one compass and one
-//                map lying out in the dark. Also pure in (x, y, seed), so a run
-//                always finds them where the last run left them.
+//   unique     — the gems, the merchants, and the chests — two of which hold
+//                the compass and the map rather than a key or a hoard. Also
+//                pure in (x, y, seed), so a run always finds them where the
+//                last run left them.
 //   consumable — coins, water and lights. A function of (x, y, seed, salt),
 //                where the salt changes every run and every time the world
 //                respawns, so these are never twice in the same places.
@@ -40,6 +41,7 @@ import {
   LANDMARK_CHEST_SPAN,
   LANDMARK_COURT,
   LANDMARK_PLAN,
+  MERCHANT_PLAN,
   MIN_SEPARATION,
   POCKET_PROBE,
   RICHNESS_CELL,
@@ -57,7 +59,6 @@ import {
   SIGNPOST_CLEARANCE,
   SIGNPOST_PLAN,
   SIGNPOST_SPACING,
-  SITE_PLAN,
   SPAWN_CHANCE,
   STONE_CLEARANCE,
   STONE_PLAN,
@@ -76,7 +77,7 @@ const CH_TERRAIN_FINE = 2;
 const CH_GROVE = 3;
 const CH_GROVE_FINE = 4;
 const CH_SANCTUM = 5;
-const CH_SITE = 6;
+const CH_MERCHANT = 6;
 const CH_COIN = 7;
 const CH_BOULDER = 8;
 const CH_VARIANT = 9;
@@ -429,25 +430,21 @@ function buildSanctums(seed) {
   });
 }
 
-// --- Sites -------------------------------------------------------------------
+// --- The merchant's stalls -----------------------------------------------------
 //
-// The single-tile things in the world that aren't behind a gate and aren't
-// rerolled: the merchants, and the one compass and one map lying out in the
-// dark (balance.js `SITE_PLAN`). Each is a single tile with a forced-floor
-// apron around it, so however the noise fell there is always ground to stand on
-// next to it.
-//
-// A site carrying an `item` is a pickup; a merchant carries none, because
-// what you do at a merchant's tile is trade, not collect — and each merchant
-// keeps its own `id` (`merchant`, `merchant-2`, ...) so a campaign can find one
-// stall without the map already knowing where the others are.
+// The three trading stalls, placed like the chests and the landmarks are and
+// never rerolled (balance.js `MERCHANT_PLAN`). Each is a single tile with a
+// forced-floor apron around it, so however the noise fell there is always
+// ground to stand on next to it, and each keeps its own `id` (`merchant`,
+// `merchant-2`, ...) so a campaign can find one stall without already knowing
+// where the others are.
 
 // Whether a built thing with a forced-floor apron around it can stand here:
 // clear of the sanctums, of everything already placed, and of the base
 // clearing, and opening onto the cave system rather than onto a pocket — the
-// same bar a sanctum door has to clear. Shared by the sites, the landmarks, the
-// chests and the signposts, which are all placed this way and all have to stay
-// off each other.
+// same bar a sanctum door has to clear. Shared by the merchants, the landmarks,
+// the chests and the signposts, which are all placed this way and all have to
+// stay off each other.
 //
 // `radius` is how much apron the thing needs: 1 for a single tile with a ring
 // of floor round it, LANDMARK_COURT for a landmark, whose court is the same
@@ -487,13 +484,13 @@ function claim(taken, spot, radius, kind) {
   return at;
 }
 
-function buildSites(seed, built, taken) {
-  const clear = (site) => spotIsClear(site, seed, built, taken);
+function buildMerchants(seed, built, taken) {
+  const clear = (spot) => spotIsClear(spot, seed, built, taken);
 
-  return SITE_PLAN.map((plan, i) => {
-    const roll = randomAt(i + 1, 0, seed, CH_SITE);
-    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_SITE) * plan.span);
-    // A site pinned `opposite` a sanctum takes that sanctum's heading plus
+  return MERCHANT_PLAN.map((plan, i) => {
+    const roll = randomAt(i + 1, 0, seed, CH_MERCHANT);
+    const distance = plan.near + Math.floor(randomAt(i + 1, 1, seed, CH_MERCHANT) * plan.span);
+    // A stall pinned `opposite` a sanctum takes that sanctum's heading plus
     // half a turn; the rest roll a heading of their own.
     const base =
       plan.opposite === null
@@ -503,16 +500,16 @@ function buildSites(seed, built, taken) {
           (roll - 0.5) * 0.5;
 
     for (const delta of HEADING_SEARCH) {
-      const site = ringPoint(distance, base + delta * Math.PI * 2);
-      if (clear(site)) {
-        claim(taken, site, 1, 'site');
-        return { ...plan, index: i, x: site.x, y: site.y };
+      const spot = ringPoint(distance, base + delta * Math.PI * 2);
+      if (clear(spot)) {
+        claim(taken, spot, 1, 'merchant');
+        return { ...plan, index: i, x: spot.x, y: spot.y };
       }
     }
     // Nothing in the sweep worked; `pickSeed` is the backstop that rejects it.
-    const site = ringPoint(distance, base);
-    claim(taken, site, 1, 'site');
-    return { ...plan, index: i, x: site.x, y: site.y };
+    const spot = ringPoint(distance, base);
+    claim(taken, spot, 1, 'merchant');
+    return { ...plan, index: i, x: spot.x, y: spot.y };
   });
 }
 
@@ -539,9 +536,9 @@ function buildSites(seed, built, taken) {
 // the campaign is walking anyway, where on a rose of their own they were a
 // detour in some other direction that only ever cost water to take.
 //
-// The stalls are unaffected and keep doing the opposite job: `SITE_PLAN` pins
-// each of the first three *opposite* its sanctum, so an expedition still has
-// two directions worth walking (DESIGN.md §4.5).
+// The stalls are unaffected and keep doing the opposite job: `MERCHANT_PLAN`
+// pins each one *opposite* its sanctum, so an expedition still has two
+// directions worth walking (DESIGN.md §4.5).
 
 // The bearing a plan asks for, off the sanctums that are already built: one of
 // their own, or the one halfway between two of them, taken round the short way
@@ -702,16 +699,17 @@ function buildWisps(seed, built, taken) {
 
 // --- Chests -------------------------------------------------------------------
 //
-// A chest is placed exactly like a site — seed-derived, a forced-floor apron
-// around it, checked for a way in — and differs in the one thing that matters:
-// its own tile is not walkable. You open it by walking into it, which is why it
-// has to be something you bump against rather than something you stand on, and
-// it never blocks a light, because a box you cannot see past would be a wall
-// wearing a lid (DESIGN.md §4.8).
+// A chest is placed exactly like a merchant's stall — seed-derived, a
+// forced-floor apron around it, checked for a way in — and differs in the one
+// thing that matters: its own tile is not walkable. You open it by walking
+// into it, which is why it has to be something you bump against rather than
+// something you stand on, and it never blocks a light, because a box you
+// cannot see past would be a wall wearing a lid (DESIGN.md §4.8).
 //
 // What a chest holds is fixed by the seed too: three of them hold the three
-// keys, in the order the gates want them, and the rest hold a pile of coins
-// picked out of balance.js `CHEST_COIN_VALUES`.
+// keys, in the order the gates want them; two hold a tool — the map and the
+// compass — instead of anything the gates care about; and the rest hold a
+// pile of coins picked out of balance.js `CHEST_COIN_VALUES`.
 //
 // Four of them don't take a ring of their own at all: a chest with an `at`
 // stands just outside that landmark's court (DESIGN.md §4.10), so the landmark
@@ -730,7 +728,7 @@ function buildChests(seed, built, taken, marks) {
         Math.floor(randomAt(i + 1, 2, seed, CH_CHEST) * CHEST_COIN_VALUES.length) %
           CHEST_COIN_VALUES.length
       ];
-    const holds = plan.key ? { key: plan.key } : { coins };
+    const holds = plan.key ? { key: plan.key } : plan.item ? { item: plan.item } : { coins };
     // A ring round the hut, or a ring round the landmark it belongs to.
     const around = (angle) => {
       // A landmark's own little ring is three to five tiles across and is not
@@ -740,16 +738,16 @@ function buildChests(seed, built, taken, marks) {
     };
 
     for (const delta of HEADING_SEARCH) {
-      const site = around(base + delta * Math.PI * 2);
-      if (spotIsClear(site, seed, built, taken)) {
-        claim(taken, site, 1, 'chest');
-        return { ...plan, ...holds, index: i, x: site.x, y: site.y };
+      const spot = around(base + delta * Math.PI * 2);
+      if (spotIsClear(spot, seed, built, taken)) {
+        claim(taken, spot, 1, 'chest');
+        return { ...plan, ...holds, index: i, x: spot.x, y: spot.y };
       }
     }
     // Nothing in the sweep worked; `pickSeed` is the backstop that rejects it.
-    const site = around(base);
-    claim(taken, site, 1, 'chest');
-    return { ...plan, ...holds, index: i, x: site.x, y: site.y };
+    const spot = around(base);
+    claim(taken, spot, 1, 'chest');
+    return { ...plan, ...holds, index: i, x: spot.x, y: spot.y };
   });
 }
 
@@ -767,17 +765,17 @@ function structures(seed = DEFAULT_SEED) {
   // One `taken` list through the lot, so nothing can land on anything else's
   // apron. The order is what each one needs to know: the landmarks take their
   // quarters first, because they are the most constrained thing in the world
-  // and the chests and posts are placed *against* them; then the sites, then
-  // the chests — four of which want a landmark to stand beside — and then the
-  // posts, which have to keep their distance from every landmark there is. The
-  // stones and the wisps come last because they are the two things a world may
-  // go without: neither is ever forced, so both take what is left.
+  // and the chests and posts are placed *against* them; then the merchants,
+  // then the chests — four of which want a landmark to stand beside — and then
+  // the posts, which have to keep their distance from every landmark there is.
+  // The stones and the wisps come last because they are the two things a world
+  // may go without: neither is ever forced, so both take what is left.
   const taken = [];
   const marks = buildLandmarks(key, built, taken);
   const world = {
     sanctums: built,
     landmarks: marks,
-    sites: buildSites(key, built, taken),
+    merchants: buildMerchants(key, built, taken),
     chests: buildChests(key, built, taken, marks),
     signposts: buildSignposts(key, built, taken),
     stones: buildStones(key, built, taken),
@@ -791,8 +789,8 @@ export function sanctums(seed = DEFAULT_SEED) {
   return structures(seed).sanctums;
 }
 
-export function sites(seed = DEFAULT_SEED) {
-  return structures(seed).sites;
+export function merchants(seed = DEFAULT_SEED) {
+  return structures(seed).merchants;
 }
 
 export function landmarks(seed = DEFAULT_SEED) {
@@ -815,8 +813,8 @@ export function wisps(seed = DEFAULT_SEED) {
   return structures(seed).wisps;
 }
 
-export function siteNamed(id, seed = DEFAULT_SEED) {
-  return sites(seed).find((site) => site.id === id) || null;
+export function merchantNamed(id, seed = DEFAULT_SEED) {
+  return merchants(seed).find((merchant) => merchant.id === id) || null;
 }
 
 export function landmarkNamed(id, seed = DEFAULT_SEED) {
@@ -856,22 +854,20 @@ export function isSorcerer(x, y, seed = DEFAULT_SEED) {
   return !!site && x === site.centre.x && y === site.centre.y;
 }
 
-// Which site a tile belongs to: the tile itself, or the forced-floor apron
-// around it that keeps it approachable whatever the noise did.
-export function siteAt(x, y, seed = DEFAULT_SEED) {
-  for (const site of sites(seed)) {
-    const d = chebyshev(x, y, site.x, site.y);
-    if (d === 0) return { site, part: 'site' };
-    if (d === 1) return { site, part: 'apron' };
+// Which merchant a tile belongs to: the stall itself, or the forced-floor
+// apron around it that keeps it approachable whatever the noise did.
+export function merchantAt(x, y, seed = DEFAULT_SEED) {
+  for (const merchant of merchants(seed)) {
+    const d = chebyshev(x, y, merchant.x, merchant.y);
+    if (d === 0) return { merchant, part: 'site' };
+    if (d === 1) return { merchant, part: 'apron' };
   }
   return null;
 }
 
-// A site carrying no item is a stall, however many of them a world has —
-// what you do there is trade, not collect.
 export function isMerchant(x, y, seed = DEFAULT_SEED) {
-  const at = siteAt(x, y, seed);
-  return !!at && at.part === 'site' && !at.site.item;
+  const at = merchantAt(x, y, seed);
+  return !!at && at.part === 'site';
 }
 
 // Which landmark a tile belongs to: the centrepiece itself, which is walked
@@ -1019,7 +1015,7 @@ export function terrainAt(x, y, seed = DEFAULT_SEED) {
   if (stone) return stone.part === 'site' ? 'stone' : 'floor';
   const wisp = wispAt(x, y, seed);
   if (wisp) return wisp.part === 'site' ? 'wisp' : 'floor';
-  if (siteAt(x, y, seed)) return 'floor'; // the merchant, a tool on the ground, and their aprons
+  if (merchantAt(x, y, seed)) return 'floor'; // the merchant's stalls and their aprons
   const box = chestAt(x, y, seed);
   if (box) return box.part === 'site' ? 'chest' : 'floor';
   return noiseTerrain(x, y, seed);
@@ -1120,7 +1116,7 @@ export function reachableFraction(seed, radius = SEED_WINDOW) {
   return floor === 0 ? 0 : seen.size / floor;
 }
 
-// Every sanctum door, every site, every landmark and every chest has to be
+// Every sanctum door, every merchant, every landmark and every chest has to be
 // walkable-to from the hut with nothing in hand, or a gem is sealed off and the
 // chain stops dead — or the merchant is somewhere no coin can ever reach, or a
 // key is in a box nobody can walk up to.
@@ -1146,10 +1142,10 @@ function landmarkCourt(landmark) {
   return tiles;
 }
 
-export function sitesReachable(seed) {
+export function structuresReachable(seed) {
   const targets = [
     ...sanctums(seed).map((s) => s.approach),
-    ...sites(seed).map((site) => ({ x: site.x, y: site.y })),
+    ...merchants(seed).map((merchant) => ({ x: merchant.x, y: merchant.y })),
     ...landmarks(seed).flatMap(landmarkCourt),
     ...chests(seed).map(chestApproach),
   ];
@@ -1214,7 +1210,7 @@ function walkToSeed(preferred, minFraction, maxAttempts) {
   let seed = preferred | 0;
   let fallback = null;
   for (let i = 0; i < maxAttempts; i++) {
-    if (reachableFraction(seed) >= minFraction && sitesReachable(seed)) {
+    if (reachableFraction(seed) >= minFraction && structuresReachable(seed)) {
       if (biomeOf(seed) === wanted) return seed;
       if (fallback === null) fallback = seed;
     }
@@ -1241,19 +1237,16 @@ function saltedSeed(seed, salt) {
 
 // --- Unique objects -----------------------------------------------------------
 
-// Fixed for a seed and never rerolled: the gems at the sanctum centres, and the
-// compass and map lying out in the dark. The merchant is a landmark too but
-// carries no item — you trade there, you don't pick it up. Neither is a chest:
-// what a chest holds is handed over by opening it (core/rules.js `openChest`),
-// so nothing is ever lying on its tile.
+// Fixed for a seed and never rerolled: the gems at the sanctum centres — the
+// only thing in the world that is ever lying out, waiting to be walked onto.
+// Everything else built into the world is either a merchant's stall, where you
+// trade rather than collect, or a chest, whose contents are handed over by
+// opening it (core/rules.js `openChest`) rather than by ever lying on its tile.
 export function uniqueAt(x, y, seed = DEFAULT_SEED) {
   const site = sanctumAt(x, y, seed);
-  if (site)
-    return site.part === 'inside' && x === site.sanctum.centre.x && y === site.sanctum.centre.y
-      ? site.sanctum.gem
-      : null;
-  const at = siteAt(x, y, seed);
-  return at && at.part === 'site' ? at.site.item : null;
+  return site && site.part === 'inside' && x === site.sanctum.centre.x && y === site.sanctum.centre.y
+    ? site.sanctum.gem
+    : null;
 }
 
 // --- Consumables ---------------------------------------------------------------
@@ -1311,13 +1304,13 @@ export function coinValue(x, y, seed = DEFAULT_SEED, salt = 0) {
 }
 
 // Ground a consumable can lie on. Sanctum clearings are excluded because they
-// have their own rule below, and the base, the sites, the landmark courts and
-// the chest, signpost, stone and wisp aprons because they are places to arrive
-// at, not to loot.
+// have their own rule below, and the base, the merchants, the landmark courts
+// and the chest, signpost, stone and wisp aprons because they are places to
+// arrive at, not to loot.
 function spawnable(x, y, seed) {
   if (chebyshev(x, y, BASE_X, BASE_Y) <= BASE_CLEARING) return false;
   if (sanctumAt(x, y, seed)) return false;
-  if (siteAt(x, y, seed)) return false;
+  if (merchantAt(x, y, seed)) return false;
   if (landmarkAt(x, y, seed)) return false;
   if (signpostAt(x, y, seed)) return false;
   if (stoneAt(x, y, seed)) return false;

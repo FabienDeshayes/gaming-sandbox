@@ -634,6 +634,11 @@ export class ExploreScene extends Phaser.Scene {
       this.textPanel.show(SAY.chestKey(itemDef(result.key).name));
       return;
     }
+    if (result.item) {
+      this.hud.flash(FLASH.toolFound(itemDef(result.item).name));
+      this.textPanel.show(SAY.chestTool(itemDef(result.item).name));
+      return;
+    }
     this.hud.flash(FLASH.chestCoins(result.coins));
     this.textPanel.show(SAY.chestCoins(result.coins));
   }
@@ -994,12 +999,6 @@ export class ExploreScene extends Phaser.Scene {
     // is the only pickup that repaints the world.
     if (result.gemFound) {
       this.hud.flash(FLASH.gemFound(itemDef(result.picked).name));
-      return;
-    }
-    // A tool is the other pickup worth its own line: it changes what is on
-    // screen, and it is only kept by walking it home.
-    if (result.picked && itemDef(result.picked).tool) {
-      this.hud.flash(FLASH.toolFound(itemDef(result.picked).name));
       return;
     }
     if (result.burnedOut) {

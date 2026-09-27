@@ -8,7 +8,7 @@
 //
 // Pure: no Phaser, no run mutation.
 
-import { BASE_X, BASE_Y, chebyshev, chests, sanctums, sites } from './world.js';
+import { BASE_X, BASE_Y, chebyshev, chests, merchants, sanctums } from './world.js';
 import { COMPASS_RANGE } from '../balance.js';
 import { itemDef } from '../data/items.js';
 
@@ -57,24 +57,18 @@ export function availableTargets(state) {
   // A chest is worth pointing at while it is still shut, and stops being the
   // moment the lid is up — which is the whole reason a key is findable at all:
   // a box you have to stumble on would leave the campaign stuck behind a gate.
-  // Whether it holds a key or a hoard is not the needle's business, so every
-  // shut chest reads the same.
+  // Whether it holds a key, a hoard or a tool is not the needle's business, so
+  // every shut chest reads the same.
   for (const chest of chests(state.seed))
     if (!state.chests.has(chest.id))
       out.push({ id: chest.id, sprite: 'chest', hue: 0, x: chest.x, y: chest.y });
 
-  for (const site of sites(state.seed)) {
-    if (site.item) {
-      // A tool you already own isn't lying there any more.
-      if (!state.tools.has(site.item)) out.push(fromItem(site.item, site.x, site.y));
-      continue;
-    }
-    // A merchant is worth pointing at while it still has something you can
-    // only get there once — after that it's a shop you know the way to. Each
-    // stall keeps its own id, so the needle can tell two apart.
+  // A merchant is worth pointing at while it still has something you can only
+  // get there once — after that it's a shop you know the way to. Each stall
+  // keeps its own id, so the needle can tell two apart.
+  for (const merchant of merchants(state.seed))
     if (state.tools.size < 2)
-      out.push({ id: site.id, sprite: 'merchant', hue: 0, x: site.x, y: site.y });
-  }
+      out.push({ id: merchant.id, sprite: 'merchant', hue: 0, x: merchant.x, y: merchant.y });
 
   // Landmarks are deliberately **not** on the needle (DESIGN.md §4.10). They
   // have a way of being found already, and it is the twelve posts standing

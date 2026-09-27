@@ -9,9 +9,9 @@ import {
   DEFAULT_SEED,
   chests,
   landmarks,
+  merchants,
   pickSeed,
   sanctums,
-  sites,
   wisps,
 } from '../src/core/world.js';
 import {
@@ -152,7 +152,8 @@ unit('the map only marks unique objects the run has actually seen', () => {
 
   for (const dir of GEM_ROUTE.path) step(state, dir);
   assert(state.seenUnique.has('gem-1'), 'the gem it walked onto is on the map');
-  assert(!state.seenUnique.has('map'), 'and the map lying 90 tiles out is not');
+  const mapChest = chests(SEED).find((c) => c.item === 'map');
+  assert(!state.seenUnique.has(mapChest.id), 'and the chest holding the map, further out, is not');
 });
 
 unit('a slot can hold every unique object in a world without losing any', () => {
@@ -165,7 +166,7 @@ unit('a slot can hold every unique object in a world without losing any', () => 
   // real round trip here.
   const everything = [
     ...sanctums(SEED).filter((s) => s.gem).map((s) => s.gem),
-    ...sites(SEED).map((s) => s.id),
+    ...merchants(SEED).map((m) => m.id),
     ...chests(SEED).map((c) => c.id),
     ...landmarks(SEED).map((l) => l.id),
     ...wisps(SEED).map((w) => w.id),

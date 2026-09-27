@@ -45,7 +45,7 @@ at all, which is the quick way to work on the rules.
 | `rules.test.js` | A step's costs, burnout and auto-swap, pickup, the inventory, the recap, cheats |
 | `terrain.test.js` | What the noise grows, where the world stops, which biome the seed makes it, and that every bit of it can be walked to |
 | `scatter.test.js` | The layer that moves: density, the separation rule, hoards, the gem swaps, respawn |
-| `campaign.test.js` | Sanctums, key-locked gates, chests, gems, the hall and which of its five conversations a campaign is having, the water ladder, the sites — merchant, compass, map — and the needle |
+| `campaign.test.js` | Sanctums, key-locked gates, chests — including the map's and the compass's own — gems, the hall and which of its five conversations a campaign is having, the water ladder, the three merchants, and the needle |
 | `landmarks.test.js` | The eight landmarks and the fourteen posts: where they stand, what a touch gives, and which of it survives a world |
 | `wisps.test.js` | The ten wisps: where they stand, that touching one hands back nothing, and that a wisp lights its own clearing whatever the character is carrying |
 | `stones.test.js` | The four carved stones: where they stand and what they keep clear of, that reading one is a post's bump, and that which of its five cuts you read is how many kinds of world the campaign has finished |
@@ -333,7 +333,7 @@ between a slot and a run, which is exactly what a browser test is for.
 
 ## Testing the chest-and-key chain
 
-Chests are placed like the sites and the landmarks — from the seed, never relaid by a respawn — so a test asks
+Chests are placed like the merchants and the landmarks — from the seed, never relaid by a respawn — so a test asks
 `chests(SEED)` where they are rather than naming a tile, exactly as it asks `sanctums(SEED)`. Three
 claims are worth keeping separate:
 

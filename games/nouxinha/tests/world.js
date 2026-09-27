@@ -156,8 +156,8 @@ export const SHADOW_ROUTE = bfs(SEED, (x, y) => {
 export const SANCTUMS = sanctums(SEED);
 export const FIRST_GEM = SANCTUMS[0];
 export const GEM_ROUTE = bfs(SEED, (x, y) => x === FIRST_GEM.centre.x && y === FIRST_GEM.centre.y, 90);
-// The walk to the merchant. The sites don't move with the nonce, so this route
-// holds for any page — but it is 20-odd taps, so only one test walks it.
+// The walk to the merchant. The merchants don't move with the nonce, so this
+// route holds for any page — but it is 20-odd taps, so only one test walks it.
 export const MERCHANT_ROUTE = bfs(SEED, (x, y) => isMerchant(x, y, SEED), 60);
 
 // The hall, and the walk to the tile you talk to the sorcerer from (DESIGN.md

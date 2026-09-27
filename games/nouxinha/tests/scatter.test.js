@@ -7,8 +7,8 @@ import {
   chebyshev,
   consumableAt,
   itemAt,
+  merchants,
   richnessAt,
-  sites,
   sanctumAt,
   sanctums,
   saltOf,
@@ -244,13 +244,15 @@ unit('a new run relays the consumables and leaves the unique objects alone', () 
     }
   assert(moved > same, 'a different nonce should lay the consumables out differently');
 
-  // The gems, the merchant and the two tools are exactly where they were: the
-  // unique layer is a function of the seed alone, and no salt touches it.
+  // The gems are exactly where they were: the unique layer is a function of
+  // the seed alone, and no salt touches it. Merchants are placed by the seed
+  // too, but they were never part of this layer — trading goes through
+  // `isMerchant`, not `uniqueAt`.
   for (const sanctum of sanctums(SEED))
     if (sanctum.gem)
       assertEqual(uniqueAt(sanctum.centre.x, sanctum.centre.y, SEED), sanctum.gem, 'the gem');
-  for (const site of sites(SEED))
-    assertEqual(uniqueAt(site.x, site.y, SEED), site.item, `the ${site.id}`);
+  for (const merchant of merchants(SEED))
+    assertEqual(uniqueAt(merchant.x, merchant.y, SEED), null, `${merchant.id} is not a unique pickup`);
 });
 
 unit('everything on the ground comes back when the world respawns', () => {

@@ -22,7 +22,7 @@ function worth(id, wants) {
   if (LIGHTS.includes(id)) return 40;
   if (WATERS.includes(id)) return 30;
   if (id === 'coin') return wants.coins ? 10 : 0;
-  // A gem, a key, a tool lying in the dark: always.
+  // A gem, lying in the dark: always.
   return 50;
 }
 

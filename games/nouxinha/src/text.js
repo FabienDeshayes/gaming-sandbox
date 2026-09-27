@@ -357,6 +357,11 @@ export const SAY = {
     `Inside is a hoard of ${coins} coins.`,
     'Nobody will ask where you got them.',
   ],
+  chestTool: (toolName) => [
+    'The lid gives, and layers of dust go up with it.',
+    `Inside lies the ${toolName.toLowerCase()}.`,
+    'Somebody left it behind, or never came back for it.',
+  ],
   // A landmark, walked into (DESIGN.md §4.10). The panel rather than a line in
   // the HUD for the same reason a chest gets it: this is the world telling you
   // something about itself, and the panel leaves the place on screen while it

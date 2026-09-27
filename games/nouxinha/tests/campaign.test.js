@@ -1,7 +1,7 @@
 // The chain the campaign is: four sanctums, three gems, the leash each one
-// widens, and the sites — the three merchants, the compass and the map —
-// standing out in the dark between them. The four landmarks are
-// `landmarks.test.js`. Pure — no browser.
+// widens, the three merchants standing opposite them, and the chests between
+// them — two of which hold the compass and the map rather than a key or a
+// hoard. The four landmarks are `landmarks.test.js`. Pure — no browser.
 
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import {
@@ -16,9 +16,9 @@ import {
   isMerchant,
   isWalkable,
   itemAt,
+  merchantNamed,
+  merchants,
   pickSeed,
-  siteNamed,
-  sites,
   sanctums,
   terrainAt,
 } from '../src/core/world.js';
@@ -30,8 +30,8 @@ import {
   createRun,
   gateOnTile,
   hallMeeting,
-  itemOnTile,
   maxWater,
+  openChest,
   resumeRun,
   runSummary,
   spendable,
@@ -41,10 +41,11 @@ import { emptySave, MAX_GEMS } from '../src/core/save.js';
 import { compassTarget } from '../src/core/compass.js';
 import {
   CHEST_COIN_VALUES,
+  CHEST_PLAN,
   COMPASS_RANGE,
+  MERCHANT_PLAN,
   PRICES,
   SANCTUM_PLAN,
-  SITE_PLAN,
   STARTING_WATER,
   WATER_PER_GEM,
 } from '../src/balance.js';
@@ -471,18 +472,18 @@ unit('the compass points at the hall once every colour is in hand', () => {
   assertEqual(compassTarget(nearly).id, 'gem-3', 'until then it points at what is missing');
 });
 
-// --- The sites ---------------------------------------------------------------
+// --- The merchants -------------------------------------------------------------
 
 unit('three merchants stand out in the dark, each one a proper stall', () => {
-  const found = sites(SEED).filter((site) => !site.item);
+  const found = merchants(SEED);
   assertEqual(found.length, 3, 'exactly three merchants');
-  assertEqual(new Set(found.map((site) => site.id)).size, 3, 'each keeps its own id');
-  for (const site of found) {
-    assertEqual(isMerchant(site.x, site.y, SEED), true, `${site.id}'s tile says so`);
-    assertEqual(terrainAt(site.x, site.y, SEED), 'floor', `you can stand on ${site.id}`);
+  assertEqual(new Set(found.map((merchant) => merchant.id)).size, 3, 'each keeps its own id');
+  for (const merchant of found) {
+    assertEqual(isMerchant(merchant.x, merchant.y, SEED), true, `${merchant.id}'s tile says so`);
+    assertEqual(terrainAt(merchant.x, merchant.y, SEED), 'floor', `you can stand on ${merchant.id}`);
   }
-  const plan = SITE_PLAN.find((site) => site.id === 'merchant');
-  const stall = siteNamed('merchant', SEED);
+  const plan = MERCHANT_PLAN.find((merchant) => merchant.id === 'merchant');
+  const stall = merchantNamed('merchant', SEED);
   const distance = ringOf(stall.x, stall.y);
   const furthest = plan.near + plan.span - 1;
   assert(
@@ -491,20 +492,31 @@ unit('three merchants stand out in the dark, each one a proper stall', () => {
   );
 });
 
-unit('the compass and the map lie out in the dark, one of each', () => {
+// --- The compass and the map ----------------------------------------------------
+
+unit('the compass and the map each lie in a chest of their own', () => {
   for (const id of ['compass', 'map']) {
-    const site = siteNamed(id, SEED);
-    assert(site, `the world places a ${id}`);
-    assertEqual(sites(SEED).filter((one) => one.item === id).length, 1, `exactly one ${id}`);
-    assert(ringOf(site.x, site.y) > 25, `the ${id} is a proper walk out`);
+    const plan = CHEST_PLAN.find((chest) => chest.item === id);
+    assert(plan, `the plan holds a chest for the ${id}`);
+    const found = chests(SEED).filter((chest) => chest.item === id);
+    assertEqual(found.length, 1, `exactly one chest holds the ${id}`);
+    const distance = ringOf(found[0].x, found[0].y);
+    const furthest = plan.near + plan.span - 1;
+    assert(
+      distance >= plan.near && distance <= furthest,
+      `the ${id}'s chest sits ${distance} tiles out (wanted ${plan.near}-${furthest})`
+    );
   }
 
-  // Owning one takes it off the ground: it was the same object.
-  const compass = siteNamed('compass', SEED);
-  const without = createRun(SEED, emptySave(), NONCE);
-  assertEqual(itemOnTile(without, compass.x, compass.y), 'compass', 'there for a run without one');
-  const owned = createRun(SEED, { ...emptySave(), compass: true }, NONCE);
-  assertEqual(itemOnTile(owned, compass.x, compass.y), null, 'gone for a run that owns one');
+  // Opening the chest hands the tool straight to the run, exactly like a key.
+  const compassChest = chests(SEED).find((chest) => chest.item === 'compass');
+  const state = createRun(SEED, emptySave(), NONCE);
+  const opened = openChest(state, compassChest);
+  assertEqual(opened.item, 'compass', 'the lid hands over the compass');
+  assertEqual(state.tools.has('compass'), true, 'and the run owns it from then on');
+  const again = openChest(state, compassChest);
+  assertEqual(again.already, true, 'walking back into it does nothing');
+  assertEqual(again.item, null, 'and hands over nothing a second time');
 });
 
 // --- The merchant's counter --------------------------------------------------
@@ -569,7 +581,7 @@ unit('the compass points at the nearest thing this run could actually reach', ()
   const reachable = sanctums(SEED)
     .filter((s) => s.gem && !s.key)
     .map((s) => s.centre)
-    .concat(sites(SEED).map((site) => ({ x: site.x, y: site.y })))
+    .concat(merchants(SEED).map((merchant) => ({ x: merchant.x, y: merchant.y })))
     .concat(chests(SEED).map((c) => ({ x: c.x, y: c.y })))
     .map((t) => chebyshev(t.x, t.y, state.x, state.y))
     .filter((d) => d <= COMPASS_RANGE);

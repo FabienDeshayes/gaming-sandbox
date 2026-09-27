@@ -43,9 +43,9 @@
 import {
   CHEST_PLAN,
   LANDMARK_PLAN,
+  MERCHANT_PLAN,
   SANCTUM_PLAN,
   SIGNPOST_PLAN,
-  SITE_PLAN,
   STONE_PLAN,
   WISP_PLAN,
 } from '../balance.js';
@@ -62,15 +62,15 @@ import { BIOME_IDS } from '../data/biomes.js';
 const STOOD_AT = [...LANDMARK_IDS, ...BIOME_LANDMARK_IDS];
 
 // How many unique objects a world can have been laid eyes on: the gems, the
-// sites, the chests, the landmarks, the carved stones and the wisps. A bound on
-// a hand-written save rather than a rule about play — but it is *derived*
-// rather than picked, because a bound under what a complete campaign
-// legitimately holds would silently drop the last markers a player earned on
-// the next load, and adding anything to the world is exactly when that would
-// happen.
+// merchants, the chests, the landmarks, the carved stones and the wisps. A
+// bound on a hand-written save rather than a rule about play — but it is
+// *derived* rather than picked, because a bound under what a complete
+// campaign legitimately holds would silently drop the last markers a player
+// earned on the next load, and adding anything to the world is exactly when
+// that would happen.
 const MAX_SEEN =
   SANCTUM_PLAN.filter((plan) => plan.gem).length +
-  SITE_PLAN.length +
+  MERCHANT_PLAN.length +
   CHEST_PLAN.length +
   LANDMARK_PLAN.length +
   STONE_PLAN.length +

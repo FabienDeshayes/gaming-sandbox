@@ -27,6 +27,7 @@ import {
   isSorcerer,
   landmarkAt,
   landmarks,
+  merchants,
   pickSeed,
   saltOf,
   sanctumAt,
@@ -38,7 +39,6 @@ import {
   signpostReadings,
   signpostTargets,
   signposts,
-  sites,
   stoneAt,
   stones,
   uniqueAt,
@@ -323,7 +323,7 @@ function applyCheats(state) {
     for (let x = -CHEAT_REVEAL_RADIUS; x <= CHEAT_REVEAL_RADIUS; x++)
       state.explored.add(tileKey(x, y));
   for (const sanctum of sanctums(state.seed)) if (sanctum.gem) state.seenUnique.add(sanctum.gem);
-  for (const site of sites(state.seed)) state.seenUnique.add(site.id);
+  for (const merchant of merchants(state.seed)) state.seenUnique.add(merchant.id);
   for (const chest of chests(state.seed)) state.seenUnique.add(chest.id);
   // Every landmark laid eyes on and every standing in hand, so a sandbox run
   // sees the world the way a campaign four cycles in would — coloured. The
@@ -419,14 +419,13 @@ export function equip(state, index) {
   return true;
 }
 
-// Whether a unique object is already the player's — a gem they hold, a tool they
-// own. Unique objects aren't tracked in `collected`, because unlike a coin they
-// are gone for good rather than until the next respawn.
+// Whether a unique object is already the player's — the only kind left lying
+// in the world is a gem. Unique objects aren't tracked in `collected`, because
+// unlike a coin they are gone for good rather than until the next respawn.
 export function uniqueTaken(state, id) {
   const def = itemDef(id);
   if (!def) return true;
   if (def.gem) return def.gem <= state.gems;
-  if (def.tool) return state.tools.has(id);
   return false;
 }
 
@@ -481,9 +480,10 @@ export function canStepOnto(state, x, y) {
 // shadow; bumping into it lifts the lid, once, and after that it is scenery.
 //
 // What it held goes into the run, not onto the ground: a key joins the keys, a
-// hoard of coins joins the pocket. Both are only the campaign's once the hut has
-// written them down, which is what makes `chests` a banked set rather than a
-// permanent one — die on the way home and the lid is shut again next time.
+// hoard of coins joins the pocket, and the map or the compass joins the tools.
+// All three are only the campaign's once the hut has written them down, which
+// is what makes `chests` a banked set rather than a permanent one — die on the
+// way home and the lid is shut again next time.
 
 // The chest standing on a tile and whether this run has already opened it, or
 // null where there is no chest there.
@@ -497,16 +497,20 @@ export function chestOnTile(state, x, y) {
 // this campaign has been to before, because a chest that has been opened does
 // nothing at all rather than refilling.
 export function openChest(state, chest) {
-  if (state.chests.has(chest.id)) return { already: true, key: null, coins: 0 };
+  if (state.chests.has(chest.id)) return { already: true, key: null, coins: 0, item: null };
   state.chests.add(chest.id);
   if (chest.key) {
     state.keys.add(chest.key);
     state.found[chest.key] = (state.found[chest.key] || 0) + 1;
-    return { already: false, key: chest.key, coins: 0 };
+    return { already: false, key: chest.key, coins: 0, item: null };
+  }
+  if (chest.item) {
+    state.tools.add(chest.item);
+    return { already: false, key: null, coins: 0, item: chest.item };
   }
   state.coins += chest.coins;
   state.coinsFound += chest.coins;
-  return { already: false, key: null, coins: chest.coins };
+  return { already: false, key: null, coins: chest.coins, item: null };
 }
 
 // --- Landmarks and signposts --------------------------------------------------
@@ -779,8 +783,8 @@ function noteSeen(state, lit) {
   for (const sanctum of sanctums(state.seed))
     if (sanctum.gem && litKeys.has(tileKey(sanctum.centre.x, sanctum.centre.y)))
       state.seenUnique.add(sanctum.gem);
-  for (const site of sites(state.seed))
-    if (litKeys.has(tileKey(site.x, site.y))) state.seenUnique.add(site.id);
+  for (const merchant of merchants(state.seed))
+    if (litKeys.has(tileKey(merchant.x, merchant.y))) state.seenUnique.add(merchant.id);
   // A landmark is marked the same way, and is the one marker on that map whose
   // *colour* the campaign had to earn (DESIGN.md §4.10).
   for (const landmark of landmarks(state.seed))
@@ -917,8 +921,6 @@ function collect(state, x, y) {
     coins = coinValue(x, y, state.seed, state.salt);
     state.coins += coins;
     state.coinsFound += coins;
-  } else if (def.tool) {
-    state.tools.add(id);
   } else if (def.gem) {
     // A gem is only ever picked up in the order the sanctums hand them out, so
     // the count only ever climbs by one — but take the max anyway rather than

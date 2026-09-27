@@ -21,9 +21,9 @@ import {
   chests,
   hall,
   landmarks,
+  merchants,
   sanctums,
   signposts,
-  sites,
   stones,
   terrainAt,
   wisps,
@@ -249,13 +249,12 @@ export class WorldMap {
     for (const sanctum of sanctums(run.seed))
       if (sanctum.gem && run.seenUnique.has(sanctum.gem))
         mark(sanctum.centre.x, sanctum.centre.y, 'gem', itemDef(sanctum.gem).hue);
-    // The stall, the compass and the map. The stall is the one thing on here a
-    // campaign can know without having seen it: standing at the Mint is a
-    // standing, and what it stands for is knowing where the money goes
-    // (DESIGN.md §4.10).
-    for (const site of sites(run.seed))
-      if (run.seenUnique.has(site.id) || (!site.item && hasStanding(run, 'mint')))
-        mark(site.x, site.y, site.item ? itemDef(site.item).sprite : 'merchant', 0);
+    // The stalls. Each is the one thing on here a campaign can know without
+    // having seen it: standing at the Mint is a standing, and what it stands
+    // for is knowing where the money goes (DESIGN.md §4.10).
+    for (const merchant of merchants(run.seed))
+      if (run.seenUnique.has(merchant.id) || hasStanding(run, 'mint'))
+        mark(merchant.x, merchant.y, 'merchant', 0);
     // The four landmarks, each in the colour it keeps — and in the plain
     // foreground until this campaign has stood at it, like every other colour
     // in the game. A landmark a signpost has pointed the way to is marked

@@ -34,8 +34,8 @@ import { KEYS } from '../src/data/items.js';
 import { biomeDef } from '../src/data/biomes.js';
 import { landmarkDef } from '../src/data/landmarks.js';
 import { emptySave } from '../src/core/save.js';
-import { LIGHTS, RING_METRIC, STARTING_LIGHT, STARTING_WATER } from '../src/balance.js';
-import { setDefaultPalette } from '../src/config.js';
+import { LIGHTS, RING_METRIC, STARTING_LIGHT, STARTING_WATER, WISP_SHAPE } from '../src/balance.js';
+import { setDefaultPalette, VIEW_COLS, VIEW_ROWS } from '../src/config.js';
 
 export const SEED = pickSeed(DEFAULT_SEED);
 
@@ -125,10 +125,40 @@ export function bfs(seed, isGoal, maxDepth = 24, start = START, keys = null) {
   throw new Error('no route found in the test world');
 }
 
+// A wisp's own light is unconditional and shows on screen whenever it falls
+// in the viewport, whoever is or isn't carrying a torch (DESIGN.md §4.11) —
+// so a route a test stands along has to steer clear of every one of them, or
+// what a test reads as "the torch's own light" is partly a wisp's instead.
+// `back` offsets of a few steps are taken against these routes, so the
+// clearance has to hold a little way back from the goal too.
+const VIEW_HALF_W = Math.floor(VIEW_COLS / 2);
+const VIEW_HALF_H = Math.floor(VIEW_ROWS / 2);
+const ROUTE_BACK_MARGIN = 6; // more than any `back` taken against these routes
+function clearOfWisps(x, y, allWisps) {
+  return allWisps.every(
+    (w) =>
+      Math.abs(w.x - x) > VIEW_HALF_W + WISP_SHAPE.radius + ROUTE_BACK_MARGIN ||
+      Math.abs(w.y - y) > VIEW_HALF_H + WISP_SHAPE.radius + ROUTE_BACK_MARGIN
+  );
+}
+
+// Like `bfs`, but skips past any goal tile within sight of a wisp rather than
+// stopping on the first one found.
+function bfsClearOfWisps(seed, isGoal, maxDepth = 60) {
+  const allWisps = wisps(seed);
+  const rejected = new Set();
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const route = bfs(seed, (x, y) => isGoal(x, y) && !rejected.has(tileKey(x, y)), maxDepth);
+    if (clearOfWisps(route.x, route.y, allWisps)) return route;
+    rejected.add(tileKey(route.x, route.y));
+  }
+  throw new Error('no wisp-clear route found in the test world');
+}
+
 // The nearest medium torch and the nearest water drop in the pinned world, and
 // the nearest spot with a rock to walk into. Terrain doesn't move with the
 // nonce; the item routes only hold for a page opened on NONCE (`WORLD` below).
-export const TORCH_ROUTE = bfs(SEED, (x, y) => scatter(x, y) === 'torch-medium', 60);
+export const TORCH_ROUTE = bfsClearOfWisps(SEED, (x, y) => scatter(x, y) === 'torch-medium', 60);
 export const WATER_ROUTE = bfs(SEED, (x, y) => scatter(x, y) === 'water-drop', 60);
 export const ROCK_ROUTE = bfs(SEED, (x, y) => {
   const into = [['up', 0, -1], ['right', 1, 0], ['down', 0, 1], ['left', -1, 0]].find(

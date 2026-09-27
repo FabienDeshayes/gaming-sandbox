@@ -379,12 +379,17 @@ function gateOn(centre, radius) {
   return { gate: { x: centre.x + off, y: centre.y + sy * radius }, out: { x: 0, y: sy } };
 }
 
-function buildSanctum(plan, index, angle) {
+function buildSanctum(plan, index, angle, slot) {
   const centre = ringPoint(plan.distance, angle);
   const { gate, out } = gateOn(centre, plan.radius);
   return {
     ...plan,
     index,
+    // Which of the four evenly-spaced quarters this sanctum ended up in
+    // (`sanctumOrder` below) — not always the same as `index`, and what a gap
+    // landmark's heading resolves against (`spokeHeading`), so it still lands
+    // between two physically adjacent sanctums whichever plan occupies them.
+    slot,
     centre,
     gate,
     // The tile you stand on to walk through the gate. Placement guarantees this
@@ -405,16 +410,37 @@ function doorOpens(candidate, seed) {
   });
 }
 
+// Which of the four evenly-spaced quarters each plan gets dealt. The quarters
+// themselves stay fixed (90° apart, same as ever — that's what the 45°
+// separation `campaign.test.js` checks rests on), but *which* plan lands in
+// quarter 0 vs quarter 2 — the two that end up opposite each other, and
+// likewise quarters 1 and 3 — is now a per-seed shuffle instead of always
+// plan order. Without this, gem-1 (plan 0) and gem-3 (plan 2) are opposite
+// every world, and so are gem-2 (plan 1) and the hall (plan 3): a pattern
+// that holds across every world rather than just this one, so it's the kind
+// of thing a player learns and starts navigating by. A shuffle makes which
+// pair ends up opposite which itself one of three equally likely outcomes
+// per world, with no change to how tightly anything is spaced.
+function sanctumOrder(seed) {
+  const order = [0, 1, 2, 3];
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(randomAt(i, 2, seed, CH_SANCTUM) * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
+
 function buildSanctums(seed) {
   const spread = (Math.PI * 2) / SANCTUM_PLAN.length;
   const heading = randomAt(0, 0, seed, CH_SANCTUM) * Math.PI * 2;
+  const order = sanctumOrder(seed);
 
   return SANCTUM_PLAN.map((plan, i) => {
     // Evenly spaced headings, jittered within their own quarter: three gems in
     // three directions at three distances is what makes collecting them
     // exploring rather than one long walk (DESIGN.md §4.4).
     const jitter = (randomAt(i + 1, 0, seed, CH_SANCTUM) - 0.5) * spread * 0.24;
-    const nominal = heading + i * spread + jitter;
+    const nominal = heading + order[i] * spread + jitter;
 
     // Roughly one seed in ten drops a given sanctum somewhere its door backs
     // onto a sealed pocket. Turning that one sanctum a few degrees around the
@@ -422,11 +448,11 @@ function buildSanctums(seed) {
     // outright would do — and the search stays inside this sanctum's own
     // quarter of the compass, so the four never bunch into one direction.
     for (const delta of HEADING_SEARCH) {
-      const candidate = buildSanctum(plan, i, nominal + delta * spread);
+      const candidate = buildSanctum(plan, i, nominal + delta * spread, order[i]);
       if (doorOpens(candidate, seed)) return candidate;
     }
     // Nothing in the arc worked; `pickSeed` is the backstop that rejects it.
-    return buildSanctum(plan, i, nominal);
+    return buildSanctum(plan, i, nominal, order[i]);
   });
 }
 
@@ -540,13 +566,23 @@ function buildMerchants(seed, built, taken) {
 // pins each one *opposite* its sanctum, so an expedition still has two
 // directions worth walking (DESIGN.md §4.5).
 
-// The bearing a plan asks for, off the sanctums that are already built: one of
-// their own, or the one halfway between two of them, taken round the short way
-// so the pair (3, 0) means the gap that wraps rather than three quarters of the
-// rose.
+// The bearing a plan asks for, off the sanctums that are already built: a
+// single number is one sanctum's own bearing (by plan index — the same gem
+// wherever `sanctumOrder` seated it), and a pair is the bearing halfway
+// between two *quarters* of the rose — resolved by slot, not by plan index,
+// so a gap landmark always falls between two physically adjacent sanctums
+// rather than between whichever two gems the shuffle happened to pair up as
+// "1 and 2" — taken round the short way so the pair (3, 0) means the gap that
+// wraps rather than three quarters of the rose.
 function spokeHeading(heading, built) {
-  const angle = (i) => Math.atan2(built[i].centre.y, built[i].centre.x);
-  if (!Array.isArray(heading)) return angle(heading);
+  if (!Array.isArray(heading)) {
+    return Math.atan2(built[heading].centre.y, built[heading].centre.x);
+  }
+  const bySlot = (slot) => built.find((s) => s.slot === slot);
+  const angle = (slot) => {
+    const s = bySlot(slot);
+    return Math.atan2(s.centre.y, s.centre.x);
+  };
   const from = angle(heading[0]);
   let arc = angle(heading[1]) - from;
   while (arc > Math.PI) arc -= Math.PI * 2;

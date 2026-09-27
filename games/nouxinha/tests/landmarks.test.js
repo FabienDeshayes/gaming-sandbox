@@ -154,7 +154,17 @@ unit('a landmark stands on a spoke of the sanctums\' rose, or halfway between tw
   for (let i = 1; i < 60; i++) {
     const seed = (Math.imul(i, 2654435761) ^ 0x5bf03635) | 0;
     const built = sanctums(seed);
+    // A spoke heading names a sanctum by plan index — the same gem wherever
+    // `sanctumOrder` seated it. A gap heading names two *quarters* of the
+    // rose instead, since which plan actually holds each quarter is shuffled
+    // per world, so a gap is a slot lookup rather than a plan-index one
+    // (`spokeHeading` in core/world.js).
     const bearing = (index) => Math.atan2(built[index].centre.y, built[index].centre.x);
+    const bySlot = (slot) => built.find((s) => s.slot === slot);
+    const slotBearing = (slot) => {
+      const s = bySlot(slot);
+      return Math.atan2(s.centre.y, s.centre.x);
+    };
 
     landmarks(seed).forEach((landmark, index) => {
       const { heading } = LANDMARK_PLAN[index];
@@ -166,8 +176,8 @@ unit('a landmark stands on a spoke of the sanctums\' rose, or halfway between tw
           `${landmark.id} is ${degrees(mine, bearing(heading)).toFixed(0)}° off sanctum ${heading}`
         );
       } else {
-        const from = bearing(heading[0]);
-        let arc = bearing(heading[1]) - from;
+        const from = slotBearing(heading[0]);
+        let arc = slotBearing(heading[1]) - from;
         while (arc > Math.PI) arc -= Math.PI * 2;
         while (arc < -Math.PI) arc += Math.PI * 2;
         assert(

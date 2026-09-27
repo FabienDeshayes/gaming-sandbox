@@ -191,6 +191,74 @@ export function setCheats(on) {
   return cheatsOn;
 }
 
+// --- The tutorial ------------------------------------------------------------
+//
+// On for a player's first game and off once it has been walked to the end
+// (DESIGN.md §4.13); Settings turns it back on for the next NEW GAME. With it
+// on, NEW GAME claims the tutorial's own world rather than drawing one, and the
+// scene walks the player through it.
+//
+// A page that has never stored the switch is a first game only if it has never
+// stored a save either — a player who was walking campaigns before there was a
+// tutorial is not handed one on their next NEW GAME. The saves are asked about
+// by their storage keys rather than through core/save.js, because this file
+// imports nothing from the game.
+//
+// How far through it the player is lives beside the switch, as a preference
+// rather than in a slot: the tutorial is the player's, not a campaign's, and
+// every lesson it has not yet reached is read back off the run itself
+// (core/tutorial.js), so the only thing worth keeping is which one is next.
+const TUTORIAL_KEY = 'nouxinha.tutorial';
+const TUTORIAL_STEP_KEY = 'nouxinha.tutorialStep';
+
+let tutorialOn = false;
+let tutorialStep = 0;
+
+try {
+  const stored = localStorage.getItem(TUTORIAL_KEY);
+  if (stored === null) {
+    const played = ['nouxinha.save', 'nouxinha.save.1', 'nouxinha.save.2', 'nouxinha.save.3'].some(
+      (key) => localStorage.getItem(key) !== null
+    );
+    tutorialOn = !played;
+  } else tutorialOn = stored === '1';
+  const step = parseInt(localStorage.getItem(TUTORIAL_STEP_KEY), 10);
+  if (step >= 0) tutorialStep = step;
+} catch (e) {
+  /* off, for a page that can't remember having shown it */
+}
+
+export function getTutorial() {
+  return tutorialOn;
+}
+
+// Turning it on starts it again from the top; turning it off is what finishing
+// it does, as well as what the Settings switch does.
+export function setTutorial(on) {
+  tutorialOn = !!on;
+  if (tutorialOn) setTutorialStep(0);
+  try {
+    localStorage.setItem(TUTORIAL_KEY, tutorialOn ? '1' : '0');
+  } catch (e) {
+    /* preference just won't persist */
+  }
+  return tutorialOn;
+}
+
+export function getTutorialStep() {
+  return tutorialStep;
+}
+
+export function setTutorialStep(step) {
+  tutorialStep = Math.max(0, step | 0);
+  try {
+    localStorage.setItem(TUTORIAL_STEP_KEY, String(tutorialStep));
+  } catch (e) {
+    /* preference just won't persist */
+  }
+  return tutorialStep;
+}
+
 // --- Move speed ----------------------------------------------------------
 //
 // Holding a D-pad arrow repeats the step instead of taking just the one

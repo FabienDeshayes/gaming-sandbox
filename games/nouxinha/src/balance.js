@@ -909,3 +909,20 @@ export const COMPASS_RANGE = 40;
 // actually has anything in.
 export const CHEAT_REVEAL_RADIUS = 130;
 export const CHEAT_COINS = 9999;
+
+// --- The tutorial -------------------------------------------------------------
+//
+// The first campaign walks one fixed world rather than a drawn one, so the
+// tutorial can walk a new player through it (DESIGN.md §4.13, core/tutorial.js):
+// a temperate world where the doorstep post, the Mint's chest, the Mint and the
+// first sanctum stand in a clean line — five steps west of the hut, then
+// straight south, the gem 27 steps out. Chosen by walking a few thousand seeds
+// for the shortest route that never doubles back on itself; `pickSeed` hands it
+// back unbumped, and `tests/tutorial.test.js` holds it to both.
+export const TUTORIAL_SEED = -1782801114;
+
+// How far off the tutorial's route a step may land before it is refused: a
+// Chebyshev band either side, so a player can wander to a coin or round a rock
+// without being walked on a rail, but cannot set off into the dark before they
+// have been told what is out there.
+export const TUTORIAL_LEASH = 3;

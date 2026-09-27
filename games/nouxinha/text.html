@@ -472,6 +472,10 @@ const GROUPS = [
     note: 'The game’s own voice: a box across the bottom that types itself out a character at a time and takes one tap per block. Everything here is read in blocks, in order.',
   },
   {
+    id: 'tutorial', name: 'THE TUTORIAL', roots: ['TUTORIAL'],
+    note: 'A first game, walked through its opening on the text panel, lesson by lesson, with an arrow at whatever each block is about. Each lesson is read as the one before it is done, so a block here is always a beat between the player and their next step — keep them short.',
+  },
+  {
     id: 'hall', name: 'THE HALL — FIVE CONVERSATIONS', roots: ['HALL_SPEECH'],
     note: 'Nouxinha, on the text panel, at the end of a world. Which conversation you get is how many kinds of world this campaign had already finished when it walked in, so he says something different every time that count goes up.',
     depth: 1,
@@ -541,6 +545,8 @@ const LEGEND = {
   'SETTINGS.cheatNote': ['THE CHEATS NOTE', 'Under the cheats row: what the switch does, or what it is doing.'],
   'SETTINGS.invert': ['INVERT COLOURS', 'On screen only while cheats are on — the switch the ending leaves behind.'],
   'SETTINGS.invertNote': ['THE INVERT NOTE', 'Under the invert row, whenever that row is on screen.'],
+  'SETTINGS.tutorial': ['TUTORIAL', 'The tutorial row, saying its own state. On for a first game, off once it has been walked.'],
+  'SETTINGS.tutorialNote': ['THE TUTORIAL NOTE', 'Under the tutorial row: what the switch will do.'],
 
   'HUD.explored': ['TILES EXPLORED', 'The counter row, for the whole walk.'],
   'HUD.coins': ['COINS', 'The counter row: everything banked plus everything in hand.'],
@@ -676,6 +682,13 @@ const LEGEND = {
   'WORLD_MAP.button': ['THE MAP BUTTON', 'The slot on the rail that opens it.'],
 
   'COMPASS.here': ['HERE', 'The compass badge, standing on the thing it was pointing at.'],
+
+  'TUTORIAL.offPath': ['A STEP OFF THE ROUTE', 'The status line, when the tutorial refuses a step: what the arrow is pointing at, and which way it lies.'],
+  'TUTORIAL.offPathEquip': ['A STEP OFF THE ROUTE, WHILE EQUIPPING', 'The same, on the one lesson that is about the HUD rather than the ground.'],
+  'TUTORIAL.things.post': ['THE POST', 'What the refused-step line calls the post.'],
+  'TUTORIAL.things.chest': ['THE CHEST', 'What it calls the chest.'],
+  'TUTORIAL.things.torch': ['THE TORCH', 'What it calls the torch in the sanctum.'],
+  'TUTORIAL.things.gem': ['THE GEM', 'What it calls the gem. The landmark is called by its own name.'],
 };
 
 // Several strings at one path are the branches of a ternary: one string, picked
@@ -683,6 +696,7 @@ const LEGEND = {
 // written.
 const VARIANTS = {
   'SETTINGS.cheatNote': ['cheats on', 'cheats off'],
+  'SETTINGS.tutorialNote': ['tutorial on', 'tutorial off'],
   'CARRIED.list': ['one thing, or nothing at all', 'two or more'],
   'SAY.signpost[1]': ['two arms have names on them', 'only one has'],
   'HALL_SPEECH[][2]': ['carrying all three colours', 'carrying one or two', 'carrying nothing'],
@@ -705,6 +719,17 @@ const SEQUENCES = {
   'SAY.chestCoins': ['A CHEST OF COINS', 'Opening a chest that holds coins instead.', 'blocks'],
   'SAY.wisp': ['A WISP', 'Putting a hand on a wisp — the first time or the tenth. It has nothing to give and nothing to remember about you, so every fresh touch reads the same.', 'blocks'],
   'SAY.signpost': ['A POST, READ', 'The first read of a post. The named arms are spliced in between these blocks, and the hut’s blank stub comes last.', 'blocks'],
+  'TUTORIAL.intro': ['OUT OF THE HUT', 'The first thing a first game says, instead of the usual setting-out blocks. The arrow points at the character, then the hut; the last four are read from the top of the screen with the water bar, the water bar again, the light bar and the D-pad boxed.', 'blocks'],
+  'TUTORIAL.post': ['TO THE POST', 'Straight after, pointing at the post. The heading is worked out from where the player is standing.', 'blocks'],
+  'TUTORIAL.postRead': ['THE POST, READ', 'After the post’s own panel has been read.', 'blocks'],
+  'TUTORIAL.chest': ['TO THE CHEST', 'Straight after, pointing at the chest. Takes a heading and the landmark’s name.', 'blocks'],
+  'TUTORIAL.chestOpened': ['THE CHEST, OPENED', 'After the chest’s own panel: the coin counter and the explored counter, boxed and read from the top of the screen, then the cogwheel menu, boxed.', 'blocks'],
+  'TUTORIAL.landmark': ['TO THE LANDMARK', 'Straight after, pointing at it. Takes the landmark’s name.', 'blocks'],
+  'TUTORIAL.landmarkTouched': ['THE LANDMARK, STOOD AT', 'After the landmark’s own panel.', 'blocks'],
+  'TUTORIAL.torch': ['TO THE TORCH', 'Straight after, pointing at a torch in the first sanctum’s hoard. The heading is to the sanctum.', 'blocks'],
+  'TUTORIAL.equip': ['EQUIPPING IT', 'Once a second light is carried, read from the top of the screen with the inventory strip boxed.', 'blocks'],
+  'TUTORIAL.gem': ['TO THE GEM', 'Once a light has been equipped, pointing at the gem — unless it is already in hand, when this is skipped.', 'blocks'],
+  'TUTORIAL.end': ['THE END OF IT', 'With the gem in hand: what it is, what the rest of the game is, and that the tutorial is over. Pointing at the character, then the hut.', 'blocks'],
   'SAY.ending': ['THE END OF THE GAME', 'The fourth kind of world, walked to the hall with every colour in hand and nowhere left to be carried. He is not beaten, there is no fight, and he is not giving up: twelve pieces is enough to mend it, and the mending is the one thing he has not done in centuries.', 'blocks'],
 };
 

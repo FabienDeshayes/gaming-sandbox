@@ -16,7 +16,17 @@
 // only destructive thing on this screen, and it is the only place a campaign
 // can be lost by accident.
 
-import { FONT, GAME_WIDTH, gemColour, getPalette, hex } from '../config.js';
+import {
+  FONT,
+  GAME_WIDTH,
+  gemColour,
+  getCheats,
+  getPalette,
+  getTutorial,
+  hex,
+  setTutorialStep,
+} from '../config.js';
+import { TUTORIAL_SEED } from '../balance.js';
 import { loadSlot, MAX_GEMS, slots, startSlot } from '../core/save.js';
 import { DEFAULT_SEED, biomeOf } from '../core/world.js';
 import { biomeDef } from '../data/biomes.js';
@@ -206,7 +216,13 @@ export class SlotScene extends Phaser.Scene {
       return;
     }
 
-    startSlot(entry.slot);
+    // A first game walks the tutorial's own world rather than a drawn one
+    // (DESIGN.md §4.13), from its first lesson. A cheat run is never a
+    // tutorial: it is handed everything the tutorial would walk it to.
+    if (getTutorial() && !getCheats()) {
+      setTutorialStep(0);
+      startSlot(entry.slot, TUTORIAL_SEED);
+    } else startSlot(entry.slot);
     this.start();
   }
 

@@ -22,11 +22,11 @@ import {
   chests,
   landmarkNamed,
   landmarks,
+  merchants,
   sanctumAt,
   sanctums,
   signpostAt,
   SIGNPOST_SECTORS,
-  sites,
   wisps,
 } from '../src/core/world.js';
 import {
@@ -246,9 +246,8 @@ function chainGoals(state, bot) {
   // need one: coins are worth nothing but light, and a walk that goes dark at
   // ring 100 cannot reach the hall at 110 however much water it has left.
   if (lightLeft(state) < RESTOCK_LIGHT && spendable(state) >= RESTOCK_PURSE)
-    for (const stall of sites(state.seed))
-      if (stall.item === null && state.seenUnique.has(stall.id))
-        out.push({ kind: 'stall', x: stall.x, y: stall.y });
+    for (const stall of merchants(state.seed))
+      if (state.seenUnique.has(stall.id)) out.push({ kind: 'stall', x: stall.x, y: stall.y });
 
   // The sanctums hand their gems out in order, so how many are held says which
   // one is next — and past the third that is the hall, which wants the third

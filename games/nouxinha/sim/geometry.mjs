@@ -28,10 +28,10 @@ import {
   chests,
   edgeDistance,
   landmarks,
+  merchants,
   pickSeed,
   sanctums,
   signposts,
-  sites,
   stones,
   wisps,
 } from '../src/core/world.js';
@@ -90,8 +90,8 @@ function placed(seed) {
     out.push({ kind: 'landmark', id: l.id, ring: l.near + l.span / 2, x: l.x, y: l.y, bump: true });
   for (const c of chests(seed))
     out.push({ kind: 'chest', id: c.id, ring: c.at ? null : c.near + c.span / 2, x: c.x, y: c.y, bump: true });
-  for (const s of sites(seed))
-    out.push({ kind: 'site', id: s.id, ring: s.near + s.span / 2, x: s.x, y: s.y, bump: false });
+  for (const m of merchants(seed))
+    out.push({ kind: 'merchant', id: m.id, ring: m.near + m.span / 2, x: m.x, y: m.y, bump: false });
   for (const p of signposts(seed))
     out.push({ kind: 'signpost', id: p.id, ring: p.near + p.span / 2, x: p.x, y: p.y, bump: true });
   for (const s of stones(seed))

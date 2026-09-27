@@ -15,14 +15,14 @@ import {
   itemAt,
   landmarkAt,
   landmarks,
+  merchantAt,
   pickSeed,
   reachableFraction,
   sanctumAt,
   sanctums,
   signpostAt,
   signposts,
-  siteAt,
-  sitesReachable,
+  structuresReachable,
   terrainAt,
 } from '../src/core/world.js';
 import { activeShape, createRun, litTiles, reveal, step, EDGE_SEEN } from '../src/core/rules.js';
@@ -50,7 +50,7 @@ function surveyOf(seed) {
       // is the ground the noise grew, not the places set into it.
       if (
         sanctumAt(x, y, seed) ||
-        siteAt(x, y, seed) ||
+        merchantAt(x, y, seed) ||
         landmarkAt(x, y, seed) ||
         signpostAt(x, y, seed)
       )
@@ -304,9 +304,9 @@ unit('a chest blocks a step, never a light, and stands on ground you can reach',
   }
 
   // And they stay off each other and off everything else that was placed first.
-  const sites = chests(SEED);
-  for (const a of sites)
-    for (const b of sites)
+  const boxes = chests(SEED);
+  for (const a of boxes)
+    for (const b of boxes)
       if (a !== b)
         assert(
           Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) > 2,
@@ -330,10 +330,10 @@ unit('the three keys are in three chests, each inside the gate it opens', () => 
     );
   }
 
-  // Everything else in a chest is a hoard of coins, and one of the three sizes
-  // balance.js offers.
+  // Everything else in a chest is a tool, or a hoard of coins in one of the
+  // three sizes balance.js offers.
   for (const chest of chests(SEED))
-    if (!chest.key)
+    if (!chest.key && !chest.item)
       assert(CHEST_COIN_VALUES.includes(chest.coins), `${chest.id} holds a hoard the table names`);
 });
 
@@ -430,7 +430,7 @@ unit('the whole world is one place, out to the rim', () => {
 
 unit('pickSeed rejects a world nobody could explore', () => {
   // Two bars, and a seed has to clear both: the spawn must not be sealed into a
-  // pocket, and every sanctum door, site, landmark, chest and post must be
+  // pocket, and every sanctum door, merchant, landmark, chest and post must be
   // walkable-to with nothing in hand (DESIGN.md §5).
   //
   // The stranding seed is looked for rather than named. Which seeds strand is
@@ -449,7 +449,7 @@ unit('pickSeed rejects a world nobody could explore', () => {
   for (const preferred of [5, 1, 77, 12345, DEFAULT_SEED, (DEFAULT_SEED + 7919) | 0]) {
     const picked = pickSeed(preferred);
     assert(reachableFraction(picked) >= SEED_MIN_FRACTION, `seed picked from ${preferred} is a pocket`);
-    assert(sitesReachable(picked), `seed picked from ${preferred} seals a door or a landmark off`);
+    assert(structuresReachable(picked), `seed picked from ${preferred} seals a door or a landmark off`);
     // And every landmark stands in a court you can walk right round, whatever
     // the noise did — its own tile is the one you cannot stand on, because that
     // is the tile you walk *into* (DESIGN.md §4.10).

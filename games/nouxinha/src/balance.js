@@ -325,10 +325,15 @@ export const CHEST_PLAN = [
   { id: 'chest-key-1', key: 'key-1', at: 'bell' },
   { id: 'chest-key-2', key: 'key-2', at: 'lantern-tree' },
   { id: 'chest-key-3', key: 'key-3', at: 'gnomon' },
-  // And the loose ones, on rings of their own, holding coins: spread a band
-  // apart so a campaign meets one every so often rather than all at once.
+  // And the loose ones, on rings of their own, spread a band apart so a
+  // campaign meets one every so often rather than all at once. Two of them
+  // hold a tool instead of coins: the map well inside the first sanctum's own
+  // distance, so an early expedition can stumble onto it, and the compass a
+  // stretch further out, on the way to the second.
   { id: 'chest-coin-1', key: null, near: 12, span: 8 },
+  { id: 'chest-map', key: null, item: 'map', near: 24, span: 8 },
   { id: 'chest-coin-2', key: null, near: 32, span: 10 },
+  { id: 'chest-compass', key: null, item: 'compass', near: 46, span: 10 },
   { id: 'chest-coin-3', key: null, near: 58, span: 12 },
   { id: 'chest-coin-4', key: null, near: 84, span: 14 },
   { id: 'chest-coin-5', key: null, near: 104, span: 14 },
@@ -343,37 +348,30 @@ export const LANDMARK_CHEST_SPAN = 3;
 // magnitude above a coin pile on the ground (COIN_VALUE_MIN/MAX below) because a
 // chest is opened once per campaign and never comes back: 30 is most of the way
 // to the map, 50 buys it outright, and 75 is a third of the way to the compass —
-// which stays a long walk away even with every chest found. The merchant's
-// prices are the scale these are set against — retune PRICES and these want a
-// second look.
+// both of which can also just turn up in a chest instead of costing a coin at
+// all. The merchant's prices are the scale these are set against — retune
+// PRICES and these want a second look.
 export const CHEST_COIN_VALUES = [30, 50, 75];
 
-// --- Sites --------------------------------------------------------------------
+// --- The merchant's stalls ------------------------------------------------------
 //
-// The single-tile things in the world that aren't behind a gate and aren't
-// rerolled: the merchants, and the one compass and one map lying out in the
-// dark. Placed like the chests and the landmarks are, and named `site` because
-// that is all they have in common — a stall, a tool on the floor, and a tool
-// on the floor. A site's `item` says which: `null` is a stall (`isMerchant`
-// goes by that, not by `id`), anything else is a pickup with that item's id.
-export const SITE_PLAN = [
+// The three trading stalls, placed like the chests and the landmarks are and
+// never rerolled. Each is a single tile with a forced-floor apron around it,
+// so however the noise fell there is always ground to stand on next to it, and
+// each keeps its own `id` (`merchant`, `merchant-2`, ...) so a campaign can
+// find one stall without already knowing where the others are.
+export const MERCHANT_PLAN = [
   // Close enough that a first expedition can reach it and walk home, and on the
   // far side of the hut from the first sanctum, so an early run has two
   // directions worth walking rather than one.
-  { id: 'merchant', item: null, near: 20, span: 6, opposite: 0 },
+  { id: 'merchant', near: 20, span: 6, opposite: 0 },
   // A second stall roughly level with the second sanctum, opposite it the same
   // way the first stall sits opposite the first — so a campaign that has
   // pushed that far out has somewhere to spend what it found without the walk
   // all the way back home.
-  { id: 'merchant-2', item: null, near: 40, span: 8, opposite: 1 },
+  { id: 'merchant-2', near: 40, span: 8, opposite: 1 },
   // A third, opposite the third sanctum, for the same reason further out.
-  { id: 'merchant-3', item: null, near: 65, span: 10, opposite: 2 },
-  // Past the second sanctum: the map is the cheaper of the two to just buy, at
-  // 50 coins, so it doesn't need to be the longer walk.
-  { id: 'map', item: 'map', near: 45, span: 16, opposite: null },
-  // Past the third: the compass is either 250 coins or the longest walk in the
-  // game that isn't a gem.
-  { id: 'compass', item: 'compass', near: 85, span: 16, opposite: null },
+  { id: 'merchant-3', near: 65, span: 10, opposite: 2 },
 ];
 
 // --- Landmarks ----------------------------------------------------------------
@@ -872,10 +870,11 @@ export const WATER_VALUE = {
 // The merchant is the only place coins go, and the only reason to pick one up
 // (DESIGN.md §4.5). Lights and water are stock: buy as many as you can carry.
 // The compass and the map are one-offs — you own one or you don't — and each
-// can also be found lying in the dark, so buying one is paying to skip a very
-// long walk. The compass is priced well above the map on purpose: it turns
-// every walk into a follow-the-needle exercise the moment it's in hand, so it
-// should cost most of a campaign's early coin rather than a couple of chests.
+// can also turn up in a chest instead (CHEST_PLAN above), so buying one is
+// paying to stop waiting on a chest that might not hold it. The compass is
+// priced well above the map on purpose: it turns every walk into a
+// follow-the-needle exercise the moment it's in hand, so it should cost most
+// of a campaign's early coin rather than a couple of chests.
 export const PRICES = {
   'torch-small': 10,
   'torch-medium': 25,

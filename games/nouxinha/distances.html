@@ -238,10 +238,10 @@ import {
   chebyshev,
   chests,
   landmarks,
+  merchants,
   pickSeed,
   sanctums,
   signposts,
-  sites,
   stones,
   wisps,
 } from './src/core/world.js';
@@ -298,7 +298,7 @@ const inGrid = (x, y) => x >= -GRID && x <= GRID && y >= -GRID && y <= GRID;
 // the ones in balance.js, because the whole point of the page is to know which
 // line to go and edit.
 
-const KIND_ORDER = ['sanctum', 'landmark', 'chest', 'site', 'stone', 'signpost', 'wisp'];
+const KIND_ORDER = ['sanctum', 'landmark', 'chest', 'merchant', 'stone', 'signpost', 'wisp'];
 
 function bandOf(plan) {
   if (plan.distance !== undefined) return [plan.distance, plan.distance];
@@ -354,7 +354,9 @@ function entitiesOf(seed) {
         ? `${LANDMARK_CHEST_NEAR}-${LANDMARK_CHEST_NEAR + LANDMARK_CHEST_SPAN - 1} off ${c.at}`
         : c.key
           ? `holds ${c.key}`
-          : `holds ${c.coins} coins`,
+          : c.item
+            ? `holds the ${c.item}`
+            : `holds ${c.coins} coins`,
       x: c.x,
       y: c.y,
       band: c.at ? null : bandOf(c),
@@ -362,16 +364,15 @@ function entitiesOf(seed) {
       key: c.key || null,
     });
   }
-  for (const s of sites(seed)) {
+  for (const m of merchants(seed)) {
     out.push({
-      id: s.id,
-      kind: 'site',
-      name: s.id.toUpperCase(),
-      note: s.item ? `the ${s.item}, lying in the dark` : 'a stall',
-      x: s.x,
-      y: s.y,
-      band: bandOf(s),
-      stall: !s.item,
+      id: m.id,
+      kind: 'merchant',
+      name: m.id.toUpperCase(),
+      note: 'a stall',
+      x: m.x,
+      y: m.y,
+      band: bandOf(m),
     });
   }
   // The four carved stones. Drawn with the majors rather than behind the
@@ -729,22 +730,14 @@ function drawMark(ctx, e) {
     }
     return;
   }
-  if (e.kind === 'site') {
+  if (e.kind === 'merchant') {
     ctx.strokeStyle = alpha(fg, 0.85);
-    if (e.stall) {
-      ctx.beginPath();
-      ctx.moveTo(x, y - 6);
-      ctx.lineTo(x + 5.5, y + 4);
-      ctx.lineTo(x - 5.5, y + 4);
-      ctx.closePath();
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      ctx.arc(x, y, 5, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = alpha(fg, 0.85);
-      ctx.fillText(e.id.toUpperCase(), x + 8, y);
-    }
+    ctx.beginPath();
+    ctx.moveTo(x, y - 6);
+    ctx.lineTo(x + 5.5, y + 4);
+    ctx.lineTo(x - 5.5, y + 4);
+    ctx.closePath();
+    ctx.stroke();
     return;
   }
   // A carved stone: an upright block, which is what it is.

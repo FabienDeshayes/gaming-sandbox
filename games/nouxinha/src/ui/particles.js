@@ -60,29 +60,9 @@ const snap = (v) => Math.floor(v / PX) * PX;
 // `cells` is the shape one is drawn as, in art pixels trailing back from its
 // head — a streak for anything fast, a single pixel for anything that drifts.
 export const WEATHER = {
-  // Fireflies over the temperate dark: few, slow, wandering, and each one on
-  // for a moment and then gone.
-  fireflies: {
-    count: 26,
-    spawn: (p) => {
-      p.period = rand(2.5, 5.5);
-      p.phase = rand(0, p.period);
-      p.heading = rand(0, Math.PI * 2);
-    },
-    move: (p, dt, t) => {
-      p.heading += rand(-2.5, 2.5) * dt;
-      p.x += Math.cos(p.heading) * 14 * dt;
-      p.y += Math.sin(p.heading) * 14 * dt;
-      // On for a little under half its cycle, fading in and out of it.
-      const u = ((t + p.phase) % p.period) / p.period;
-      p.glow = u < 0.4 ? Math.sin((u / 0.4) * Math.PI) : 0;
-    },
-  },
-  // Rain, falling a little slantwise, in streaks. Not any biome's today — it is
-  // here to be tried (`?weather=rain`, below) and handed to a world with one
-  // word in src/data/biomes.js.
+  // Rain over the temperate world, falling a little slantwise, in streaks.
   rain: {
-    count: 90,
+    count: 72,
     spawn: (p) => {
       p.vy = rand(520, 640);
       p.cells = [[0, 0], [0, -1], [-1, -2], [-1, -3]];
@@ -118,16 +98,16 @@ export const WEATHER = {
     },
     move: (p, dt, t) => {
       const gust = sandGust(t);
-      const vx = (50 + 420 * gust) * p.speed;
+      const vx = (40 + 336 * gust) * p.speed;
       p.x += vx * dt;
       p.y += Math.sin(t * 2 + p.phase) * 12 * dt;
       p.glow = gust + 0.3 > p.threshold ? 1 : 0;
-      p.cells = vx > 330 ? [[0, 0], [-1, 0], [-2, 0]] : vx > 180 ? [[0, 0], [-1, 0]] : null;
+      p.cells = vx > 264 ? [[0, 0], [-1, 0], [-2, 0]] : vx > 144 ? [[0, 0], [-1, 0]] : null;
     },
   },
   // Motes rising through the mystical realm, twinkling as they go.
   motes: {
-    count: 55,
+    count: 66,
     spawn: (p) => {
       p.vy = -rand(12, 30);
       p.phase = rand(0, Math.PI * 2);
@@ -149,7 +129,7 @@ function sandGust(t) {
   return Math.min(1, 0.12 + swell * (0.6 + 0.4 * flutter));
 }
 
-// `?weather=snow` (or rain, sand, fireflies, motes, none) on the URL puts any
+// `?weather=snow` (or rain, sand, motes, none) on the URL puts any
 // weather in any world — the quickest way to look at all of them.
 const ASKED_WEATHER = (() => {
   try {

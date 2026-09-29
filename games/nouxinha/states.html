@@ -110,7 +110,9 @@ import {
   SHEET_GAP,
   SHEET_PATH,
   TILES,
+  animationOf,
   biomeKey,
+  frameAt,
   variantCount,
   variantKey,
   wallSprite,
@@ -247,8 +249,18 @@ function catalogue() {
         style: itemStyle(def.hue || 0),
       })),
     ]);
-  add('STRUCTURES', 'wisp', 'wisp', 'A light nobody is carrying; ten per world.',
-    (biome) => [{ label: 'every wisp', tiles: strip([biomeKey('wisp', biome)]), style: plain }]);
+  // The one sprite that moves (`ANIMATIONS` in src/data/tiles.js): its first
+  // row plays the loop at the game's own speed, and the second lays the same
+  // frames out side by side.
+  add('STRUCTURES', 'wisp', 'wisp', 'A light nobody is carrying; ten per world. It flickers.',
+    (biome) => {
+      const key = biomeKey('wisp', biome);
+      const anim = animationOf(key);
+      return [
+        { label: anim ? 'every wisp, playing' : 'every wisp', tiles: strip([key]), style: plain, play: anim },
+        ...(anim ? [{ label: 'its flicker, frame by frame', tiles: strip(anim.frames), style: plain }] : []),
+      ];
+    });
   add('STRUCTURES', 'signpost', 'signpost',
     'Its arm is painted in the colour of the landmark it names, once the campaign has stood there.',
     () => [
@@ -425,6 +437,23 @@ biomeSel.add(new Option('ALL BIOMES', ALL_BIOMES));
 BIOMES.forEach((b) => biomeSel.add(new Option(b.name, b.id)));
 
 let sprites = {};
+
+// The cells drawing a sprite that moves, redrawn at whichever frame the clock
+// is on — the same `frameAt` the map asks. A frame is painted in its rest
+// pose's zones (src/data/paint.js), so the tints worked out for the rest pose
+// hold for every frame of it.
+let playing = [];
+setInterval(() => {
+  const now = performance.now();
+  for (const cell of playing) {
+    const frame = frameAt(cell.row.play, now);
+    if (frame === cell.frame || !cell.canvas.isConnected) continue;
+    const next = drawCell({ ...cell.row, tiles: [{ key: frame, x: 0, y: 0 }] }, cell.tints, cell.look);
+    next.title = frame;
+    cell.canvas.replaceWith(next);
+    Object.assign(cell, { canvas: next, frame });
+  }
+}, 30);
 const ENTRIES = catalogue();
 
 function pagePalette() {
@@ -462,6 +491,7 @@ function render() {
 
   const main = el('main');
   const index = el('index');
+  playing = [];
   main.replaceChildren();
   index.replaceChildren();
   let shown = 0;
@@ -511,6 +541,7 @@ function render() {
         tr.append(label);
         for (const gems of columns) {
           const canvas = drawCell(row, row.tints[gems], { bg: pal.bg, alpha });
+          if (row.play) playing.push({ canvas, row, tints: row.tints[gems], look: { bg: pal.bg, alpha }, frame: row.tiles[0].key });
           canvas.title = row.tiles.map((t) => t.key).filter((k, i, all) => all.indexOf(k) === i).join(', ');
           tr.append(make('td', {}, canvas));
           states++;

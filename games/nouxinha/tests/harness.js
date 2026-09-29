@@ -718,6 +718,26 @@ export async function openGame(
         return !!s && !!s.dialog && s.dialog.isOpen();
       }),
 
+    // Watches one world tile's ground sprite frame by frame until it has shown
+    // every key in `keys`, and hands back every key it showed on the way —
+    // which is how a test sees a sprite move (`ANIMATIONS` in
+    // src/data/tiles.js) without betting on how long a loop takes.
+    watchGround: async (x, y, keys) => {
+      const handle = await page.waitForFunction(
+        ({ x, y, keys }) => {
+          const s = window.__game.scene.getScene('ExploreScene');
+          const cell = s && s.map.cells.find((c) => s.run.x + c.dx === x && s.run.y + c.dy === y);
+          if (!cell || !cell.ground.visible) return false;
+          const seen = (window.__groundSeen = window.__groundSeen || new Set());
+          seen.add(cell.ground.key);
+          return keys.every((k) => seen.has(k)) && [...seen];
+        },
+        { x, y, keys },
+        { polling: 'raf' }
+      );
+      return handle.jsonValue();
+    },
+
     settle: async () => {
       await page.waitForFunction(() => {
         const s = window.__game.scene.getScene('ExploreScene');

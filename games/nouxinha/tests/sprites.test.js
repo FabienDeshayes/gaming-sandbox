@@ -6,14 +6,17 @@
 import { assert, assertEqual, runIfMain, unit } from './harness.js';
 import { DIM, buildSprites } from '../src/data/sprites.js';
 import {
+  ANIMATIONS,
   BIOME_KEYS,
   BIOME_TILES,
   SHEET_COLS,
   SHEET_ROWS,
   TILES,
   VARIANT_KEYS,
+  animationOf,
   baseKey,
   biomeKey,
+  frameAt,
   tileList,
   variantCount,
   variantKey,
@@ -312,6 +315,33 @@ unit('floor texture is drawn at half strength, and nothing else is', () => {
     if (ground(key)) continue;
     assert(!mask.join('').includes(DIM), `${key} is drawn at one strength`);
   }
+});
+
+unit('an animation plays sprites the sheet gives, starting from its own rest pose', () => {
+  assert(Object.keys(ANIMATIONS).length > 0, 'something moves');
+  for (const [key, anim] of Object.entries(ANIMATIONS)) {
+    assert(TILES[key], `${key} is a sprite the map draws`);
+    assertEqual(anim.frames[0], key, `${key}: the first frame is the rest pose`);
+    assert(anim.frames.length > 1, `${key}: more than one frame`);
+    assert(anim.ms > 0, `${key}: each frame is shown for a while`);
+    for (const frame of anim.frames) assert(sprites[frame], `${key}: ${frame} was cut from the sheet`);
+    // The frames are drawn the way the rest pose is — a colour never blinks in
+    // and out as the thing moves.
+    const hues = (k) => JSON.stringify(paintOf(k) ? paintOf(k).hues : null);
+    for (const frame of anim.frames)
+      assertEqual(hues(frame), hues(key), `${frame} is painted in the same zones as ${key}`);
+  }
+});
+
+unit('a frame is picked off the clock, and the phase offsets the loop', () => {
+  const anim = { frames: ['a', 'b', 'c'], ms: 100 };
+  assertEqual([0, 99, 100, 250, 300].map((t) => frameAt(anim, t)), ['a', 'a', 'b', 'c', 'a'], 'one frame per ms');
+  assertEqual(frameAt(anim, 0, 1), 'b', 'a phase starts further along');
+  assertEqual(frameAt(anim, 0, -1), 'c', 'and wraps backwards too, for a tile west or north of the hut');
+  assertEqual(animationOf('rock'), null, 'most things stand still');
+  // A biome that repoints an animated sprite draws its own tile still, rather
+  // than borrowing frames drawn for another tile.
+  assertEqual(animationOf('wisp@frozen'), null, "a biome's own wisp has no frames until it is given some");
 });
 
 unit('the wizard accumulates one colour per gem, keeping the base silhouette', () => {

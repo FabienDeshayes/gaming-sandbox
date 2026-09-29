@@ -272,10 +272,12 @@ export class ExploreScene extends Phaser.Scene {
       this.textPanel.show(SAY.expeditionStart);
   }
 
-  // The tutorial is the one thing that runs off the frame loop: a lesson waits
-  // for whatever else is on screen to close before it says its piece
-  // (ui/tutorial.js).
+  // Two things run off the frame loop: the sprites that move (`ANIMATIONS` in
+  // src/data/tiles.js), which only ever change which frame a tile is showing,
+  // and the tutorial, where a lesson waits for whatever else is on screen to
+  // close before it says its piece (ui/tutorial.js).
   update() {
+    this.map.animate();
     if (this.tutorial) this.tutorial.update();
   }
 

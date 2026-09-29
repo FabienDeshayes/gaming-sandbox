@@ -180,7 +180,7 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
   kinds it favours when it does. The distances, the sanctums, the landmarks, the water and the lights
   stay one set of numbers for every world: what changes is the ground between them.
 
-  And, beside those three, it has **weather**: fireflies over the temperate dark, snow in the frozen
+  And, beside those three, it has **weather**: rain over the temperate world, snow in the frozen
   world, sand blown in gusts across the desert, motes rising through the mystical realm (`weather` in
   `src/data/biomes.js`, drawn by `src/ui/particles.js`, §9). It is not one of the three because it
   is not the world — nothing reads it but the particles, and it says nothing about the ground under
@@ -1456,7 +1456,7 @@ have nothing left to do and are skipped.
 
     | | |
     |---|---|
-    | Weather | one kind per biome (§4.3): fireflies wandering and blinking, snow drifting down and swaying, sand blown sideways in uneven gusts (streaks when it is strong, settling out of the air when it drops), motes rising and twinkling. Rain exists too and is no world's yet. `?weather=` on the URL puts any of them (or `none`) in any world |
+    | Weather | one kind per biome (§4.3): rain falling slantwise in streaks over the temperate world, snow drifting down and swaying in the frozen one, sand blown sideways in uneven gusts across the desert (streaks when it is strong, settling out of the air when it drops), motes rising and twinkling through the mystical realm. `?weather=` on the URL puts any of them (or `none`) in any world |
     | Embers | off the light in hand, more the bigger it is and in the colour it is drawn in, none in blackout; and off the tip of every wisp's flame, in the tip's own colour |
     | The edge | once the dark has started eating the light (§4.7), motes drift outward across the screen and are gone past the rim — more of them the deeper the choke |
     | Moments | a small burst for anything picked up, in the colour it lay there in; a real burst and a ring for a gem — the first time its colour is on screen at all; a lid's worth of pixels thrown up out of a chest, in the foreground and the colours its fittings wear; dust shaken off an arch as its gate gives; a ring in a landmark's colour the first time the campaign stands there; a ring off the Drowned Bell every time it tolls, out as far as it can be heard, so the toll is a bearing you can see sweep across the screen |

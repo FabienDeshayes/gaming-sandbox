@@ -26,8 +26,8 @@
 //     (DESIGN.md §4.9).
 //
 // And one thing that isn't the world at all, only its air: the `weather` it is
-// drawn with (`WEATHER` in src/ui/particles.js) — fireflies over the temperate
-// dark, snow in the frozen one, sand blown in gusts across the desert, motes
+// drawn with (`WEATHER` in src/ui/particles.js) — rain over the temperate
+// world, snow in the frozen one, sand blown in gusts across the desert, motes
 // rising through the mystical realm. Pure flavour: nothing reads it but the
 // particles, and it says nothing about the ground under it.
 //
@@ -37,7 +37,7 @@
 import { BIOME_NAMES } from '../text.js';
 
 export const BIOMES = [
-  { id: 'temperate', name: BIOME_NAMES.temperate, palette: 'phosphor', weather: 'fireflies' },
+  { id: 'temperate', name: BIOME_NAMES.temperate, palette: 'phosphor', weather: 'rain' },
   { id: 'frozen', name: BIOME_NAMES.frozen, palette: 'cathode', weather: 'snow' },
   { id: 'desert', name: BIOME_NAMES.desert, palette: 'amber', weather: 'sand' },
   { id: 'mystic', name: BIOME_NAMES.mystic, palette: 'magenta', weather: 'motes' },

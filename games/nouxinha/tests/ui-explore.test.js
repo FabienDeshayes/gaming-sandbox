@@ -10,7 +10,8 @@
 
 import { assert, assertEqual, runIfMain } from './harness.js';
 import { BLACKOUT_MEMORY_RADIUS, STARTING_LIGHT } from '../src/balance.js';
-import { HUD } from '../src/text.js';
+import { HUD, MENU, SETTINGS } from '../src/text.js';
+import { PARTICLE_ALPHA } from '../src/config.js';
 import { ITEMS } from '../src/data/items.js';
 import { createRun } from '../src/core/rules.js';
 import { emptySave } from '../src/core/save.js';
@@ -184,5 +185,27 @@ test('a wisp flickers on its own while nothing moves', async (game) => {
   const { x, y } = AT_WISP.save.run;
   assertEqual({ x: state.x, y: state.y }, { x, y }, 'without a step taken');
 }, { save: AT_WISP.save });
+
+// Weather fills the whole view rather than only the light — it is weather —
+// but over ground the run has never seen it is drawn no stronger than the
+// faint strength config.js allows, so the light is still the only thing that
+// shows the world. And PARTICLES in Settings, turned off, draws none at all.
+test('weather crosses the whole view, faintly over the dark, and the switch turns it off', async (game) => {
+  await game.startRun();
+  const on = await game.particles();
+  assert(on.dark > 0, 'weather is drawn over ground nobody has seen');
+  assert(on.darkMax <= PARTICLE_ALPHA.dark + 1e-6, 'and never stronger than the dark allows there');
+
+  await game.tapMenuButton();
+  await game.clickText(MENU.settings);
+  await game.waitForScene('SettingsScene');
+  await game.clickText(SETTINGS.particles(true));
+  assert(await game.hasText(SETTINGS.particles(false)), 'the switch says it is off');
+  await game.clickText(SETTINGS.back);
+  await game.waitForScene('ExploreScene');
+  const off = await game.particles();
+  assertEqual(off.lit + off.remembered + off.dark, 0, 'and nothing is drawn');
+  assertEqual(await game.pref('nouxinha.particles'), '0', 'kept beside the saves like the music');
+});
 
 runIfMain(import.meta.url);

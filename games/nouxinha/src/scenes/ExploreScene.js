@@ -6,12 +6,14 @@ import {
   VIEW_CX,
   VIEW_CY,
   VIEW_H,
+  gemColour,
   getCheats,
   getPalette,
   getTutorial,
   hex,
   invertColour,
   overrideInvert,
+  paletteColour,
   setDefaultPalette,
 } from '../config.js';
 import {
@@ -36,7 +38,7 @@ import {
   turnCycle,
 } from '../core/rules.js';
 import { activeSlot, loadSave, MAX_GEMS } from '../core/save.js';
-import { chebyshev, landmarkNamed } from '../core/world.js';
+import { chebyshev, landmarkNamed, terrainAt } from '../core/world.js';
 import { isTutorialWorld } from '../core/tutorial.js';
 import { BELL_HEARING } from '../balance.js';
 import { biomeDef } from '../data/biomes.js';
@@ -59,7 +61,8 @@ import {
 } from '../text.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
 import { bindKeyboardNav } from '../ui/keyboardNav.js';
-import { MapView } from '../ui/MapView.js';
+import { MapView, landmarkRole } from '../ui/MapView.js';
+import { Particles } from '../ui/particles.js';
 import { Hud } from '../ui/hud.js';
 import { ItemCard } from '../ui/itemCard.js';
 import { InventoryPanel } from '../ui/inventoryPanel.js';
@@ -232,6 +235,9 @@ export class ExploreScene extends Phaser.Scene {
     this.nav = bindKeyboardNav(this);
 
     this.map = new MapView(this);
+    // Weather, embers and bursts, in the map's own layer (ui/particles.js).
+    this.particles = new Particles(this, this.map);
+    this.particles.setRun(this.run);
     this.hud = new Hud(this, {
       onSlot: (stack) => this.openStack(stack),
       onCoins: () => !this.modalOpen() && this.card.show({ def: itemDef('coin') }),
@@ -272,12 +278,14 @@ export class ExploreScene extends Phaser.Scene {
       this.textPanel.show(SAY.expeditionStart);
   }
 
-  // Two things run off the frame loop: the sprites that move (`ANIMATIONS` in
-  // src/data/tiles.js), which only ever change which frame a tile is showing,
-  // and the tutorial, where a lesson waits for whatever else is on screen to
-  // close before it says its piece (ui/tutorial.js).
+  // Three things run off the frame loop: the sprites that move (`ANIMATIONS` in
+  // src/data/tiles.js), which only ever change which frame a tile is showing;
+  // the particles (ui/particles.js); and the tutorial, where a lesson waits for
+  // whatever else is on screen to close before it says its piece
+  // (ui/tutorial.js).
   update() {
     this.map.animate();
+    this.particles.update();
     if (this.tutorial) this.tutorial.update();
   }
 
@@ -577,6 +585,7 @@ export class ExploreScene extends Phaser.Scene {
         if (result.firstTime) this.showEdge();
         else this.hud.flash(FLASH.edge);
       }
+      this.bumpParticles(result, direction);
       this.animating = true;
       this.map.bump(this, direction, this.run, () => {
         this.animating = false;
@@ -588,6 +597,7 @@ export class ExploreScene extends Phaser.Scene {
     this.hud.update(this.run);
     this.layOutRail();
     this.announce(result);
+    this.stepParticles(result, direction);
     this.tollBell();
     // The key turning under you as you walk through: the one moment a gate is
     // anything other than scenery.
@@ -762,6 +772,43 @@ export class ExploreScene extends Phaser.Scene {
     this.heardBell = true;
     this.bellStep = this.run.steps;
     playBell(1 - distance / BELL_HEARING);
+    // And a ring off the bell as far as it can be heard, sweeping across the
+    // screen from wherever it stands — the toll made visible, which is a
+    // bearing you can see as well as hear.
+    this.particles.toll(bell.x, bell.y, paletteColour(landmarkDef('bell').palette), BELL_HEARING);
+  }
+
+  // What a bump shakes loose (ui/particles.js): grit off rock and masonry, a
+  // leaf off a tree, a lid thrown up, and a ring in a landmark's colour the
+  // first time this campaign ever stands at it. Purely what is drawn — every
+  // one of these moments has already happened in core/ by now.
+  bumpParticles(result, direction) {
+    const dir = DIRECTIONS[direction];
+    const into = { x: this.run.x + dir.dx, y: this.run.y + dir.dy };
+    if (result.reason === 'blocked' || result.reason === 'locked')
+      this.particles.bump(this.run.x, this.run.y, dir, terrainAt(into.x, into.y, this.run.seed) === 'tree');
+    if (result.reason === 'chest' && !result.already) {
+      const colours = [getPalette().fg];
+      for (let gem = 1; gem <= this.run.gems; gem++) colours.push(gemColour(gem));
+      this.particles.chest(into.x, into.y, colours);
+    }
+    if (result.reason === 'landmark' && result.firstEver) {
+      const { colour } = landmarkRole(this.run, result.landmark);
+      this.particles.standing(into.x, into.y, colour || getPalette().fg);
+    }
+  }
+
+  // And what a step does: a puff of loose ground where the foot pushed off, a
+  // burst for anything picked up — a real one, and a ring, for a gem, which is
+  // the first time its colour is on screen at all — and dust off an arch the
+  // moment its gate gives.
+  stepParticles(result, direction) {
+    const dir = DIRECTIONS[direction];
+    const { x, y } = this.run;
+    this.particles.footfall(x - dir.dx, y - dir.dy);
+    if (result.gemFound) this.particles.gem(x, y, gemColour(itemDef(result.picked).hue));
+    else if (result.picked) this.particles.pickup(x, y, gemColour(itemDef(result.picked).hue || 0));
+    if (result.unlocked) this.particles.gate(x, y);
   }
 
   // The hall, and the only conversation in the game (DESIGN.md §4.9).

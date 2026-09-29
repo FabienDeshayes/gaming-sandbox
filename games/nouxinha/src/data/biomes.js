@@ -25,16 +25,22 @@
 //     colours — which matters, because finishing all four is how the game ends
 //     (DESIGN.md §4.9).
 //
-// All three are keyed by the id below and nothing else, so a biome stays what
+// And one thing that isn't the world at all, only its air: the `weather` it is
+// drawn with (`WEATHER` in src/ui/particles.js) — fireflies over the temperate
+// dark, snow in the frozen one, sand blown in gusts across the desert, motes
+// rising through the mystical realm. Pure flavour: nothing reads it but the
+// particles, and it says nothing about the ground under it.
+//
+// All of it is keyed by the id below and nothing else, so a biome stays what
 // it has always been: a property of the seed, derived and never stored.
 
 import { BIOME_NAMES } from '../text.js';
 
 export const BIOMES = [
-  { id: 'temperate', name: BIOME_NAMES.temperate, palette: 'phosphor' },
-  { id: 'frozen', name: BIOME_NAMES.frozen, palette: 'cathode' },
-  { id: 'desert', name: BIOME_NAMES.desert, palette: 'amber' },
-  { id: 'mystic', name: BIOME_NAMES.mystic, palette: 'magenta' },
+  { id: 'temperate', name: BIOME_NAMES.temperate, palette: 'phosphor', weather: 'fireflies' },
+  { id: 'frozen', name: BIOME_NAMES.frozen, palette: 'cathode', weather: 'snow' },
+  { id: 'desert', name: BIOME_NAMES.desert, palette: 'amber', weather: 'sand' },
+  { id: 'mystic', name: BIOME_NAMES.mystic, palette: 'magenta', weather: 'motes' },
 ];
 
 // The world every campaign walked before there were four kinds of them, and the

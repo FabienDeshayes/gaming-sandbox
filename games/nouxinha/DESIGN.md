@@ -1089,6 +1089,10 @@ far for.
   world — nothing recognises it, nothing colours it — so there is nothing wrong with a biome drawing
   it its own way; today none does, and all four worlds draw the same small glint, drawn for this
   game (`draw.html`).
+- **It flickers.** A wisp is the one thing in the world that moves while the character stands
+  still: a four-frame loop, the tip leaning right, stretching up and leaning left while an ember
+  comes off its flank and rises away (§9). Nothing else on screen moves unless a step moves it, so a
+  wisp at the edge of the screen reads as a light rather than as one more thing lying on the ground.
 
 | Path | Holds |
 |---|---|
@@ -1096,7 +1100,7 @@ far for.
 | `src/core/world.js` | `buildWisps`, `wisps()`, `wispAt()`, and the `'wisp'` terrain |
 | `src/core/light.js` | the `round` shape kind (`roundTiles`) |
 | `src/core/rules.js` | `wispOnTile`, `touchWisp`, and `wispLitTiles` inside `litTiles` |
-| `src/data/tiles.js` | the shared `wisp` sprite |
+| `src/data/tiles.js` | the shared `wisp` sprite, its flicker frames, and `ANIMATIONS.wisp` |
 | `src/text.js` | `SAY.wisp`, `FLASH.wispAgain` |
 | `src/ui/MapView.js` / `src/ui/worldMap.js` | drawing the tile, and marking it once it has been lit |
 
@@ -1440,6 +1444,7 @@ have nothing left to do and are skipped.
     zone maps being authored four times. Items, the character and the HUD are deliberately *not* in
     this: they belong to the campaign that carries them from world to world, and they are drawn on
     screens that have no world to ask.
+  - **A few sprites move, and a frame is just another sprite.** `ANIMATIONS` in `src/data/tiles.js` gives a drawn key a list of frames and how long each is shown, and each frame is a sprite key of its own (`wisp~1`) pointed at a tile on the sheet like any other — so it is cut, painted and tinted exactly as the rest pose is, `draw.html` redraws it and `paint.html` paints it. The map draws the key as usual and asks `frameAt` which frame the clock is on, and between steps it only ever swaps which frame a tile shows (`MapView.animate`, off the scene's frame loop); what colours it wears were decided by the step, and each frame is painted in the same zones as its rest pose, so nothing ever blinks a colour in and out as it moves. The phase is taken from the world tile, so two of the same thing in view don't move in lockstep, and a given one always moves the same way. A biome that repoints an animated sprite draws its own tile still until it is given frames of its own. Today the wisp is the only thing that moves (§4.11); `states.html` plays it, and lays its frames out side by side.
   - **Two weights, still one colour.** A mask pixel is either full strength or `FLOOR_TEXTURE_LEVEL` of it (`src/config.js`, currently half), baked as white and mid-grey and multiplied through by the same tint. That is what lets ground texture sit under the things standing on it without becoming a second colour on screen.
   - **A tile can be painted in up to four colours.** One texture takes one tint, so a tile that has to be two colours at once is not one sprite but a stack of them. `src/data/paint.js` gives a sprite key a **zone map** — 16 lines of 16 characters laid over the tile, where `1`, `2` and `3` claim a pixel for that zone and everything else stays zone 0 — plus a **hue** per zone saying which colour it turns. At boot each zone is cut into its own mask and baked into its own texture, and `src/ui/painted.js` stacks them back into the one silhouette, tinting each separately. The zones never overlap, so the stack survives being drawn at the remembered state's 30% alpha exactly as a single sprite would. A tile with no entry in the table is the same stack with one layer showing, which is why nothing that draws a tile has to know which tiles are painted.
 

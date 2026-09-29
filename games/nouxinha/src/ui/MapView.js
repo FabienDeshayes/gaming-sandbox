@@ -37,7 +37,7 @@ import {
 import { itemDef } from '../data/items.js';
 import { landmarkDef } from '../data/landmarks.js';
 import { paintOf } from '../data/paint.js';
-import { biomeKey, variantKey, wallSprite } from '../data/tiles.js';
+import { animationOf, biomeKey, frameAt, variantKey, wallSprite } from '../data/tiles.js';
 import { makePainted, paintTile } from './painted.js';
 import { makeWizard, paintWizard } from './wizard.js';
 
@@ -119,6 +119,10 @@ export class MapView {
     }
 
     this.wizard = makeWizard(scene, VIEW_CX, VIEW_CY, 'up', SPRITE_SCALE);
+
+    // The cells whose ground is a sprite that moves, as the last refresh left
+    // them — what `animate` walks every frame instead of all of them.
+    this.animated = [];
   }
 
   // Repaints every tile from the run's current position. Three visibility
@@ -141,6 +145,8 @@ export class MapView {
     // everywhere. Items don't: they belong to the campaign carrying them from
     // world to world, and the HUD has to draw them with no world to ask.
     const biome = run.biome;
+    const now = this.scene.time.now;
+    this.animated = [];
 
     for (const cell of this.cells) {
       const wx = run.x + cell.dx;
@@ -257,12 +263,24 @@ export class MapView {
       // to show for having stood at it (DESIGN.md §4.10). Drawing one zone in
       // the landmark's colour keeps the two-colour rule either way.
       const plainLandmark = mark && !paintOf(ground);
-      cell.ground.setVisible(true).setAlpha(alpha);
-      paintTile(cell.ground, ground, {
+      const style = {
         gems: run.gems,
         base: plainLandmark ? roles.landmark.colour || fg : fg,
         roles,
-      });
+      };
+      cell.ground.setVisible(true).setAlpha(alpha);
+      // A sprite that moves is drawn at whichever frame the clock is on, and
+      // remembered so `animate` can move it on between steps. The phase comes
+      // from the world tile, so two wisps in view don't flicker in lockstep
+      // and a given one always flickers the same way.
+      const anim = animationOf(ground);
+      if (anim) {
+        const phase = wx * 3 + wy * 5;
+        this.animated.push({ cell, anim, phase, style });
+        paintTile(cell.ground, frameAt(anim, now, phase), style);
+      } else {
+        paintTile(cell.ground, ground, style);
+      }
 
       // Nothing lies on rock, on trees, on wall, on a chest, or in a gateway.
       if (terrain !== 'floor') {
@@ -304,6 +322,19 @@ export class MapView {
     // The wizard wears one colour per gem carried, on top of the base colour
     // they start with (DESIGN.md §9).
     paintWizard(this.wizard, run.facing, run.gems);
+  }
+
+  // Moves every animated tile on screen on to the frame the clock says, once a
+  // frame from the scene's loop. Only ever swaps which frame a tile shows — the
+  // colours it wears were decided by the last `refresh`, and a frame is
+  // painted with exactly those (src/data/paint.js keeps each frame's zones in
+  // step with its rest pose), so nothing a step decides can change mid-loop.
+  animate() {
+    const now = this.scene.time.now;
+    for (const { cell, anim, phase, style } of this.animated) {
+      const key = frameAt(anim, now, phase);
+      if (cell.ground.key !== key) paintTile(cell.ground, key, style);
+    }
   }
 
   // Starts the world one tile off-centre in the direction just walked and

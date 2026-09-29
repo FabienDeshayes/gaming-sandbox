@@ -164,7 +164,15 @@ export const TILES = {
   // world to world, so there would be nothing wrong with four worlds drawing
   // it four different ways. Drawn for this game (`draw.html`), and every
   // biome shares the one tile until one earns a version of its own.
+  //
+  // It is also the one sprite that moves: `wisp` is its rest pose, and the
+  // three beside it on the sheet are the rest of its flicker (`ANIMATIONS`
+  // below) — the tip leaning right, stretching up, leaning left, with an ember
+  // coming off its flank and rising away.
   wisp: [15, 10],
+  'wisp~1': [16, 10],
+  'wisp~2': [17, 10],
+  'wisp~3': [18, 10],
 
   // --- Items ---------------------------------------------------------------
   // The four lights climb a silhouette: candle, lantern, candelabra, and a
@@ -196,6 +204,42 @@ export const TILES = {
   'arrow-down': [30, 20],
   'arrow-left': [31, 20],
 };
+
+// --- Animation ---------------------------------------------------------------
+//
+// A sprite that moves is a list of frames, and a frame is just another sprite
+// key: `wisp~1` is cut off the sheet, painted (src/data/paint.js) and tinted
+// exactly like `wisp` is, and nothing that bakes or colours a tile has to know
+// it is one frame of several. The `~n` is only a naming convention, kept clear
+// of the `-n` a terrain's alternates are cut under.
+//
+// What is animated is the key the map asks for, so a sprite animates wherever
+// it is drawn and a caller never picks a frame itself: `MapView` draws the key
+// as usual, and `frameAt` says which of its frames is showing at a moment. A
+// frame list may repeat a key, which is how a loop gets a hold or a ping-pong
+// without a second copy of the art. `ms` is how long each frame is shown.
+//
+// A biome that repoints an animated sprite draws its own tile *still*: its key
+// (`wisp@frozen`) is not in this table until someone draws it frames of its
+// own and names them here.
+export const ANIMATIONS = {
+  wisp: { frames: ['wisp', 'wisp~1', 'wisp~2', 'wisp~3'], ms: 150 },
+};
+
+// The animation a drawn key plays, or null for the ones that stand still.
+export function animationOf(key) {
+  return ANIMATIONS[key] || null;
+}
+
+// Which frame of an animation is showing at `time` (ms). `phase` offsets the
+// loop by whole frames, so two of the same thing on screen at once don't move
+// in lockstep — the caller derives it from the world tile, so a given wisp
+// always flickers the same way.
+export function frameAt(anim, time, phase = 0) {
+  const n = anim.frames.length;
+  const step = Math.floor(time / anim.ms) + phase;
+  return anim.frames[((step % n) + n) % n];
+}
 
 // --- Biomes ------------------------------------------------------------------
 //

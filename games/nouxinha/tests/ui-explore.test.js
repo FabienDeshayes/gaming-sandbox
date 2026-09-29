@@ -14,7 +14,8 @@ import { HUD } from '../src/text.js';
 import { ITEMS } from '../src/data/items.js';
 import { createRun } from '../src/core/rules.js';
 import { emptySave } from '../src/core/save.js';
-import { NONCE, SEED, TORCH_ROUTE, standingAt, test, walkPath } from './world.js';
+import { ANIMATIONS } from '../src/data/tiles.js';
+import { FIRST_WISP, NONCE, SEED, TORCH_ROUTE, WISP_ROUTE, standingAt, test, walkPath } from './world.js';
 
 // The 3x3 block a small torch shows is no longer the whole of what a fresh
 // run has lit: every wisp in the world lights its own little clearing
@@ -166,5 +167,22 @@ test('blackout shrinks memory to a fog of war around the character', async (game
     'nothing further out is drawn as remembered any more'
   );
 }, { save: BLACKOUT.save });
+
+
+// A wisp flickers (`ANIMATIONS` in src/data/tiles.js): standing still next to
+// one, the tile it is drawn on goes round every frame of its loop and nothing
+// else, with nobody pressing anything. Planted on the doorstep — the walk
+// there is `wisps.test.js`'s claim, and what is here is the frame loop.
+const AT_WISP = standingAt(WISP_ROUTE);
+
+test('a wisp flickers on its own while nothing moves', async (game) => {
+  await game.startRun();
+  const { frames } = ANIMATIONS.wisp;
+  const seen = await game.watchGround(FIRST_WISP.x, FIRST_WISP.y, frames);
+  assertEqual([...seen].sort(), [...frames].sort(), 'every frame of the loop, and nothing but');
+  const state = await game.state();
+  const { x, y } = AT_WISP.save.run;
+  assertEqual({ x: state.x, y: state.y }, { x, y }, 'without a step taken');
+}, { save: AT_WISP.save });
 
 runIfMain(import.meta.url);

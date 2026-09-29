@@ -37,6 +37,12 @@ export const VIEW_ROWS = 15;
 // Visibility states (DESIGN.md §4). Unknown tiles are simply not drawn.
 export const LIT_ALPHA = 1;
 export const REMEMBERED_ALPHA = 0.3;
+// How strongly a particle is drawn over each of the three (src/ui/particles.js).
+// Weather fills the whole viewport, so it has to read over the dark too — but
+// only just, so the light is still the thing that shows the world. A particle
+// is one pixel where a tile is a whole silhouette, which is why it is drawn a
+// little stronger than remembered ground to read at the same weight.
+export const PARTICLE_ALPHA = { lit: 1, remembered: 0.5, dark: 0.26 };
 
 // Ground texture is drawn at this fraction of the foreground's strength, so an
 // explored floor tile reads as a surface without competing with the wizard, the
@@ -158,6 +164,36 @@ export function setMusic(on) {
     /* preference just won't persist */
   }
   return musicOn;
+}
+
+// --- Particles ---------------------------------------------------------------
+//
+// Weather, embers and the little bursts that mark a moment (src/ui/particles.js)
+// — flavour, and nothing a rule ever reads, so a player on a slow phone or who
+// would rather the screen kept still can have it off. On by default, persisted
+// like the music.
+const PARTICLES_KEY = 'nouxinha.particles';
+
+let particlesOn = true;
+
+try {
+  particlesOn = localStorage.getItem(PARTICLES_KEY) !== '0';
+} catch (e) {
+  /* on by default */
+}
+
+export function getParticles() {
+  return particlesOn;
+}
+
+export function setParticles(on) {
+  particlesOn = !!on;
+  try {
+    localStorage.setItem(PARTICLES_KEY, particlesOn ? '1' : '0');
+  } catch (e) {
+    /* preference just won't persist */
+  }
+  return particlesOn;
 }
 
 // --- Cheats ------------------------------------------------------------------

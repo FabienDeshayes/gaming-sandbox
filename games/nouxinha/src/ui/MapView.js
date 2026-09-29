@@ -123,6 +123,11 @@ export class MapView {
     // The cells whose ground is a sprite that moves, as the last refresh left
     // them — what `animate` walks every frame instead of all of them.
     this.animated = [];
+    // How strongly each world tile on screen was drawn by the last refresh,
+    // keyed like `explored` — lit or remembered; a tile not in it was not drawn
+    // at all. The particles read it (src/ui/particles.js), so they are exactly
+    // as bright as the ground they are over.
+    this.shownAlpha = new Map();
   }
 
   // Repaints every tile from the run's current position. Three visibility
@@ -147,6 +152,7 @@ export class MapView {
     const biome = run.biome;
     const now = this.scene.time.now;
     this.animated = [];
+    this.shownAlpha = new Map();
 
     for (const cell of this.cells) {
       const wx = run.x + cell.dx;
@@ -170,6 +176,7 @@ export class MapView {
 
       const alpha = lit.has(key) ? LIT_ALPHA : REMEMBERED_ALPHA;
       const terrain = terrainAt(wx, wy, run.seed);
+      if (terrain !== 'dark') this.shownAlpha.set(key, alpha);
 
       // Outside the world. Nothing is drawn there — the boundary is read by
       // seeing the ground stop, not by seeing a wall (DESIGN.md §4.7). Lit

@@ -718,6 +718,15 @@ export async function openGame(
         return !!s && !!s.dialog && s.dialog.isOpen();
       }),
 
+    // What the particles drew on the last frame (src/ui/particles.js): how many
+    // art pixels over lit, remembered and unknown ground, and the strongest one
+    // drawn over the unknown. Read a frame later, so it is a frame that has
+    // actually been drawn since whatever came before.
+    particles: async () => {
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      return page.evaluate(() => ({ ...window.__game.scene.getScene('ExploreScene').particles.frame }));
+    },
+
     // Watches one world tile's ground sprite frame by frame until it has shown
     // every key in `keys`, and hands back every key it showed on the way —
     // which is how a test sees a sprite move (`ANIMATIONS` in

@@ -71,6 +71,8 @@ export const SLOTS = {
 export const SETTINGS = {
   heading: UI.settings,
   music: (on) => `MUSIC: ${on ? 'ON' : 'OFF'}`,
+  // Weather, embers and bursts (src/ui/particles.js).
+  particles: (on) => `PARTICLES: ${on ? 'ON' : 'OFF'}`,
   moveSpeed: (stepsPerSecond) => `MOVE SPEED: ${stepsPerSecond}/s`,
   cheats: (on) => `CHEATS: ${on ? 'ON' : 'OFF'}`,
   cheatNote: (on) =>

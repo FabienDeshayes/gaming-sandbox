@@ -1,4 +1,4 @@
-// Settings: the music, tutorial and cheat switches, the move-speed slider, and — for a
+// Settings: the music, particles, tutorial and cheat switches, the move-speed slider, and — for a
 // player who has finished all four worlds — the switch that draws the game
 // inside out (DESIGN.md §4.9). There is no palette picker here: a world's colour
 // comes from its biome (§4.3, src/data/biomes.js), not from a choice a player
@@ -18,12 +18,14 @@ import {
   getMoveSpeed,
   getMusic,
   getPalette,
+  getParticles,
   getTutorial,
   hex,
   setCheats,
   setInvert,
   setMoveSpeed,
   setMusic,
+  setParticles,
   setTutorial,
 } from '../config.js';
 import { ensureTextures, preloadTiles } from '../ui/textures.js';
@@ -67,7 +69,7 @@ export class SettingsScene extends Phaser.Scene {
     const music = makeButton(
       this,
       cx,
-      270,
+      250,
       musicLabel(getMusic()),
       () => {
         const on = setMusic(!getMusic());
@@ -78,10 +80,21 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
 
+    // Weather, embers and bursts (src/ui/particles.js). Flavour only, so it is
+    // the one thing on screen a player can simply have off.
+    const particles = makeButton(
+      this,
+      cx,
+      310,
+      SETTINGS.particles(getParticles()),
+      () => particles.setLabel(SETTINGS.particles(setParticles(!getParticles()))),
+      { width: 300, fontSize: 14 }
+    );
+
     // How fast holding a D-pad arrow walks (DESIGN.md §7, dpad.js) — a slider
     // rather than a fixed rate, since "fast" is a matter of taste and thumb
     // speed both.
-    const moveSpeed = makeSlider(this, cx, 360, {
+    const moveSpeed = makeSlider(this, cx, 380, {
       width: 300,
       min: MIN_MOVE_SPEED,
       max: MAX_MOVE_SPEED,
@@ -96,7 +109,7 @@ export class SettingsScene extends Phaser.Scene {
     const tutorial = makeButton(
       this,
       cx,
-      450,
+      460,
       tutorialLabel(getTutorial()),
       () => {
         const on = setTutorial(!getTutorial());
@@ -106,7 +119,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
     const tutorialNoteText = this.add
-      .text(cx, 490, tutorialNote(getTutorial()), {
+      .text(cx, 498, tutorialNote(getTutorial()), {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -121,7 +134,7 @@ export class SettingsScene extends Phaser.Scene {
     const cheats = makeButton(
       this,
       cx,
-      550,
+      555,
       cheatLabel(getCheats()),
       () => {
         const on = setCheats(!getCheats());
@@ -138,7 +151,7 @@ export class SettingsScene extends Phaser.Scene {
       { width: 300, fontSize: 14 }
     );
     const note = this.add
-      .text(cx, 590, cheatNote(getCheats()), {
+      .text(cx, 593, cheatNote(getCheats()), {
         fontFamily: FONT,
         fontSize: '11px',
         color: hex(pal.fg),
@@ -183,7 +196,7 @@ export class SettingsScene extends Phaser.Scene {
         : this.scene.start('TitleScene');
     const back = makeButton(this, cx, 750, SETTINGS.back, goBack, { width: 240 });
 
-    bindKeyboardNav(this).set([music, moveSpeed, tutorial, cheats, ...(invert ? [invert] : []), back]);
+    bindKeyboardNav(this).set([music, particles, moveSpeed, tutorial, cheats, ...(invert ? [invert] : []), back]);
     this.input.keyboard.on('keydown-ESC', goBack);
   }
 }

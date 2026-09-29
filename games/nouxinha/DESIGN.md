@@ -180,6 +180,12 @@ they depend on. Nothing about the world is ever stored — a run remembers only 
   kinds it favours when it does. The distances, the sanctums, the landmarks, the water and the lights
   stay one set of numbers for every world: what changes is the ground between them.
 
+  And, beside those three, it has **weather**: fireflies over the temperate dark, snow in the frozen
+  world, sand blown in gusts across the desert, motes rising through the mystical realm (`weather` in
+  `src/data/biomes.js`, drawn by `src/ui/particles.js`, §9). It is not one of the three because it
+  is not the world — nothing reads it but the particles, and it says nothing about the ground under
+  it — but it is the quickest way to tell which kind of world you are in with the lights down.
+
   The four lean on different pressures rather than on different difficulties, and the rate a walk
   *pays* is deliberately level across all four — about one thing found every 37 floor tiles, the
   number the scatter was playtested at — so what differs is what it pays in and what it costs to
@@ -1334,6 +1340,7 @@ would have been.
 | Overwrite a campaign | Tap an occupied slot under **NEW GAME**, then tap it again | Tab to the row and press Enter/Space twice, or click twice |
 | Back out of the slot picker | Tap **BACK** | Tab to it and press Enter/Space, click, or press Esc |
 | Turn the music off | Settings → **MUSIC** (§9), which silences both loops | Tab to it and press Enter/Space, or click |
+| Turn the particles off | Settings → **PARTICLES** (§9): weather, embers and bursts | Tab to it and press Enter/Space, or click |
 | Set the walking speed | Settings → drag or tap the **MOVE SPEED** slider (2-10 steps/second) | Tab to it, Left/Right to change it, or drag/click |
 | Turn the tutorial on or off | Settings → **TUTORIAL** (§4.13) — on, the next NEW GAME walks it from the top | Tab to it and press Enter/Space, or click |
 | Turn cheats on or off | Settings → **CHEATS** (§6.2) | Tab to it and press Enter/Space, or click |
@@ -1445,6 +1452,15 @@ have nothing left to do and are skipped.
     this: they belong to the campaign that carries them from world to world, and they are drawn on
     screens that have no world to ask.
   - **A few sprites move, and a frame is just another sprite.** `ANIMATIONS` in `src/data/tiles.js` gives a drawn key a list of frames and how long each is shown, and each frame is a sprite key of its own (`wisp~1`) pointed at a tile on the sheet like any other — so it is cut, painted and tinted exactly as the rest pose is, `draw.html` redraws it and `paint.html` paints it. The map draws the key as usual and asks `frameAt` which frame the clock is on, and between steps it only ever swaps which frame a tile shows (`MapView.animate`, off the scene's frame loop); what colours it wears were decided by the step, and each frame is painted in the same zones as its rest pose, so nothing ever blinks a colour in and out as it moves. The phase is taken from the world tile, so two of the same thing in view don't move in lockstep, and a given one always moves the same way. A biome that repoints an animated sprite draws its own tile still until it is given frames of its own. Today the wisp is the only thing that moves (§4.11); `states.html` plays it, and lays its frames out side by side.
+  - **Particles are single art pixels, and they are as bright as the ground under them.** Weather, embers and the bursts that mark a moment (`src/ui/particles.js`) are each one pixel of a 16×16 tile — three screen pixels square — snapped to the grid the tiles are drawn on, and tinted like everything else: the foreground, or a colour the campaign has already brought back, through the same accessors, so the ending inverts them too. They live in world space inside the map's layer, so a step slides them with the ground: an ember you walk away from stays behind, and weather is something you walk through. **Weather fills the whole viewport** — that is what makes it weather rather than a halo round the torch — and each pixel of it is drawn at the strength of the tile it is over: full in the light, a little over the remembered strength over ground the run has seen (a single pixel needs the help to read as heavily as a whole tile), faintly over the unknown, and not at all past the edge of the world (`PARTICLE_ALPHA` in `src/config.js`). None of it reacts to what is under it, so the faint snow over the unknown says nothing about what the unknown holds. Nothing here is state and no rule reads any of it; **PARTICLES** in Settings turns the whole of it off. What there is:
+
+    | | |
+    |---|---|
+    | Weather | one kind per biome (§4.3): fireflies wandering and blinking, snow drifting down and swaying, sand blown sideways in uneven gusts (streaks when it is strong, settling out of the air when it drops), motes rising and twinkling. Rain exists too and is no world's yet. `?weather=` on the URL puts any of them (or `none`) in any world |
+    | Embers | off the light in hand, more the bigger it is and in the colour it is drawn in, none in blackout; and off the tip of every wisp's flame, in the tip's own colour |
+    | The edge | once the dark has started eating the light (§4.7), motes drift outward across the screen and are gone past the rim — more of them the deeper the choke |
+    | Moments | a small burst for anything picked up, in the colour it lay there in; a real burst and a ring for a gem — the first time its colour is on screen at all; a lid's worth of pixels thrown up out of a chest, in the foreground and the colours its fittings wear; dust shaken off an arch as its gate gives; a ring in a landmark's colour the first time the campaign stands there; a ring off the Drowned Bell every time it tolls, out as far as it can be heard, so the toll is a bearing you can see sweep across the screen |
+    | Small touches | grit off rock and masonry when you walk into it, a leaf off a tree; a puff of sand or snow where a foot pushed off, in the two worlds whose ground is loose |
   - **Two weights, still one colour.** A mask pixel is either full strength or `FLOOR_TEXTURE_LEVEL` of it (`src/config.js`, currently half), baked as white and mid-grey and multiplied through by the same tint. That is what lets ground texture sit under the things standing on it without becoming a second colour on screen.
   - **A tile can be painted in up to four colours.** One texture takes one tint, so a tile that has to be two colours at once is not one sprite but a stack of them. `src/data/paint.js` gives a sprite key a **zone map** — 16 lines of 16 characters laid over the tile, where `1`, `2` and `3` claim a pixel for that zone and everything else stays zone 0 — plus a **hue** per zone saying which colour it turns. At boot each zone is cut into its own mask and baked into its own texture, and `src/ui/painted.js` stacks them back into the one silhouette, tinting each separately. The zones never overlap, so the stack survives being drawn at the remembered state's 30% alpha exactly as a single sprite would. A tile with no entry in the table is the same stack with one layer showing, which is why nothing that draws a tile has to know which tiles are painted.
 

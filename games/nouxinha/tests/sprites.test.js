@@ -22,7 +22,8 @@ import {
   variantKey,
   wallSprite,
 } from '../src/data/tiles.js';
-import { BIOME_IDS } from '../src/data/biomes.js';
+import { BIOME_IDS, BIOMES } from '../src/data/biomes.js';
+import { WEATHER } from '../src/ui/particles.js';
 import { PAINT, PAINT_ZONES, ZONE_INK, paintOf, zoneAt, zoneKey } from '../src/data/paint.js';
 import { zoneTints } from '../src/ui/painted.js';
 import { MAX_MOVE_SPEED, MIN_MOVE_SPEED, gemColour, getMoveSpeed, setMoveSpeed } from '../src/config.js';
@@ -342,6 +343,11 @@ unit('a frame is picked off the clock, and the phase offsets the loop', () => {
   // A biome that repoints an animated sprite draws its own tile still, rather
   // than borrowing frames drawn for another tile.
   assertEqual(animationOf('wisp@frozen'), null, "a biome's own wisp has no frames until it is given some");
+});
+
+unit('every kind of world has weather of its own', () => {
+  for (const biome of BIOMES) assert(WEATHER[biome.weather], `${biome.id}: "${biome.weather}" is a weather`);
+  assertEqual(new Set(BIOMES.map((b) => b.weather)).size, BIOMES.length, 'no two worlds share one');
 });
 
 unit('the wizard accumulates one colour per gem, keeping the base silhouette', () => {

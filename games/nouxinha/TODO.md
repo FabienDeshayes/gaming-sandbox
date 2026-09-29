@@ -18,6 +18,7 @@ fixes:
 Polish:
 * animated sprites for unique elements such as fires and landmarks
 * tutorial
+* particles review
 
 ideas to explore (post release):
 * dead cities with ghosts

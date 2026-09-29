@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nouxinha — sprite states</title>
+  <style>
+    /* A development page, not part of the game, and read-only. It draws every
+       sprite the game actually puts on screen in every state the game can put
+       it in: once per biome — the tile that world draws it with, in that
+       world's colours — and once per number of gems carried, plus whatever
+       else decides its colour where it stands (which sanctum a wall belongs
+       to, whether a gate is open, whether the campaign has stood at a
+       landmark, which landmark a post names).
+
+       It derives all of that from the game's own tables and draws through the
+       game's own colour rule (`zoneTints` in src/ui/painted.js), so it can
+       never show a state the game can't reach, and a sheet tile nothing draws
+       is not on it at all. Changing what it shows is changing the game:
+       paint.html, biomes.html and draw.html are where that is done. */
+    :root { --bg: #0b1a0b; --fg: #33ff66; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.5 monospace;
+      -webkit-font-smoothing: none;
+    }
+    header {
+      position: sticky; top: 0; z-index: 2;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+    }
+    h1 { font-size: 15px; margin: 0; letter-spacing: 2px; }
+    h2 { font-size: 13px; margin: 28px 0 10px; letter-spacing: 3px; opacity: 0.55; }
+    h3 { font-size: 13px; margin: 0; letter-spacing: 2px; }
+    a { color: var(--fg); }
+    p { margin: 0; opacity: 0.65; max-width: 80ch; }
+    .controls { display: flex; gap: 18px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    label { opacity: 0.8; }
+    select, input[type=search] {
+      font: inherit; color: var(--fg); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--fg) 45%, transparent);
+      padding: 6px 10px; min-height: 34px;
+    }
+    select { cursor: pointer; }
+    select option { background: var(--bg); }
+    input[type=checkbox] { accent-color: var(--fg); }
+    .dim { opacity: 0.5; }
+
+    #index { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 10px 16px 0; font-size: 12px; }
+    /* On a phone the controls alone are half the screen, so nothing sticks. */
+    @media (max-width: 700px) { header { position: static; } .entry { scroll-margin-top: 0; } }
+    #index a { opacity: 0.6; text-decoration: none; }
+    #index a:hover { opacity: 1; text-decoration: underline; }
+    #index b { font-weight: normal; opacity: 0.35; }
+
+    main { padding: 0 16px 40px; }
+    .entry {
+      margin: 0 0 18px;
+      border: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
+      scroll-margin-top: 100px;
+    }
+    .entry > .head {
+      display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline;
+      padding: 8px 10px;
+      border-bottom: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
+    }
+    .entry .note { opacity: 0.6; flex: 1 1 40ch; }
+    .entry .zones { width: 100%; font-size: 11px; opacity: 0.6; }
+    .entry .zones a { text-decoration: none; }
+    .entry .zones a:hover { text-decoration: underline; }
+    .table { overflow-x: auto; }
+    table { border-collapse: collapse; }
+    th { font-weight: normal; font-size: 11px; opacity: 0.6; text-align: left; padding: 6px 10px 2px; white-space: nowrap; }
+    /* Each biome's rows are drawn in that biome's own two colours, the way the
+       game would draw them, whatever colour the page itself is in. */
+    tbody.biome td { background: var(--row-bg); color: var(--row-fg); padding: 6px 10px; vertical-align: middle; }
+    tbody.biome tr:first-child td { border-top: 1px solid color-mix(in srgb, var(--row-fg) 25%, transparent); }
+    td.label { min-width: 16em; max-width: 30em; font-size: 12px; }
+    td.label .world { font-size: 10px; letter-spacing: 2px; opacity: 0.6; display: block; }
+    td canvas { image-rendering: pixelated; display: block; }
+    #empty { padding: 30px 0; opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <nav id="tools"></nav>
+  <script type="module" src="dev/nav.js"></script>
+  <header>
+    <h1>NOUXINHA SPRITE STATES</h1>
+    <div class="controls">
+      <label>biome <select id="biome"></select></label>
+      <label>drawn <select id="light">
+        <option value="lit">lit</option>
+        <option value="remembered">remembered</option>
+      </select></label>
+      <label><input type="checkbox" id="invert" /> inverted (the ending)</label>
+      <input type="search" id="find" placeholder="find a sprite…" />
+      <span id="summary" class="dim"></span>
+    </div>
+  </header>
+  <div id="index"></div>
+  <main id="main"></main>
+
+<script type="module">
+import {
+  BIOME_TILES,
+  SHEET_GAP,
+  SHEET_PATH,
+  TILES,
+  biomeKey,
+  variantCount,
+  variantKey,
+  wallSprite,
+} from './src/data/tiles.js';
+import { HUES, paintOf, zoneAt } from './src/data/paint.js';
+import { buildSprites } from './src/data/sprites.js';
+import { zoneTints } from './src/ui/painted.js';
+import { ITEMS, itemDef } from './src/data/items.js';
+import { BIOME_LANDMARKS, LANDMARKS, LANDMARK_IDS } from './src/data/landmarks.js';
+import { BIOMES, DEFAULT_BIOME, biomeDef } from './src/data/biomes.js';
+import { SANCTUM_PLAN } from './src/balance.js';
+import {
+  FLOOR_TEXTURE_LEVEL,
+  REMEMBERED_ALPHA,
+  SPRITE_SCALE,
+  gemColour,
+  getPalette,
+  overrideInvert,
+  paletteColour,
+  setDefaultPalette,
+} from './src/config.js';
+
+const TILE = 16;
+const STRIDE = TILE + SHEET_GAP;
+const GEMS = [0, 1, 2, 3];
+const ALL_BIOMES = '*';
+
+const el = (id) => document.getElementById(id);
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+const lower = (name, id) => (name || id).toLowerCase();
+const make = (tag, props = {}, ...kids) => {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...kids);
+  return node;
+};
+
+// --- What the game draws -----------------------------------------------------
+//
+// The catalogue is every sprite the game puts on screen, found the way the
+// game finds it — `variantKey` for a terrain's tiles, `wallSprite` round a
+// ring, `biomeKey` for anything a world may repoint, the item and landmark
+// tables for what stands on the ground — so a key the game never asks for
+// (the bare `wall` piece, the shared trees every biome has replaced) is never
+// asked for here either.
+//
+// An entry is one thing a player would call one thing (the tree, the gate),
+// and a row is one situation it can be seen in, in one world. A row's `tiles`
+// are drawn side by side in one cell — a terrain's alternates, the wizard's
+// four facings, the wall's nine-slice put back together — and `style(key)`
+// is the `{ base, roles }` MapView hands `paintTile` for that key, worked out
+// *after* the world's palette is set, since every colour in it is relative to
+// the world it is being drawn in.
+
+const fgOf = () => getPalette().fg;
+const plain = () => ({ base: fgOf(), roles: {} });
+const strip = (keys) => keys.map((key, i) => ({ key, x: i, y: 0 }));
+
+// A terrain's tiles in one world, in the order `variantKey` rolls them.
+function variants(terrain, biome) {
+  const count = variantCount(terrain, biome);
+  return Array.from({ length: count }, (_, n) => variantKey(terrain, (n + 0.5) / count, biome));
+}
+
+// The sanctum wall, as the ring MapView cuts it: a radius-1 ring is exactly
+// the eight pieces a ring of any size is built from, in the places they go.
+function ring(biome) {
+  const tiles = [];
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++)
+      if (dx || dy) tiles.push({ key: biomeKey(wallSprite(dx, dy, 1), biome), x: dx + 1, y: dy + 1 });
+  return tiles;
+}
+
+// MapView's `sanctumHue`: the gem a sanctum keeps, or for the hall the gem its
+// gate wanted.
+const sanctumHue = (plan) => (plan.gem ? itemDef(plan.gem).hue : plan.colour);
+const sanctumName = (plan, i) => (plan.hall ? 'the hall' : `sanctum ${i + 1} (${plan.gem})`);
+
+// A landmark's own colour as `landmarkRole` resolves it: absolute, and nothing
+// until the campaign has stood there.
+const landmarkColour = (id, held) => ({ colour: held ? paletteColour(LANDMARKS[id].palette) : 0 });
+
+// An item as it lies on the ground (MapView): in its tier's colour outright,
+// with anything its own paint adds on top.
+const itemStyle = (hue) => () => ({ base: gemColour(hue), roles: { gem: hue } });
+
+function catalogue() {
+  const entries = [];
+  const add = (group, id, title, note, rowsFor, only = null) =>
+    entries.push({ group, id, title, note, rowsFor, only });
+
+  add('THE CHARACTER', 'wizard', 'the wizard',
+    'One tile per facing. Hood, robe and staff are the colours of gems one, two and three.',
+    () => [{ label: 'down · up · right · left', tiles: strip(['down', 'up', 'right', 'left'].map((f) => `wizard-${f}`)), style: plain }]);
+
+  add('THE GROUND', 'floor', 'floor',
+    'Ground texture, drawn at half strength. One of these is picked per world tile, from the seed.',
+    (biome) => [{ label: 'every floor tile away from a court', tiles: strip(variants('floor', biome)), style: plain }]);
+  add('THE GROUND', 'rock', 'rock',
+    'Rock masses and loose boulders alike; one of these is picked per world tile.',
+    (biome) => [{ label: 'every rock tile', tiles: strip(variants('rock', biome)), style: plain }]);
+  add('THE GROUND', 'tree', 'trees',
+    'The groves; one of these is picked per world tile.',
+    (biome) => [{ label: 'every tree tile', tiles: strip(variants('tree', biome)), style: plain }]);
+
+  add('THE SANCTUMS', 'wall', 'sanctum wall',
+    "The nine-slice put back together as the ring it is cut for. It wears the colour of the gem its sanctum keeps — the hall's, of the key its gate wants.",
+    (biome) => SANCTUM_PLAN.map((plan, i) => ({
+      label: sanctumName(plan, i),
+      tiles: ring(biome),
+      style: () => ({ base: fgOf(), roles: { gem: sanctumHue(plan), opened: 0 } }),
+    })));
+  add('THE SANCTUMS', 'gate', 'gate',
+    'Shut until its key is carried; the first sanctum wants none and is never shut.',
+    (biome) => SANCTUM_PLAN.flatMap((plan, i) => {
+      const style = () => ({ base: fgOf(), roles: { gem: sanctumHue(plan), opened: plan.colour } });
+      const open = { label: `${sanctumName(plan, i)} — open`, tiles: strip([biomeKey('gate-open', biome)]), style };
+      if (!plan.key) return [open];
+      return [{ label: `${sanctumName(plan, i)} — shut, wants ${plan.key}`, tiles: strip([biomeKey('gate', biome)]), style }, open];
+    }));
+
+  add('STRUCTURES', 'base', 'the hut', 'Drawn over the floor at the hut; the wizard stands in its doorway.',
+    (biome) => [{ label: 'the hut', tiles: strip([biomeKey('base', biome)]), style: plain }]);
+  add('STRUCTURES', 'merchant', "the merchant's stall", 'Drawn over the floor where the merchant stands.',
+    (biome) => [{ label: 'the stall', tiles: strip([biomeKey('merchant', biome)]), style: plain }]);
+  add('STRUCTURES', 'chest', 'chest',
+    "Shut until bumped, open forever after. A death's bag is the same box, drawn with the shared tile whatever world it is in.",
+    (biome) => [
+      { label: 'shut', tiles: strip([biomeKey('chest', biome)]), style: plain },
+      { label: 'opened', tiles: strip([biomeKey('chest-open', biome)]), style: plain },
+      ...Object.values(ITEMS).filter((def) => def.sprite === 'chest').map((def) => ({
+        label: `${def.id} (an item on the ground)`,
+        tiles: strip([def.sprite]),
+        style: itemStyle(def.hue || 0),
+      })),
+    ]);
+  add('STRUCTURES', 'wisp', 'wisp', 'A light nobody is carrying; ten per world.',
+    (biome) => [{ label: 'every wisp', tiles: strip([biomeKey('wisp', biome)]), style: plain }]);
+  add('STRUCTURES', 'signpost', 'signpost',
+    'Its arm is painted in the colour of the landmark it names, once the campaign has stood there.',
+    () => [
+      { label: 'names a landmark not yet stood at', tiles: strip(['signpost']), style: () => ({ base: fgOf(), roles: { landmark: landmarkColour(null, false) } }) },
+      ...LANDMARK_IDS.map((id) => ({
+        label: `names ${lower(LANDMARKS[id].name, id)}, stood at`,
+        tiles: strip(['signpost']),
+        style: () => ({ base: fgOf(), roles: { landmark: landmarkColour(id, true) } }),
+      })),
+    ]);
+  add('STRUCTURES', 'stone', 'carved stone', 'Never earns a colour, and no world redraws it.',
+    () => [{ label: 'every carved stone', tiles: strip(['stone']), style: plain }]);
+  add('STRUCTURES', 'sorcerer', 'Nouxinha', 'At the centre of the hall. The same man in every world.',
+    () => [{ label: 'in the hall', tiles: strip(['sorcerer']), style: plain }]);
+
+  // A landmark beside the court it stands on. A landmark with no zone map of
+  // its own is one zone, the whole silhouette (MapView's `plainLandmark`).
+  const eighth = new Map(Object.entries(BIOME_LANDMARKS).map(([biome, id]) => [id, biome]));
+  for (const [id, def] of Object.entries(LANDMARKS)) {
+    const own = eighth.get(id);
+    const tiles = strip([def.sprite, def.court]);
+    const styleFor = (held) => (key) => {
+      if (key === def.court) return plain();
+      const landmark = landmarkColour(id, held);
+      return { base: paintOf(key) ? fgOf() : landmark.colour || fgOf(), roles: { landmark } };
+    };
+    add('LANDMARKS', id, lower(def.name, id),
+      own
+        ? `Only ever stands in a ${lower(biomeDef(own).name)} world, holds no standing, and so is never drawn in a colour. Beside its court.`
+        : `Drawn plain until the campaign has stood at it, then in ${def.palette}. Beside its court.`,
+      () => (def.standing
+        ? [{ label: 'not yet stood at', tiles, style: styleFor(false) }, { label: 'stood at — standing held', tiles, style: styleFor(true) }]
+        : [{ label: 'the landmark and its court', tiles, style: styleFor(false) }]),
+      own);
+  }
+
+  // Items, one entry per sprite (the three gems are one tile, as are the
+  // three keys). The bag is under the chest, since it is drawn as one.
+  const bySprite = new Map();
+  for (const def of Object.values(ITEMS)) {
+    if (def.sprite === 'chest') continue;
+    if (!bySprite.has(def.sprite)) bySprite.set(def.sprite, []);
+    bySprite.get(def.sprite).push(def);
+  }
+  for (const [sprite, defs] of bySprite)
+    add('ITEMS', `item-${sprite}`, defs.length > 1 ? sprite : lower(defs[0].name, sprite),
+      'On the ground, in the colour of the gem its tier belongs to. The HUD and the item card draw the same tile in that one colour.',
+      () => defs.map((def) => ({ label: def.name ? `${lower(def.name)} (${def.id})` : def.id, tiles: strip([sprite]), style: itemStyle(def.hue || 0) })));
+
+  // The HUD's own two, always in the foreground. The coin counter's icon is the
+  // coin item's tile.
+  add('THE HUD', 'cog', 'cogwheel', 'The in-run menu button.',
+    () => [{ label: 'top right, always', tiles: strip(['cog']), style: plain }]);
+  add('THE HUD', 'arrows', 'compass needle', 'One tile per heading; a heading is a texture swap.',
+    () => [{ label: 'up · right · down · left', tiles: strip(['arrow-up', 'arrow-right', 'arrow-down', 'arrow-left']), style: plain }]);
+
+  return entries;
+}
+
+// --- Drawing -----------------------------------------------------------------
+
+function sheetReader(image) {
+  const off = document.createElement('canvas');
+  off.width = image.width;
+  off.height = image.height;
+  const c = off.getContext('2d', { willReadFrequently: true });
+  c.drawImage(image, 0, 0);
+  const { data } = c.getImageData(0, 0, off.width, off.height);
+  return (col, row) =>
+    Array.from({ length: TILE }, (_, y) => {
+      let line = '';
+      for (let x = 0; x < TILE; x++)
+        line += data[((row * STRIDE + y) * off.width + col * STRIDE + x) * 4 + 3] > 127 ? '#' : '.';
+      return line;
+    });
+}
+
+const channels = (c) => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+const rgb = ([r, g, b]) => `rgb(${r | 0},${g | 0},${b | 0})`;
+
+// One pixel as the game puts it on screen: the texture's white (or the
+// ground's grey) multiplied by the zone's tint, then the whole tile at the
+// alpha its visibility gives it over the world's background.
+function pixelColour(tint, dim, alpha, bg) {
+  const level = dim ? FLOOR_TEXTURE_LEVEL : 1;
+  const b = channels(bg);
+  return rgb(channels(tint).map((v, i) => b[i] + (v * level - b[i]) * alpha));
+}
+
+// A state's colours, per tile, per zone — the whole of what makes two states
+// look different, so it doubles as the signature that folds identical ones.
+// A zone the sheet draws no pixel of is left out: a tint nobody can see is
+// not a difference, and folding on it would show two identical rows.
+function stateTints(row, gems) {
+  return row.tiles.map(({ key }) =>
+    zoneTints(key, { gems, ...row.style(key) }).map((tint, zone) => (drawnZones(key).has(zone) ? tint : null))
+  );
+}
+
+const drawn = new Map();
+function drawnZones(key) {
+  if (!drawn.has(key)) {
+    const entry = paintOf(key);
+    const zones = new Set();
+    sprites[key].forEach((line, y) =>
+      Array.from(line).forEach((ink, x) => ink !== '.' && zones.add(entry ? zoneAt(entry.map, x, y) : 0))
+    );
+    drawn.set(key, zones);
+  }
+  return drawn.get(key);
+}
+
+function drawCell(row, tints, { bg, alpha }) {
+  const cols = Math.max(...row.tiles.map((t) => t.x)) + 1;
+  const rows = Math.max(...row.tiles.map((t) => t.y)) + 1;
+  const gap = row.tiles.length > 1 && rows === 1 ? 4 : 0;
+  const S = SPRITE_SCALE;
+  const canvas = make('canvas');
+  canvas.width = cols * TILE * S + (cols - 1) * gap;
+  canvas.height = rows * TILE * S;
+  const c = canvas.getContext('2d');
+  c.fillStyle = hex(bg);
+  c.fillRect(0, 0, canvas.width, canvas.height);
+  row.tiles.forEach(({ key, x, y }, i) => {
+    const mask = sprites[key];
+    const entry = paintOf(key);
+    const ox = x * (TILE * S + gap);
+    const oy = y * TILE * S;
+    for (let py = 0; py < TILE; py++)
+      for (let px = 0; px < TILE; px++) {
+        const ink = mask[py][px];
+        if (ink === '.') continue;
+        const zone = entry ? zoneAt(entry.map, px, py) : 0;
+        c.fillStyle = pixelColour(tints[i][zone], ink === '+', alpha, bg);
+        c.fillRect(ox + px * S, oy + py * S, S, S);
+      }
+  });
+  return canvas;
+}
+
+// What a sprite's zones are painted in, for the line under an entry's title:
+// keys that share a hue list are said once.
+function zoneLine(keys, biome) {
+  const byHues = new Map();
+  for (const key of keys) {
+    const entry = paintOf(key);
+    const said = entry
+      ? entry.hues.map((hue, i) => `${i + 1} = ${(HUES.find((h) => h.hue === hue) || { label: hue }).label}`).join(' · ')
+      : 'one colour — no zones';
+    if (!byHues.has(said)) byHues.set(said, []);
+    byHues.get(said).push(key);
+  }
+  const line = make('div', { className: 'zones' });
+  for (const [said, list] of byHues) {
+    const part = make('div');
+    list.forEach((key, i) => {
+      if (i) part.append(', ');
+      part.append(make('a', {
+        href: `paint.html?key=${encodeURIComponent(key)}${biome ? `&biome=${biome}` : ''}`,
+        textContent: key,
+        title: `open ${key} in the painter`,
+      }));
+    });
+    part.append(` — ${said}`);
+    line.append(part);
+  }
+  return line;
+}
+
+// --- The page ----------------------------------------------------------------
+
+const biomeSel = el('biome');
+biomeSel.add(new Option('ALL BIOMES', ALL_BIOMES));
+BIOMES.forEach((b) => biomeSel.add(new Option(b.name, b.id)));
+
+let sprites = {};
+const ENTRIES = catalogue();
+
+function pagePalette() {
+  const biome = biomeSel.value === ALL_BIOMES ? DEFAULT_BIOME : biomeSel.value;
+  setDefaultPalette(biomeDef(biome).palette);
+  const pal = getPalette();
+  document.documentElement.style.setProperty('--bg', hex(pal.bg));
+  document.documentElement.style.setProperty('--fg', hex(pal.fg));
+}
+
+// Every state of one entry in one world, folded: two situations that come out
+// looking identical are one row saying both, and an entry that no number of
+// gems changes gets one column rather than four identical ones.
+function statesIn(entry, biome) {
+  setDefaultPalette(biomeDef(biome).palette);
+  const pal = getPalette();
+  const rows = [];
+  for (const row of entry.rowsFor(biome)) {
+    const tints = GEMS.map((gems) => stateTints(row, gems));
+    const sig = JSON.stringify([row.tiles, tints]);
+    const same = rows.find((r) => r.sig === sig);
+    if (same) same.labels.push(row.label);
+    else rows.push({ ...row, tints, sig, labels: [row.label] });
+  }
+  return { biome, pal, rows };
+}
+
+function render() {
+  // Always an override, never the Settings switch: a page opened in a browser
+  // that has INVERT COLOURS on should still start on the world as it is.
+  overrideInvert(el('invert').checked);
+  const alpha = el('light').value === 'remembered' ? REMEMBERED_ALPHA : 1;
+  const chosen = biomeSel.value === ALL_BIOMES ? BIOMES.map((b) => b.id) : [biomeSel.value];
+  const find = el('find').value.trim().toLowerCase();
+
+  const main = el('main');
+  const index = el('index');
+  main.replaceChildren();
+  index.replaceChildren();
+  let shown = 0;
+  let states = 0;
+  let group = null;
+  let indexGroup = null;
+
+  for (const entry of ENTRIES) {
+    const biomes = chosen.filter((b) => !entry.only || entry.only === b);
+    if (!biomes.length) continue;
+    const worlds = biomes.map((b) => statesIn(entry, b));
+    const keys = [...new Set(worlds.flatMap((w) => w.rows.flatMap((r) => r.tiles.map((t) => t.key))))];
+    const haystack = [entry.title, entry.id, entry.group, ...keys].join(' ').toLowerCase();
+    if (find && !haystack.includes(find)) continue;
+
+    const gemsMatter = worlds.some((w) => w.rows.some((r) => r.tints.some((t) => JSON.stringify(t) !== JSON.stringify(r.tints[0]))));
+    const columns = gemsMatter ? GEMS : [0];
+
+    if (entry.group !== group) {
+      group = entry.group;
+      main.append(make('h2', { textContent: group }));
+      indexGroup = make('span', {}, make('b', { textContent: group.toLowerCase() }));
+      index.append(indexGroup);
+    }
+    indexGroup.append(' ', make('a', { href: `#${entry.id}`, textContent: entry.title }));
+
+    const head = make('div', { className: 'head' },
+      make('h3', { textContent: entry.title.toUpperCase() }),
+      make('span', { className: 'note', textContent: entry.note }),
+      zoneLine(keys, biomes.length === 1 ? biomes[0] : null));
+
+    const table = make('table');
+    const headRow = make('tr', {}, make('th'));
+    for (const gems of columns)
+      headRow.append(make('th', { textContent: !gemsMatter ? 'any number of gems' : gems === 0 ? 'no gems' : `${gems} gem${gems > 1 ? 's' : ''}` }));
+    table.append(make('thead', {}, headRow));
+
+    for (const { biome, pal, rows } of worlds) {
+      const body = make('tbody', { className: 'biome' });
+      body.style.setProperty('--row-bg', hex(pal.bg));
+      body.style.setProperty('--row-fg', hex(pal.fg));
+      rows.forEach((row, r) => {
+        const tr = make('tr');
+        const label = make('td', { className: 'label' });
+        if (r === 0) label.append(make('span', { className: 'world', textContent: biomeDef(biome).name }));
+        label.append(row.labels.join(' · '));
+        tr.append(label);
+        for (const gems of columns) {
+          const canvas = drawCell(row, row.tints[gems], { bg: pal.bg, alpha });
+          canvas.title = row.tiles.map((t) => t.key).filter((k, i, all) => all.indexOf(k) === i).join(', ');
+          tr.append(make('td', {}, canvas));
+          states++;
+        }
+        body.append(tr);
+      });
+      table.append(body);
+    }
+
+    main.append(make('section', { className: 'entry', id: entry.id }, head, make('div', { className: 'table' }, table)));
+    shown++;
+  }
+
+  pagePalette();
+  if (!shown) main.append(make('p', { id: 'empty', textContent: 'Nothing the game draws matches that.' }));
+  el('summary').textContent = `${shown} sprite${shown === 1 ? '' : 's'} · ${states} states · ${unused.length} sheet tiles nothing draws left out`;
+  el('summary').title = unused.length ? `never drawn: ${unused.join(', ')}` : '';
+  history.replaceState(null, '', `?biome=${encodeURIComponent(biomeSel.value)}${location.hash}`);
+}
+
+// Every tile the tables cut, one name per tile — the shared ones, and each one
+// a biome draws of its own — less the ones the catalogue ever asks for. Said
+// as a count, not drawn: those are the sprites this page is not about.
+function unusedKeys() {
+  const named = [];
+  const list = (key, tile) => {
+    if (Array.isArray(tile[0])) tile.forEach((_, n) => named.push(`${key}-${n}`));
+    else named.push(key);
+  };
+  for (const [key, tile] of Object.entries(TILES)) list(key, tile);
+  for (const [biome, own] of Object.entries(BIOME_TILES))
+    for (const [key, tile] of Object.entries(own)) {
+      const name = biomeKey(key, biome);
+      if (name !== key) list(name, tile);
+    }
+  const used = new Set();
+  for (const entry of ENTRIES)
+    for (const biome of BIOMES.map((b) => b.id))
+      if (!entry.only || entry.only === biome)
+        for (const row of entry.rowsFor(biome)) for (const t of row.tiles) used.add(t.key);
+  // A single-tile list is cut under its bare name (`floor@frozen`), so a
+  // terrain's `-0` counts as used when its bare name is.
+  return named.filter((k) => !used.has(k) && !used.has(k.replace(/-0$/, '')));
+}
+
+const source = new Image();
+source.src = SHEET_PATH;
+await source.decode();
+sprites = buildSprites(sheetReader(source));
+const unused = unusedKeys();
+
+const asked = new URLSearchParams(location.search).get('biome');
+biomeSel.value = [ALL_BIOMES, ...BIOMES.map((b) => b.id)].includes(asked) ? asked : ALL_BIOMES;
+for (const id of ['biome', 'light', 'invert']) el(id).addEventListener('change', render);
+el('find').addEventListener('input', render);
+render();
+if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+</script>
+</body>
+</html>

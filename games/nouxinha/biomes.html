@@ -37,8 +37,6 @@
     h1 { font-size: 15px; margin: 0; letter-spacing: 2px; }
     h2 { font-size: 13px; margin: 0 0 8px; letter-spacing: 2px; }
     a { color: var(--fg); }
-    .navlink { opacity: 0.65; text-decoration: none; }
-    .navlink:hover { opacity: 1; text-decoration: underline; }
     p { margin: 0; opacity: 0.65; max-width: 74ch; }
     .controls { display: flex; gap: 18px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
     label { opacity: 0.65; }
@@ -104,14 +102,11 @@
   </style>
 </head>
 <body>
+  <nav id="tools"></nav>
+  <script type="module" src="dev/nav.js"></script>
   <header>
     <div class="title">
       <h1>NOUXINHA BIOME TILES</h1>
-      <a class="navlink" href="tiles.html">← browse tile sheet</a>
-      <a class="navlink" href="draw.html">draw a tile's pixels →</a>
-      <a class="navlink" href="paint.html">paint a tile's zones →</a>
-      <a class="navlink" href="distances.html">measure the world →</a>
-      <a class="navlink" href="text.html">review the words →</a>
     </div>
     <div class="controls">
       <label>tile <select id="key"></select></label>

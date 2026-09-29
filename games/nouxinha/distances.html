@@ -81,8 +81,6 @@
     }
     h2 span { opacity: 0.5; letter-spacing: 0; margin-left: 10px; }
     a { color: var(--fg); }
-    .navlink { opacity: 0.65; text-decoration: none; }
-    .navlink:hover { opacity: 1; text-decoration: underline; }
     p { margin: 0; opacity: 0.65; max-width: 92ch; }
     .controls { display: flex; gap: 18px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
     label { opacity: 0.65; }
@@ -172,14 +170,11 @@
   </style>
 </head>
 <body>
+  <nav id="tools"></nav>
+  <script type="module" src="dev/nav.js"></script>
   <header>
     <div class="title">
       <h1>NOUXINHA DISTANCES</h1>
-      <a class="navlink" href="tiles.html">← browse tile sheet</a>
-      <a class="navlink" href="biomes.html">assign tiles to biomes →</a>
-      <a class="navlink" href="paint.html">paint a tile's zones →</a>
-      <a class="navlink" href="draw.html">draw a tile's pixels →</a>
-      <a class="navlink" href="text.html">review the words →</a>
     </div>
     <div class="controls">
       <label>world <select id="biome"></select></label>

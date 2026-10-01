@@ -1,7 +1,7 @@
 # Nouxinha — the story
 
-> The fiction the game is told in: why the world is dark, why one person walks into it for pieces of
-> a sun, who is waiting at the end of the walk, and why the world is somewhere else every time.
+> The story the game tells: why the world is dark, why you walk out into it to find pieces of the
+> sun, who is waiting at the end of the walk, and why the world is different every time.
 
 > **Doc convention:** this describes the story *as it stands now*, the way `DESIGN.md` describes the
 > game as it stands now. When it changes, edit the section in place — no "previously"/"superseded"
@@ -9,177 +9,187 @@
 
 ## 1. The short version
 
-The sun was dying. A sorcerer called **Nouxinha** put his hands around it and held it, and the
-holding worked — and the sun broke in his hands. The big pieces fell across the realm. The small ones
-are still lying about, burning, too small to pick up.
+Long ago, the sun was dying. A sorcerer called **Nouxinha** used a special kind of magic to hold it
+still, and for a moment it worked. Then the sun cracked in his hands. The big pieces fell all over
+the land. The tiny pieces are still out there too, glowing, but too small to pick up.
 
-He cannot go and fetch them. What is left of the sun stays whole only while he stands in his hall
-and works at it, and if he stops there is no dark left to walk in — there is nothing. So he woke
-somebody who could walk: not a wizard, not a hero, a **person**, in a hut, remembering almost
-nothing.
+Nouxinha can't go and get the pieces himself. He is still holding together what is left of the sun,
+and if he lets go, everything disappears — not just the light, but the ground too. So he woke
+someone up to do the walking for him. Not a wizard and not a hero: just a **person** in a small hut,
+who can hardly remember anything.
 
-You are that person. You walk out into the dark carrying a candle and some water, and you find
-**three colours** — three pieces of the sun, each one a colour this place does not otherwise
-contain — and you carry them home, because nothing you find is yours until you have walked it back to your
-door. Then you carry them to him.
+That person is you. You walk out into the dark with a candle and some water. Out there you find
+**three colours** — three pieces of the sun, each one a colour you can't see anywhere else in that
+land. You have to carry each one all the way back to your hut, because nothing you find really
+counts until you bring it home. When you have all three, you take them to Nouxinha.
 
-He takes them, and he moves you. The four worlds are four places in one realm, and the crossing is
-the whole of what he can spare: he can carry a person and nothing else, so your coins, your lights,
-your tools and the map of every tile you ever lit stay behind. What crosses with you is what you
-know.
+He takes the pieces and sends you on to the next part of the land. There are four parts in all. The
+magic that moves you is very hard for him, so he can only send *you* — your coins, your lights, your
+tools and the map of everything you have seen all stay behind. The only things you keep are the
+things you have learned.
 
-Four places, three pieces each. When the last one is in his hands he has enough to mend it, and
-mending it means opening his hands, which is the thing he has not done in centuries. He does it. The
-sun comes up over whatever was actually there. The count of countries and everything you learned
-standing at his seven places stay where they are, and the walking can begin again.
+Four lands, three pieces in each: twelve pieces. When Nouxinha has the last one, he can put the sun
+back together. To do that he has to open his hands, which he hasn't done for hundreds of years. He
+opens them, the sun rises, and the game is over.
 
 ## 2. What Nouxinha says
 
-*He is the only one who can tell it, so he does.*
+*He is the only one who knows the whole story, so he tells it.*
 
-I will tell it plainly, since you will not remember it.
+I'll keep this simple, because you won't remember it anyway.
 
-The sun was dying. Not going out the way a lamp goes out — going the way an old animal goes: slowly,
-in front of everybody, for no reason anyone could mend. I was the one who knew what it was doing.
-That is not a boast. It is why what came after is mine.
+The sun was dying. Not all at once, like a candle blown out. Slowly, like an old animal getting
+weaker, with everyone watching and nobody able to help. I was the one who understood what was
+happening. I'm not saying that to show off. I'm saying it because what happened next is my fault.
 
-There is a kind of magic that is very old and little used, because all it does is hold. It makes
-nothing and undoes nothing: it catches a thing in the moment it is, and keeps it there. I put my
-hands around the sun and closed them, and the dying stopped. Understand that it worked.
+There is a very old kind of magic that hardly anyone uses, because it only does one thing: it holds.
+It doesn't make anything and it doesn't fix anything. It catches something exactly as it is and
+keeps it that way. I wrapped my hands around the sun and held on, and the sun stopped dying. It
+really worked.
 
-And then it broke. A thing that size does not come apart the way a cup does. It came apart the way
-ice does, all at once and everywhere, and the pieces went out across the realm — three to a country,
-big enough to carry, and under them a dust of pieces too small for anybody's hands. They are still
-burning. They will burn after both of us.
+Then the sun broke. Something that big doesn't break like a cup. It breaks like ice on a pond — all
+at once, everywhere. The pieces flew across the land. Three big ones fell in each country, big
+enough to carry. Thousands of tiny ones fell too, too small for anyone to hold. They are all still
+glowing, and they will keep glowing for a very long time.
 
-What was left I kept hold of, and I am holding it now. Not the way a man holds a stone — the way a
-man holds a rope with something heavy on the end of it. If I shift my feet, the whole of it goes,
-and then there is no dark to walk in — there is nothing to stand on at all. So I stand here. I have
-stood here a long time, and I will not be going out to look for anything.
+I am still holding what was left. Think of someone holding a rope with something very heavy hanging
+from it. If I take one step, I drop it, and then there is no dark for you to walk in — there is
+nothing left at all. So I stay right here. I have stood here for a long time, and I can't go out
+and look for anything.
 
-That is why there is you.
+That is why I need you.
 
-I built you a road and I have let you call it a world. The walls are mine, and the gates, and the
-order they open in, which is the order that keeps you alive. The caches are mine, packed by somebody
-who knows what the walk to them costs. The stalls are mine, though there is nobody behind them, and
-so is the money — I struck it blank at a press I built for the purpose, because a country with
-nothing to spend in it looks like a trap, and I did not want to hand you one.
+I built you a path, and you can call it a world. I built the walls, and the gates, and I chose the
+order they open in, so that each trip is only as long as you can manage. I packed the supplies you
+find inside the walls, and I know how far you had to walk to reach them. I put up the stalls too,
+even though nobody works there, and I made the coins at a press I built for that. A land with
+nothing to buy in it would feel like a trap, and I didn't want you to feel trapped.
 
-Seven things I carry with me wherever I put you down: the press, the arches, the bell, the balance,
-the tree, the tower, the dial. I cannot hold a country in my head without something to measure from.
-They are pins. They are also, I think, the only company I have. I cut names into posts so you would
-find them. The third arm of every post is blank and points at your door. I left it blank on purpose:
-I would rather not be the one who writes your door down.
+There are seven things I bring with me to every land: the press, the arches, the bell, the scales,
+the tree, the tower and the sundial. I need them to find my way around, the way you need
+landmarks. They are also the only company I have. I put up signposts with their names on, so you
+can find them. Every signpost also has a third arm with no name on it. That one points to your hut.
+I left it blank on purpose — your home is yours, not mine to write down.
 
-The other things you find out there are not mine. A plough standing in an unfinished furrow. A wash
-hung out and frozen stiff. A line of pack animals' loads, roped, square, going nowhere. A hut that
-is yours, cold, with your own things in it, on ground you have never lived on — you have walked for
-me more times than you can count, and I have left more doors standing than I can. I do not know what
-became of the people. I have had centuries and have not worked it out, and I will not pretend to you
-it was nothing to do with me.
+Some things you'll find out there are not mine. A plough stopped in the middle of a field. Washing
+hung out on a line, frozen stiff. A row of pack animals' loads, tied up and ready, going nowhere. A
+hut just like yours, cold, with your own things in it, on ground you have never lived on. That's
+because you have walked for me before — more times than you can remember — and every time there was
+a hut. As for the people who used to live here: when my magic caught the sun, I think it caught
+them too, right in the middle of what they were doing. I can't be sure. But I won't pretend it had
+nothing to do with me.
 
-When you have brought me the three a country holds, that country is finished, and I take you
-somewhere else. It costs me everything I have spare. I can carry a person; I cannot carry their
-pockets. Your coins, your lights, your compass, and all that ground you lit go where the country
-goes. I am sorriest about the ground.
+When you bring me the three pieces from a land, that land is finished, and I send you to the next
+one. It takes all the strength I have left. I can carry a person, but not what's in their pockets.
+Your coins, your lights, your compass, and all the ground you lit up stay behind. I'm sorriest
+about the ground.
 
-Four countries. Twelve pieces. That is the whole sum, and it has never once been about you fetching.
-It is about whether you come back, and you do.
+Four lands. Twelve pieces. That's all of it. It was never really about fetching things. It's about
+whether you come back. And you always do.
 
-When you bring me the last of them I will have enough to mend it. Mending it means opening my hands.
-Stand where you are when I do. It will be bright.
+When you bring me the last piece, I will have enough to fix the sun. To fix it, I have to open my
+hands. Stand still when I do. It will be very bright.
 
 ## 3. Glossary
 
-**Nouxinha** — the sorcerer. Not a villain and never written as one: a man who caught a dying sun,
-broke it, and has been holding the remains together ever since. Courteous, honest, tired. He stands
-at the centre of the hall and does not move, because moving ends everything.
+**Nouxinha** — the sorcerer. He is not a bad guy and is never written as one. He tried to save a
+dying sun, broke it by accident, and has been holding the rest of it together ever since. He is
+polite, honest and very tired. He stands in the middle of the hall and never moves, because if he
+moves, everything ends.
 
-**The walker** — you. Not a wizard; a person, they/them, woken in a hut by him with almost nothing
-left of who they were. They remember that the sun is gone, and whatever he has told them, which is
-not much.
+**The walker** — you. Not a wizard; just a person (they/them), woken up in a hut by Nouxinha, with
+almost no memories left. They know the sun is gone, and they know whatever Nouxinha has told them,
+which isn't much.
 
-**The realm** — the whole of the land the game takes place in. Its four parts are the four worlds:
-the **temperate**, the **frozen**, the **desert** and the **mystical realm**. Each holds three pieces
-of the sun and one thing of its own. He calls them countries.
+**The realm** — the whole land the game takes place in. It is split into four parts, which are the
+four worlds: the **temperate**, the **frozen**, the **desert** and the **mystical realm**. Each one
+holds three pieces of the sun and one special thing of its own. Nouxinha calls them countries.
 
-**The crossing** — what happens after the hall. Not a world being made: a person being carried to
-another part of the realm, with nothing in their hands. The game counts them as *worlds ended*.
+**The crossing** — what happens after you meet Nouxinha in the hall. He doesn't make a new world: he
+carries you to another part of the realm, with empty hands. The game counts these as *worlds
+ended*.
 
-**The dark** — what is left when there is no sun. It is not alive and it wants nothing. Far out it
-gets thick enough to eat the reach of a light, and at the edge of the realm it stops giving way
-altogether.
+**The dark** — what's left when there is no sun. It isn't alive and it doesn't want anything. Far
+from your hut it gets thicker, and your light can't reach as far. At the edge of the realm you
+can't walk any further at all.
 
-**The hut** — one room, a flag, water and a candle, and the only place where what you carry becomes
-yours. Reaching it writes everything down; leaving it takes it back out into the dark.
+**The hut** — one room, a flag, water and a candle. It is the only place where what you carry
+becomes yours for good. Arriving there saves everything you brought back. Leaving takes you back out
+into the dark.
 
-**A carved stone** — one of four blocks he stood on end and cut, in every part of the realm, before
-any of this. They are the only thing in the dark written *to* the walker: what the colours are, what
-the gates want, what a light costs, and that water is distance. He cut them long ago and he keeps
-them standing, and what they say changes depending on how many countries the person reading them has
-already walked out of — by the fourth he has stopped explaining anything and is just talking.
+**A carved stone** — one of four stone blocks Nouxinha set up and carved, in every part of the
+realm, a long time ago. They are the only messages in the dark written *to* the walker. They explain
+what the colours are, what the gates need, what lights cost, and that water is how far you can go.
+What a stone says depends on how many lands you have already finished. By the fourth land, Nouxinha
+has stopped explaining things and is just talking to you.
 
-**A colour** — a piece of the sun, big enough to carry. Three to a country, one behind each sanctum
-gate, each of them a colour that country does not otherwise contain. Banked at the hut, a colour is
-a piece of the world come back: the water runs deeper, the ground gives up better things, and things
-that were drawn plain are suddenly drawn in their own colour. Nothing is ever shown in a colour the
-campaign has not brought home.
+**A colour** — a piece of the sun, big enough to carry. There are three in each land, one behind
+each sanctum gate, and each one is a colour you can't find anywhere else in that land. Once it's
+safe at the hut, a colour brings a bit of the world back: you can carry more water, you find better
+things on the ground, and things that were plain suddenly show up in their own colour. You never see
+a colour you haven't brought home yet.
 
-**A wisp** — one of the pieces too small to pick up. Ten to a country, burning on nothing, lighting
-their patch of ground from the first moment of a walk. They give nothing and take nothing. They were
-burning before you came and will be burning after.
+**A wisp** — one of the tiny pieces of the sun, too small to pick up. There are ten in each land,
+floating in the dark and lighting up the ground around them from the moment you set out. They don't
+give you anything and they don't take anything. They were glowing before you came, and they'll keep
+glowing after you leave.
 
-**A sanctum** — one of the three walled places, at 20, 45 and 80 tiles out, each with a gate and a
-colour behind it, and a cache of supplies laid out by somebody who knew what the walk cost.
+**A sanctum** — one of the three walled places, at 20, 45 and 80 tiles from the hut. Each one has a
+gate, a colour inside, and a pile of supplies left by someone who knew how far you had to walk.
 
-**The hall** — the fourth walled place, at 110, and the only one with nobody's prize in it. He is
-standing in the middle of it. Walking into him is the end of that country.
+**The hall** — the fourth walled place, at 110 tiles. There is no prize inside. Nouxinha stands in
+the middle of it. Walking up to him ends your time in that land.
 
-**Keys and gates** — the gates open in order, first key to the second sanctum and so on, so that the
-fetching happens in the sequence that keeps the fetcher alive. Keys come out of chests.
+**Keys and gates** — the gates open in order: the key you find first opens the second sanctum, and
+so on. That way you always go to the closer places first, which keeps you alive. Keys come out of
+chests.
 
-**A chest** — a lid in the dark with centuries of dust on it, holding a key or a hoard of coins.
-Opens once, forever, and is opened by walking into it.
+**A chest** — a dusty old box in the dark, holding either a key or a pile of coins. You open it by
+walking into it. Once it's open, it stays open forever.
 
-**The stalls** — three counters with canopies and nobody behind them, his, standing where a long walk
-needs somewhere to spend. **Coins** are struck blank at the Mint, are worth nothing anywhere, and
-buy things anyway, because he would rather hand you a market than a trap.
+**The stalls** — three shops with little roofs and nobody working in them. Nouxinha set them up
+where a long walk needs a place to buy things. **Coins** are made at the Mint. They're blank and
+aren't worth anything anywhere else, but they still buy things here, because Nouxinha would rather
+give you a market than a trap.
 
-**The seven** — the landmarks he carries from country to country as fixed points to measure from.
-Each one pays something out every time you touch it, and the first time ever changes the campaign
-for good — a **standing**, the one thing besides your own memory that survives a crossing.
+**The seven** — the landmarks Nouxinha brings with him to every land, to help him find his way.
+Each one gives you something every time you touch it. The very first time you ever touch one, it
+also gives you a **standing**: a lasting reward that stays with you from land to land. Standings
+are the only thing, apart from what you remember, that you keep after a crossing.
 
 | | What it is | The standing |
 |---|---|---|
-| **The Mint** | A stone press in a drift of blank coins | You know where the stall is, in every country after |
-| **The Aqueduct** | Dry arches striding out of the dark and stopping in mid-air | You carry more water than you did |
-| **The Drowned Bell** | A bell bigger than the hut, mouth-down in wet ground | You hear it wherever it is standing |
-| **The Weighhouse** | A balance big enough for a loaded cart, level, weighing nothing against nothing | Nobody puts a false price on you again |
-| **The Lantern Tree** | A dead tree hung with lanterns, lit long ago, still faintly going | You never set out with a single light again |
-| **The Watchtower** | A doorless tower with a stair up the outside and nothing at the top | The dark has to come closer before it starts eating your light |
-| **The Gnomon** | A shaft on a stepped base at the centre of a cut dial, which has never cast a shadow | You know how far out you are standing |
+| **The Mint** | A stone press in a pile of blank coins | You know where the stall is, in every land after this one |
+| **The Aqueduct** | Dry stone arches that come out of the dark and stop in mid-air | You can carry more water |
+| **The Drowned Bell** | A bell bigger than your hut, upside down in wet ground | You can hear it from wherever it stands |
+| **The Weighhouse** | Giant scales big enough to weigh a full cart, perfectly level, with nothing on either side | You pay less at the stalls |
+| **The Lantern Tree** | A dead tree hung with lanterns, lit long ago and still glowing faintly | You always set out with a spare candle |
+| **The Watchtower** | A tower with no door, a staircase winding up the outside, and nothing at the top | The dark has to get closer before it starts shrinking your light |
+| **The Gnomon** | The pointer of a big sundial on stone steps. It has never cast a shadow | You always know how far you are from home |
 
-**The four** — one to a country, and not his. Nothing to take, nothing kept, only a panel of text
-about somebody who stopped between one gesture and the next: the **Plough** in its unfinished furrow
-(temperate), the **Line of Washing** frozen stiff on its posts (frozen), the **Caravan** roped and
-loaded and going nowhere (desert), and the **Second Hut** — yours exactly, cold, dusty, on ground you
-have never lived on (mystical realm). Meeting all four takes finishing the game.
+**The four** — one in each land, and not built by Nouxinha. There's nothing to take and nothing to
+keep, just a message about someone who froze in the middle of what they were doing: the **Plough**
+stopped in its half-dug field (temperate), the **Line of Washing** frozen stiff on its posts
+(frozen), the **Caravan** loaded up and going nowhere (desert), and the **Second Hut** — exactly like
+yours, but cold and dusty, on ground you have never lived on (mystical realm). You only see all four
+by finishing the game.
 
-**A signpost** — his, fourteen to a country, the only writing anywhere. Two arms carry a landmark's
-name, a heading and roughly how far. The third is a blank stub pointing at your hut.
+**A signpost** — put up by Nouxinha, fourteen in each land, and the only writing out in the dark
+apart from the carved stones. Two arms show a landmark's name, which way it is, and roughly how far.
+The third arm has no name and points to your hut.
 
-**Water** — the only thing in the game that can kill you. No fiction defends it: the dark is empty,
-a person has to drink, and there is nobody left to dig a well. Run dry and you fall; everything you
-were carrying waits in a **bag** where you fell, for the next walk out.
+**Water** — the only thing in the game that can kill you. There's no magic reason for it: the dark
+is empty, people need to drink, and nobody is left to dig a well. If you run out, you fall, and
+everything you were carrying stays where you fell, in a **bag**, waiting for your next trip.
 
-**An expedition** — one walk out of the hut and, with luck, back to it. Dying costs the walk. Only
-the hall costs the country.
+**An expedition** — one trip out of the hut and, if you're lucky, back again. If you die, you lose
+that trip. Only the hall ends your time in a land.
 
-**What you carry** — four lights, in the order they are worth having: the **candle**, which lights
-the ring you are standing in; the **torch**, twice the reach and half the leash; the **candelabre**,
-which throws a widening cone ahead and nothing at all behind; and the **lantern**, which reaches
-furthest and burns longest. Water comes as a **drop**, a **flask**, or a **spring vial** that fills
-you wherever you are standing. The two tools are the **map**, which draws everywhere you have
-walked, and the **compass**, which turns towards whatever is worth walking to next and, with nothing
-in range, turns for home. All of it is bought at a stall or found on the ground, and all of it stays
-behind at the crossing.
+**What you carry** — there are four lights, from weakest to best: the **candle**, which lights the
+squares around you; the **torch**, which reaches twice as far but runs out sooner; the
+**candelabre**, which lights a wide cone in front of you and nothing behind; and the **lantern**,
+which reaches furthest and lasts longest. Water comes as a **drop**, a **flask**, or a **spring
+vial**, which fills you up wherever you are. There are two tools: the **map**, which shows
+everywhere you have been, and the **compass**, which points to the next thing worth walking to — or,
+if there's nothing nearby, points home. You can buy all of these at a stall or find them on the
+ground, and all of them stay behind when you cross to the next land.

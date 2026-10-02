@@ -1222,7 +1222,7 @@ Turning it on starts it from the top.
   | The landmark | Walk into it | The Mint | It has been stood at — then: a gift every visit, something for good the first time |
   | The torch | Pick one up in the sanctum | The nearest torch left in the hoard | A second light is carried |
   | Equipping | Tap it, then EQUIP; a bigger light burns faster | The inventory strip | A light has been chosen off its card |
-  | The gem | Take it | The gem | It is in hand — then: what a gem does, that there are more to bring to the one who waits in the far dark, that only the hut keeps it, and that the tutorial can be turned back on |
+  | The gem | Take it | The gem | It is in hand — then: what a gem does, that there are more to bring to Nouxinha in the hall, that only the hut keeps it, and that the tutorial can be turned back on |
 
 - **Each lesson waits its turn.** A lesson is said the moment nothing else is on screen — so the chest's
   own panel is read first and the tutorial's explanation after it — and a lesson that is already done

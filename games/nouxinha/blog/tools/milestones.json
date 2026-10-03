@@ -1,0 +1,218 @@
+[
+ {
+  "tag": "01",
+  "commit": "36167ec",
+  "date": "2026-08-17",
+  "caption": "The MVP: an infinite seeded grid, light as the only thing you spend",
+  "cheats": false,
+  "query": ""
+ },
+ {
+  "tag": "02",
+  "commit": "f2b2f5d",
+  "date": "2026-08-17",
+  "caption": "Water: every step costs a drop, and running dry kills",
+  "cheats": false,
+  "query": ""
+ },
+ {
+  "tag": "03",
+  "commit": "2892b55",
+  "date": "2026-08-17",
+  "caption": "Three gems, gated sanctums, and a save at the hut",
+  "cheats": false,
+  "query": ""
+ },
+ {
+  "tag": "04",
+  "commit": "f49b458",
+  "date": "2026-08-18",
+  "caption": "Crisp pixel art, a wider lamp cone, and the blackout fog",
+  "cheats": false,
+  "query": ""
+ },
+ {
+  "tag": "05",
+  "commit": "4dc2c2f",
+  "date": "2026-08-18",
+  "caption": "Three world layers, a merchant, a compass and a map",
+  "cheats": false,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "06",
+  "commit": "2e9bfc0",
+  "date": "2026-08-18",
+  "caption": "Three save slots, persistent ground, and cheats",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "07",
+  "commit": "8f8f692",
+  "date": "2026-08-20",
+  "caption": "Music, terrain variety and a denser scatter",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "08",
+  "commit": "fd0b01c",
+  "date": "2026-08-21",
+  "caption": "Every sprite drawn from a real tile sheet",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "09",
+  "commit": "80b36db",
+  "date": "2026-08-22",
+  "caption": "The HUD reworked: icon counters, an ITEMS slot, a hold-to-walk D-pad",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "10",
+  "commit": "186746e",
+  "date": "2026-08-23",
+  "caption": "The world gets an edge, and the dark is what ends it",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "11",
+  "commit": "658b05e",
+  "date": "2026-08-23",
+  "caption": "Tiles painted in up to four colours; a full-screen map",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "12",
+  "commit": "0f5db11",
+  "date": "2026-08-23",
+  "caption": "Rock, trees and shut gates cast shadow",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "13",
+  "commit": "52d2b95",
+  "date": "2026-08-24",
+  "caption": "A new hand-drawn tile sheet",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "14",
+  "commit": "b99f2bf",
+  "date": "2026-08-25",
+  "caption": "The text panel: the game gets a voice",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "15",
+  "commit": "07b885d",
+  "date": "2026-08-25",
+  "caption": "Treasure chests, keys and key-locked gates",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "16",
+  "commit": "5034304",
+  "date": "2026-08-25",
+  "caption": "Biomes: one kind of world per seed",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "17",
+  "commit": "58b16f5",
+  "date": "2026-08-25",
+  "caption": "The hall, the sorcerer in it, and the cycle he turns",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "18",
+  "commit": "391df22",
+  "date": "2026-08-27",
+  "caption": "Landmarks and signposts",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "19",
+  "commit": "3e7d410",
+  "date": "2026-08-27",
+  "caption": "Each biome gets its own floor and trees",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "20",
+  "commit": "d8e1310",
+  "date": "2026-09-05",
+  "caption": "Five conversations in the hall, and an ending in the light",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "21",
+  "commit": "bd8f766",
+  "date": "2026-09-10",
+  "caption": "Each biome grows its own ground; landmarks on the sanctums' rose",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "22",
+  "commit": "d355574",
+  "date": "2026-09-13",
+  "caption": "Wisps: lights nobody is carrying",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "23",
+  "commit": "dc52be7",
+  "date": "2026-09-14",
+  "caption": "Eight landmarks: seven shared, one per biome",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "24",
+  "commit": "815383f",
+  "date": "2026-09-17",
+  "caption": "Carved stones: letters from the sorcerer",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "25",
+  "commit": "e66156d",
+  "date": "2026-09-27",
+  "caption": "A tutorial for the first game",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "26",
+  "commit": "bfe2902",
+  "date": "2026-09-29",
+  "caption": "Particles: weather per biome, embers, bursts",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ },
+ {
+  "tag": "27",
+  "commit": "abfa7e0",
+  "date": "2026-10-03",
+  "caption": "Today: a new tile sheet, painted trees, a breathing sorcerer",
+  "cheats": true,
+  "query": "?seed=1852798328&nonce=7"
+ }
+]

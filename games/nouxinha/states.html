@@ -117,7 +117,7 @@ import {
   variantKey,
   wallSprite,
 } from './src/data/tiles.js';
-import { HUES, paintOf, zoneAt } from './src/data/paint.js';
+import { HUES, PAINT, paintOf, zoneAt } from './src/data/paint.js';
 import { buildSprites } from './src/data/sprites.js';
 import { zoneTints } from './src/ui/painted.js';
 import { ITEMS, itemDef } from './src/data/items.js';
@@ -407,8 +407,14 @@ function zoneLine(keys, biome) {
   const byHues = new Map();
   for (const key of keys) {
     const entry = paintOf(key);
+    // A key with no entry of its own is drawn with the zones of the tile it is a
+    // version of (`paintOf`) — a biome's tree is laid over the shared tree's
+    // map until it is painted for that biome — so say so rather than let it
+    // pass for painted.
+    const inherited = entry && typeof PAINT[key] !== 'object';
     const said = entry
-      ? entry.hues.map((hue, i) => `${i + 1} = ${(HUES.find((h) => h.hue === hue) || { label: hue }).label}`).join(' · ')
+      ? entry.hues.map((hue, i) => `${i + 1} = ${(HUES.find((h) => h.hue === hue) || { label: hue }).label}`).join(' · ') +
+        (inherited ? ' (inherited — not painted for this tile)' : '')
       : 'one colour — no zones';
     if (!byHues.has(said)) byHues.set(said, []);
     byHues.get(said).push(key);

@@ -273,8 +273,14 @@ function catalogue() {
     ]);
   add('STRUCTURES', 'stone', 'carved stone', 'Never earns a colour, and no world redraws it.',
     () => [{ label: 'every carved stone', tiles: strip(['stone']), style: plain }]);
-  add('STRUCTURES', 'sorcerer', 'Nouxinha', 'At the centre of the hall. The same man in every world.',
-    () => [{ label: 'in the hall', tiles: strip(['sorcerer']), style: plain }]);
+  add('STRUCTURES', 'sorcerer', 'Nouxinha', 'At the centre of the hall. The same man in every world. He breathes.',
+    () => {
+      const anim = animationOf('sorcerer');
+      return [
+        { label: 'in the hall, playing', tiles: strip(['sorcerer']), style: plain, play: anim },
+        { label: 'his breath, frame by frame', tiles: strip([...new Set(anim.frames)]), style: plain },
+      ];
+    });
 
   // A landmark beside the court it stands on. A landmark with no zone map of
   // its own is one zone, the whole silhouette (MapView's `plainLandmark`).

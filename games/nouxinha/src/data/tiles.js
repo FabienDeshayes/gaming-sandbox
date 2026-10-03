@@ -100,7 +100,14 @@ export const TILES = {
   // not the wizard's own tile — there are two people in this world and they
   // have to read as two people. Not a biome's to repoint: he is the same man in
   // every world he makes.
+  //
+  // He breathes (`ANIMATIONS` below): beside him on the sheet is the same
+  // figure with the cowl and shoulders sunk a pixel, which is all it takes for
+  // the one other person in the world to stop reading as one more thing cut
+  // out of stone. Slow, and held at rest for longer than it is out of it — the
+  // wisp flickers, he does not.
   sorcerer: [24, 2],
+  'sorcerer~1': [25, 2],
   // The chest, shut and open. Drawn for this game — the sheet is a dungeon set
   // with no chest in it — over two of its interchangeable crates, the same way
   // three of the wizard's four facings were drawn over tiles nothing claimed.
@@ -165,10 +172,10 @@ export const TILES = {
   // it four different ways. Drawn for this game (`draw.html`), and every
   // biome shares the one tile until one earns a version of its own.
   //
-  // It is also the one sprite that moves: `wisp` is its rest pose, and the
-  // three beside it on the sheet are the rest of its flicker (`ANIMATIONS`
-  // below) — the tip leaning right, stretching up, leaning left, with an ember
-  // coming off its flank and rising away.
+  // It is also one of the two sprites that move (the sorcerer is the other):
+  // `wisp` is its rest pose, and the three beside it on the sheet are the rest
+  // of its flicker (`ANIMATIONS` below) — the tip leaning right, stretching up,
+  // leaning left, with an ember coming off its flank and rising away.
   wisp: [15, 10],
   'wisp~1': [16, 10],
   'wisp~2': [17, 10],
@@ -224,6 +231,7 @@ export const TILES = {
 // own and names them here.
 export const ANIMATIONS = {
   wisp: { frames: ['wisp', 'wisp~1', 'wisp~2', 'wisp~3'], ms: 150 },
+  sorcerer: { frames: ['sorcerer', 'sorcerer', 'sorcerer', 'sorcerer~1', 'sorcerer~1'], ms: 350 },
 };
 
 // The animation a drawn key plays, or null for the ones that stand still.

@@ -3,7 +3,6 @@
 Agents, do not use this file as a list of things to implement, ignore it unless explicitly asked to add or remove something from it.
 
 Big things next:
-* review all sprites
 * review all texts 
 
 small things:
@@ -11,8 +10,6 @@ small things:
 * better transition when finishing one world
 
 fixes:
-* tree painting bug
-* review colours changing, mapping gems to their hall, landmarks, etc. this needs to make strong sense both in game and for the gameplay
 * balance things: water and light (after world generation is reviewed)
 
 Polish:

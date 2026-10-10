@@ -116,6 +116,15 @@ owner's notes — don't implement from it unless asked.
   derive their seeds by replaying seasons against `rules.js` — there are no authored
   levels, so nothing is hardcoded.
 
+## Working in `games/combinator/`
+
+Combinator is a machine-building game: modules pass four flows (Motion, Matter, Heat, Signal) through their ports. The prototype is one screen, a test bench where a machine is built and its 8-turn test run is shown live. Read `games/combinator/DESIGN.md` (§12 is the prototype) before changing it, and `games/combinator/TESTING.md` before adding a test.
+
+- **The rules are `src/core/machine.js` and nothing else.** Connections, the turn-by-turn run and the plain-language readout are pure functions over a placement list (`{ id, type, x, y, rot }`), shared by the screen and the tests, and meant to be reused by a future tile map. The scene holds the placements and re-runs `simulate` on every change, including while a module is being dragged (the ghost is simulated as if dropped).
+- **Flows settle as a fixed point that starts with everything off.** That is what keeps a run independent of evaluation order and stops a loop of carriers from powering itself. Don't change it to a single pass in placement order.
+- **Modules are data.** `src/data/modules.js` holds every module and `TUNING`; `src/data/bench.js` holds the terrain and the example machines. A new module is a catalogue entry plus a palette slot, not new rules code, unless it needs a new effect kind.
+- `npm test` runs `test:rules` (`node --test`) and `test:ui` (Playwright, the same CDN-rewriting harness as Pitchou).
+
 ## Working in `games/bibou/` (the reference prototype)
 
 Bibou is a turn-based grid puzzle game (move tiles to get a character to a goal). It's the most fleshed-out prototype and the one with a real test suite — read its docs before making changes:

@@ -125,6 +125,7 @@ Combinator is a machine-building game: modules pass four flows (Motion, Matter, 
 - **Flows settle as a fixed point that starts with everything off.** That is what keeps a run independent of evaluation order and stops a loop of carriers from powering itself. Don't change it to a single pass in placement order.
 - **Modules are data.** `src/data/modules.js` holds every module and `TUNING`; `src/data/world.js` holds terrain, both grids and the starting machines. A new module is a catalogue entry plus a palette slot, not new rules code, unless it needs a new effect kind.
 - **Saved state lives in `src/store.js`** (`localStorage`): machines, the Playground layout and the open Workbench draft. A placement references a machine by id and always shows its last saved version; deleting a machine removes its placements. Don't name a scene method `load` — it shadows Phaser's loader.
+- **Two layouts, picked once at load.** A portrait screen gets the mobile one (`MOBILE` in `src/config.js`; `?layout=` forces either): a 450-wide design with the panels under bottom tabs (`src/ui/panelTabs.js`), drawn at the phone's pixel density through a camera zoom. So scenes read pointers as `pointer.worldX/worldY`, never `pointer.x`, and drag distances go through `isDrag` in `ui/button.js`. Fabien mostly tests on his phone: a change to either screen has to work in both layouts.
 - `npm test` runs `test:rules` (`node --test`) and `test:ui` (Playwright, the same CDN-rewriting harness as Pitchou).
 
 ## Working in `games/bibou/` (the reference prototype)

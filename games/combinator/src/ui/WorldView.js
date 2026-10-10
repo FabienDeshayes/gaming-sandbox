@@ -27,17 +27,24 @@ export class WorldView {
     this.bodies = scene.add.graphics().setDepth(depth + 1);
     this.overlay = scene.add.graphics().setDepth(depth + 3);
     this.labels = [];
+    this.coords = [];
     this.labelDepth = depth + 2;
+    this.shown = true;
 
     if (opts.coords) {
       const style = { fontFamily: FONT, fontSize: '14px', color: COLORS.muted, resolution: TEXT_RESOLUTION };
       for (let c = 0; c < world.cols; c++) {
-        scene.add.text(this.x0 + c * this.tile + this.tile / 2, this.y0 - 14, String.fromCharCode(65 + c), style).setOrigin(0.5);
+        this.coords.push(scene.add.text(this.x0 + c * this.tile + this.tile / 2, this.y0 - 14, String.fromCharCode(65 + c), style).setOrigin(0.5));
       }
       for (let r = 0; r < world.rows; r++) {
-        scene.add.text(this.x0 - 14, this.y0 + r * this.tile + this.tile / 2, `${r + 1}`, style).setOrigin(0.5);
+        this.coords.push(scene.add.text(this.x0 - 14, this.y0 + r * this.tile + this.tile / 2, `${r + 1}`, style).setOrigin(0.5));
       }
     }
+  }
+
+  setShown(on) {
+    this.shown = on;
+    for (const o of [this.ground, this.bodies, this.overlay, ...this.labels, ...this.coords]) o.setVisible(on);
   }
 
   setWorld(world) {
@@ -49,6 +56,7 @@ export class WorldView {
   }
 
   tileAt(px, py) {
+    if (!this.shown) return null;
     const x = Math.floor((px - this.x0) / this.tile);
     const y = Math.floor((py - this.y0) / this.tile);
     if (x < 0 || y < 0 || x >= this.world.cols || y >= this.world.rows) return null;
@@ -107,7 +115,8 @@ export class WorldView {
           })
           .setOrigin(0.5, 1)
           .setDepth(this.labelDepth)
-          .setAlpha(ghost ? 0.8 : 1);
+          .setAlpha(ghost ? 0.8 : 1)
+          .setVisible(this.shown);
         this.labels.push(name);
       }
     }

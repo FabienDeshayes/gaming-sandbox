@@ -6,15 +6,23 @@
 import { COLORS, EFFECT_STYLE, FONT, FONT_SM, TEXT_RESOLUTION } from '../config.js';
 
 export class Timeline {
-  // layout: { x, y, w, labelW, rowH, bottom }
+  // layout: { x, y, w, labelW, rowH, bottom, headerY (the turn numbers; y + 44
+  // by default) }
   constructor(scene, layout) {
     this.scene = scene;
     Object.assign(this, layout);
     this.maxBottom = layout.bottom;
     this.g = scene.add.graphics().setDepth(1);
     this.texts = [];
-    this.headerY = layout.y + 44;
+    this.shown = true;
+    this.headerY = layout.headerY ?? layout.y + 44;
     this.bottom = this.headerY + 14;
+  }
+
+  setShown(on) {
+    this.shown = on;
+    this.g.setVisible(on);
+    for (const t of this.texts) t.setVisible(on);
   }
 
   colX(turn, turns) {
@@ -23,6 +31,7 @@ export class Timeline {
   }
 
   turnAt(px, py, turns) {
+    if (!this.shown) return null;
     const cw = (this.w - this.labelW) / turns;
     if (py < this.headerY - 12 || py > this.bottom || px < this.x + this.labelW || px > this.x + this.w) return null;
     return Math.min(turns, Math.floor((px - this.x - this.labelW) / cw) + 1);
@@ -37,7 +46,8 @@ export class Timeline {
         resolution: TEXT_RESOLUTION,
         ...style,
       })
-      .setDepth(2);
+      .setDepth(2)
+      .setVisible(this.shown);
     this.texts.push(t);
     return t;
   }

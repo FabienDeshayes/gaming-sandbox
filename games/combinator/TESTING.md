@@ -35,5 +35,14 @@ The harness serves the game folder and rewrites the blocked CDN Phaser
 `<script src>` to the npm copy in the response. `index.html` on disk is never
 modified.
 
+Tests opened with `{ phone: true }` get a portrait touch screen (390×844, three
+device pixels per CSS pixel), and so the mobile layout. They drive it the way a
+finger would: `game.tap`, `game.tapText`, and `game.swipe` for a drag, sent as
+touch events rather than mouse ones. Design coordinates still work everywhere:
+the harness divides out the mobile layout's camera zoom.
+
+`node tests/shot-phone.mjs <dir>` screenshots the mobile layout, each screen
+with each of its tabs.
+
 `node tests/shot.mjs <dir>` screenshots each starting machine on the Workbench
 and the starting Playground, for a quick look at the screens. It is not a test.

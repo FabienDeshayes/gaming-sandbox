@@ -7,12 +7,13 @@
 
 import {
   COLORS,
-  DRAG_THRESHOLD,
   EFFECT_STYLE,
   FLOW_STYLE,
   FONT,
   FONT_SM,
   GAME_WIDTH,
+  MOBILE,
+  MOBILE_PLAY_LAYOUT,
   PLAY_LAYOUT,
   PLAY_STEP_MS,
   ROLE_STYLE,
@@ -38,8 +39,9 @@ import {
   whyIdle,
 } from '../core/machine.js';
 import * as store from '../store.js';
-import { createButton } from '../ui/button.js';
+import { createButton, isDrag } from '../ui/button.js';
 import { ListView } from '../ui/ListView.js';
+import { PanelTabs } from '../ui/panelTabs.js';
 import { drawMachine } from '../ui/machineArt.js';
 import { Readout } from '../ui/Readout.js';
 import { drawHeader } from '../ui/tabs.js';
@@ -53,6 +55,17 @@ const HELP = [
   'Machines act on the tiles round them, and on each other through those tiles. Open inputs draw from the ground a machine stands on.',
   'Change a machine on the Workbench and save it: every copy here changes with it.',
 ];
+// Mouse or finger, in the words the screen uses.
+const CLICK = MOBILE ? 'Tap' : 'Click';
+const HELP_TOUCH = [
+  'Drag a saved machine from the list onto a tile, or tap it and then tap tiles.',
+  'Tap a placed machine to inspect it; tap it again (or Turn) to turn it.',
+  'Drag a machine to move it; drag it off the Playground (or tap Remove) to remove it.',
+  'Machines act on the tiles round them, and on each other through those tiles. Open inputs draw from the ground a machine stands on.',
+  'Change a machine on the Workbench and save it: every copy here changes with it.',
+];
+// Where things sit: the stacked mobile layout or the desktop one.
+const L = MOBILE ? MOBILE_PLAY_LAYOUT : PLAY_LAYOUT;
 const EFFECT_WORDS = { wet: 'Wet', hot: 'Hot', steam: 'Steam', air: 'Air', alert: 'Alert' };
 
 export class PlaygroundScene extends Phaser.Scene {
@@ -73,18 +86,36 @@ export class PlaygroundScene extends Phaser.Scene {
 
     this.input.mouse?.disableContextMenu();
     drawHeader(this, 'PlaygroundScene', () => this.stop());
-    const clear = createButton(this, 0, 28, 'Clear playground', () => this.clear(), { fontSize: FONT_SM });
-    clear.moveX(GAME_WIDTH - 16 - clear.width / 2);
 
     this.palette = new ListView(this, {
-      ...PLAY_LAYOUT.machines,
+      ...L.machines,
       heading: 'SAVED MACHINES',
-      empty: 'No saved machines. Build one on the Workbench and press Save.',
+      empty: `No saved machines. Build one on the Workbench and ${MOBILE ? 'tap' : 'press'} Save.`,
       icon: (g, item, cx, cy, size) => drawMachine(g, item.parts, 0, cx, cy, size),
       onPage: () => this.refresh(),
     });
-    this.view = new WorldView(this, PLAYGROUND, { ...PLAY_LAYOUT.world, coords: true, names: true });
+    this.view = new WorldView(this, PLAYGROUND, { ...L.world, coords: true, names: true });
     this.drawLegend();
+    if (MOBILE) this.drawMobilePanel();
+    else this.drawDesktopPanel();
+    this.dragGfx = this.add.graphics().setDepth(20);
+    this.dragLabel = this.add
+      .text(0, 0, '', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: COLORS.text, resolution: TEXT_RESOLUTION })
+      .setOrigin(0.5)
+      .setDepth(21);
+
+    this.input.on('pointerdown', (pointer, over) => this.onDown(pointer, over));
+    this.input.on('pointermove', (pointer) => this.onMove(pointer));
+    this.input.on('pointerup', (pointer, over) => this.onUp(pointer, over));
+    this.input.keyboard?.on('keydown', (event) => this.onKey(event));
+
+    this.refresh();
+  }
+
+  // Desktop: the round under the world, the readout down the right.
+  drawDesktopPanel() {
+    const clear = createButton(this, 0, 28, 'Clear playground', () => this.clear(), { fontSize: FONT_SM });
+    clear.moveX(GAME_WIDTH - 16 - clear.width / 2);
     this.readout = new Readout(
       this,
       PLAY_LAYOUT.panel,
@@ -94,20 +125,51 @@ export class PlaygroundScene extends Phaser.Scene {
       },
       ['What happens this round', 'Problems', 'Notes']
     );
-    this.drawTimelineHeader();
+    const { x, y, w } = PLAY_LAYOUT.timeline;
+    this.drawRunControls(x + w, y + 14);
+    this.turnLabel.setX(x);
     this.timeline = new Timeline(this, PLAY_LAYOUT.timeline);
-    this.dragGfx = this.add.graphics().setDepth(20);
-    this.dragLabel = this.add
-      .text(0, 0, '', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: COLORS.text, resolution: TEXT_RESOLUTION })
-      .setOrigin(0.5)
-      .setDepth(21);
+  }
 
-    this.input.on('pointerdown', (pointer, over) => this.onDown(pointer, over));
-    this.input.on('pointermove', (pointer) => this.onMove(pointer));
-    this.input.on('pointerup', (pointer) => this.onUp(pointer));
-    this.input.keyboard?.on('keydown', (event) => this.onKey(event));
+  // Mobile: the readout, the inspector and the round (its controls, Clear and
+  // the timeline) under three tabs at the bottom.
+  drawMobilePanel() {
+    const P = MOBILE_PLAY_LAYOUT.panel;
+    this.tabs = new PanelTabs(this, {
+      y: MOBILE_PLAY_LAYOUT.tabs.y,
+      panel: P,
+      tabs: [
+        { key: 'readout', label: 'Readout' },
+        { key: 'inspect', label: 'Inspect' },
+        { key: 'round', label: 'Round' },
+      ],
+      onChange: () => this.refresh(),
+    });
+    this.readout = new Readout(this, { ...P, stacked: false }, () => {}, ['What happens this round', 'Problems', 'Notes']);
 
-    this.refresh();
+    const right = P.x + P.w - 12;
+    const clear = createButton(this, 0, P.y + 22, 'Clear', () => this.clear(), { fontSize: FONT_SM, padX: 10, padY: 7 });
+    clear.moveX(right - clear.width / 2);
+    const run = this.drawRunControls(clear.x - clear.width / 2 - 12, P.y + 22);
+    this.turnLabel.setX(P.x + 12);
+    this.timeline = new Timeline(this, {
+      x: P.x + 12,
+      y: P.y + 44,
+      headerY: P.y + 56,
+      w: P.w - 24,
+      labelW: 150,
+      rowH: 24,
+      bottom: P.y + P.h - 4,
+    });
+
+    this.turnButton = createButton(this, 0, P.y + 24, '⟳ Turn', () => this.actOnFocus('turn'), { fontSize: FONT_SM, padX: 10, padY: 6 });
+    this.removeButton = createButton(this, 0, P.y + 24, '✕ Remove', () => this.actOnFocus('remove'), { fontSize: FONT_SM, padX: 10, padY: 6 });
+    this.removeButton.moveX(right - this.removeButton.width / 2);
+    this.turnButton.moveX(this.removeButton.x - this.removeButton.width / 2 - 8 - this.turnButton.width / 2);
+
+    this.tabs.add('readout', this.readout.summary);
+    this.tabs.add('inspect', this.readout.inspector);
+    this.tabs.add('round', clear, ...run, this.turnLabel, this.timeline);
   }
 
   // --- State -----------------------------------------------------------------
@@ -147,12 +209,12 @@ export class PlaygroundScene extends Phaser.Scene {
       round: this.round,
       turn: this.viewTurn,
       ghostId,
-      highlight: new Set(this.lineHighlight),
+      highlight: new Set(MOBILE && this.hoverId ? [this.hoverId] : this.lineHighlight),
       area: hovered ? unitArea(PLAYGROUND, hovered) : [],
     });
     this.readout.render(this.desc);
     this.timeline.render(this.timelineRows(), this.round.turns.length, this.viewTurn, 'Every machine on the Playground gets a row.');
-    this.turnLabel.setText(`ROUND · turn ${this.viewTurn} of ${this.round.turns.length}`);
+    this.turnLabel.setText(MOBILE ? `Turn ${this.viewTurn}/${this.round.turns.length}` : `ROUND · turn ${this.viewTurn} of ${this.round.turns.length}`);
     this.palette.setItems(
       store.machines().map((m) => {
         const n = this.placed.filter((p) => p.machineId === m.id).length;
@@ -161,6 +223,13 @@ export class PlaygroundScene extends Phaser.Scene {
     );
     this.palette.render({ selected: this.armed, hover: this.hoverMachine });
     this.renderInspect();
+    if (MOBILE) {
+      const on = this.tabs.shown('inspect') && this.placed.some((p) => p.id === this.hoverId);
+      for (const b of [this.turnButton, this.removeButton]) {
+        b.setVisible(on);
+        b.panel.setVisible(on);
+      }
+    }
   }
 
   timelineRows() {
@@ -245,30 +314,30 @@ export class PlaygroundScene extends Phaser.Scene {
   onDown(pointer, over) {
     if (over.some((o) => o.isButton)) return;
     if (pointer.rightButtonDown()) {
-      const p = this.placedAt(pointer.x, pointer.y);
+      const p = this.placedAt(pointer.worldX, pointer.worldY);
       if (p) {
         this.rotate(p.id);
         this.changed();
       }
       return;
     }
-    const item = this.palette.itemAt(pointer.x, pointer.y);
+    const item = this.palette.itemAt(pointer.worldX, pointer.worldY);
     if (item) {
       this.drag = { kind: 'new', machineId: item.key, rot: 0, moved: false, target: null };
       return;
     }
-    const p = this.placedAt(pointer.x, pointer.y);
+    const p = this.placedAt(pointer.worldX, pointer.worldY);
     if (p) {
       this.drag = { kind: 'move', id: p.id, machineId: p.machineId, rot: p.rot, moved: false, target: null };
       return;
     }
-    const tile = this.view.tileAt(pointer.x, pointer.y);
+    const tile = this.view.tileAt(pointer.worldX, pointer.worldY);
     if (tile && this.armed) {
       this.place(this.armed, tile[0], tile[1]);
       this.changed();
       return;
     }
-    const turn = this.timeline.turnAt(pointer.x, pointer.y, this.round.turns.length);
+    const turn = this.timeline.turnAt(pointer.worldX, pointer.worldY, this.round.turns.length);
     if (turn) {
       this.stop();
       this.setTurn(turn);
@@ -278,12 +347,12 @@ export class PlaygroundScene extends Phaser.Scene {
   onMove(pointer) {
     const d = this.drag;
     if (d) {
-      if (!d.moved && pointer.getDistance() >= DRAG_THRESHOLD) {
+      if (!d.moved && isDrag(pointer)) {
         d.moved = true;
         this.armed = null;
       }
       if (d.moved) {
-        const tile = this.view.tileAt(pointer.x, pointer.y);
+        const tile = this.view.tileAt(pointer.worldX, pointer.worldY);
         const ok = tile && canPlace(PLAYGROUND, this.placed, tile[0], tile[1], d.kind === 'move' ? d.id : null);
         const target = ok ? tile : null;
         const changed = String(target) !== String(d.target);
@@ -293,26 +362,35 @@ export class PlaygroundScene extends Phaser.Scene {
         return;
       }
     }
-    this.updateHover(pointer);
+    // A finger doesn't hover: on a phone the inspector follows taps instead.
+    if (!MOBILE) this.updateHover(pointer);
   }
 
-  onUp(pointer) {
+  onUp(pointer, over = []) {
     const d = this.drag;
     this.drag = null;
     this.dragGfx.clear();
     this.dragLabel.setText('');
-    if (!d) return;
+    if (!d) {
+      if (MOBILE && !over.some((o) => o.isButton)) this.focus(pointer);
+      return;
+    }
     if (!d.moved) {
+      // On a phone the first tap on a placed machine picks it out; tapping
+      // it again turns it.
       if (d.kind === 'new') {
         this.armed = this.armed === d.machineId ? null : d.machineId;
-        this.refresh();
+        if (MOBILE) this.focus(pointer);
+        else this.refresh();
+      } else if (MOBILE && this.hoverId !== d.id) {
+        this.focus(pointer);
       } else {
         this.rotate(d.id);
         this.changed();
       }
       return;
     }
-    const tile = this.view.tileAt(pointer.x, pointer.y);
+    const tile = this.view.tileAt(pointer.worldX, pointer.worldY);
     if (d.kind === 'new') {
       if (d.target) this.place(d.machineId, d.target[0], d.target[1], d.rot);
     } else if (d.target) {
@@ -354,10 +432,27 @@ export class PlaygroundScene extends Phaser.Scene {
     }
   }
 
+  // Mobile: a tap on the world or the machine list picks out what it landed on
+  // and shows it in Inspect. A tap anywhere else leaves it be.
+  focus(pointer) {
+    const [px, py] = [pointer.worldX, pointer.worldY];
+    if (!this.palette.itemAt(px, py) && !this.view.tileAt(px, py)) return;
+    this.updateHover(pointer, false);
+    this.tabs.set('inspect');
+    this.refresh();
+  }
+
+  actOnFocus(action) {
+    if (!this.placed.some((p) => p.id === this.hoverId)) return;
+    if (action === 'turn') this.rotate(this.hoverId);
+    else this.remove(this.hoverId);
+    this.changed();
+  }
+
   updateHover(pointer, redraw = true) {
-    const item = this.palette.itemAt(pointer.x, pointer.y);
-    const p = this.placedAt(pointer.x, pointer.y);
-    const tile = this.view.tileAt(pointer.x, pointer.y);
+    const item = this.palette.itemAt(pointer.worldX, pointer.worldY);
+    const p = this.placedAt(pointer.worldX, pointer.worldY);
+    const tile = this.view.tileAt(pointer.worldX, pointer.worldY);
     const next = { machine: item?.key ?? null, id: p?.id ?? null, tile: !p && tile ? tileKey(...tile) : null };
     const prev = { machine: this.hoverMachine, id: this.hoverId, tile: this.hoverTile };
     this.hoverMachine = next.machine;
@@ -374,35 +469,36 @@ export class PlaygroundScene extends Phaser.Scene {
     this.dragLabel.setText('');
     if (d.target) return; // shown as a ghost on the Playground instead
     const m = store.machine(d.machineId);
-    const off = !this.view.tileAt(pointer.x, pointer.y);
-    drawMachine(this.dragGfx, m.parts, d.rot, pointer.x, pointer.y, 56, { alpha: 0.85 });
+    const off = !this.view.tileAt(pointer.worldX, pointer.worldY);
+    drawMachine(this.dragGfx, m.parts, d.rot, pointer.worldX, pointer.worldY, 56, { alpha: 0.85 });
     if (d.kind === 'move' && off) {
       this.dragGfx.lineStyle(3, COLORS.badHex, 1);
-      this.dragGfx.strokeRoundedRect(pointer.x - 32, pointer.y - 32, 64, 64, 10);
-      this.dragLabel.setText('drop to remove').setPosition(pointer.x, pointer.y + 44).setColor(COLORS.bad);
+      this.dragGfx.strokeRoundedRect(pointer.worldX - 32, pointer.worldY - 32, 64, 64, 10);
+      this.dragLabel.setText('drop to remove').setPosition(pointer.worldX, pointer.worldY + 44).setColor(COLORS.bad);
     } else {
-      this.dragLabel.setText(m.name).setPosition(pointer.x, pointer.y + 44).setColor(COLORS.text);
+      this.dragLabel.setText(m.name).setPosition(pointer.worldX, pointer.worldY + 44).setColor(COLORS.text);
     }
   }
 
   drawLegend() {
-    const y = PLAY_LAYOUT.legend.y;
+    const y = L.legend.y;
     const g = this.add.graphics().setDepth(1);
-    let x = PLAY_LAYOUT.world.x - 20;
+    let x = MOBILE ? 16 : PLAY_LAYOUT.world.x - 20;
     const style = { fontFamily: FONT, fontSize: `${FONT_SM}px`, color: COLORS.muted, resolution: TEXT_RESOLUTION };
     for (const [kind, word] of Object.entries(EFFECT_WORDS)) {
       g.fillStyle(EFFECT_STYLE[kind], kind === 'steam' ? 0.6 : 0.85);
       g.fillRect(x, y - 7, 14, 14);
       const t = this.add.text(x + 20, y, word, style).setOrigin(0, 0.5);
-      x += t.width + 36;
+      x += t.width + (MOBILE ? 32 : 36);
     }
-    this.add.text(x, y, 'Lit squares: modules running', style).setOrigin(0, 0.5);
+    this.add.text(x, y, MOBILE ? 'Lit: running' : 'Lit squares: modules running', style).setOrigin(0, 0.5);
   }
 
-  drawTimelineHeader() {
-    const { x, y, w } = PLAY_LAYOUT.timeline;
+  // |◀ ▶ Run round ▶|, ending at `right`, and the turn label (placed by the
+  // caller). Returns the buttons.
+  drawRunControls(right, y) {
     this.turnLabel = this.add
-      .text(x, y + 14, '', {
+      .text(0, y, '', {
         fontFamily: FONT,
         fontSize: `${FONT_SM}px`,
         fontStyle: 'bold',
@@ -410,20 +506,22 @@ export class PlaygroundScene extends Phaser.Scene {
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0, 0.5);
-    const next = createButton(this, x + w - 22, y + 14, '▶|', () => {
+    const pad = MOBILE ? 7 : 5;
+    const next = createButton(this, right - 22, y, '▶|', () => {
       this.stop();
       this.setTurn(this.viewTurn + 1);
-    }, { fontSize: FONT_SM, padX: 10, padY: 5 });
-    this.playButton = createButton(this, next.x - 92, y + 14, '▶ Run round', () => this.play(), {
+    }, { fontSize: FONT_SM, padX: 10, padY: pad });
+    this.playButton = createButton(this, next.x - 92, y, '▶ Run round', () => this.play(), {
       fontSize: FONT_SM,
       padX: 10,
-      padY: 5,
+      padY: pad,
       width: 120,
     });
-    createButton(this, this.playButton.x - 92, y + 14, '|◀', () => {
+    const prev = createButton(this, this.playButton.x - 92, y, '|◀', () => {
       this.stop();
       this.setTurn(this.viewTurn - 1);
-    }, { fontSize: FONT_SM, padX: 10, padY: 5 });
+    }, { fontSize: FONT_SM, padX: 10, padY: pad });
+    return [prev, this.playButton, next];
   }
 
   // --- Inspector -------------------------------------------------------------
@@ -434,7 +532,7 @@ export class PlaygroundScene extends Phaser.Scene {
     const machineId = this.hoverMachine ?? this.armed;
     if (machineId) return this.readout.inspect(this.machineInfo(store.machine(machineId)));
     if (this.hoverTile) return this.readout.inspect(this.tileInfo(this.hoverTile));
-    return this.readout.inspect({ title: 'How to play a round', lines: HELP.map((text) => ({ text, color: COLORS.muted })) });
+    return this.readout.inspect({ title: 'How to play a round', lines: (MOBILE ? HELP_TOUCH : HELP).map((text) => ({ text, color: COLORS.muted })) });
   }
 
   unitInfo(unit) {
@@ -455,7 +553,7 @@ export class PlaygroundScene extends Phaser.Scene {
       }
     }
     const ground = terrainAt(PLAYGROUND, unit.x, unit.y);
-    lines.push({ text: `Stands on ${ground ? ground.name.toLowerCase() : 'bare ground'}. Click to turn it.`, color: COLORS.muted });
+    lines.push({ text: `Stands on ${ground ? ground.name.toLowerCase() : 'bare ground'}. ${CLICK} to turn it.`, color: COLORS.muted });
     return {
       title: unitLabel(unit),
       subtitle: `Turn ${this.viewTurn} · facing ${SIDE_WORDS[['N', 'E', 'S', 'W'][unit.rot]]} · ${unit.machine.parts.length} modules`,
@@ -493,7 +591,7 @@ export class PlaygroundScene extends Phaser.Scene {
       if (tile.air.length) lines.push({ text: `Air blown by ${from(tile.air)}.` });
       if (tile.alert.length) lines.push({ text: `Alerted by ${from(tile.alert)}.`, color: FLOW_STYLE.signal.css });
     }
-    if (this.armed) lines.push({ text: `Click to place ${store.machine(this.armed).name} here.`, color: COLORS.good });
+    if (this.armed) lines.push({ text: `${CLICK} to place ${store.machine(this.armed).name} here.`, color: COLORS.good });
     return { title: `Tile ${tileName(x, y)}`, subtitle: `Turn ${this.viewTurn}`, lines };
   }
 

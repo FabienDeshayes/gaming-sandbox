@@ -4,16 +4,19 @@
 // — no Phaser, no scene state — so the same rules drive both screens, the
 // readouts and the tests, and a round is always the same for the same layout.
 //
-// Two grids, two kinds of placement:
-//  - a part is a module inside a machine, on the Workbench grid:
-//    { id, type, x, y, rot }. A port's side is where it sits on its cell once
-//    the module is rotated; two parts connect when their touching ports carry
-//    the same flow and one is an output, the other an input.
+// Two kinds of placement:
+//  - a part is a module inside a machine: { id, type }. A machine's parts are
+//    a row, read left to right, and a part's place is its place in the list.
+//    The row is a line that carries flows rightwards: each input takes the
+//    nearest flow of its kind offered by a piece to its left that no other
+//    piece has taken yet, and each output offers its flow to the pieces on its
+//    right. A flow nobody takes is left open, and so is an input with nothing
+//    to take.
 //  - a unit is a whole machine standing on one tile of a world (the
 //    Playground, or the small test world round the Workbench):
 //    { id, machine: { name, parts }, x, y, rot }.
 
-import { TERRAIN, WORKBENCH } from '../data/world.js';
+import { TERRAIN } from '../data/world.js';
 import { MODULES, TUNING } from '../data/modules.js';
 
 export const SIDES = ['N', 'E', 'S', 'W'];
@@ -27,10 +30,6 @@ export const tileName = (x, y) => `${String.fromCharCode(65 + x)}${y + 1}`;
 
 export function rotateSide(side, rot) {
   return SIDES[(SIDES.indexOf(side) + (((rot % 4) + 4) % 4)) % 4];
-}
-
-export function opposite(side) {
-  return SIDES[(SIDES.indexOf(side) + 2) % 4];
 }
 
 export function neighbour(x, y, side) {
@@ -47,9 +46,15 @@ export function terrainAt(world, x, y) {
   return id ? { id, ...TERRAIN[id] } : null;
 }
 
-// A part named by where it sits on the Workbench.
-export function label(p) {
-  return `${MODULES[p.type].name} (${tileName(p.x, p.y)})`;
+// How the parts of one machine are named: by their module's name, with their
+// place in the row ("Sprinkler #3") when the machine has more than one of it.
+export function labelFor(parts) {
+  const count = {};
+  for (const p of parts) count[p.type] = (count[p.type] ?? 0) + 1;
+  return (p) => {
+    const name = MODULES[p.type].name;
+    return count[p.type] > 1 ? `${name} #${parts.findIndex((q) => q.id === p.id) + 1}` : name;
+  };
 }
 
 // A machine named by where it stands in the world.
@@ -57,18 +62,17 @@ export function unitLabel(unit) {
   return `${unit.machine.name} (${tileName(unit.x, unit.y)})`;
 }
 
-// The module's ports with their sides turned to where they actually face.
 export function portsOf(p) {
   return MODULES[p.type].ports.map((port, index) => ({
     key: `${p.id}:${index}`,
     id: p.id,
     index,
-    side: rotateSide(port.side, p.rot),
     dir: port.dir,
     flow: port.flow,
   }));
 }
 
+// Whether a machine can stand on tile (x, y) of a world, one machine per tile.
 export function canPlace(grid, placements, x, y, ignoreId = null) {
   if (!onGrid(grid, x, y)) return false;
   return !placements.some((p) => p.id !== ignoreId && p.x === x && p.y === y);
@@ -76,11 +80,10 @@ export function canPlace(grid, placements, x, y, ignoreId = null) {
 
 // --- Effects in the world ----------------------------------------------------
 
-// Which way an effector inside a machine faces in the world: its own turn on
-// the Workbench plus the machine's turn on its tile. At rotation 0 an effector
-// faces north, away from its input.
-export function effectFront(part, machineRot = 0) {
-  return rotateSide('N', part.rot + machineRot);
+// Which way a machine's effectors face in the world: its front, which is north
+// until the machine is turned on its tile.
+export function effectFront(machineRot = 0) {
+  return rotateSide('N', machineRot);
 }
 
 // The world tiles an effect reaches from a machine at (x, y): 'cross' is the
@@ -109,7 +112,7 @@ export function unitArea(world, unit, partId = null) {
   for (const part of unit.machine.parts) {
     const def = MODULES[part.type];
     if (!def.effect || (partId && part.id !== partId)) continue;
-    for (const [x, y] of areaTiles(world, unit.x, unit.y, def.effect.area, effectFront(part, unit.rot))) {
+    for (const [x, y] of areaTiles(world, unit.x, unit.y, def.effect.area, effectFront(unit.rot))) {
       out.push({ x, y, kind: def.effect.kind });
     }
   }
@@ -118,34 +121,29 @@ export function unitArea(world, unit, partId = null) {
 
 // --- Connections inside a machine --------------------------------------------
 
-// Every port's link status. 'linked' has a partner port; 'open' faces an empty
-// cell, the edge of the Workbench or a side of a module with no port there;
-// 'mismatch' touches a port it can't connect to. An open or mismatched port
-// behaves the same way in a run — it spills or draws on the machine's tile —
-// the difference is only that a mismatch is almost always a mistake, so the
-// screen flags it.
-export function connect(parts, grid = WORKBENCH) {
-  const at = new Map(parts.map((p) => [tileKey(p.x, p.y), p]));
+// Every port's link status, worked out along the row from left to right. An
+// input takes the nearest output of its flow to its left that nothing nearer
+// has taken; it is then 'linked' to it. An input with nothing to take, and an
+// output nobody takes, are 'open': in a run an open input draws from the
+// ground under the machine and an open output spills onto its tile.
+export function connect(parts) {
   const ports = new Map();
-  for (const p of parts) {
-    for (const port of portsOf(p)) {
-      const [nx, ny] = neighbour(p.x, p.y, port.side);
-      const info = { ...port, x: p.x, y: p.y, status: 'open', edge: !onGrid(grid, nx, ny) };
-      const q = info.edge ? null : at.get(tileKey(nx, ny));
-      const other = q && portsOf(q).find((o) => o.side === opposite(port.side));
-      if (other) {
-        info.partner = other.key;
-        info.partnerId = q.id;
-        if (other.flow === port.flow && other.dir !== port.dir) {
-          info.status = 'linked';
-        } else {
-          info.status = 'mismatch';
-          info.reason = other.flow !== port.flow ? 'flow' : `both-${port.dir}`;
-        }
-      }
-      ports.set(port.key, info);
+  const offered = []; // outputs to the left still untaken, nearest last
+  parts.forEach((p, pos) => {
+    const mine = portsOf(p).map((port) => ({ ...port, pos, status: 'open' }));
+    for (const info of mine) {
+      if (info.dir !== 'in') continue;
+      const k = offered.findLastIndex((o) => o.flow === info.flow);
+      if (k < 0) continue;
+      const [out] = offered.splice(k, 1);
+      Object.assign(info, { status: 'linked', partner: out.key, partnerId: out.id });
+      Object.assign(out, { status: 'linked', partner: info.key, partnerId: info.id });
     }
-  }
+    for (const info of mine) {
+      if (info.dir === 'out') offered.push(info);
+      ports.set(info.key, info);
+    }
+  });
   return { ports };
 }
 
@@ -159,8 +157,8 @@ function addCause(tiles, key, kind, cause) {
 // One machine's flows for one turn, settled as a fixed point that starts with
 // everything off, so a loop with no source in it never switches itself on and
 // the order modules are listed in can't change the result. Effects land on the
-// world's tiles; waste heat stays inside the machine, on the cells round the
-// converter.
+// world's tiles; waste heat stays inside the machine, on the pieces either
+// side of the converter.
 function settle(unit, state, tiles, world) {
   const { parts, net, charge, ground } = state;
   const present = parts.filter((p) => state.burntAfter[p.id] === undefined);
@@ -212,13 +210,13 @@ function settle(unit, state, tiles, world) {
     if (!active[p.id]) continue;
     const def = MODULES[p.type];
     if (def.kind === 'converter') {
-      for (const side of SIDES) {
-        const [x, y] = neighbour(p.x, p.y, side);
-        if (onGrid(WORKBENCH, x, y)) (inner[tileKey(x, y)] ??= []).push({ kind: 'waste', unit: unit.id, id: p.id });
+      const pos = parts.indexOf(p);
+      for (const at of [pos - 1, pos + 1]) {
+        if (at >= 0 && at < parts.length) (inner[at] ??= []).push({ kind: 'waste', unit: unit.id, id: p.id });
       }
     }
     if (def.effect) {
-      const front = effectFront(p, unit.rot);
+      const front = effectFront(unit.rot);
       for (const [x, y] of areaTiles(world, unit.x, unit.y, def.effect.area, front)) {
         addCause(tiles, tileKey(x, y), def.effect.kind, { kind: 'effect', unit: unit.id, id: p.id, front });
       }
@@ -232,22 +230,20 @@ function settle(unit, state, tiles, world) {
   return { present: [...presentIds], active, carrying, draws, spills, inner, charge: { ...charge } };
 }
 
-// What each cell inside a machine feels this turn: its own waste heat, plus
-// whatever lands on the machine's tile in the world. Water on the tile wets
-// every module in the machine, which is how a sprinkler cools its neighbours.
+// What each piece of a machine feels this turn, by its place in the row: waste
+// heat from a converter beside it, plus whatever lands on the machine's tile
+// in the world. Water on the tile wets every module in the machine, which is
+// how a sprinkler cools its neighbours.
 function cellsOf(unit, inner, tiles) {
   const world = tiles[tileKey(unit.x, unit.y)];
   const cells = {};
-  for (let y = 0; y < WORKBENCH.rows; y++) {
-    for (let x = 0; x < WORKBENCH.cols; x++) {
-      const key = tileKey(x, y);
-      const hot = [...(inner[key] ?? []), ...(world?.hot ?? [])];
-      const wet = world?.wet ?? [];
-      if (hot.length === 0 && wet.length === 0) continue;
-      const steam = hot.length > 0 && wet.length > 0;
-      cells[key] = { hot, wet, steam, isHot: hot.length > 0 && !steam };
-    }
-  }
+  unit.machine.parts.forEach((p, pos) => {
+    const hot = [...(inner[pos] ?? []), ...(world?.hot ?? [])];
+    const wet = world?.wet ?? [];
+    if (hot.length === 0 && wet.length === 0) return;
+    const steam = hot.length > 0 && wet.length > 0;
+    cells[pos] = { hot, wet, steam, isHot: hot.length > 0 && !steam };
+  });
   return cells;
 }
 
@@ -295,7 +291,7 @@ export function runRound(world, units, tuning = TUNING) {
       const state = states.get(unit.id);
       const record = records[unit.id];
       record.turn = turn;
-      record.tiles = cellsOf(unit, record.inner, tiles);
+      record.cells = cellsOf(unit, record.inner, tiles);
       delete record.inner;
       record.events = [];
       for (const p of state.parts) {
@@ -305,15 +301,15 @@ export function runRound(world, units, tuning = TUNING) {
           if (state.charge[p.id] === 0) record.events.push({ type: 'empty', id: p.id });
         }
       }
-      for (const p of state.parts) {
-        if (!record.present.includes(p.id) || MODULES[p.type].material !== 'wood') continue;
-        const cell = record.tiles[tileKey(p.x, p.y)];
+      state.parts.forEach((p, pos) => {
+        if (!record.present.includes(p.id) || MODULES[p.type].material !== 'wood') return;
+        const cell = record.cells[pos];
         state.streak[p.id] = cell?.isHot ? state.streak[p.id] + 1 : 0;
         if (state.streak[p.id] >= tuning.burnTurns) {
           state.burntAfter[p.id] = turn;
           record.events.push({ type: 'burn', id: p.id, causes: cell.hot });
         }
-      }
+      });
       record.streak = { ...state.streak };
     }
     turns.push({ turn, tiles, units: records });
@@ -326,7 +322,7 @@ export function runRound(world, units, tuning = TUNING) {
 
 // One machine's side of a round, turn by turn: { net, burntAfter, ground,
 // turns: [record] }, where each record says which parts are present and
-// running, what each port carries, and what each cell feels.
+// running, what each port carries, and what each piece feels.
 export function unitView(round, unitId) {
   const u = round.units[unitId];
   return { ...u, turns: round.turns.map((t) => t.units[unitId]) };
@@ -388,14 +384,14 @@ export function turnsText(list, last) {
 
 // Names whatever made a tile hot or wet, as seen from inside unit `selfId`:
 // its own modules by name, anyone else's as "Torch in Hot Box (C4)".
-export function causeNamer(units, labelOf = label) {
+export function causeNamer(units, labelOf = null) {
   const byUnit = new Map(units.map((u) => [u.id, u]));
   return (cause, selfId) => {
     if (cause.kind === 'terrain') return `the ${TERRAIN[cause.terrain].name.toLowerCase()} under the machine`;
     const unit = byUnit.get(cause.unit);
     const part = unit.machine.parts.find((p) => p.id === cause.id);
     const own = cause.unit === selfId;
-    const who = own ? labelOf(part) : `${MODULES[part.type].name} in ${unitLabel(unit)}`;
+    const who = own ? (labelOf ?? labelFor(unit.machine.parts))(part) : `${MODULES[part.type].name} in ${unitLabel(unit)}`;
     if (cause.kind === 'waste') return `waste heat from ${who}`;
     if (cause.kind === 'spill') return `heat spilling out of ${who}`;
     return who;
@@ -405,7 +401,7 @@ export function causeNamer(units, labelOf = label) {
 // Why a part isn't running on a given turn, followed upstream to the first
 // thing that is actually wrong, so the answer names the cause rather than the
 // next pipe along.
-export function whyIdle(parts, sim, id, turn, labelOf = label) {
+export function whyIdle(parts, sim, id, turn, labelOf = labelFor(parts)) {
   const byId = new Map(parts.map((p) => [p.id, p]));
   const seen = new Set();
   const walk = (partId) => {
@@ -428,15 +424,11 @@ export function whyIdle(parts, sim, id, turn, labelOf = label) {
       const info = sim.net.ports.get(port.key);
       const flow = FLOW_NAMES[port.flow];
       if (info.status === 'linked') return walk(info.partnerId);
-      if (info.status === 'mismatch') {
-        const other = sim.net.ports.get(info.partner);
-        return `${whose} ${flow} input touches ${labelOf(byId.get(info.partnerId))}'s ${FLOW_NAMES[other.flow]} ${other.dir}put, and they can't connect`;
-      }
       const ground = sim.ground;
       const where = ground
-        ? `the ${ground.name.toLowerCase()} under the machine gives no ${flow}`
-        : `the bare ground under the machine has no ${flow} to give`;
-      return `${whose} ${flow} input isn't connected, and ${where}`;
+        ? `the ${ground.name.toLowerCase()} under the machine gives none`
+        : `the bare ground under the machine has none to give`;
+      return `${whose} ${flow} input gets nothing: no piece to its left has ${flow} to spare, and ${where}`;
     }
     return "it isn't getting what it needs";
   };
@@ -450,7 +442,7 @@ export function whyIdle(parts, sim, id, turn, labelOf = label) {
 //   opts.labelOf  how a part is named
 //   opts.nameCause, opts.self  how a burn's causes are named (causeNamer)
 export function describe(parts, sim, opts = {}) {
-  const { rot = 0, labelOf = label, self = BENCH_UNIT } = opts;
+  const { rot = 0, labelOf = labelFor(parts), self = BENCH_UNIT } = opts;
   const nameCause =
     opts.nameCause ?? causeNamer([{ id: self, machine: { parts }, x: 0, y: 0 }], labelOf);
   const result = [];
@@ -460,7 +452,7 @@ export function describe(parts, sim, opts = {}) {
   const last = sim.turns.length;
 
   if (parts.length === 0) {
-    result.push({ text: 'The Workbench is empty. Drag a module from the left onto a cell to start a machine.', ids: [] });
+    result.push({ text: 'The Workbench is empty. Drag a module into the row to start a machine.', ids: [] });
     return { result, problems, notes };
   }
 
@@ -474,7 +466,7 @@ export function describe(parts, sim, opts = {}) {
   for (const p of effectors) {
     const def = MODULES[p.type];
     const on = sim.turns.filter((t) => t.active[p.id]).map((t) => t.turn);
-    const what = `${labelOf(p)} ${EFFECT_VERB[def.effect.kind]} ${areaText(def.effect.area, effectFront(p, rot))}`;
+    const what = `${labelOf(p)} ${EFFECT_VERB[def.effect.kind]} ${areaText(def.effect.area, effectFront(rot))}`;
     if (on.length === 0) {
       problems.push({ text: `${labelOf(p)} never runs: ${whyIdle(parts, sim, p.id, 1, labelOf)}.`, ids: [p.id] });
       continue;
@@ -483,24 +475,6 @@ export function describe(parts, sim, opts = {}) {
     const stop = on[on.length - 1];
     if (stop < last) text += ` Then it stops: ${whyIdle(parts, sim, p.id, stop + 1, labelOf)}.`;
     result.push({ text, ids: [p.id], good: true, on });
-  }
-
-  const pairs = new Set();
-  for (const info of sim.net.ports.values()) {
-    if (info.status !== 'mismatch') continue;
-    const pair = [info.key, info.partner].sort().join('|');
-    if (pairs.has(pair)) continue;
-    pairs.add(pair);
-    const other = sim.net.ports.get(info.partner);
-    const why =
-      info.reason === 'flow'
-        ? `${FLOW_NAMES[info.flow]} meets ${FLOW_NAMES[other.flow]}`
-        : `two ${info.dir}puts face each other`;
-    problems.push({
-      text: `${labelOf(byId.get(info.id))} and ${labelOf(byId.get(info.partnerId))} touch but can't connect: ${why}.`,
-      ids: [info.id, info.partnerId],
-      kind: 'mismatch',
-    });
   }
 
   for (const record of sim.turns) {
@@ -530,11 +504,11 @@ export function describe(parts, sim, opts = {}) {
       const flow = FLOW_NAMES[spill.flow];
       const effect =
         spill.flow === 'matter'
-          ? "onto the machine's tile and wets it"
+          ? "spills onto the machine's tile and wets it"
           : spill.flow === 'heat'
-            ? "onto the machine's tile and heats it"
-            : 'and goes to waste';
-      notes.push({ text: `${labelOf(p)} has an open ${flow} output: it spills ${effect}.`, ids: [p.id], kind: 'spill' });
+            ? "spills onto the machine's tile and heats it"
+            : 'goes to waste';
+      notes.push({ text: `${labelOf(p)} gives ${flow} that no piece to its right takes: it ${effect}.`, ids: [p.id], kind: 'spill' });
     }
     for (const draw of record.draws) {
       if (drew.has(draw.key)) continue;
@@ -550,7 +524,7 @@ export function describe(parts, sim, opts = {}) {
       if (!record.active[p.id] || MODULES[p.type].kind !== 'converter' || wasted.has(p.id)) continue;
       wasted.add(p.id);
       notes.push({
-        text: `${labelOf(p)} gives off waste heat onto the cells around it while it runs.`,
+        text: `${labelOf(p)} gives off waste heat onto the pieces either side of it while it runs.`,
         ids: [p.id],
         kind: 'waste',
       });
@@ -563,7 +537,7 @@ export function describe(parts, sim, opts = {}) {
 const TOUCH_VERB = { wet: 'is wetted by', hot: 'is heated by' };
 
 // The whole round in the world, machine by machine. Lines carry unit ids. The
-// Workbench's own concerns (ports that don't meet, spills, waste heat) are
+// Workbench's own concerns (spills, waste heat) are
 // left to the Workbench; what is said here is what each machine does where it
 // stands, what wrecks it, and what the machines do to each other.
 export function describeRound(world, units, round) {
@@ -586,7 +560,6 @@ export function describeRound(world, units, round) {
       (line.good ? result : notes).push({ text: `${who}: ${line.text}`, ids: [unit.id], good: line.good });
     }
     for (const line of desc.problems) {
-      if (line.kind === 'mismatch') continue;
       problems.push({ text: `${who}: ${line.text}`, ids: [unit.id] });
     }
     for (const line of desc.notes) {

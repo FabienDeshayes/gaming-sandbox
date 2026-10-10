@@ -11,11 +11,12 @@ npm run test:ui    # node tests/game.test.js
 
 ## `tests/rules.test.mjs` — the rules
 
-Plain `node:test` against `src/core/machine.js`, no browser: how ports link,
-sources running out, open inputs drawing from the ground under the machine,
-spills onto its tile, controls, loops with no source, waste heat and burning,
-steam, effect areas turned with module and machine, machines meeting through
-shared tiles in a round, determinism whatever order machines are listed in,
+Plain `node:test` against `src/core/machine.js`, no browser: how an input
+takes the nearest untaken flow to its left along a machine's row, sources
+running out, open inputs drawing from the ground under the machine, spills
+onto its tile, controls, waste heat and burning, steam, effect areas facing
+the machine's front, machines meeting through shared tiles in a round,
+determinism whatever order machines are listed in,
 and the readouts naming the real cause of a stop. Each test builds its own
 small machine (and world) inline, and reads tuned numbers (charges,
 `TUNING.burnTurns`) from the data tables instead of writing them down twice.
@@ -28,7 +29,8 @@ Pitchou's and trimmed). Every test gets a fresh page with empty
 saved and placed; tests that build from scratch press **New** first. Tests only
 send the pointer and key events a player would, flip screens with
 `game.open('Playground')`, and read the shown scene's `testState()` back
-(`game.state()`). `game.reload()` reloads the page and keeps storage, for
+(`game.state()`). `game.slot(i)` is slot i of the Workbench row and
+`game.tile(x, y)` a tile of the Playground. `game.reload()` reloads the page and keeps storage, for
 anything that has to survive a visit.
 
 The harness serves the game folder and rewrites the blocked CDN Phaser

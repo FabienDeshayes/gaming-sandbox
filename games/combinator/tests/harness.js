@@ -265,12 +265,18 @@ export async function openGame(browser, port, { viewport, phone = false, query =
     },
 
     // Where things are, in design coords, read from the live scene. `tile` is
-    // a cell of the Workbench or a tile of the Playground, whichever is shown.
+    // a tile of the Playground.
     tile: (x, y) =>
       page.evaluate(([x, y]) => {
         const c = window.__game.scene.getScenes(true)[0].view.center(x, y);
         return [c.x, c.y];
       }, [x, y]),
+    // Slot i of the Workbench's row (the middle of the piece there, if any).
+    slot: (i) =>
+      page.evaluate((i) => {
+        const c = window.__game.scene.getScenes(true)[0].view.center(i);
+        return [c.x, c.y];
+      }, i),
     // A module in the Workbench palette.
     paletteItem: (type) =>
       page.evaluate((type) => {

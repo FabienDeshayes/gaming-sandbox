@@ -35,12 +35,11 @@ export const FONT_SM = 14;
 // A press that travels further than this (in design pixels) is a drag, not a
 // click. A fingertip wobbles more than a mouse.
 export const DRAG_THRESHOLD = MOBILE ? 10 : 8;
-// How long each turn shows during a played-back test run.
-export const PLAY_STEP_MS = 700;
 
 // The Workbench: modules on the left, the machine's row in the middle with a
-// few words under each piece and its test world and run below that, saved
-// machines and the readout on the right. `bench.top` is where the row starts
+// few words under each piece and its test world and grounds below that, saved
+// machines and the readout on the right. `grounds` is the list of grounds to
+// test on, beside the test world. `bench.top` is where the row starts
 // taking drops; links that skip pieces run over it between `top` and `y`.
 export const LAYOUT = {
   header: { h: 56 },
@@ -49,24 +48,24 @@ export const LAYOUT = {
   bench: { x: 268, y: 172, slot: 84, gap: 6, top: 112, captionH: 168 },
   legend: { y: 444 },
   preview: { x: 262, y: 500, tile: 34 },
-  timeline: { x: 454, y: 474, w: 440, labelW: 150, rowH: 26, bottom: 784 },
+  grounds: { x: 454, y: 482, rowH: 36 },
   library: { x: 914, y: 72, w: 350, rowH: 30, rows: 4 },
   panel: { x: 914, y: 256, w: 350, h: 528, inspectH: 210 },
 };
 
 // The Playground: saved machines on the left, the world in the middle with the
-// round below it, the readout on the right.
+// run (what has worked so far) below it, the readout on the right.
 export const PLAY_LAYOUT = {
   machines: { x: 16, y: 72, w: 224, rowH: 44, rows: 13 },
   world: { x: 282, y: 104, tile: 62 },
   legend: { y: 562 },
-  timeline: { x: 262, y: 588, w: 632, labelW: 190, rowH: 24, bottom: 784 },
+  run: { x: 262, y: 588, w: 632, bottom: 784 },
   panel: { x: 914, y: 72, w: 350, h: 712, inspectH: 250 },
 };
 
 // The mobile layouts: one column, the grid on top, what you drag from under
 // it, and a tabbed panel at the bottom for everything else (the readout, the
-// inspector, the test run and the saved machines). `panel` runs to the bottom
+// inspector, the test and the saved machines). `panel` runs to the bottom
 // of the screen, however tall the phone makes it.
 const panelTo = (y) => ({ x: 16, y, w: GAME_WIDTH - 32, h: GAME_HEIGHT - 8 - y });
 
@@ -110,37 +109,40 @@ export const COLORS = {
   selectedHex: 0x3d5a80,
 };
 
-// Each flow has a colour *and* a shape, so the four stay apart for anyone who
-// can't tell the colours apart.
+// Each element has a colour *and* a shape, so the four stay apart for anyone
+// who can't tell the colours apart.
 export const FLOW_STYLE = {
-  motion: { color: 0x5aa9ff, css: '#5aa9ff', shape: 'circle' },
-  matter: { color: 0x33d1c4, css: '#33d1c4', shape: 'square' },
-  heat: { color: 0xff8a3d, css: '#ff8a3d', shape: 'triangle' },
-  signal: { color: 0xf5d547, css: '#f5d547', shape: 'diamond' },
+  liquid: { color: 0x4aa8ff, css: '#4aa8ff', shape: 'circle' },
+  solid: { color: 0xd9a95b, css: '#d9a95b', shape: 'square' },
+  gas: { color: 0x9fe8c9, css: '#9fe8c9', shape: 'diamond' },
+  energy: { color: 0xffb02e, css: '#ffb02e', shape: 'triangle' },
 };
 
 export const ROLE_STYLE = {
   source: { color: 0x3f9b62, css: '#5cc985', label: 'Source' },
   converter: { color: 0x7a55c9, css: '#b593ff', label: 'Transmission · Converter' },
-  control: { color: 0x3d6f9e, css: '#7fb2e5', label: 'Transmission · Control' },
   effector: { color: 0xb8456a, css: '#ff7aa2', label: 'Effector' },
 };
 
 export const MATERIAL_STYLE = {
-  wood: { color: 0xc08a50, label: 'Wood — burns after 2 hot turns' },
+  wood: { color: 0xc08a50, label: 'Wood — burns down if it is hot while its machine works' },
   metal: { color: 0xb9c3d1, label: 'Metal — does not burn' },
 };
 
+// What can be left on a tile (data/world.js CONDITIONS), and steam.
 export const EFFECT_STYLE = {
   wet: 0x3aa0ff,
+  sand: 0xd9a95b,
+  fumes: 0x9fe8c9,
+  wind: 0xcfe3ff,
   hot: 0xff6a2a,
   steam: 0xdfe8f0,
-  air: 0xcfe3ff,
-  alert: 0xf5d547,
 };
 
 export const TERRAIN_STYLE = {
   puddle: 0x2f6fb0,
+  sand: 0xc49a55,
+  vent: 0x6fbf9f,
   embers: 0xd9481e,
   draft: 0x8fa3bf,
 };

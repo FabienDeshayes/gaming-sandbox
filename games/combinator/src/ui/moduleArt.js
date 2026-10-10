@@ -91,8 +91,8 @@ export function drawModule(g, type, cx, cy, size, opts = {}) {
   const pathW = Math.max(3, size * 0.07);
   const ports = def.ports.map((port, index) => ({ ...port, index, at: portAnchor(type, index, cx, cy, size) }));
 
-  // Flow paths: every port runs to the hub, so a converter reads as two
-  // colours meeting in the middle and a control as two flows joining.
+  // Flow paths: every port runs to the hub, so a converter reads as the
+  // colours of what it takes and gives meeting in the middle.
   for (const port of ports) {
     const on = lit(port.index);
     g.lineStyle(pathW, FLOW_STYLE[port.flow].color, (on ? 0.95 : 0.22) * bodyAlpha);

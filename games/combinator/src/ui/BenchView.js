@@ -1,12 +1,12 @@
 // Draws the Workbench: the row a machine is built in, the ground it is being
-// tested on, what each piece feels on the turn being viewed, the modules, the
+// tested on, what each piece feels as the machine works, the modules, the
 // links along the row, the flows moving through them, and a few words under
 // each piece saying what it takes, what it gives and how it is doing. Holds no
-// machine state — the scene hands it the parts, the run and the turn, and it
-// draws that.
+// machine state — the scene hands it the parts and the record of the machine
+// working once, and it draws that.
 
 import { COLORS, EFFECT_STYLE, FLOW_STYLE, FONT, LAYOUT, MOBILE, MOBILE_LAYOUT, TERRAIN_STYLE, TEXT_RESOLUTION } from '../config.js';
-import { MODULES, TUNING } from '../data/modules.js';
+import { MODULES } from '../data/modules.js';
 import { TERRAIN } from '../data/world.js';
 import { FLOW_NAMES, labelFor, portsOf } from '../core/machine.js';
 import { drawModule, portAnchor } from './moduleArt.js';
@@ -18,9 +18,9 @@ const LANE = MOBILE ? 6 : 8; // how far apart links over the row run
 // What an effector does, in a few words under it.
 const EFFECT_SHORT = {
   wet: 'Wets 5 tiles',
-  air: 'Air on 2 tiles ahead',
+  sand: 'Sands the tile ahead',
+  wind: 'Wind on 2 tiles ahead',
   hot: 'Heats the tile ahead',
-  alert: 'Rings over 5 tiles',
 };
 
 export class BenchView {
@@ -79,10 +79,12 @@ export class BenchView {
     return i;
   }
 
-  // state: { placements, sim, turn, ground, ghostId, highlight: Set }
+  // state: { placements, step, ground, ghostId, highlight: Set } — step is
+  // the record of the machine working once (core/machine.js).
   render(state) {
-    const { placements, sim, turn } = state;
-    const record = sim.turns[turn - 1];
+    const { placements, step } = state;
+    const record = step;
+    const sim = step;
     const size = this.slot * BODY;
     const present = new Set(record.present);
     const labelOf = labelFor(placements);
@@ -119,8 +121,8 @@ export class BenchView {
       this.text(c.x, c.y, '+', { fontSize: MOBILE ? '20px' : '26px', color: COLORS.muted }, 2);
     }
 
-    // What each piece feels this turn: waste heat, and whatever lands on the
-    // machine's tile in the world.
+    // What each piece feels as the machine works: waste heat, and whatever is
+    // on the machine's tile in the world.
     for (const [pos, cell] of Object.entries(record.cells)) {
       drawTileEffects(this.ground, cell, this.slotX(Number(pos)), this.y0, this.slot);
     }
@@ -192,9 +194,7 @@ export class BenchView {
 
       this.caption(p, i, labelOf, sim, record, state.ground);
       if (burnt) return;
-      if (def.role === 'source') this.drawCharge(record.charge[p.id], def.charge, c, size);
-      const streak = record.streak[p.id];
-      if (def.material === 'wood' && streak > 0) this.drawFlame(c.x + size / 2 - 8, c.y - size / 2 + 8, streak);
+      if (record.cells[i]?.isHot && def.material === 'wood') this.drawFlame(c.x + size / 2 - 8, c.y - size / 2 + 8);
     });
 
     const outline = (i, alpha, width) => {
@@ -224,10 +224,11 @@ export class BenchView {
     const lines = [];
     const burnt = !record.present.includes(p.id);
     const active = !!record.active[p.id];
+    const burns = record.burns.some((b) => b.id === p.id);
     let status;
     if (burnt) status = { text: 'Burnt', color: '#b08a6a' };
-    else if (active) status = { text: 'Running', color: COLORS.good };
-    else if (def.role === 'source') status = { text: 'Empty', color: COLORS.warn };
+    else if (burns) status = { text: 'Works, burns', color: COLORS.warn };
+    else if (active) status = { text: 'Works', color: COLORS.good };
     else status = { text: 'Idle', color: COLORS.bad };
     lines.push({ text: `#${i + 1} ${status.text}`, color: status.color, bold: true });
 
@@ -246,8 +247,7 @@ export class BenchView {
       } else if (other) {
         lines.push({ text: MOBILE ? `${flow} ▸ ${short(other.id)}` : `${flow} ▸ ${labelOf(other)}`, color });
       } else {
-        const lands = port.flow === 'matter' || port.flow === 'heat';
-        lines.push({ text: `${flow} ${lands ? 'spills' : 'wasted'}`, color });
+        lines.push({ text: `${flow} spills`, color });
       }
     }
     if (def.effect) {
@@ -256,10 +256,12 @@ export class BenchView {
     const cell = record.cells[i];
     if (!burnt && cell) {
       if (cell.steam) lines.push({ text: 'Steaming', color: '#dfe8f0' });
+      else if (cell.smothered) lines.push({ text: 'Heat smothered', color: FLOW_STYLE.solid.css });
       else if (cell.isHot) {
         const wood = def.material === 'wood';
-        lines.push({ text: wood ? `Hot ${record.streak[p.id]}/${TUNING.burnTurns}, wood` : 'Hot, metal', color: FLOW_STYLE.heat.css });
-      } else if (cell.wet.length) lines.push({ text: 'Wet', color: FLOW_STYLE.matter.css });
+        lines.push({ text: wood ? 'Hot, wood' : 'Hot, metal', color: FLOW_STYLE.energy.css });
+      } else if (cell.wet.length) lines.push({ text: 'Wet', color: FLOW_STYLE.liquid.css });
+      else if (cell.sand.length) lines.push({ text: 'Sanded', color: FLOW_STYLE.solid.css });
     }
 
     const x = this.slotX(i) + this.slot / 2;
@@ -283,25 +285,12 @@ export class BenchView {
     }
   }
 
-  drawCharge(left, full, c, size) {
-    const w = MOBILE ? 5 : 7;
-    const gap = MOBILE ? 2 : 3;
-    const total = full * w + (full - 1) * gap;
-    const x = c.x - total / 2;
-    const y = c.y + size / 2 - (MOBILE ? 8 : 11);
-    for (let i = 0; i < full; i++) {
-      this.modules.fillStyle(i < left ? 0x9ff0b8 : 0x3a414d, 1);
-      this.modules.fillRect(x + i * (w + gap), y, w, MOBILE ? 4 : 6);
-    }
-  }
-
-  drawFlame(x, y, streak) {
+  drawFlame(x, y) {
     const g = this.modules;
     g.fillStyle(EFFECT_STYLE.hot, 1);
     g.fillTriangle(x - 6, y + 7, x + 6, y + 7, x, y - 9);
     g.fillStyle(0xffd27a, 1);
     g.fillTriangle(x - 3, y + 7, x + 3, y + 7, x, y - 2);
-    if (streak > 1) g.fillCircle(x + 8, y - 6, 3);
   }
 
   // Flow on the move: dots running along every live link, puffs where an

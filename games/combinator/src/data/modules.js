@@ -1,116 +1,98 @@
-// The module catalogue and the numbers the machine rules read.
+// The module catalogue.
 //
 // A machine is a row of modules, read left to right. A module's inputs take
 // flow from pieces to its left and its outputs offer flow to pieces on its
 // right (src/core/machine.js says exactly how). Everything a module does
-// follows from its role (DESIGN.md §4), so a definition only says which flows
-// it takes and gives, what it is made of, and — for sources and effectors —
-// how long it runs or what it does to the world.
+// follows from its role (DESIGN.md §4), so a definition only says which
+// elements it takes and gives, what it is made of, and — for effectors — what
+// it does to the world. Every module works every time its machine is made to
+// work: nothing runs out.
 
-export const FLOWS = ['motion', 'matter', 'heat', 'signal'];
-
-export const TUNING = {
-  // How many turns a test run lasts. Long enough for every source to run dry.
-  turns: 8,
-  // A wooden module burns once its tile has been hot this many turns in a row.
-  burnTurns: 2,
-};
+// The four elements a flow can carry: three states of matter, and the energy
+// that moves matter from one state to another.
+export const FLOWS = ['liquid', 'solid', 'gas', 'energy'];
 
 const port = (dir, flow) => ({ dir, flow });
 
 export const MODULES = {
-  // --- Sources: produce a flow until they run out -----------------------------
+  // --- Sources: give an element every time the machine works -----------------
   tank: {
     name: 'Water Tank',
     role: 'source',
     material: 'metal',
-    charge: 4,
-    ports: [port('out', 'matter')],
-    blurb: 'Pushes out water for 4 turns, then it is empty.',
+    ports: [port('out', 'liquid')],
+    blurb: 'Gives water (Liquid) every time the machine works.',
   },
-  spring: {
-    name: 'Spring',
+  hopper: {
+    name: 'Sand Hopper',
     role: 'source',
     material: 'metal',
-    charge: 3,
-    ports: [port('out', 'motion')],
-    blurb: 'A wound spring. Turns for 3 turns, then it is unwound.',
+    ports: [port('out', 'solid')],
+    blurb: 'Gives sand (Solid) every time the machine works.',
   },
-  burner: {
-    name: 'Burner',
+  bottle: {
+    name: 'Gas Bottle',
     role: 'source',
     material: 'metal',
-    charge: 4,
-    ports: [port('out', 'heat')],
-    blurb: 'Burns its fuel for 4 turns, then it goes out.',
+    ports: [port('out', 'gas')],
+    blurb: 'Gives gas every time the machine works.',
   },
   battery: {
     name: 'Battery',
     role: 'source',
     material: 'metal',
-    charge: 5,
-    ports: [port('out', 'signal')],
-    blurb: 'Sends a signal for 5 turns, then it is flat.',
+    ports: [port('out', 'energy')],
+    blurb: 'Gives Energy every time the machine works.',
   },
 
-  // --- Transmission: converters turn one flow into another (and run hot) ------
-  pump: {
-    name: 'Pump',
+  // --- Transmission: converters turn one element into another (and run hot) --
+  boiler: {
+    name: 'Boiler',
     role: 'transmission',
     kind: 'converter',
     material: 'metal',
-    ports: [port('in', 'motion'), port('in', 'matter'), port('out', 'matter')],
-    blurb: 'Uses motion to push water. Needs both inputs.',
+    ports: [port('in', 'liquid'), port('in', 'energy'), port('out', 'gas')],
+    blurb: 'Boils Liquid into Gas with Energy. Needs both inputs.',
+  },
+  condenser: {
+    name: 'Condenser',
+    role: 'transmission',
+    kind: 'converter',
+    material: 'metal',
+    ports: [port('in', 'gas'), port('out', 'liquid')],
+    blurb: 'Cools Gas back into Liquid.',
+  },
+  melter: {
+    name: 'Melter',
+    role: 'transmission',
+    kind: 'converter',
+    material: 'metal',
+    ports: [port('in', 'solid'), port('in', 'energy'), port('out', 'liquid')],
+    blurb: 'Melts a Solid into Liquid with Energy. Needs both inputs.',
+  },
+  freezer: {
+    name: 'Freezer',
+    role: 'transmission',
+    kind: 'converter',
+    material: 'metal',
+    ports: [port('in', 'liquid'), port('in', 'energy'), port('out', 'solid')],
+    blurb: 'Uses Energy to freeze Liquid into a Solid. Needs both inputs.',
   },
   wheel: {
     name: 'Water Wheel',
     role: 'transmission',
     kind: 'converter',
     material: 'wood',
-    ports: [port('in', 'matter'), port('out', 'motion')],
-    blurb: 'Turns flowing water into motion.',
+    ports: [port('in', 'liquid'), port('out', 'energy')],
+    blurb: 'Turns flowing Liquid into Energy.',
   },
   engine: {
     name: 'Steam Engine',
     role: 'transmission',
     kind: 'converter',
     material: 'metal',
-    ports: [port('in', 'heat'), port('out', 'motion')],
-    blurb: 'Turns heat into motion.',
-  },
-  brake: {
-    name: 'Friction Brake',
-    role: 'transmission',
-    kind: 'converter',
-    material: 'metal',
-    ports: [port('in', 'motion'), port('out', 'heat')],
-    blurb: 'Turns motion into heat.',
-  },
-  thermo: {
-    name: 'Thermo Switch',
-    role: 'transmission',
-    kind: 'converter',
-    material: 'metal',
-    ports: [port('in', 'heat'), port('out', 'signal')],
-    blurb: 'Sends a signal while it is fed heat.',
-  },
-
-  // --- Transmission: controls let a flow through only on a signal -------------
-  valve: {
-    name: 'Valve',
-    role: 'transmission',
-    kind: 'control',
-    material: 'metal',
-    ports: [port('in', 'matter'), port('in', 'signal'), port('out', 'matter')],
-    blurb: 'Lets water through only while it gets a signal too.',
-  },
-  clutch: {
-    name: 'Clutch',
-    role: 'transmission',
-    kind: 'control',
-    material: 'metal',
-    ports: [port('in', 'motion'), port('in', 'signal'), port('out', 'motion')],
-    blurb: 'Lets motion through only while it gets a signal too.',
+    ports: [port('in', 'gas'), port('out', 'energy')],
+    blurb: 'Turns Gas under pressure into Energy.',
   },
 
   // --- Effectors: act on the world --------------------------------------------
@@ -118,40 +100,39 @@ export const MODULES = {
     name: 'Sprinkler',
     role: 'effector',
     material: 'metal',
-    ports: [port('in', 'matter')],
+    ports: [port('in', 'liquid')],
     effect: { kind: 'wet', area: 'cross' },
     blurb: 'Wets its own tile and the 4 tiles around it.',
+  },
+  chute: {
+    name: 'Sand Chute',
+    role: 'effector',
+    material: 'metal',
+    ports: [port('in', 'solid')],
+    effect: { kind: 'sand', area: 'front1' },
+    blurb: 'Pours sand over the tile in front of the machine.',
   },
   fan: {
     name: 'Fan',
     role: 'effector',
     material: 'wood',
-    ports: [port('in', 'motion')],
-    effect: { kind: 'air', area: 'front2' },
-    blurb: 'Blows air onto the 2 tiles in front of the machine.',
+    ports: [port('in', 'energy')],
+    effect: { kind: 'wind', area: 'front2' },
+    blurb: 'Blows wind onto the 2 tiles in front of the machine.',
   },
   torch: {
     name: 'Torch',
     role: 'effector',
     material: 'metal',
-    ports: [port('in', 'heat')],
+    ports: [port('in', 'gas')],
     effect: { kind: 'hot', area: 'front1' },
-    blurb: 'Heats the tile in front of the machine.',
-  },
-  bell: {
-    name: 'Alarm Bell',
-    role: 'effector',
-    material: 'metal',
-    ports: [port('in', 'signal')],
-    effect: { kind: 'alert', area: 'cross' },
-    blurb: 'Rings, alerting its own tile and the 4 around it.',
+    blurb: 'Burns Gas to heat the tile in front of the machine.',
   },
 };
 
 // Palette order: grouped by role so the three roles read as three shelves.
 export const PALETTE = [
-  { heading: 'Sources', ids: ['tank', 'spring', 'burner', 'battery'] },
-  { heading: 'Converters', ids: ['pump', 'wheel', 'engine', 'brake', 'thermo'] },
-  { heading: 'Controls', ids: ['valve', 'clutch'] },
-  { heading: 'Effectors', ids: ['sprinkler', 'fan', 'torch', 'bell'] },
+  { heading: 'Sources', ids: ['tank', 'hopper', 'bottle', 'battery'] },
+  { heading: 'Converters', ids: ['boiler', 'condenser', 'melter', 'freezer', 'wheel', 'engine'] },
+  { heading: 'Effectors', ids: ['sprinkler', 'chute', 'fan', 'torch'] },
 ];

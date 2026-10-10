@@ -1,13 +1,12 @@
 // The Workbench: where machines are built, named, saved and deleted. A palette
 // of modules, the row a machine is built in, the ground it is tested
-// standing on, the small world round it showing what it does there, a readout
-// in sentences and a turn-by-turn timeline of its test run. Every edit re-runs
-// the test at once, so what the screen shows is always what the machine will
-// do — and while a module is being dragged, what it *would* do with it dropped.
+// standing on, the small world round it showing what it does there when it
+// works, and a readout in sentences. Every edit makes the machine work again
+// at once, so what the screen shows is always what the machine will do — and
+// while a module is being dragged, what it *would* do with it dropped.
 
 import {
   COLORS,
-  EFFECT_STYLE,
   FLOW_STYLE,
   FONT,
   FONT_MD,
@@ -17,11 +16,10 @@ import {
   MATERIAL_STYLE,
   MOBILE,
   MOBILE_LAYOUT,
-  PLAY_STEP_MS,
   ROLE_STYLE,
   TEXT_RESOLUTION,
 } from '../config.js';
-import { GROUNDS, TERRAIN, WORKBENCH } from '../data/world.js';
+import { CONDITIONS, GROUNDS, SPILL, TERRAIN, WORKBENCH } from '../data/world.js';
 import { FLOWS, MODULES, PALETTE } from '../data/modules.js';
 import {
   BENCH_UNIT,
@@ -29,6 +27,7 @@ import {
   causeNamer,
   describe,
   labelFor,
+  offerText,
   portsOf,
   testMachine,
   tileKey,
@@ -45,7 +44,6 @@ import { drawMachine } from '../ui/machineArt.js';
 import { drawModule, flowShape, roleKey } from '../ui/moduleArt.js';
 import { Readout } from '../ui/Readout.js';
 import { drawHeader } from '../ui/tabs.js';
-import { Timeline } from '../ui/Timeline.js';
 import { WorldView } from '../ui/WorldView.js';
 
 const HELP = [
@@ -54,6 +52,7 @@ const HELP = [
   'Drag a piece along the row to move it; drag it out of the row (or press Delete) to remove it.',
   'An input with nothing to take draws from the ground; an output nobody takes spills onto the tile. Pick the ground under "Test on".',
   'Effectors act towards the front of the machine, which is north until it is turned on the Playground.',
+  'Every module works every time the machine works. Here it works once, on fresh ground; on the Playground you decide when.',
   'Save the machine, then place it on the Playground.',
 ];
 // The same, for a finger: a tap picks a thing out, and Inspect has buttons to
@@ -62,7 +61,7 @@ const HELP_TOUCH = [
   'A machine is a row of modules. Drag one from the shelf into the row, or tap it and then tap the row.',
   'Flow runs left to right. An input (hollow) takes the nearest flow of its kind from a piece to its left.',
   'Tap a piece to inspect it. Drag it along the row to move it, or out of the row to remove it.',
-  'An input with nothing to take draws from the ground (pick it under Test run); an output nobody takes spills.',
+  'An input with nothing to take draws from the ground (pick it under Test); an output nobody takes spills.',
   'Effectors act towards the front of the machine, which is north until it is turned on the Playground.',
 ];
 // Mouse or finger, in the words the screen uses.
@@ -84,7 +83,6 @@ export class WorkbenchScene extends Phaser.Scene {
     this.ground = draft.ground;
     this.placements = draft.parts;
     this.nextId = 1 + Math.max(0, ...this.placements.map((p) => Number(p.id.slice(1)) || 0));
-    this.viewTurn = 1;
     this.drag = null;
     this.armed = null;
     this.hoverId = null;
@@ -93,15 +91,11 @@ export class WorkbenchScene extends Phaser.Scene {
     this.hoverLib = null;
     this.hoverWorld = null;
     this.lineHighlight = [];
-    this.playTimer = null;
     this.editing = null;
     this.pending = null;
 
     this.input.mouse?.disableContextMenu();
-    drawHeader(this, 'WorkbenchScene', () => {
-      this.finishEdit(true);
-      this.stop();
-    });
+    drawHeader(this, 'WorkbenchScene', () => this.finishEdit(true));
     this.drawActions();
     this.drawMachineBar();
     this.drawPalette();
@@ -135,12 +129,12 @@ export class WorkbenchScene extends Phaser.Scene {
     this.refresh();
   }
 
-  // Desktop: the test world and the run under the Workbench, the saved
-  // machines and the readout down the right.
+  // Desktop: the test world and the grounds to test on under the Workbench,
+  // the saved machines and the readout down the right.
   drawDesktopPanel() {
     this.preview = new WorldView(this, testMachine([], this.ground).world, { ...LAYOUT.preview, depth: 1 });
     this.add
-      .text(LAYOUT.preview.x, LAYOUT.preview.y - 18, 'IN THE WORLD', {
+      .text(LAYOUT.preview.x, LAYOUT.preview.y - 18, 'WORKING ONCE', {
         fontFamily: FONT,
         fontSize: `${FONT_SM}px`,
         fontStyle: 'bold',
@@ -159,15 +153,12 @@ export class WorkbenchScene extends Phaser.Scene {
       this.lineHighlight = ids;
       this.refresh();
     });
-    const { x, y, w } = LAYOUT.timeline;
-    this.drawRunControls(x + w, y + 14);
-    this.turnLabel.setX(x);
-    this.timeline = new Timeline(this, LAYOUT.timeline);
+    const { x, y, rowH } = LAYOUT.grounds;
+    this.drawGroundButtons(x, y, rowH, 96);
   }
 
   // Mobile: everything but the Workbench and its shelf goes under four tabs at
-  // the bottom. Test run holds the ground, the run controls, the test world
-  // and the timeline together.
+  // the bottom. Test holds the test world and the grounds to test on.
   drawMobilePanel() {
     const P = MOBILE_LAYOUT.panel;
     this.tabs = new PanelTabs(this, {
@@ -176,7 +167,7 @@ export class WorkbenchScene extends Phaser.Scene {
       tabs: [
         { key: 'readout', label: 'Readout' },
         { key: 'inspect', label: 'Inspect' },
-        { key: 'test', label: 'Test run' },
+        { key: 'test', label: 'Test' },
         { key: 'saved', label: 'Saved' },
       ],
       onChange: () => this.refresh(),
@@ -184,22 +175,15 @@ export class WorkbenchScene extends Phaser.Scene {
     this.readout = new Readout(this, { ...P, stacked: false }, () => {});
 
     const right = P.x + P.w - 12;
-    const run = this.drawRunControls(right, P.y + 22);
-    this.turnLabel.setX(P.x + 12);
-    const ground = this.drawGroundButtons(P.x + 12, P.y + 58);
-    const top = P.y + 80;
+    const top = P.y + 36;
     const tile = Phaser.Math.Clamp(Math.floor((P.y + P.h - 10 - top) / 5), 14, 28);
+    const worldLabel = this.add
+      .text(P.x + 12, P.y + 18, 'WORKING ONCE', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: COLORS.text, resolution: TEXT_RESOLUTION })
+      .setOrigin(0, 0.5);
     this.preview = new WorldView(this, testMachine([], this.ground).world, { x: P.x + 12, y: top, tile, depth: 1 });
-    const tx = P.x + 12 + tile * 5 + 14;
-    this.timeline = new Timeline(this, {
-      x: tx,
-      y: top,
-      headerY: top + 8,
-      w: right - tx,
-      labelW: 96,
-      rowH: 20,
-      bottom: P.y + P.h - 4,
-    });
+    const gx = P.x + 12 + tile * 5 + 16;
+    const rowH = Math.min(36, Math.floor((P.y + P.h - 8 - (P.y + 36)) / GROUNDS.length));
+    const ground = this.drawGroundButtons(gx, P.y + 18, rowH, 78);
 
     this.library = new ListView(this, {
       x: P.x + 12,
@@ -228,7 +212,7 @@ export class WorkbenchScene extends Phaser.Scene {
 
     this.tabs.add('readout', this.readout.summary);
     this.tabs.add('inspect', this.readout.inspector);
-    this.tabs.add('test', ...run, this.turnLabel, ...ground, this.preview, this.timeline);
+    this.tabs.add('test', worldLabel, ...ground, this.preview);
     this.tabs.add('saved', this.library);
   }
 
@@ -280,13 +264,12 @@ export class WorkbenchScene extends Phaser.Scene {
   refresh() {
     const { placements, ghostId } = this.shownPlacements();
     this.test = testMachine(placements, this.ground);
-    this.sim = this.test.sim;
-    this.desc = describe(placements, this.sim);
+    this.step = this.test.step;
+    this.desc = describe(placements, this.step);
     this.shown = placements;
     this.view.render({
       placements,
-      sim: this.sim,
-      turn: this.viewTurn,
+      step: this.step,
       ground: this.ground,
       ghostId,
       highlight: new Set(MOBILE && this.hoverId ? [this.hoverId] : this.lineHighlight),
@@ -298,10 +281,8 @@ export class WorkbenchScene extends Phaser.Scene {
         ? unitArea(this.test.world, this.test.unit)
         : [];
     this.preview.setWorld(this.test.world);
-    this.preview.render({ units: [this.test.unit], round: this.test.round, turn: this.viewTurn, area });
+    this.preview.render({ units: [this.test.unit], tiles: this.test.tiles, records: { [BENCH_UNIT]: this.step }, area });
     this.readout.render(this.desc);
-    this.timeline.render(this.timelineRows(), this.sim.turns.length, this.viewTurn, 'Sources and effectors show up here, one row each.');
-    this.turnLabel.setText(MOBILE ? `Turn ${this.viewTurn} of ${this.sim.turns.length}` : `TEST RUN · turn ${this.viewTurn} of ${this.sim.turns.length}`);
     this.renderInspect();
     if (MOBILE) {
       const on = this.tabs.shown('inspect') && !!this.placements.find((p) => p.id === this.hoverId);
@@ -319,28 +300,6 @@ export class WorkbenchScene extends Phaser.Scene {
       })
     );
     this.library.render({ selected: this.machineId, hover: this.hoverLib });
-  }
-
-  timelineRows() {
-    const burns = new Set(Object.keys(this.sim.burntAfter));
-    const rank = (p) => ({ effector: 0, source: 1 })[MODULES[p.type].role] ?? 2;
-    const pos = (p) => this.shown.indexOf(p);
-    return this.shown
-      .filter((p) => ['source', 'effector'].includes(MODULES[p.type].role) || burns.has(p.id))
-      .sort((a, b) => rank(a) - rank(b) || pos(a) - pos(b))
-      .map((p) => {
-        const def = MODULES[p.type];
-        const role = ROLE_STYLE[roleKey(def)];
-        return {
-          label: `#${pos(p) + 1} ${def.name}`,
-          labelColor: role.css,
-          onColor: def.effect ? EFFECT_STYLE[def.effect.kind] : role.color,
-          cells: this.sim.turns.map((r) => ({
-            state: !r.present.includes(p.id) ? 'gone' : r.active[p.id] ? 'on' : 'off',
-            mark: r.events.find((e) => e.id === p.id)?.type ?? null,
-          })),
-        };
-      });
   }
 
   // Puts a new piece into the row at `index` (the end if left out).
@@ -362,38 +321,6 @@ export class WorkbenchScene extends Phaser.Scene {
     if (!p) return;
     this.placements = this.placements.filter((q) => q !== p);
     this.placements.splice(Phaser.Math.Clamp(index, 0, this.placements.length), 0, p);
-  }
-
-  setTurn(turn) {
-    this.viewTurn = Phaser.Math.Clamp(turn, 1, this.sim.turns.length);
-    this.refresh();
-  }
-
-  play() {
-    if (this.playTimer) {
-      this.stop();
-      return;
-    }
-    this.viewTurn = 1;
-    this.playButton.setLabel('❚❚ Pause');
-    this.refresh();
-    this.playTimer = this.time.addEvent({
-      delay: PLAY_STEP_MS,
-      loop: true,
-      callback: () => {
-        if (this.viewTurn >= this.sim.turns.length) {
-          this.stop();
-          return;
-        }
-        this.setTurn(this.viewTurn + 1);
-      },
-    });
-  }
-
-  stop() {
-    this.playTimer?.remove();
-    this.playTimer = null;
-    this.playButton?.setLabel('▶ Run test');
   }
 
   // --- The machine: new, open, save, delete, name, ground ---------------------
@@ -421,13 +348,11 @@ export class WorkbenchScene extends Phaser.Scene {
   }
 
   loadMachine(m) {
-    this.stop();
     this.machineId = m?.id ?? null;
     this.name = m?.name ?? store.freshName();
     this.ground = m?.ground ?? null;
     this.placements = m ? store.copy(m.parts) : [];
     this.nextId = 1 + Math.max(0, ...this.placements.map((p) => Number(p.id.slice(1)) || 0));
-    this.viewTurn = 1;
     this.hoverId = null;
     if (m) this.library.reveal(m.id);
     this.changed();
@@ -474,7 +399,6 @@ export class WorkbenchScene extends Phaser.Scene {
 
   startEdit() {
     if (this.editing) return;
-    this.stop();
     if (MOBILE) {
       // A phone has no keyboard to type into the canvas with: ask the browser,
       // which brings up the phone's own.
@@ -540,12 +464,6 @@ export class WorkbenchScene extends Phaser.Scene {
     if (this.armed && this.view.inBand(pointer.worldX, pointer.worldY)) {
       this.place(this.armed);
       this.changed();
-      return;
-    }
-    const turn = this.timeline.turnAt(pointer.worldX, pointer.worldY, this.sim.turns.length);
-    if (turn) {
-      this.stop();
-      this.setTurn(turn);
     }
   }
 
@@ -612,14 +530,6 @@ export class WorkbenchScene extends Phaser.Scene {
     } else if (key === 'Escape') {
       this.armed = null;
       this.refresh();
-    } else if (key === ' ') {
-      this.play();
-    } else if (key === 'ArrowRight') {
-      this.stop();
-      this.setTurn(this.viewTurn + 1);
-    } else if (key === 'ArrowLeft') {
-      this.stop();
-      this.setTurn(this.viewTurn - 1);
     }
   }
 
@@ -719,50 +629,37 @@ export class WorkbenchScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(3);
     if (MOBILE) {
-      // The status gets a line of its own under the name, and the ground
-      // buttons live in the Test run tab.
+      // The status gets a line of its own under the name.
       this.statusText.setOrigin(0, 0).setPosition(x, MOBILE_LAYOUT.machineBar.status).setWordWrapWidth(GAME_WIDTH - 32);
-      this.groundButtons = [];
       return;
     }
-
     const { x: bx, slot, gap } = LAYOUT.bench;
-    let right = bx + WORKBENCH.slots * slot + (WORKBENCH.slots - 1) * gap;
-    this.groundButtons = [];
-    for (const ground of [...GROUNDS].reverse()) {
-      const b = createButton(this, 0, y, ground ? TERRAIN[ground].name : 'Bare', () => this.setGround(ground), {
-        fontSize: FONT_SM,
-        padX: 10,
-        padY: 4,
-      });
-      b.moveX(right - b.width / 2);
-      right -= b.width + 6;
-      this.groundButtons.push({ ground, button: b });
-    }
-    this.add
-      .text(right - 4, y, 'Test on:', { fontFamily: FONT, fontSize: `${FONT_SM}px`, color: COLORS.muted, resolution: TEXT_RESOLUTION })
-      .setOrigin(1, 0.5);
-    this.barRight = right - 70;
+    this.barRight = bx + WORKBENCH.slots * slot + (WORKBENCH.slots - 1) * gap;
   }
 
-  // Mobile: "Test on:" and the four grounds, from (x, y). Returns them all.
-  drawGroundButtons(x, y) {
-    const label = this.add
-      .text(x, y, 'Test on:', { fontFamily: FONT, fontSize: `${FONT_SM}px`, color: COLORS.muted, resolution: TEXT_RESOLUTION })
-      .setOrigin(0, 0.5);
-    let left = x + label.width + 8;
+  // "TEST ON" and a button per ground, one under the other from (x, y), each
+  // with what an open input draws from it. Returns everything drawn.
+  drawGroundButtons(x, y, rowH, width) {
+    const style = { fontFamily: FONT, fontSize: `${MOBILE ? 13 : FONT_SM}px`, color: COLORS.muted, resolution: TEXT_RESOLUTION };
+    const drawn = [this.add.text(x, y, 'TEST ON', { ...style, fontStyle: 'bold', color: COLORS.text }).setOrigin(0, 0.5)];
     this.groundButtons = [];
-    for (const ground of GROUNDS) {
-      const b = createButton(this, 0, y, ground ? TERRAIN[ground].name : 'Bare', () => this.setGround(ground), {
-        fontSize: FONT_SM,
-        padX: 10,
-        padY: 6,
+    GROUNDS.forEach((ground, i) => {
+      const cy = y + 14 + rowH * (i + 0.5);
+      const terrain = ground ? TERRAIN[ground] : null;
+      const b = createButton(this, x + width / 2, cy, terrain ? terrain.name : 'Bare', () => this.setGround(ground), {
+        fontSize: MOBILE ? 13 : FONT_SM,
+        padX: 6,
+        padY: MOBILE ? 6 : 5,
+        width,
       });
-      b.moveX(left + b.width / 2);
-      left += b.width + 6;
+      const gives = terrain ? `${FLOW_NAMES[terrain.provides]}${terrain.hot ? ', hot' : ''}` : 'nothing';
+      const t = this.add
+        .text(x + width + 10, cy, MOBILE ? gives : `gives ${gives}`, { ...style, color: terrain ? FLOW_STYLE[terrain.provides].css : COLORS.muted })
+        .setOrigin(0, 0.5);
       this.groundButtons.push({ ground, button: b });
-    }
-    return [label, ...this.groundButtons.map((g) => g.button)];
+      drawn.push(b, t);
+    });
+    return drawn;
   }
 
   renderMachineBar() {
@@ -893,7 +790,7 @@ export class WorkbenchScene extends Phaser.Scene {
           .setDepth(3)
       );
     }
-    if (this.sim) this.paintPalette();
+    if (this.step) this.paintPalette();
   }
 
   paintPalette() {
@@ -923,47 +820,16 @@ export class WorkbenchScene extends Phaser.Scene {
         .setOrigin(0, 0.5);
       x += t.width + (MOBILE ? 26 : 32);
     }
-    this.add.text(x, y, MOBILE ? 'solid out · hollow in' : 'solid = output · hollow = input', style).setOrigin(0, 0.5);
-  }
-
-  // |◀ ▶ Run test ▶|, ending at `right`, and the turn label (placed by the
-  // caller). Returns the buttons.
-  drawRunControls(right, y) {
-    this.turnLabel = this.add
-      .text(0, y, '', {
-        fontFamily: FONT,
-        fontSize: `${FONT_SM}px`,
-        fontStyle: 'bold',
-        color: COLORS.text,
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0, 0.5);
-    const pad = MOBILE ? 7 : 5;
-    const next = createButton(this, right - 22, y, '▶|', () => {
-      this.stop();
-      this.setTurn(this.viewTurn + 1);
-    }, { fontSize: FONT_SM, padX: 10, padY: pad });
-    this.playButton = createButton(this, next.x - 86, y, '▶ Run test', () => this.play(), {
-      fontSize: FONT_SM,
-      padX: 10,
-      padY: pad,
-      width: 112,
-    });
-    const prev = createButton(this, this.playButton.x - 86, y, '|◀', () => {
-      this.stop();
-      this.setTurn(this.viewTurn - 1);
-    }, { fontSize: FONT_SM, padX: 10, padY: pad });
-    return [prev, this.playButton, next];
+    this.add.text(x, y, MOBILE ? 'filled out · hollow in' : 'filled = output · hollow = input', style).setOrigin(0, 0.5);
   }
 
   // --- Inspector -------------------------------------------------------------
 
   renderInspect() {
-    const record = this.sim.turns[this.viewTurn - 1];
     const placed = this.shown.find((p) => p.id === this.hoverId);
-    if (placed) return this.readout.inspect(this.moduleInfo(placed.type, placed, record));
+    if (placed) return this.readout.inspect(this.moduleInfo(placed.type, placed));
     const type = this.hoverType ?? this.armed;
-    if (type) return this.readout.inspect(this.moduleInfo(type, null, null));
+    if (type) return this.readout.inspect(this.moduleInfo(type, null));
     if (this.hoverTile !== null) return this.readout.inspect(this.slotInfo(this.hoverTile));
     if (this.hoverWorld) return this.readout.inspect(this.worldInfo(this.hoverWorld));
     if (this.hoverLib) {
@@ -984,40 +850,37 @@ export class WorkbenchScene extends Phaser.Scene {
     });
   }
 
-  moduleInfo(type, p, record) {
+  moduleInfo(type, p) {
     const def = MODULES[type];
     const role = ROLE_STYLE[roleKey(def)];
+    const step = this.step;
     const lines = [{ text: def.blurb }];
     const labelOf = labelFor(this.shown);
-    const ground = this.ground ? TERRAIN[this.ground].name.toLowerCase() : null;
+    const nameCause = causeNamer([this.test.unit], labelOf);
     const ports = p ? portsOf(p) : def.ports.map((port, index) => ({ ...port, index }));
     for (const port of ports) {
       const flow = FLOW_NAMES[port.flow];
-      const info = p && this.sim.net.ports.get(port.key);
+      const info = p && step.net.ports.get(port.key);
       const other = info?.status === 'linked' ? this.shown.find((q) => q.id === info.partnerId) : null;
       const where = (q) => `${labelOf(q)} (#${this.shown.indexOf(q) + 1})`;
+      const draw = p && step.draws.find((d) => d.key === port.key);
       let text;
       if (port.dir === 'in') {
-        if (!p) text = `Takes ${flow} from a piece to its left.`;
+        if (!p) text = `Takes ${flow} from a piece to its left, or from the ground.`;
         else if (other) text = `Takes ${flow} from ${where(other)}.`;
-        else if (this.sim.ground?.provides === port.flow) text = `Takes ${flow} from the ${ground} under the machine: nothing to its left has any to spare.`;
+        else if (draw) text = `Takes ${flow} from ${offerText(draw.from, nameCause, BENCH_UNIT)}: nothing to its left has any to spare.`;
         else text = `Needs ${flow}, but nothing to its left has any to spare and the ground gives none.`;
       } else if (!p) text = `Gives ${flow} to a piece on its right.`;
       else if (other) text = `Gives ${flow} to ${where(other)}.`;
-      else text = `Gives ${flow} that no piece on its right takes: it ${port.flow === 'matter' || port.flow === 'heat' ? "spills onto the machine's tile" : 'goes to waste'}.`;
+      else text = `Gives ${flow} that no piece on its right takes: it spills onto the machine's tile, leaving ${CONDITIONS[SPILL[port.flow]].what}.`;
       lines.push({ text, color: FLOW_STYLE[port.flow].css });
     }
     lines.push({ text: MATERIAL_STYLE[def.material].label, color: COLORS.muted });
-    if (p && record) {
-      const turn = record.turn;
-      if (!record.present.includes(p.id)) {
-        lines.push({ text: `Turn ${turn}: burnt down after turn ${this.sim.burntAfter[p.id]}.`, color: COLORS.bad });
-      } else if (record.active[p.id]) {
-        const charge = def.role === 'source' ? ` ${record.charge[p.id]} of ${def.charge} turns of charge left.` : '';
-        lines.push({ text: `Turn ${turn}: running.${charge}`, color: COLORS.good });
-      } else {
-        lines.push({ text: `Turn ${turn}: idle, because ${whyIdle(this.shown, this.sim, p.id, turn)}.`, color: COLORS.bad });
-      }
+    if (p) {
+      const burn = step.burns.find((b) => b.id === p.id);
+      if (burn) lines.push({ text: 'Works, then burns down: it is wooden and hot.', color: COLORS.warn });
+      else if (step.active[p.id]) lines.push({ text: 'Works when the machine works.', color: COLORS.good });
+      else lines.push({ text: `Idle, because ${whyIdle(this.shown, step, p.id)}.`, color: COLORS.bad });
     }
     const title = p ? `#${this.shown.indexOf(p) + 1} ${def.name}` : def.name;
     return { title, color: role.css, subtitle: role.label, lines };
@@ -1041,20 +904,22 @@ export class WorkbenchScene extends Phaser.Scene {
 
   worldInfo(key) {
     const [x, y] = key.split(',').map(Number);
-    const tile = this.test.round.turns[this.viewTurn - 1].tiles[key];
+    const tile = this.test.tiles[key];
     const name = causeNamer([this.test.unit]);
     const from = (causes) => [...new Set(causes.map((c) => name(c, BENCH_UNIT)))].join(', ');
-    const lines = [{ text: 'The machine on its own, in the middle, with the tiles round it. This is how it acts on the Playground.', color: COLORS.muted }];
+    const lines = [{ text: 'The machine on its own, in the middle, after it has worked once. This is how it acts on the Playground.', color: COLORS.muted }];
     if (tile) {
-      if (tile.steam) lines.push({ text: `Steaming: wet from ${from(tile.wet)} and hot from ${from(tile.hot)}.` });
-      else {
-        if (tile.wet.length) lines.push({ text: `Wet, from ${from(tile.wet)}.`, color: FLOW_STYLE.matter.css });
-        if (tile.isHot) lines.push({ text: `Hot, from ${from(tile.hot)}.`, color: FLOW_STYLE.heat.css });
+      if (tile.terrain) lines.push({ text: `${tile.terrain.name}: gives ${FLOW_NAMES[tile.terrain.provides]}.${tile.terrain.hot ? ' Always hot.' : ''}` });
+      for (const kind of ['wet', 'sand', 'fumes', 'wind']) {
+        if (tile[kind].length === 0) continue;
+        const c = CONDITIONS[kind];
+        lines.push({ text: `${c.name}, from ${from(tile[kind])}: a machine standing here can draw ${FLOW_NAMES[c.gives]}.`, color: FLOW_STYLE[c.gives].css });
       }
-      if (tile.air.length) lines.push({ text: `Air blown by ${from(tile.air)}.` });
-      if (tile.alert.length) lines.push({ text: `Alerted by ${from(tile.alert)}.`, color: FLOW_STYLE.signal.css });
-    } else lines.push({ text: 'Nothing reaches this tile on this turn.' });
-    return { title: `In the world, ${tileName(x, y)}`, subtitle: `Turn ${this.viewTurn}`, lines };
+      if (tile.steam) lines.push({ text: `Steaming: the water puts out the heat from ${from(tile.hot)}.` });
+      else if (tile.smothered) lines.push({ text: `The sand smothers the heat from ${from(tile.hot)}.` });
+      else if (tile.isHot) lines.push({ text: `Hot, from ${from(tile.hot)}.`, color: FLOW_STYLE.energy.css });
+    } else lines.push({ text: 'The machine leaves nothing on this tile.' });
+    return { title: `In the world, ${tileName(x, y)}`, lines };
   }
 
   // Read by the tests.
@@ -1062,10 +927,9 @@ export class WorkbenchScene extends Phaser.Scene {
     return {
       screen: 'workbench',
       placements: this.placements.map((p) => ({ ...p })),
-      turn: this.viewTurn,
       armed: this.armed,
-      playing: !!this.playTimer,
-      active: { ...this.sim.turns[this.viewTurn - 1].active },
+      active: { ...this.step.active },
+      burns: this.step.burns.map((b) => b.id),
       desc: JSON.parse(JSON.stringify(this.desc)),
       machineId: this.machineId,
       name: this.name,
@@ -1073,7 +937,7 @@ export class WorkbenchScene extends Phaser.Scene {
       dirty: this.isDirty(),
       editing: !!this.editing,
       library: store.machines().map((m) => ({ id: m.id, name: m.name })),
-      worldTiles: JSON.parse(JSON.stringify(this.test.round.turns[this.viewTurn - 1].tiles)),
+      worldTiles: JSON.parse(JSON.stringify(this.test.tiles)),
     };
   }
 }

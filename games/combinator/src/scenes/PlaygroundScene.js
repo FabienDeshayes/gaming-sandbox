@@ -1,9 +1,11 @@
-// The Playground: saved machines placed on a world, one per tile, and the
-// round they play out together. Machines don't connect to each other; they
+// The Playground: saved machines placed on a world, one per tile, each made
+// to work when the player decides. Machines don't connect to each other; they
 // meet through the tiles — one machine's sprinkler wets its neighbour's tile,
-// a torch heats the next tile over, embers heat whatever stands on them. As on
-// the Workbench, every change re-runs the round at once, and a machine being
-// dragged is shown as if dropped where it hovers.
+// which keeps it cool and gives it water to draw; a torch heats the next tile
+// over; embers heat whatever works on them. The run is the list of machines
+// made to work so far, in order, and replays from the start whenever the
+// layout changes, so what the screen shows is always the real outcome — and a
+// machine being dragged is shown as if dropped where it hovers.
 
 import {
   COLORS,
@@ -15,27 +17,26 @@ import {
   MOBILE,
   MOBILE_PLAY_LAYOUT,
   PLAY_LAYOUT,
-  PLAY_STEP_MS,
-  ROLE_STYLE,
   TEXT_RESOLUTION,
 } from '../config.js';
-import { PLAYGROUND, TERRAIN } from '../data/world.js';
+import { CONDITIONS, PLAYGROUND, TERRAIN } from '../data/world.js';
 import { MODULES } from '../data/modules.js';
 import {
   FLOW_NAMES,
   SIDE_WORDS,
+  allTiles,
   canPlace,
   causeNamer,
   describe,
-  describeRound,
-  runRound,
-  terrainAt,
+  describePlayground,
+  preview,
+  runActions,
   testMachine,
   tileKey,
   tileName,
+  tileState,
   unitArea,
   unitLabel,
-  unitView,
   whyIdle,
 } from '../core/machine.js';
 import * as store from '../store.js';
@@ -45,28 +46,29 @@ import { PanelTabs } from '../ui/panelTabs.js';
 import { drawMachine } from '../ui/machineArt.js';
 import { Readout } from '../ui/Readout.js';
 import { drawHeader } from '../ui/tabs.js';
-import { Timeline } from '../ui/Timeline.js';
 import { WorldView } from '../ui/WorldView.js';
 
 const HELP = [
   'Drag a saved machine from the left onto a tile, or click it and then click a tile.',
-  'Click a placed machine to turn it. R turns whatever is under the pointer, or the one you are dragging.',
+  'Click a placed machine to make it work once. Nothing works until you say so.',
+  'R turns whatever is under the pointer (or the one you are dragging); right-click turns too.',
   'Drag a machine to move it; drag it off the Playground (or press Delete) to remove it.',
-  'Machines act on the tiles round them, and on each other through those tiles. Open inputs draw from the ground a machine stands on.',
-  'Change a machine on the Workbench and save it: every copy here changes with it.',
+  'What a machine leaves on a tile stays there: water, sand, fumes, wind or heat. A machine standing on it can draw that element.',
+  'Undo takes back the last action; Reset starts the run again with clean tiles.',
 ];
 // Mouse or finger, in the words the screen uses.
 const CLICK = MOBILE ? 'Tap' : 'Click';
 const HELP_TOUCH = [
   'Drag a saved machine from the list onto a tile, or tap it and then tap tiles.',
-  'Tap a placed machine to inspect it; tap it again (or Turn) to turn it.',
-  'Drag a machine to move it; drag it off the Playground (or tap Remove) to remove it.',
-  'Machines act on the tiles round them, and on each other through those tiles. Open inputs draw from the ground a machine stands on.',
-  'Change a machine on the Workbench and save it: every copy here changes with it.',
+  'Tap a placed machine to inspect it; tap it again (or Work) to make it work once.',
+  'Drag a machine to move it, or off the Playground to remove it. Turn and Remove are in Inspect.',
+  'What a machine leaves on a tile stays there. A machine standing on it can draw that element.',
+  'Undo and Reset are under Run.',
 ];
 // Where things sit: the stacked mobile layout or the desktop one.
 const L = MOBILE ? MOBILE_PLAY_LAYOUT : PLAY_LAYOUT;
-const EFFECT_WORDS = { wet: 'Wet', hot: 'Hot', steam: 'Steam', air: 'Air', alert: 'Alert' };
+const LEGEND = ['wet', 'sand', 'fumes', 'wind', 'hot', 'steam'];
+const READOUT_TITLES = ['What each machine does', 'Problems', 'Notes'];
 
 export class PlaygroundScene extends Phaser.Scene {
   constructor() {
@@ -75,17 +77,16 @@ export class PlaygroundScene extends Phaser.Scene {
 
   create() {
     this.placed = store.copy(store.placed());
-    this.viewTurn = 1;
+    this.actions = [...store.actions()];
     this.drag = null;
     this.armed = null;
     this.hoverId = null;
     this.hoverTile = null;
     this.hoverMachine = null;
     this.lineHighlight = [];
-    this.playTimer = null;
 
     this.input.mouse?.disableContextMenu();
-    drawHeader(this, 'PlaygroundScene', () => this.stop());
+    drawHeader(this, 'PlaygroundScene');
 
     this.palette = new ListView(this, {
       ...L.machines,
@@ -95,6 +96,7 @@ export class PlaygroundScene extends Phaser.Scene {
       onPage: () => this.refresh(),
     });
     this.view = new WorldView(this, PLAYGROUND, { ...L.world, coords: true, names: true });
+    this.flashGfx = this.add.graphics().setDepth(8);
     this.drawLegend();
     if (MOBILE) this.drawMobilePanel();
     else this.drawDesktopPanel();
@@ -112,7 +114,7 @@ export class PlaygroundScene extends Phaser.Scene {
     this.refresh();
   }
 
-  // Desktop: the round under the world, the readout down the right.
+  // Desktop: the run under the world, the readout down the right.
   drawDesktopPanel() {
     const clear = createButton(this, 0, 28, 'Clear playground', () => this.clear(), { fontSize: FONT_SM });
     clear.moveX(GAME_WIDTH - 16 - clear.width / 2);
@@ -123,16 +125,14 @@ export class PlaygroundScene extends Phaser.Scene {
         this.lineHighlight = ids;
         this.refresh();
       },
-      ['What happens this round', 'Problems', 'Notes']
+      READOUT_TITLES
     );
-    const { x, y, w } = PLAY_LAYOUT.timeline;
-    this.drawRunControls(x + w, y + 14);
-    this.turnLabel.setX(x);
-    this.timeline = new Timeline(this, PLAY_LAYOUT.timeline);
+    const { x, y, w } = PLAY_LAYOUT.run;
+    this.drawRunControls(x, x + w, y + 14, w);
   }
 
-  // Mobile: the readout, the inspector and the round (its controls, Clear and
-  // the timeline) under three tabs at the bottom.
+  // Mobile: the readout, the inspector and the run (its log, Undo, Reset and
+  // Clear) under three tabs at the bottom.
   drawMobilePanel() {
     const P = MOBILE_PLAY_LAYOUT.panel;
     this.tabs = new PanelTabs(this, {
@@ -141,35 +141,32 @@ export class PlaygroundScene extends Phaser.Scene {
       tabs: [
         { key: 'readout', label: 'Readout' },
         { key: 'inspect', label: 'Inspect' },
-        { key: 'round', label: 'Round' },
+        { key: 'run', label: 'Run' },
       ],
       onChange: () => this.refresh(),
     });
-    this.readout = new Readout(this, { ...P, stacked: false }, () => {}, ['What happens this round', 'Problems', 'Notes']);
+    this.readout = new Readout(this, { ...P, stacked: false }, () => {}, READOUT_TITLES);
 
     const right = P.x + P.w - 12;
     const clear = createButton(this, 0, P.y + 22, 'Clear', () => this.clear(), { fontSize: FONT_SM, padX: 10, padY: 7 });
     clear.moveX(right - clear.width / 2);
-    const run = this.drawRunControls(clear.x - clear.width / 2 - 12, P.y + 22);
-    this.turnLabel.setX(P.x + 12);
-    this.timeline = new Timeline(this, {
-      x: P.x + 12,
-      y: P.y + 44,
-      headerY: P.y + 56,
-      w: P.w - 24,
-      labelW: 150,
-      rowH: 24,
-      bottom: P.y + P.h - 4,
-    });
+    const run = this.drawRunControls(P.x + 12, clear.x - clear.width / 2 - 8, P.y + 22, P.w - 24);
 
-    this.turnButton = createButton(this, 0, P.y + 24, '⟳ Turn', () => this.actOnFocus('turn'), { fontSize: FONT_SM, padX: 10, padY: 6 });
-    this.removeButton = createButton(this, 0, P.y + 24, '✕ Remove', () => this.actOnFocus('remove'), { fontSize: FONT_SM, padX: 10, padY: 6 });
-    this.removeButton.moveX(right - this.removeButton.width / 2);
-    this.turnButton.moveX(this.removeButton.x - this.removeButton.width / 2 - 8 - this.turnButton.width / 2);
+    const small = { fontSize: FONT_SM, padX: 10, padY: 6 };
+    this.focusButtons = [
+      createButton(this, 0, P.y + 24, '▶ Work', () => this.actOnFocus('work'), small),
+      createButton(this, 0, P.y + 24, '⟳ Turn', () => this.actOnFocus('turn'), small),
+      createButton(this, 0, P.y + 24, '✕ Remove', () => this.actOnFocus('remove'), small),
+    ];
+    let edge = right;
+    for (const b of [...this.focusButtons].reverse()) {
+      b.moveX(edge - b.width / 2);
+      edge -= b.width + 6;
+    }
 
     this.tabs.add('readout', this.readout.summary);
     this.tabs.add('inspect', this.readout.inspector);
-    this.tabs.add('round', clear, ...run, this.turnLabel, this.timeline);
+    this.tabs.add('run', clear, ...run);
   }
 
   // --- State -----------------------------------------------------------------
@@ -195,26 +192,27 @@ export class PlaygroundScene extends Phaser.Scene {
 
   changed() {
     store.setPlaced(this.placed);
+    this.actions = [...store.actions()];
     this.refresh();
   }
 
   refresh() {
     const { units, ghostId } = this.shownUnits();
     this.units = units;
-    this.round = runRound(PLAYGROUND, units);
-    this.desc = describeRound(PLAYGROUND, units, this.round);
+    this.run = runActions(PLAYGROUND, units, this.actions);
+    this.previews = Object.fromEntries(units.map((u) => [u.id, preview(this.run, u.id)]));
+    this.desc = describePlayground(PLAYGROUND, units, this.run, this.previews);
     const hovered = units.find((u) => u.id === (ghostId ?? this.hoverId));
     this.view.render({
       units,
-      round: this.round,
-      turn: this.viewTurn,
+      tiles: allTiles(PLAYGROUND, this.run.state.landed),
+      records: this.previews,
       ghostId,
       highlight: new Set(MOBILE && this.hoverId ? [this.hoverId] : this.lineHighlight),
       area: hovered ? unitArea(PLAYGROUND, hovered) : [],
     });
     this.readout.render(this.desc);
-    this.timeline.render(this.timelineRows(), this.round.turns.length, this.viewTurn, 'Every machine on the Playground gets a row.');
-    this.turnLabel.setText(MOBILE ? `Turn ${this.viewTurn}/${this.round.turns.length}` : `ROUND · turn ${this.viewTurn} of ${this.round.turns.length}`);
+    this.renderRun();
     this.palette.setItems(
       store.machines().map((m) => {
         const n = this.placed.filter((p) => p.machineId === m.id).length;
@@ -225,29 +223,11 @@ export class PlaygroundScene extends Phaser.Scene {
     this.renderInspect();
     if (MOBILE) {
       const on = this.tabs.shown('inspect') && this.placed.some((p) => p.id === this.hoverId);
-      for (const b of [this.turnButton, this.removeButton]) {
+      for (const b of this.focusButtons) {
         b.setVisible(on);
         b.panel.setVisible(on);
       }
     }
-  }
-
-  timelineRows() {
-    return this.units.map((unit) => {
-      const sim = unitView(this.round, unit.id);
-      const effectors = unit.machine.parts.filter((p) => MODULES[p.type].effect);
-      const watched = effectors.length ? effectors : unit.machine.parts;
-      const first = effectors[0] && MODULES[effectors[0].type].effect.kind;
-      return {
-        label: unitLabel(unit),
-        labelColor: COLORS.text,
-        onColor: first ? EFFECT_STYLE[first] : ROLE_STYLE.source.color,
-        cells: sim.turns.map((r) => ({
-          state: r.present.length === 0 && unit.machine.parts.length ? 'gone' : watched.some((p) => r.active[p.id]) ? 'on' : 'off',
-          mark: r.events.some((e) => e.type === 'burn') ? 'burn' : r.events.some((e) => e.type === 'empty') ? 'empty' : null,
-        })),
-      };
-    });
   }
 
   place(machineId, x, y, rot = 0) {
@@ -265,42 +245,45 @@ export class PlaygroundScene extends Phaser.Scene {
   }
 
   clear() {
-    this.stop();
     this.placed = [];
-    this.viewTurn = 1;
     this.changed();
   }
 
-  setTurn(turn) {
-    this.viewTurn = Phaser.Math.Clamp(turn, 1, this.round.turns.length);
+  // --- The run ---------------------------------------------------------------
+
+  // Makes a placed machine work once: it is added to the end of the run.
+  work(id) {
+    if (!this.placed.some((p) => p.id === id)) return;
+    this.actions.push(id);
+    store.setActions(this.actions);
+    this.refresh();
+    this.flash(id);
+  }
+
+  undo() {
+    if (this.actions.length === 0) return;
+    this.actions.pop();
+    store.setActions(this.actions);
     this.refresh();
   }
 
-  play() {
-    if (this.playTimer) {
-      this.stop();
-      return;
-    }
-    this.viewTurn = 1;
-    this.playButton.setLabel('❚❚ Pause');
+  reset() {
+    this.actions = [];
+    store.setActions(this.actions);
     this.refresh();
-    this.playTimer = this.time.addEvent({
-      delay: PLAY_STEP_MS,
-      loop: true,
-      callback: () => {
-        if (this.viewTurn >= this.round.turns.length) {
-          this.stop();
-          return;
-        }
-        this.setTurn(this.viewTurn + 1);
-      },
-    });
   }
 
-  stop() {
-    this.playTimer?.remove();
-    this.playTimer = null;
-    this.playButton?.setLabel('▶ Run round');
+  // A ring that fades round a machine that has just worked.
+  flash(id) {
+    const unit = this.units.find((u) => u.id === id);
+    if (!unit) return;
+    const t = this.view.tile;
+    const c = this.view.center(unit.x, unit.y);
+    this.flashTween?.remove();
+    this.flashGfx.clear().setAlpha(1);
+    this.flashGfx.lineStyle(4, COLORS.goodHex, 1);
+    this.flashGfx.strokeRoundedRect(c.x - t / 2 - 2, c.y - t / 2 - 2, t + 4, t + 4, 12);
+    this.flashTween = this.tweens.add({ targets: this.flashGfx, alpha: 0, duration: 700, ease: 'Quad.easeIn' });
   }
 
   // --- Input -----------------------------------------------------------------
@@ -335,12 +318,6 @@ export class PlaygroundScene extends Phaser.Scene {
     if (tile && this.armed) {
       this.place(this.armed, tile[0], tile[1]);
       this.changed();
-      return;
-    }
-    const turn = this.timeline.turnAt(pointer.worldX, pointer.worldY, this.round.turns.length);
-    if (turn) {
-      this.stop();
-      this.setTurn(turn);
     }
   }
 
@@ -376,8 +353,8 @@ export class PlaygroundScene extends Phaser.Scene {
       return;
     }
     if (!d.moved) {
-      // On a phone the first tap on a placed machine picks it out; tapping
-      // it again turns it.
+      // A click on a placed machine makes it work. On a phone the first tap
+      // picks it out and the next one makes it work.
       if (d.kind === 'new') {
         this.armed = this.armed === d.machineId ? null : d.machineId;
         if (MOBILE) this.focus(pointer);
@@ -385,8 +362,7 @@ export class PlaygroundScene extends Phaser.Scene {
       } else if (MOBILE && this.hoverId !== d.id) {
         this.focus(pointer);
       } else {
-        this.rotate(d.id);
-        this.changed();
+        this.work(d.id);
       }
       return;
     }
@@ -421,14 +397,10 @@ export class PlaygroundScene extends Phaser.Scene {
     } else if (key === 'Escape') {
       this.armed = null;
       this.refresh();
-    } else if (key === ' ') {
-      this.play();
-    } else if (key === 'ArrowRight') {
-      this.stop();
-      this.setTurn(this.viewTurn + 1);
-    } else if (key === 'ArrowLeft') {
-      this.stop();
-      this.setTurn(this.viewTurn - 1);
+    } else if ((key === ' ' || key === 'Enter') && this.hoverId && !this.drag) {
+      this.work(this.hoverId);
+    } else if (key === 'z' || key === 'Z' || key === 'u' || key === 'U') {
+      this.undo();
     }
   }
 
@@ -444,6 +416,7 @@ export class PlaygroundScene extends Phaser.Scene {
 
   actOnFocus(action) {
     if (!this.placed.some((p) => p.id === this.hoverId)) return;
+    if (action === 'work') return this.work(this.hoverId);
     if (action === 'turn') this.rotate(this.hoverId);
     else this.remove(this.hoverId);
     this.changed();
@@ -485,43 +458,47 @@ export class PlaygroundScene extends Phaser.Scene {
     const g = this.add.graphics().setDepth(1);
     let x = MOBILE ? 16 : PLAY_LAYOUT.world.x - 20;
     const style = { fontFamily: FONT, fontSize: `${FONT_SM}px`, color: COLORS.muted, resolution: TEXT_RESOLUTION };
-    for (const [kind, word] of Object.entries(EFFECT_WORDS)) {
+    for (const kind of LEGEND) {
       g.fillStyle(EFFECT_STYLE[kind], kind === 'steam' ? 0.6 : 0.85);
       g.fillRect(x, y - 7, 14, 14);
-      const t = this.add.text(x + 20, y, word, style).setOrigin(0, 0.5);
-      x += t.width + (MOBILE ? 32 : 36);
+      const word = kind === 'steam' ? 'Steam' : CONDITIONS[kind].name;
+      const t = this.add.text(x + 19, y, word, style).setOrigin(0, 0.5);
+      x += t.width + (MOBILE ? 29 : 34);
     }
-    this.add.text(x, y, MOBILE ? 'Lit: running' : 'Lit squares: modules running', style).setOrigin(0, 0.5);
+    if (!MOBILE) this.add.text(x, y, 'Lit: ready to work', style).setOrigin(0, 0.5);
   }
 
-  // |◀ ▶ Run round ▶|, ending at `right`, and the turn label (placed by the
-  // caller). Returns the buttons.
-  drawRunControls(right, y) {
-    this.turnLabel = this.add
-      .text(0, y, '', {
-        fontFamily: FONT,
-        fontSize: `${FONT_SM}px`,
-        fontStyle: 'bold',
-        color: COLORS.text,
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0, 0.5);
+  // RUN · how many actions, Undo and Reset ending at `right`, and the log of
+  // what has worked under them, from `left`. Returns everything drawn.
+  drawRunControls(left, right, y, w) {
+    const style = { fontFamily: FONT, fontSize: `${FONT_SM}px`, color: COLORS.text, resolution: TEXT_RESOLUTION };
+    this.runLabel = this.add.text(left, y, '', { ...style, fontStyle: 'bold' }).setOrigin(0, 0.5);
     const pad = MOBILE ? 7 : 5;
-    const next = createButton(this, right - 22, y, '▶|', () => {
-      this.stop();
-      this.setTurn(this.viewTurn + 1);
-    }, { fontSize: FONT_SM, padX: 10, padY: pad });
-    this.playButton = createButton(this, next.x - 92, y, '▶ Run round', () => this.play(), {
-      fontSize: FONT_SM,
-      padX: 10,
-      padY: pad,
-      width: 120,
+    const reset = createButton(this, 0, y, 'Reset', () => this.reset(), { fontSize: FONT_SM, padX: 10, padY: pad });
+    reset.moveX(right - reset.width / 2);
+    const undo = createButton(this, 0, y, '↶ Undo', () => this.undo(), { fontSize: FONT_SM, padX: 10, padY: pad });
+    undo.moveX(reset.x - reset.width / 2 - 8 - undo.width / 2);
+    this.runLog = this.add
+      .text(left, y + 24, '', { ...style, color: COLORS.muted, wordWrap: { width: w }, lineSpacing: 4 })
+      .setOrigin(0, 0);
+    return [this.runLabel, undo, reset, this.runLog];
+  }
+
+  renderRun() {
+    const n = this.run.steps.length;
+    this.runLabel.setText(MOBILE ? `Run · ${n} action${n === 1 ? '' : 's'}` : `RUN · ${n} action${n === 1 ? '' : 's'} so far`);
+    if (n === 0) {
+      this.runLog.setText(`Nothing has worked yet. ${CLICK} a machine on the Playground to make it work once; what it leaves on the tiles stays there for the next.`);
+      return;
+    }
+    const shown = MOBILE ? 8 : 12;
+    const lines = this.run.steps.slice(-shown).map((s) => {
+      const unit = this.run.byId.get(s.unit);
+      const burnt = s.burns.length ? ` · burnt ${s.burns.map((b) => MODULES[this.run.byId.get(b.unit).machine.parts.find((p) => p.id === b.id).type].name).join(', ')}` : '';
+      return `${s.n}. ${unitLabel(unit)}${burnt}`;
     });
-    const prev = createButton(this, this.playButton.x - 92, y, '|◀', () => {
-      this.stop();
-      this.setTurn(this.viewTurn - 1);
-    }, { fontSize: FONT_SM, padX: 10, padY: pad });
-    return [prev, this.playButton, next];
+    if (n > shown) lines.unshift(`… ${n - shown} earlier`);
+    this.runLog.setText(lines.join(MOBILE ? '\n' : '   '));
   }
 
   // --- Inspector -------------------------------------------------------------
@@ -532,38 +509,44 @@ export class PlaygroundScene extends Phaser.Scene {
     const machineId = this.hoverMachine ?? this.armed;
     if (machineId) return this.readout.inspect(this.machineInfo(store.machine(machineId)));
     if (this.hoverTile) return this.readout.inspect(this.tileInfo(this.hoverTile));
-    return this.readout.inspect({ title: 'How to play a round', lines: (MOBILE ? HELP_TOUCH : HELP).map((text) => ({ text, color: COLORS.muted })) });
+    return this.readout.inspect({ title: 'How to play', lines: (MOBILE ? HELP_TOUCH : HELP).map((text) => ({ text, color: COLORS.muted })) });
   }
 
   unitInfo(unit) {
-    const sim = unitView(this.round, unit.id);
-    const record = sim.turns[this.viewTurn - 1];
+    const step = this.previews[unit.id];
     const name = (p) => MODULES[p.type].name;
     const lines = [];
     for (const p of unit.machine.parts) {
       const def = MODULES[p.type];
-      if (def.role !== 'effector' && def.role !== 'source' && sim.burntAfter[p.id] === undefined) continue;
-      if (!record.present.includes(p.id)) {
-        lines.push({ text: `${name(p)}: burnt down after turn ${sim.burntAfter[p.id]}.`, color: COLORS.bad });
-      } else if (record.active[p.id]) {
-        const charge = def.role === 'source' ? `, ${record.charge[p.id]} of ${def.charge} turns of charge left` : '';
-        lines.push({ text: `${name(p)}: running${charge}.`, color: COLORS.good });
+      const burnt = !step.present.includes(p.id);
+      if (def.role !== 'effector' && !burnt) continue;
+      if (burnt) {
+        lines.push({ text: `${name(p)}: burnt down in action ${this.run.state.burnt[unit.id][p.id]}.`, color: COLORS.bad });
+      } else if (step.active[p.id]) {
+        lines.push({ text: `${name(p)}: ready to work.`, color: COLORS.good });
       } else {
-        lines.push({ text: `${name(p)}: idle, because ${whyIdle(unit.machine.parts, sim, p.id, this.viewTurn, name)}.`, color: COLORS.bad });
+        lines.push({ text: `${name(p)}: can't work, because ${whyIdle(unit.machine.parts, step, p.id, name)}.`, color: COLORS.bad });
       }
     }
-    const ground = terrainAt(PLAYGROUND, unit.x, unit.y);
-    lines.push({ text: `Stands on ${ground ? ground.name.toLowerCase() : 'bare ground'}. ${CLICK} to turn it.`, color: COLORS.muted });
+    for (const b of step.burns) {
+      const part = this.run.byId.get(b.unit).machine.parts.find((p) => p.id === b.id);
+      const where = b.unit === unit.id ? '' : ` in ${unitLabel(this.run.byId.get(b.unit))}`;
+      lines.push({ text: `Working it now burns down the ${name(part)}${where}.`, color: COLORS.warn });
+    }
+    const ground = tileState(PLAYGROUND, this.run.state.landed, unit.x, unit.y).terrain;
+    const how = MOBILE ? (this.hoverId === unit.id ? 'Tap it again to make it work.' : 'Tap to pick it out.') : 'Click to make it work, R to turn it.';
+    lines.push({ text: `Stands on ${ground ? ground.name.toLowerCase() : 'bare ground'}. ${how}`, color: COLORS.muted });
+    const worked = this.run.steps.filter((s) => s.unit === unit.id).length;
     return {
       title: unitLabel(unit),
-      subtitle: `Turn ${this.viewTurn} · facing ${SIDE_WORDS[['N', 'E', 'S', 'W'][unit.rot]]} · ${unit.machine.parts.length} modules`,
+      subtitle: `Facing ${SIDE_WORDS[['N', 'E', 'S', 'W'][unit.rot]]} · ${unit.machine.parts.length} modules · worked ${worked} time${worked === 1 ? '' : 's'}`,
       lines,
     };
   }
 
   machineInfo(m) {
     const test = testMachine(m.parts, m.ground);
-    const desc = describe(m.parts, test.sim);
+    const desc = describe(m.parts, test.step);
     const lines = desc.result.map((l) => ({ text: l.text, color: l.good ? COLORS.text : COLORS.muted }));
     for (const l of desc.problems) lines.push({ text: l.text, color: COLORS.bad });
     const on = m.ground ? TERRAIN[m.ground].name.toLowerCase() : 'bare ground';
@@ -572,43 +555,41 @@ export class PlaygroundScene extends Phaser.Scene {
 
   tileInfo(key) {
     const [x, y] = key.split(',').map(Number);
-    const terrain = terrainAt(PLAYGROUND, x, y);
+    const tile = tileState(PLAYGROUND, this.run.state.landed, x, y);
     const lines = [];
-    if (terrain) {
-      lines.push({
-        text: `${terrain.name}: an open ${FLOW_NAMES[terrain.provides]} input in a machine standing here draws from it, and it never runs out.${terrain.hot ? ' Always hot.' : ''}`,
-      });
-    } else lines.push({ text: 'Bare ground. Nothing to draw from.', color: COLORS.muted });
-    const tile = this.round.turns[this.viewTurn - 1].tiles[key];
     const name = causeNamer(this.units);
     const from = (causes) => [...new Set(causes.map((c) => name(c, null)))].join(', ');
-    if (tile) {
-      if (tile.steam) lines.push({ text: `Steaming: water from ${from(tile.wet)} cools the heat from ${from(tile.hot)}.` });
-      else {
-        if (tile.wet.length) lines.push({ text: `Wet, from ${from(tile.wet)}.`, color: FLOW_STYLE.matter.css });
-        if (tile.isHot) lines.push({ text: `Hot, from ${from(tile.hot)}.`, color: FLOW_STYLE.heat.css });
-      }
-      if (tile.air.length) lines.push({ text: `Air blown by ${from(tile.air)}.` });
-      if (tile.alert.length) lines.push({ text: `Alerted by ${from(tile.alert)}.`, color: FLOW_STYLE.signal.css });
+    if (tile.terrain) {
+      lines.push({
+        text: `${tile.terrain.name}: gives ${FLOW_NAMES[tile.terrain.provides]} to an open input of a machine working here, and never runs out.${tile.terrain.hot ? ' Always hot.' : ''}`,
+      });
+    } else if (tile.blank) lines.push({ text: 'Bare ground. Nothing to draw from yet.', color: COLORS.muted });
+    for (const kind of ['wet', 'sand', 'fumes', 'wind']) {
+      const causes = tile[kind];
+      if (causes.length === 0) continue;
+      const c = CONDITIONS[kind];
+      lines.push({ text: `${c.name}, from ${from(causes)}: gives ${FLOW_NAMES[c.gives]}.`, color: FLOW_STYLE[c.gives].css });
     }
+    const heat = tile.hot.filter((c) => c.kind !== 'terrain');
+    if (tile.steam) lines.push({ text: `Steaming: the water puts out the heat${heat.length ? ` from ${from(heat)}` : ''}.` });
+    else if (tile.smothered) lines.push({ text: `The sand smothers the heat${heat.length ? ` from ${from(heat)}` : ''}.` });
+    else if (heat.length) lines.push({ text: `Hot, from ${from(heat)}: gives Energy, and burns wood.`, color: FLOW_STYLE.energy.css });
     if (this.armed) lines.push({ text: `${CLICK} to place ${store.machine(this.armed).name} here.`, color: COLORS.good });
-    return { title: `Tile ${tileName(x, y)}`, subtitle: `Turn ${this.viewTurn}`, lines };
+    return { title: `Tile ${tileName(x, y)}`, subtitle: `After ${this.run.steps.length} action${this.run.steps.length === 1 ? '' : 's'}`, lines };
   }
 
   // Read by the tests.
   testState() {
-    const record = this.round.turns[this.viewTurn - 1];
     return {
       screen: 'playground',
       placed: this.placed.map((p) => ({ ...p })),
-      turn: this.viewTurn,
+      actions: [...this.actions],
       armed: this.armed,
-      playing: !!this.playTimer,
       desc: JSON.parse(JSON.stringify(this.desc)),
       machines: store.machines().map((m) => ({ id: m.id, name: m.name })),
-      burnt: Object.fromEntries(this.units.map((u) => [u.id, Object.keys(this.round.units[u.id].burntAfter)])),
-      running: Object.fromEntries(this.units.map((u) => [u.id, Object.keys(record.units[u.id].active)])),
-      tiles: JSON.parse(JSON.stringify(record.tiles)),
+      burnt: Object.fromEntries(this.units.map((u) => [u.id, Object.keys(this.run.state.burnt[u.id])])),
+      ready: Object.fromEntries(this.units.map((u) => [u.id, Object.keys(this.previews[u.id].active)])),
+      tiles: JSON.parse(JSON.stringify(allTiles(PLAYGROUND, this.run.state.landed))),
     };
   }
 }

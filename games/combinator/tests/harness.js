@@ -168,11 +168,15 @@ export async function openGame(browser, port, { viewport = { width: 1280, height
     });
   });
 
+  // The screen on show: whichever scene is running, once it has drawn.
+  const ready = (key = null) =>
+    page.waitForFunction((key) => {
+      const shown = window.__game?.scene.getScenes(true) ?? [];
+      const s = shown[0];
+      return shown.length === 1 && (!key || s.sys.settings.key === key) && typeof s.testState === 'function' && !!s.readout;
+    }, key);
   await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => {
-    const s = window.__game?.scene.getScene('BenchScene');
-    return !!s && !!s.sim;
-  });
+  await ready();
 
   // Design coords -> screen coords, through Phaser's FIT scaling.
   const rect = () =>
@@ -222,23 +226,41 @@ export async function openGame(browser, port, { viewport = { width: 1280, height
       await frame();
     },
 
-    // Where things are, in design coords, read from the live scene.
+    // Reload the page, as a player coming back would; storage survives.
+    reload: async () => {
+      await page.reload({ waitUntil: 'networkidle' });
+      await ready();
+    },
+
+    // Where things are, in design coords, read from the live scene. `tile` is
+    // a cell of the Workbench or a tile of the Playground, whichever is shown.
     tile: (x, y) =>
       page.evaluate(([x, y]) => {
-        const c = window.__game.scene.getScene('BenchScene').view.center(x, y);
+        const c = window.__game.scene.getScenes(true)[0].view.center(x, y);
         return [c.x, c.y];
       }, [x, y]),
+    // A module in the Workbench palette.
     paletteItem: (type) =>
       page.evaluate((type) => {
-        const it = window.__game.scene.getScene('BenchScene').paletteItems.find((i) => i.type === type);
+        const it = window.__game.scene.getScenes(true)[0].paletteItems.find((i) => i.type === type);
         return [it.x + it.w / 2, it.y + it.h / 2];
       }, type),
+    // A saved machine's row: the Workbench's library, or the Playground's palette.
+    machineRow: (id) =>
+      page.evaluate((id) => {
+        const s = window.__game.scene.getScenes(true)[0];
+        const list = s.library ?? s.palette;
+        list.reveal(id);
+        s.refresh();
+        const it = list.visible.find((i) => i.key === id);
+        return [it.x + it.w / 2, it.y + it.h / 2];
+      }, id),
 
-    // Every visible label on the scene.
+    // Every visible label on the screen.
     texts: () =>
       page.evaluate(() =>
         window.__game.scene
-          .getScene('BenchScene')
+          .getScenes(true)[0]
           .children.list.filter((c) => c.visible && c.text !== undefined)
           .map((c) => c.text)
       ),
@@ -246,7 +268,7 @@ export async function openGame(browser, port, { viewport = { width: 1280, height
     clickText: async (label) => {
       const pos = await page.evaluate((label) => {
         const o = window.__game.scene
-          .getScene('BenchScene')
+          .getScenes(true)[0]
           .children.list.find((c) => c.visible && c.text === label);
         if (!o) return null;
         const b = o.getBounds();
@@ -256,19 +278,15 @@ export async function openGame(browser, port, { viewport = { width: 1280, height
       await game.clickAt(...pos);
     },
 
-    // Live BenchScene state, read-only.
-    state: () =>
-      page.evaluate(() => {
-        const s = window.__game.scene.getScene('BenchScene');
-        return {
-          placements: s.placements.map((p) => ({ ...p })),
-          turn: s.viewTurn,
-          armed: s.armed,
-          playing: !!s.playTimer,
-          active: { ...s.sim.turns[s.viewTurn - 1].active },
-          desc: JSON.parse(JSON.stringify(s.desc)),
-        };
-      }),
+    // Flip to a screen by its tab, and wait for it to draw.
+    open: async (tab) => {
+      await game.clickText(tab);
+      await ready(`${tab}Scene`);
+      await frame();
+    },
+
+    // Live state of the screen on show, read-only (each scene's testState()).
+    state: () => page.evaluate(() => window.__game.scene.getScenes(true)[0].testState()),
   };
 
   return game;

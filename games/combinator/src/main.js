@@ -1,5 +1,6 @@
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from './config.js';
-import { BenchScene } from './scenes/BenchScene.js';
+import { PlaygroundScene } from './scenes/PlaygroundScene.js';
+import { WorkbenchScene } from './scenes/WorkbenchScene.js';
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -11,5 +12,5 @@ new Phaser.Game({
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
   },
-  scene: [BenchScene],
+  scene: [WorkbenchScene, PlaygroundScene],
 });

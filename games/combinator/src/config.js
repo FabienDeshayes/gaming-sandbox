@@ -16,12 +16,27 @@ export const DRAG_THRESHOLD = 8;
 // How long each turn shows during a played-back test run.
 export const PLAY_STEP_MS = 700;
 
+// The Workbench: modules on the left, the machine in the middle with its test
+// world and run below it, saved machines and the readout on the right.
 export const LAYOUT = {
   header: { h: 56 },
+  machineBar: { y: 78 },
   palette: { x: 16, y: 72, w: 224, rowH: 40, headingH: 26, gap: 6 },
-  bench: { x: 282, y: 104, tile: 88 },
-  legend: { y: 560 },
-  timeline: { x: 262, y: 598, w: 632, labelW: 168, rowH: 24 },
+  bench: { x: 282, y: 124, tile: 84 },
+  legend: { y: 566 },
+  preview: { x: 262, y: 620, tile: 30 },
+  timeline: { x: 436, y: 588, w: 458, labelW: 132, rowH: 24, bottom: 784 },
+  library: { x: 914, y: 72, w: 350, rowH: 30, rows: 4 },
+  panel: { x: 914, y: 256, w: 350, h: 528, inspectH: 210 },
+};
+
+// The Playground: saved machines on the left, the world in the middle with the
+// round below it, the readout on the right.
+export const PLAY_LAYOUT = {
+  machines: { x: 16, y: 72, w: 224, rowH: 44, rows: 13 },
+  world: { x: 282, y: 104, tile: 62 },
+  legend: { y: 562 },
+  timeline: { x: 262, y: 588, w: 632, labelW: 190, rowH: 24, bottom: 784 },
   panel: { x: 914, y: 72, w: 350, h: 712, inspectH: 250 },
 };
 
@@ -37,6 +52,7 @@ export const COLORS = {
   good: '#6be38f',
   goodHex: 0x6be38f,
   bad: '#ff6b6b',
+  warn: '#f5b547',
   badHex: 0xff5252,
   highlightHex: 0xffffff,
   buttonHex: 0x2a3240,

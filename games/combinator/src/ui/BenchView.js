@@ -1,12 +1,13 @@
-// Draws the test bench: tiles and terrain, what the machine does to each tile
-// on the turn being viewed, the modules, their links, and the flows moving
-// through them. Holds no machine state — the scene hands it a placement list,
-// the run and the turn, and it draws that.
+// Draws the Workbench: the cells a machine is built on, the ground it is being
+// tested on, what each cell feels on the turn being viewed, the modules, their
+// links, and the flows moving through them. Holds no machine state — the scene
+// hands it the parts, the run and the turn, and it draws that.
 
 import { COLORS, EFFECT_STYLE, FLOW_STYLE, FONT, LAYOUT, TERRAIN_STYLE, TEXT_RESOLUTION } from '../config.js';
 import { MODULES } from '../data/modules.js';
-import { effectTiles, neighbour, portsOf, rotateSide, terrainAt } from '../core/machine.js';
+import { neighbour, portsOf } from '../core/machine.js';
 import { drawModule, portPoint } from './moduleArt.js';
+import { drawTileEffects } from './tileArt.js';
 
 const BODY = 0.8; // module body as a share of the tile
 
@@ -51,7 +52,7 @@ export class BenchView {
     return [x, y];
   }
 
-  // state: { placements, sim, turn, ghostId, highlight: Set, hoverId, selectedId }
+  // state: { placements, sim, turn, ground, ghostId, highlight: Set }
   render(state) {
     const { placements, sim, turn } = state;
     const record = sim.turns[turn - 1];
@@ -65,32 +66,30 @@ export class BenchView {
     for (const t of this.labels) t.destroy();
     this.labels = [];
 
-    // Tiles and terrain.
+    // The ground the whole machine stands on: a tint under every cell and a
+    // frame round the Workbench.
+    const ground = state.ground ? TERRAIN_STYLE[state.ground] : null;
     for (let y = 0; y < this.bench.rows; y++) {
       for (let x = 0; x < this.bench.cols; x++) {
         const px = this.x0 + x * this.tile;
         const py = this.y0 + y * this.tile;
         this.ground.fillStyle(COLORS.tileHex, 1);
         this.ground.fillRect(px + 1, py + 1, this.tile - 2, this.tile - 2);
-        const terrain = terrainAt(this.bench, x, y);
-        if (terrain) this.drawTerrain(terrain.id, px, py);
+        if (ground !== null) {
+          this.ground.fillStyle(ground, 0.12);
+          this.ground.fillRect(px + 1, py + 1, this.tile - 2, this.tile - 2);
+        }
       }
     }
-    this.ground.lineStyle(1, COLORS.tileEdgeHex, 1);
-    this.ground.strokeRect(this.x0, this.y0, this.width, this.height);
+    this.ground.lineStyle(ground !== null ? 5 : 1, ground ?? COLORS.tileEdgeHex, 1);
+    this.ground.strokeRect(this.x0 - (ground !== null ? 3 : 0), this.y0 - (ground !== null ? 3 : 0), this.width + (ground !== null ? 6 : 0), this.height + (ground !== null ? 6 : 0));
 
-    // What the machine does to each tile this turn.
+    // What each cell feels this turn: waste heat, and whatever lands on the
+    // machine's tile in the world.
     const byId = new Map(placements.map((p) => [p.id, p]));
-    for (const [key, tile] of Object.entries(record.tiles)) {
+    for (const [key, cell] of Object.entries(record.tiles)) {
       const [x, y] = key.split(',').map(Number);
-      this.drawEffects(tile, x, y, byId);
-    }
-
-    // Terrain also gets a frame, so it still shows round a module standing on it.
-    for (const [key, id] of Object.entries(this.bench.terrain)) {
-      const [x, y] = key.split(',').map(Number);
-      this.ground.lineStyle(4, TERRAIN_STYLE[id], 0.9);
-      this.ground.strokeRect(this.x0 + x * this.tile + 3, this.y0 + y * this.tile + 3, this.tile - 6, this.tile - 6);
+      drawTileEffects(this.ground, cell, this.x0 + x * this.tile, this.y0 + y * this.tile, this.tile);
     }
 
     // Links between modules, and the edges where ports touch but can't link.
@@ -171,19 +170,6 @@ export class BenchView {
       if (def.material === 'wood' && streak > 0) this.drawFlame(c.x + size / 2 - 8, c.y - size / 2 + 8, streak);
     }
 
-    // Effect area of the module under the pointer, so an effector shows where
-    // it reaches before it is even fed.
-    const hover = state.hoverId && byId.get(state.hoverId);
-    if (hover && MODULES[hover.type].effect) {
-      const kind = MODULES[hover.type].effect.kind;
-      this.overlay.lineStyle(3, EFFECT_STYLE[kind], 0.9);
-      for (const [x, y] of effectTiles(this.bench, hover)) {
-        const px = this.x0 + x * this.tile;
-        const py = this.y0 + y * this.tile;
-        this.overlay.strokeRect(px + 5, py + 5, this.tile - 10, this.tile - 10);
-      }
-    }
-
     for (const id of state.highlight ?? []) {
       const p = byId.get(id);
       if (!p) continue;
@@ -196,95 +182,6 @@ export class BenchView {
       const c = this.center(p.x, p.y);
       this.overlay.lineStyle(2, COLORS.highlightHex, 0.8);
       this.overlay.strokeRoundedRect(c.x - this.tile / 2 + 3, c.y - this.tile / 2 + 3, this.tile - 6, this.tile - 6, 12);
-    }
-  }
-
-  drawTerrain(id, px, py) {
-    const g = this.ground;
-    const t = this.tile;
-    const color = TERRAIN_STYLE[id];
-    if (id === 'puddle') {
-      g.fillStyle(color, 0.55);
-      g.fillEllipse(px + t * 0.42, py + t * 0.55, t * 0.62, t * 0.36);
-      g.fillEllipse(px + t * 0.66, py + t * 0.4, t * 0.36, t * 0.22);
-    } else if (id === 'embers') {
-      g.fillStyle(0x3a1a12, 1);
-      g.fillRect(px + 1, py + 1, t - 2, t - 2);
-      g.fillStyle(color, 0.9);
-      for (const [fx, fy] of [[0.25, 0.3], [0.6, 0.22], [0.42, 0.55], [0.75, 0.62], [0.3, 0.78], [0.62, 0.84]]) {
-        g.fillCircle(px + t * fx, py + t * fy, 4);
-      }
-    } else if (id === 'draft') {
-      g.lineStyle(2, color, 0.6);
-      for (const fy of [0.3, 0.5, 0.7]) {
-        g.beginPath();
-        g.moveTo(px + t * 0.15, py + t * fy);
-        for (let i = 1; i <= 8; i++) {
-          g.lineTo(px + t * (0.15 + i * 0.09), py + t * fy + Math.sin(i * 1.4) * 4);
-        }
-        g.strokePath();
-      }
-    }
-  }
-
-  drawEffects(tile, x, y, byId) {
-    const g = this.ground;
-    const t = this.tile;
-    const px = this.x0 + x * t;
-    const py = this.y0 + y * t;
-    if (tile.steam) {
-      g.fillStyle(EFFECT_STYLE.steam, 0.22);
-      g.fillRect(px + 1, py + 1, t - 2, t - 2);
-    } else if (tile.wet.length) {
-      g.fillStyle(EFFECT_STYLE.wet, 0.3);
-      g.fillRect(px + 1, py + 1, t - 2, t - 2);
-    }
-    if (tile.isHot) {
-      g.fillStyle(EFFECT_STYLE.hot, 0.28);
-      g.fillRect(px + 1, py + 1, t - 2, t - 2);
-      g.lineStyle(2, EFFECT_STYLE.hot, 0.7);
-      for (const fx of [0.2, 0.8]) {
-        g.beginPath();
-        g.moveTo(px + t * fx, py + t * 0.85);
-        g.lineTo(px + t * fx - 4, py + t * 0.7);
-        g.lineTo(px + t * fx + 4, py + t * 0.55);
-        g.lineTo(px + t * fx, py + t * 0.4);
-        g.strokePath();
-      }
-    }
-    if (tile.wet.length && !tile.steam) {
-      g.fillStyle(EFFECT_STYLE.wet, 0.9);
-      for (const [fx, fy] of [[0.12, 0.14], [0.88, 0.14], [0.12, 0.88], [0.88, 0.88]]) {
-        g.fillCircle(px + t * fx, py + t * fy, 3);
-      }
-    }
-    if (tile.steam) {
-      g.lineStyle(2, EFFECT_STYLE.steam, 0.8);
-      for (const fx of [0.12, 0.88]) {
-        g.strokeCircle(px + t * fx, py + t * 0.15, 4);
-        g.strokeCircle(px + t * fx + 3, py + t * 0.1, 3);
-      }
-    }
-    for (const cause of tile.air) {
-      const fan = byId.get(cause.id);
-      const side = rotateSide('N', fan.rot);
-      const [nx, ny] = neighbour(0, 0, side);
-      g.lineStyle(2, EFFECT_STYLE.air, 0.85);
-      for (const off of [-0.25, 0.25]) {
-        const cx = px + t / 2 + (ny !== 0 ? off * t : 0);
-        const cy = py + t / 2 + (nx !== 0 ? off * t : 0);
-        const ex = cx + nx * 14;
-        const ey = cy + ny * 14;
-        g.lineBetween(cx - nx * 14, cy - ny * 14, ex, ey);
-        g.lineBetween(ex, ey, ex - nx * 6 - ny * 5, ey - ny * 6 - nx * 5);
-        g.lineBetween(ex, ey, ex - nx * 6 + ny * 5, ey - ny * 6 + nx * 5);
-      }
-    }
-    if (tile.alert.length) {
-      g.lineStyle(2, EFFECT_STYLE.alert, 0.85);
-      for (const [fx, fy] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]]) {
-        g.strokeCircle(px + t * fx, py + t * fy, 5);
-      }
     }
   }
 

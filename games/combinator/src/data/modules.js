@@ -192,7 +192,7 @@ export const MODULES = {
     role: 'effector',
     material: 'metal',
     ports: [port('S', 'in', 'heat')],
-    effect: { kind: 'heat', area: 'front1' },
+    effect: { kind: 'hot', area: 'front1' },
     blurb: 'Heats the tile in front of it.',
   },
   bell: {

@@ -1,17 +1,21 @@
-// Dev helper, not a test: screenshots every example machine into a folder, for
-// a look at the screen without opening a browser. `node tests/shot.mjs <dir>`.
-import { EXAMPLES } from '../src/data/bench.js';
+// Dev helper, not a test: screenshots each starting machine on the Workbench
+// and the Playground with its starting layout, for a look at the screens
+// without opening a browser. `node tests/shot.mjs <dir>`.
+import { EXAMPLES } from '../src/data/world.js';
 import { launchBrowser, openGame, startServer } from './harness.js';
 
 const out = process.argv[2] || '.';
 const { server, port } = await startServer();
 const browser = await launchBrowser();
 const game = await openGame(browser, port);
-for (const [i, example] of EXAMPLES.entries()) {
-  await game.clickText(example.name);
+for (const [i] of EXAMPLES.entries()) {
+  await game.clickAt(...(await game.machineRow(`k${i + 1}`)));
   await game.page.waitForTimeout(200);
-  await game.shot(`${out}/example-${i + 1}.png`);
+  await game.shot(`${out}/workbench-${i + 1}.png`);
 }
+await game.open('Playground');
+await game.page.waitForTimeout(200);
+await game.shot(`${out}/playground.png`);
 const errors = game.pageErrors();
 if (errors.length) console.log(errors.join('\n'));
 await browser.close();

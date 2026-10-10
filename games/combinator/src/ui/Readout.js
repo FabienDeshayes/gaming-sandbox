@@ -1,17 +1,19 @@
-// The right-hand panel. The top half says, in sentences, what the machine on
-// the bench does, what is wrong with it and what else is worth knowing; the
+// The right-hand panel. The top half says, in sentences, what the machine (or
+// the round) does, what is wrong with it and what else is worth knowing; the
 // bottom half is an inspector for whatever is under the pointer.
 
-import { COLORS, FONT, FONT_MD, FONT_SM, LAYOUT, TEXT_RESOLUTION } from '../config.js';
+import { COLORS, FONT, FONT_MD, FONT_SM, TEXT_RESOLUTION } from '../config.js';
 
 const PAD = 14;
 const LINE_FONT = 15;
 
 export class Readout {
-  constructor(scene, onHoverLine) {
+  // layout: { x, y, w, h, inspectH }; titles: the three section headings.
+  constructor(scene, layout, onHoverLine, titles = ['What this machine does', 'Problems', 'Notes']) {
     this.scene = scene;
     this.onHoverLine = onHoverLine;
-    const { x, y, w, h, inspectH } = LAYOUT.panel;
+    this.titles = titles;
+    const { x, y, w, h, inspectH } = layout;
     this.x = x;
     this.w = w;
     this.top = y;
@@ -52,9 +54,9 @@ export class Readout {
     this.texts = [];
     let y = this.top + PAD;
     const sections = [
-      { title: 'What this machine does', color: COLORS.good, lines: desc.result },
-      { title: 'Problems', color: COLORS.bad, lines: desc.problems },
-      { title: 'Notes', color: COLORS.muted, lines: desc.notes },
+      { title: this.titles[0], color: COLORS.good, lines: desc.result },
+      { title: this.titles[1], color: COLORS.bad, lines: desc.problems },
+      { title: this.titles[2], color: COLORS.muted, lines: desc.notes },
     ];
     let hidden = 0;
     for (const section of sections) {

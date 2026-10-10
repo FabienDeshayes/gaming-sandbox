@@ -45,7 +45,7 @@ test('opens on the Workbench with a saved machine that already works, and no err
   assert(s.desc.result.some((l) => l.good), 'and the readout says what it does');
   const texts = await game.texts();
   assert(texts.includes('WHAT THIS MACHINE DOES') && texts.includes('SAVED MACHINES'), 'readout and library on screen');
-  assert(texts.includes('#1 Running') && texts.includes('#2 Running'), 'each piece says how it is doing under it');
+  assert(texts.includes('#1 Works') && texts.includes('#2 Works'), 'each piece says how it is doing under it');
 });
 
 test('building tank → sprinkler by dragging into the row', async (game) => {
@@ -53,18 +53,18 @@ test('building tank → sprinkler by dragging into the row', async (game) => {
   await game.drag(await game.paletteItem('tank'), await game.slot(0));
   let s = await game.state();
   assertEqual(types(s), ['tank'], 'tank in the row');
-  assert(s.desc.notes.some((l) => /gives Matter that no piece to its right takes: it spills onto the machine's tile/.test(l.text)), 'a tank on its own spills');
+  assert(s.desc.notes.some((l) => /gives Liquid that no piece to its right takes: it spills onto the machine's tile/.test(l.text)), 'a tank on its own spills');
 
   await game.drag(await game.paletteItem('sprinkler'), await game.slot(3));
   s = await game.state();
   assertEqual(types(s), ['tank', 'sprinkler'], 'dropped past the end, it lands at the end');
-  assert(s.active[s.placements[1].id], 'sprinkler runs on turn 1');
+  assert(s.active[s.placements[1].id], 'sprinkler works');
   assert(
-    s.desc.result.some((l) => /^Sprinkler wets the machine's tile and the 4 around it on turns 1–4/.test(l.text)),
+    s.desc.result.some((l) => /^Sprinkler wets the machine's tile and the 4 around it\./.test(l.text)),
     'readout: ' + JSON.stringify(s.desc.result)
   );
   assertEqual(Object.keys(s.worldTiles).filter((k) => s.worldTiles[k].wet.length).length, 5, 'five tiles wet in the world round it');
-  assert((await game.texts()).includes('◂ Matter from Water Tank'), 'the sprinkler says where its water comes from');
+  assert((await game.texts()).includes('◂ Liquid from Water Tank'), 'the sprinkler says where its water comes from');
 });
 
 test('a module dropped between two pieces goes in between, and flow passes by it', async (game) => {
@@ -82,7 +82,7 @@ test('an input with nothing to its left is reported as a problem', async (game) 
   await game.drag(await game.paletteItem('tank'), await game.slot(1));
   const s = await game.state();
   assert(
-    s.desc.problems.some((l) => /Sprinkler never runs: its Matter input gets nothing: no piece to its left has Matter to spare/.test(l.text)),
+    s.desc.problems.some((l) => /Sprinkler can't work: its Liquid input gets nothing: no piece to its left has Liquid to spare/.test(l.text)),
     'problems: ' + JSON.stringify(s.desc.problems)
   );
 });
@@ -108,32 +108,27 @@ test('tapping a palette module and then the row adds it at the end, up to a full
   assertEqual(types(await game.state()), Array(7).fill('fan'), 'seven fans and no more');
 });
 
-test('the timeline steps through the test run and the Workbench follows it', async (game) => {
+test('a wooden fan beside an engine works once and burns, and the Workbench says so', async (game) => {
   await game.clickAt(...(await game.machineRow(idOf(await game.state(), 'Steam Fan'))));
-  assertEqual((await game.state()).name, 'Steam Fan', 'opened the Steam Fan');
-  await game.clickText('▶|');
-  assertEqual((await game.state()).turn, 2, 'stepped to turn 2');
-  await game.clickText('8');
   const s = await game.state();
-  assertEqual(s.turn, 8, 'clicked turn 8');
-  assert(!s.placements.every((p) => s.active[p.id]), 'by turn 8 the fan has stopped');
-  assert((await game.texts()).includes('TEST RUN · turn 8 of 8'), 'turn shown');
-
-  await game.clickText('▶ Run test');
-  const playing = await game.state();
-  assert(playing.playing && playing.turn === 1, 'a test run starts from turn 1');
+  assertEqual(s.name, 'Steam Fan', 'opened the Steam Fan');
+  const fan = s.placements[2].id;
+  assert(s.active[fan] && s.burns.includes(fan), 'the fan works and burns');
+  assert((await game.texts()).includes('#3 Works, burns'), 'said under it');
+  assert(s.desc.problems.some((l) => /Fan is wooden and burns down as the machine works, from waste heat from Steam Engine/.test(l.text)), JSON.stringify(s.desc.problems));
 });
 
 test('the ground under the machine decides what its open inputs draw', async (game) => {
-  await game.clickAt(...(await game.machineRow(idOf(await game.state(), 'Puddle Pump'))));
+  await game.clickAt(...(await game.machineRow(idOf(await game.state(), 'Puddle Torch'))));
   let s = await game.state();
-  assertEqual(s.ground, 'puddle', 'the Puddle Pump is tested on a puddle');
+  assertEqual(s.ground, 'puddle', 'the Puddle Torch is tested on a puddle');
   assert(s.desc.result.some((l) => l.good), 'and works there');
+  assert(s.desc.notes.some((l) => /Boiler draws Liquid from the puddle under the machine/.test(l.text)), JSON.stringify(s.desc.notes));
 
   await game.clickText('Bare');
   s = await game.state();
   assertEqual(s.ground, null, 'now on bare ground');
-  assert(s.desc.problems.some((l) => /Sprinkler never runs: .*bare ground under the machine has none to give/.test(l.text)), JSON.stringify(s.desc.problems));
+  assert(s.desc.problems.some((l) => /Torch can't work: .*bare ground under the machine has none to give/.test(l.text)), JSON.stringify(s.desc.problems));
   assert(s.dirty, 'changing the ground is an unsaved change');
 });
 
@@ -160,7 +155,6 @@ test('Escape while naming keeps the old name, and typing a name never edits the 
   const s = await game.state();
   assertEqual(s.name, before.name, 'name unchanged');
   assertEqual(JSON.stringify(s.placements), JSON.stringify(before.placements), 'R and Space did not touch the machine');
-  assert(!s.playing, 'and did not start a run');
 });
 
 test('opening another machine over unsaved changes takes a second click', async (game) => {
@@ -209,30 +203,65 @@ test('unsaved work survives flipping to the Playground and back, and a reload', 
 
 // --- Playground ------------------------------------------------------------------
 
-test('the Playground opens with the starting machines placed, and the round runs', async (game) => {
+test('the Playground opens with the starting machines placed, and nothing works until clicked', async (game) => {
   await game.open('Playground');
   const s = await game.state();
   assertEqual(s.screen, 'playground', 'on the Playground');
   assertEqual(s.placed.length, 3, 'three machines placed');
-  assertEqual(s.desc.result.filter((l) => l.good).length, 3, 'each does something: ' + JSON.stringify(s.desc.result));
-  assert(s.desc.notes.some((l) => /Steam Fan \(E4\) is wetted by Tank Sprinkler \(D4\) on turns 1–4/.test(l.text)), 'machines touch through tiles');
-  assert((await game.texts()).includes('ROUND · turn 1 of 8'), 'round header');
+  assertEqual(s.actions.length, 0, 'nothing has worked yet');
+  assertEqual(s.desc.result.filter((l) => l.good).length, 3, 'each is ready to do something: ' + JSON.stringify(s.desc.result));
+  assert(!Object.values(s.tiles).some((t) => t.wet.length), 'no tile is wet yet');
+  assert((await game.texts()).includes('RUN · 0 actions so far'), 'run header');
 });
 
-test('a machine that burns out on its own survives beside a sprinkler, and burns when moved away', async (game) => {
+test('clicking a machine makes it work once, and what it leaves on the tiles stays', async (game) => {
+  await game.open('Playground');
+  const sprinkler = placedAt(await game.state(), 3, 3);
+  await game.clickAt(...(await game.tile(3, 3)));
+  let s = await game.state();
+  assertEqual(s.actions, [sprinkler.id], 'one action');
+  assertEqual(Object.values(s.tiles).filter((t) => t.wet.length).length, 5, 'five tiles wet');
+  assertEqual(placedAt(s, 3, 3).rot, 0, 'a click no longer turns it');
+  assert(s.desc.notes.some((l) => /Steam Fan \(E4\) stands on a tile wetted by Tank Sprinkler \(D4\)/.test(l.text)), 'machines touch through tiles');
+  assert((await game.texts()).includes('1. Tank Sprinkler (D4)'), 'the run log names it');
+
+  await game.clickText('↶ Undo');
+  s = await game.state();
+  assertEqual(s.actions.length, 0, 'Undo takes it back');
+  assert(!Object.values(s.tiles).some((t) => t.wet.length), 'and dries the tiles');
+  await game.clickAt(...(await game.tile(3, 3)));
+  await game.clickAt(...(await game.tile(3, 3)));
+  await game.clickText('Reset');
+  assertEqual((await game.state()).actions.length, 0, 'Reset clears the run');
+});
+
+test('the Steam Fan burns if it works first, and survives once the sprinkler beside it has worked', async (game) => {
   await game.open('Playground');
   let s = await game.state();
   const fan = placedAt(s, 4, 3);
-  assertEqual(s.burnt[fan.id].length, 0, 'beside the Tank Sprinkler nothing in the Steam Fan burns');
-
-  await game.drag(await game.tile(4, 3), await game.tile(5, 6));
+  await game.clickAt(...(await game.tile(4, 3)));
   s = await game.state();
-  assert(placedAt(s, 5, 6)?.id === fan.id, 'moved to F7');
-  assertEqual(s.burnt[fan.id].length, 1, 'out on its own its fan burns');
-  assert(s.desc.problems.some((l) => /Steam Fan \(F7\): Fan is wooden and burns down after turn 2, from waste heat from Steam Engine/.test(l.text)), JSON.stringify(s.desc.problems));
+  assertEqual(s.burnt[fan.id].length, 1, 'on its dry tile its fan burns');
+  assert(s.desc.problems.some((l) => /Steam Fan \(E4\): Fan has burnt down/.test(l.text)), JSON.stringify(s.desc.problems));
+
+  await game.clickText('Reset');
+  await game.clickAt(...(await game.tile(3, 3)));
+  await game.clickAt(...(await game.tile(4, 3)));
+  await game.clickAt(...(await game.tile(4, 3)));
+  s = await game.state();
+  assertEqual(s.burnt[fan.id].length, 0, 'beside the wet sprinkler it never burns');
+  assert(s.ready[fan.id].length === 3, 'and is still ready to work');
 });
 
-test('placing a saved machine by dragging, turning it by clicking, removing it by dragging off', async (game) => {
+test('the run and the layout are kept across a reload', async (game) => {
+  await game.open('Playground');
+  await game.clickAt(...(await game.tile(3, 3)));
+  await game.reload();
+  await game.open('Playground');
+  assertEqual((await game.state()).actions.length, 1, 'still one action');
+});
+
+test('placing a saved machine by dragging, turning it with R, removing it by dragging off', async (game) => {
   await game.open('Playground');
   const id = (await game.state()).machines.find((m) => m.name === 'Steam Fan').id;
   await game.drag(await game.machineRow(id), await game.tile(0, 0));
@@ -240,10 +269,11 @@ test('placing a saved machine by dragging, turning it by clicking, removing it b
   assertEqual(placedAt(s, 0, 0)?.machineId, id, 'placed on A1');
   assertEqual(s.placed.length, 4, 'a second Steam Fan');
 
-  await game.clickAt(...(await game.tile(0, 0)));
+  await game.page.mouse.move(...(await game.tile(0, 0)));
+  await game.key('r');
   s = await game.state();
   assertEqual(placedAt(s, 0, 0).rot, 1, 'turned a quarter');
-  assert(s.desc.result.some((l) => /Steam Fan \(A1\): Fan blows air onto the 2 tiles east of the machine/.test(l.text)), JSON.stringify(s.desc.result));
+  assert(s.desc.result.some((l) => /Steam Fan \(A1\): Fan blows wind onto the 2 tiles east of the machine/.test(l.text)), JSON.stringify(s.desc.result));
 
   await game.drag(await game.tile(0, 0), [600, 790]);
   assertEqual((await game.state()).placed.length, 3, 'dragged off, gone');
@@ -256,8 +286,7 @@ test('saving a change on the Workbench changes every copy on the Playground', as
   await game.clickText('Save');
   await game.open('Playground');
   const s = await game.state();
-  assert(s.desc.problems.some((l) => /Tank Sprinkler \(D4\): Sprinkler never runs/.test(l.text)), JSON.stringify(s.desc.problems));
-  assert(!s.desc.notes.some((l) => /is wetted by Tank Sprinkler/.test(l.text)), 'and no longer wets its neighbour');
+  assert(s.desc.problems.some((l) => /Tank Sprinkler \(D4\): Sprinkler can't work/.test(l.text)), JSON.stringify(s.desc.problems));
 });
 
 test('the Playground layout is kept across a reload, and Tab flips screens', async (game) => {
@@ -310,7 +339,7 @@ test('a phone held upright gets the mobile layout, and all of it is on screen', 
   assertEqual(fit.out, 0, 'nothing drawn off the edge');
   assert(fit.zoom > 2, 'drawn at the phone’s pixel density');
   const texts = await game.texts();
-  assert(['Readout', 'Inspect', 'Test run', 'Saved', 'Sources', 'Effectors'].every((t) => texts.includes(t)), 'tabs and shelves on screen');
+  assert(['Readout', 'Inspect', 'Test', 'Saved', 'Sources', 'Effectors'].every((t) => texts.includes(t)), 'tabs and shelves on screen');
 }, phone);
 
 test('on a phone: building a sprinkler by dragging modules off the shelves with a finger', async (game) => {
@@ -321,7 +350,7 @@ test('on a phone: building a sprinkler by dragging modules off the shelves with 
   await game.swipe(await shelfItem(game, 'Sources', 'battery'), await between(game, 0));
   const s = await game.state();
   assertEqual(types(s), ['tank', 'battery', 'sprinkler'], 'three modules in the row');
-  assert(s.active[s.placements[2].id], 'and the sprinkler runs');
+  assert(s.active[s.placements[2].id], 'and the sprinkler works');
 }, phone);
 
 test('on a phone: a tap inspects a piece, and Inspect moves it along the row or removes it', async (game) => {
@@ -352,10 +381,8 @@ test('on a phone: tap a module, then tap the row to add it', async (game) => {
   assertEqual(types(await game.state()), ['fan', 'fan'], 'two fans added');
 }, phone);
 
-test('on a phone: the test run, the ground and the saved machines are under their tabs', async (game) => {
-  await game.tapText('Test run');
-  await game.tapText('▶|');
-  assertEqual((await game.state()).turn, 2, 'stepped to turn 2');
+test('on a phone: the test ground and the saved machines are under their tabs', async (game) => {
+  await game.tapText('Test');
   await game.tapText('Puddle');
   assertEqual((await game.state()).ground, 'puddle', 'tested on a puddle');
 
@@ -375,33 +402,37 @@ test('on a phone: naming a machine asks with the phone’s own keyboard', async 
   assert(s.dirty, 'as an unsaved change');
 }, phone);
 
-test('on a phone: placing a machine on the Playground with a finger, and running the round', async (game) => {
+test('on a phone: placing a machine with a finger, a second tap makes it work', async (game) => {
   await game.open('Playground');
   const id = (await game.state()).machines.find((m) => m.name === 'Steam Fan').id;
   await game.swipe(await game.machineRow(id), await game.tile(0, 0));
   let s = await game.state();
-  assertEqual(placedAt(s, 0, 0)?.machineId, id, 'placed on A1');
+  const placed = placedAt(s, 0, 0);
+  assertEqual(placed?.machineId, id, 'placed on A1');
 
-  // A machine just dropped is already picked out, so a tap turns it.
-  await game.tap(...(await game.tile(0, 0)));
-  assertEqual(placedAt(await game.state(), 0, 0).rot, 1, 'a tap on the dropped machine turns it');
   await game.tap(...(await game.tile(3, 3)));
+  assertEqual((await game.state()).actions.length, 0, 'a first tap only picks a machine out');
+  assert((await game.texts()).includes('▶ Work'), 'and Inspect offers to make it work');
+  await game.tap(...(await game.tile(3, 3)));
+  s = await game.state();
+  assertEqual(s.actions.length, 1, 'a second tap makes it work');
+
   await game.tap(...(await game.tile(0, 0)));
-  assertEqual(placedAt(await game.state(), 0, 0).rot, 1, 'after picking out another, a tap only inspects');
+  await game.tapText('⟳ Turn');
+  assertEqual(placedAt(await game.state(), 0, 0).rot, 1, 'Turn turns it');
   await game.tapText('✕ Remove');
   assertEqual((await game.state()).placed.length, 3, 'removed');
 
-  await game.tapText('Round');
-  await game.tapText('▶ Run round');
-  s = await game.state();
-  assert(s.playing && s.turn === 1, 'the round plays');
+  await game.tapText('Run');
+  await game.tapText('↶ Undo');
+  assertEqual((await game.state()).actions.length, 0, 'Undo is under Run');
 }, phone);
 
 test('a laptop window gets the desktop layout, and ?layout=mobile forces the phone one', async (game) => {
-  assert((await game.texts()).includes('TEST RUN · turn 1 of 8'), 'the desktop layout');
+  assert((await game.texts()).includes('WORKING ONCE') && (await game.texts()).includes('TEST ON'), 'the desktop layout');
   await game.page.goto(game.page.url() + '?layout=mobile', { waitUntil: 'networkidle' });
   await game.page.waitForFunction(() => window.__game?.scene.getScenes(true)[0]?.readout);
-  assert((await game.texts()).includes('Test run'), 'the mobile layout, forced');
+  assert((await game.texts()).includes('Test') && !(await game.texts()).includes('TEST ON'), 'the mobile layout, forced');
 });
 
 run();

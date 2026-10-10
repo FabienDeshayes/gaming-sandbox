@@ -1,7 +1,8 @@
-// Draws a world: its tiles and ground, what the turn being viewed does to each
-// tile, and the machines standing on it, one per tile. Used big for the
-// Playground and small for the test world round the Workbench. Holds no state
-// — the scene hands it the units, the round and the turn, and it draws that.
+// Draws a world: its tiles and ground, what machines have left on each tile,
+// and the machines standing on it, one per tile. Used big for the Playground
+// and small for the test world round the Workbench. Holds no state — the scene
+// hands it the units, the tiles and a record for each machine, and it draws
+// that.
 
 import { COLORS, EFFECT_STYLE, FONT, TEXT_RESOLUTION } from '../config.js';
 import { terrainAt } from '../core/machine.js';
@@ -63,11 +64,11 @@ export class WorldView {
     return [x, y];
   }
 
-  // state: { units, round, turn, ghostId, highlight: Set, area: [{ x, y, kind }] }
+  // state: { units, tiles: { [key]: tileState }, records: { [unitId]: record },
+  // ghostId, highlight: Set, area: [{ x, y, kind }] }
   render(state) {
-    const { units, round, turn } = state;
+    const { units, tiles, records } = state;
     const t = this.tile;
-    const record = round.turns[turn - 1];
     this.ground.clear();
     this.bodies.clear();
     this.overlay.clear();
@@ -87,7 +88,7 @@ export class WorldView {
     this.ground.lineStyle(1, COLORS.tileEdgeHex, 1);
     this.ground.strokeRect(this.x0, this.y0, this.width, this.height);
 
-    for (const [key, tile] of Object.entries(record.tiles)) {
+    for (const [key, tile] of Object.entries(tiles)) {
       const [x, y] = key.split(',').map(Number);
       drawTileEffects(this.ground, tile, this.x0 + x * t, this.y0 + y * t, t);
     }
@@ -97,7 +98,7 @@ export class WorldView {
       const c = this.center(unit.x, unit.y);
       const ghost = unit.id === state.ghostId;
       drawMachine(this.bodies, unit.machine.parts, unit.rot, c.x, c.y, size, {
-        record: record.units[unit.id],
+        record: records[unit.id],
         alpha: ghost ? 0.7 : 1,
         label: this.names,
       });

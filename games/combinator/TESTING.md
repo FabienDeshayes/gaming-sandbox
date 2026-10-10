@@ -12,21 +12,21 @@ npm run test:ui    # node tests/game.test.js
 ## `tests/rules.test.mjs` — the rules
 
 Plain `node:test` against `src/core/machine.js`, no browser: how an input
-takes the nearest untaken flow to its left along a machine's row, sources
-running out, open inputs drawing from the ground under the machine, spills
-onto its tile, controls, waste heat and burning, steam, effect areas facing
-the machine's front, machines meeting through shared tiles in a round,
-determinism whatever order machines are listed in,
-and the readouts naming the real cause of a stop. Each test builds its own
-small machine (and world) inline, and reads tuned numbers (charges,
-`TUNING.burnTurns`) from the data tables instead of writing them down twice.
+takes the nearest untaken flow to its left along a machine's row, nothing
+running out, converters changing one element into another, open inputs
+drawing from the ground (one machine, different sources), what machines leave
+on tiles staying and being drawn from, spills, waste heat and burning, steam
+and smothering, effect areas facing the machine's front, the order of actions
+mattering but the order machines are listed in not, and the readouts naming
+the real cause of an idle effector. Each test builds its own small machine
+(and world) inline.
 
 ## `tests/game.test.js` — the screen
 
 Playwright against the real canvas, through `tests/harness.js` (copied from
 Pitchou's and trimmed). Every test gets a fresh page with empty
 `localStorage`, so it opens on the Workbench with the three starting machines
-saved and placed; tests that build from scratch press **New** first. Tests only
+saved and placed, and nothing worked yet; tests that build from scratch press **New** first. Tests only
 send the pointer and key events a player would, flip screens with
 `game.open('Playground')`, and read the shown scene's `testState()` back
 (`game.state()`). `game.slot(i)` is slot i of the Workbench row and
@@ -47,4 +47,4 @@ the harness divides out the mobile layout's camera zoom.
 with each of its tabs.
 
 `node tests/shot.mjs <dir>` screenshots each starting machine on the Workbench
-and the starting Playground, for a quick look at the screens. It is not a test.
+and the starting Playground (before and after two machines have worked), for a quick look at the screens. It is not a test.

@@ -1,8 +1,9 @@
 // Drawing a whole machine as one tile: a body with its row of modules shrunk
 // inside it, one coloured square per module, and a notch on the side it faces.
-// The row runs across the machine at rotation 0 and turns with it. While a
-// round is shown, running modules are lit, idle ones dim and burnt ones dark,
-// so a machine on the Playground still says what is going on inside it.
+// The row runs across the machine at rotation 0 and turns with it. On the
+// Playground, modules that would work if the machine were made to work now
+// are lit, idle ones dim and burnt ones dark, so a machine still says what is
+// going on inside it.
 
 import { COLORS, EFFECT_STYLE, ROLE_STYLE } from '../config.js';
 import { MODULES } from '../data/modules.js';
@@ -10,7 +11,8 @@ import { roleKey } from './moduleArt.js';
 
 const MACHINE_EDGE = 0x8b97a8;
 
-// opts.record: this machine's turn record, or nothing to draw it neutrally.
+// opts.record: the record of this machine working (core/machine.js), or
+// nothing to draw it neutrally.
 // opts.alpha: for a ghost being dragged.
 // opts.label: leave the bottom of the body clear for a name.
 export function drawMachine(g, parts, rot, cx, cy, size, opts = {}) {

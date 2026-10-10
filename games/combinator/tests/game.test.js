@@ -286,4 +286,128 @@ test('fits a small laptop screen without scrolling', async (game) => {
   assert(fit.right <= fit.w + 1 && fit.bottom <= fit.h + 1, JSON.stringify(fit));
 }, { viewport: { width: 1024, height: 640 } });
 
+// --- On a phone -----------------------------------------------------------------
+// A portrait touch screen gets the mobile layout, driven with taps and finger
+// drags (touch events, not the mouse).
+
+const phone = { phone: true };
+
+// Picks the shelf a module is on, the way a player would.
+async function shelfItem(game, shelf, type) {
+  await game.tapText(shelf);
+  return game.paletteItem(type);
+}
+
+test('a phone held upright gets the mobile layout, and all of it is on screen', async (game) => {
+  const fit = await game.page.evaluate(() => {
+    const s = window.__game.scene.getScenes(true)[0];
+    const r = window.__game.canvas.getBoundingClientRect();
+    const cam = s.cameras.main;
+    const W = window.__game.scale.width / cam.zoom;
+    const H = window.__game.scale.height / cam.zoom;
+    const out = s.children.list
+      .filter((c) => c.visible && c.getBounds)
+      .map((c) => c.getBounds())
+      .filter((b) => b.width > 0 && (b.left < -1 || b.top < -1 || b.right > W + 1 || b.bottom > H + 1));
+    return { w: r.width, h: r.height, vw: innerWidth, vh: innerHeight, out: out.length, zoom: cam.zoom };
+  });
+  assert(fit.w >= fit.vw - 1, 'the canvas fills the phone’s width: ' + JSON.stringify(fit));
+  assert(fit.h <= fit.vh + 1, 'and fits its height: ' + JSON.stringify(fit));
+  assertEqual(fit.out, 0, 'nothing drawn off the edge');
+  assert(fit.zoom > 2, 'drawn at the phone’s pixel density');
+  const texts = await game.texts();
+  assert(['Readout', 'Inspect', 'Test run', 'Saved', 'Sources', 'Effectors'].every((t) => texts.includes(t)), 'tabs and shelves on screen');
+}, phone);
+
+test('on a phone: building a sprinkler by dragging modules off the shelves with a finger', async (game) => {
+  await game.tapText('New');
+  assertEqual((await game.state()).placements.length, 0, 'a new machine starts empty');
+  await game.swipe(await shelfItem(game, 'Sources', 'tank'), await game.tile(1, 2));
+  await game.swipe(await shelfItem(game, 'Carriers', 'bend'), await game.tile(2, 2));
+  await game.swipe(await shelfItem(game, 'Effectors', 'sprinkler'), await game.tile(2, 1));
+  const s = await game.state();
+  assertEqual(s.placements.map((p) => p.type), ['tank', 'bend', 'sprinkler'], 'three modules placed');
+  assert(s.active[at(s, 2, 1).id], 'and the sprinkler runs');
+}, phone);
+
+test('on a phone: a tap inspects a module, a second tap turns it, Remove removes it', async (game) => {
+  const before = await game.state();
+  const sprinkler = before.placements.find((p) => p.type === 'sprinkler');
+  await game.tap(...(await game.tile(sprinkler.x, sprinkler.y)));
+  let s = await game.state();
+  assertEqual(at(s, sprinkler.x, sprinkler.y).rot, sprinkler.rot, 'the first tap does not turn it');
+  assert((await game.texts()).includes(`Sprinkler (${String.fromCharCode(65 + sprinkler.x)}${sprinkler.y + 1})`), 'Inspect shows it');
+
+  await game.tap(...(await game.tile(sprinkler.x, sprinkler.y)));
+  assertEqual(at(await game.state(), sprinkler.x, sprinkler.y).rot, (sprinkler.rot + 1) % 4, 'the second tap turns it');
+  await game.tapText('⟳ Turn');
+  assertEqual(at(await game.state(), sprinkler.x, sprinkler.y).rot, (sprinkler.rot + 2) % 4, 'so does Turn');
+  await game.tapText('✕ Remove');
+  s = await game.state();
+  assert(!at(s, sprinkler.x, sprinkler.y), 'Remove takes it off');
+  assert(s.dirty, 'an unsaved change');
+}, phone);
+
+test('on a phone: tap a module, then tap cells to place it', async (game) => {
+  await game.tapText('New');
+  await game.tap(...(await shelfItem(game, 'Effectors', 'fan')));
+  assertEqual((await game.state()).armed, 'fan', 'fan armed');
+  await game.tap(...(await game.tile(0, 0)));
+  await game.tap(...(await game.tile(1, 0)));
+  const s = await game.state();
+  assert(at(s, 0, 0)?.type === 'fan' && at(s, 1, 0)?.type === 'fan', 'two fans placed');
+}, phone);
+
+test('on a phone: the test run, the ground and the saved machines are under their tabs', async (game) => {
+  await game.tapText('Test run');
+  await game.tapText('▶|');
+  assertEqual((await game.state()).turn, 2, 'stepped to turn 2');
+  await game.tapText('Puddle');
+  assertEqual((await game.state()).ground, 'puddle', 'tested on a puddle');
+
+  await game.tapText('Saved');
+  const fan = idOf(await game.state(), 'Steam Fan');
+  await game.tap(...(await game.machineRow(fan)));
+  assert((await game.texts()).some((t) => /Tap Steam Fan again/.test(t)), 'a second tap is asked for over unsaved changes');
+  await game.tap(...(await game.machineRow(fan)));
+  assertEqual((await game.state()).name, 'Steam Fan', 'opened');
+}, phone);
+
+test('on a phone: naming a machine asks with the phone’s own keyboard', async (game) => {
+  game.page.once('dialog', (d) => d.accept('Pocket Pump'));
+  await game.tapText(`${(await game.state()).name}  ✎`);
+  const s = await game.state();
+  assertEqual(s.name, 'Pocket Pump', 'renamed');
+  assert(s.dirty, 'as an unsaved change');
+}, phone);
+
+test('on a phone: placing a machine on the Playground with a finger, and running the round', async (game) => {
+  await game.open('Playground');
+  const id = (await game.state()).machines.find((m) => m.name === 'Steam Fan').id;
+  await game.swipe(await game.machineRow(id), await game.tile(0, 0));
+  let s = await game.state();
+  assertEqual(placedAt(s, 0, 0)?.machineId, id, 'placed on A1');
+
+  // A machine just dropped is already picked out, so a tap turns it.
+  await game.tap(...(await game.tile(0, 0)));
+  assertEqual(placedAt(await game.state(), 0, 0).rot, 1, 'a tap on the dropped machine turns it');
+  await game.tap(...(await game.tile(3, 3)));
+  await game.tap(...(await game.tile(0, 0)));
+  assertEqual(placedAt(await game.state(), 0, 0).rot, 1, 'after picking out another, a tap only inspects');
+  await game.tapText('✕ Remove');
+  assertEqual((await game.state()).placed.length, 3, 'removed');
+
+  await game.tapText('Round');
+  await game.tapText('▶ Run round');
+  s = await game.state();
+  assert(s.playing && s.turn === 1, 'the round plays');
+}, phone);
+
+test('a laptop window gets the desktop layout, and ?layout=mobile forces the phone one', async (game) => {
+  assert((await game.texts()).includes('TEST RUN · turn 1 of 8'), 'the desktop layout');
+  await game.page.goto(game.page.url() + '?layout=mobile', { waitUntil: 'networkidle' });
+  await game.page.waitForFunction(() => window.__game?.scene.getScenes(true)[0]?.readout);
+  assert((await game.texts()).includes('Test run'), 'the mobile layout, forced');
+});
+
 run();

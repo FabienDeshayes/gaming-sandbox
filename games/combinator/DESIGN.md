@@ -163,6 +163,8 @@ The Workbench runs exactly the same rules, with the machine alone in the middle 
 - A readout in sentences on each screen: what each effector does and on which turns, why it stops (traced upstream to the real cause), problems, and notes. On the Playground the notes say which machines wet or heat which others.
 - A timeline: one row per source, effector and burning module on the Workbench; one row per machine on the Playground. Clicking a turn shows it.
 
+**On a phone.** A screen held upright gets a mobile layout of both screens, picked at load (turning the phone reloads into the other layout; `?layout=mobile` or `?layout=desktop` forces one). It is one column: the grid on top, what you drag from under it (the palette one shelf at a time on the Workbench, the saved machines in two columns on the Playground), and a tabbed panel at the bottom. The Workbench tabs are Readout, Inspect, Test run (the ground, the run controls, the test world and the timeline) and Saved; the Playground's are Readout, Inspect and Round (the run controls, Clear and the timeline). A finger has no hover, so a tap picks a thing out and shows it in Inspect; a second tap on a placed module or machine turns it, and Inspect has Turn and Remove buttons for it. Dragging works as on desktop. A machine is named through the phone's own keyboard.
+
 **Modules.**
 
 | Role | Module | Ports (at rotation 0) | Material | Notes |

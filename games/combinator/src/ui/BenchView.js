@@ -3,7 +3,7 @@
 // links, and the flows moving through them. Holds no machine state — the scene
 // hands it the parts, the run and the turn, and it draws that.
 
-import { COLORS, EFFECT_STYLE, FLOW_STYLE, FONT, LAYOUT, TERRAIN_STYLE, TEXT_RESOLUTION } from '../config.js';
+import { COLORS, EFFECT_STYLE, FLOW_STYLE, FONT, LAYOUT, MOBILE, MOBILE_LAYOUT, TERRAIN_STYLE, TEXT_RESOLUTION } from '../config.js';
 import { MODULES } from '../data/modules.js';
 import { neighbour, portsOf } from '../core/machine.js';
 import { drawModule, portPoint } from './moduleArt.js';
@@ -15,7 +15,7 @@ export class BenchView {
   constructor(scene, bench) {
     this.scene = scene;
     this.bench = bench;
-    const { x, y, tile } = LAYOUT.bench;
+    const { x, y, tile } = (MOBILE ? MOBILE_LAYOUT : LAYOUT).bench;
     this.x0 = x;
     this.y0 = y;
     this.tile = tile;
@@ -150,11 +150,11 @@ export class BenchView {
       const name = this.scene.add
         .text(c.x, c.y, burnt ? 'burnt' : def.name, {
           fontFamily: FONT,
-          fontSize: '13px',
+          fontSize: MOBILE ? '10px' : '13px',
           fontStyle: 'bold',
           color: burnt ? '#8a7a6a' : COLORS.text,
           align: 'center',
-          wordWrap: { width: size - 18 },
+          wordWrap: { width: size - (MOBILE ? 6 : 18) },
           backgroundColor: burnt ? null : 'rgba(18,21,27,0.78)',
           padding: { x: 3, y: 1 },
           resolution: TEXT_RESOLUTION,

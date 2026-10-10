@@ -1,18 +1,40 @@
 // Layout, type and palette. No rules live here: what modules do is in
 // src/data/modules.js and src/core/machine.js.
 
-export const GAME_WIDTH = 1280;
-export const GAME_HEIGHT = 800;
+// Two layouts. A portrait screen (a phone held upright) gets the mobile one:
+// a narrow design that stacks the screen and puts the panels under tabs, and
+// is driven by tapping and dragging with a finger. Anything else gets the
+// desktop one. `?layout=mobile` or `?layout=desktop` forces either. The choice
+// is made once, at load; src/main.js reloads the page if the screen turns.
+const view = globalThis.window ?? { innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1 };
+const forced = new URLSearchParams(globalThis.location?.search ?? '').get('layout');
+export const isPortrait = () => view.innerHeight > view.innerWidth;
+export const MOBILE = forced ? forced === 'mobile' : isPortrait();
+
+const MOBILE_WIDTH = 450;
+// The design size, in the coordinates every layout below is written in. The
+// mobile height follows the phone's shape, so a tall phone gets taller panels.
+export const GAME_WIDTH = MOBILE ? MOBILE_WIDTH : 1280;
+export const GAME_HEIGHT = MOBILE
+  ? Math.round(Math.min(1000, Math.max(800, (MOBILE_WIDTH * view.innerHeight) / view.innerWidth)))
+  : 800;
+// A phone's screen has two to three pixels per CSS pixel, so the mobile canvas
+// is drawn that many times bigger and each scene's camera zooms in to match:
+// the layout stays in design coordinates and comes out sharp.
+export const ZOOM = MOBILE
+  ? Math.min(3, Math.max(1, (view.devicePixelRatio || 1) * Math.min(view.innerWidth / GAME_WIDTH, view.innerHeight / GAME_HEIGHT)))
+  : 1;
 
 export const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-export const TEXT_RESOLUTION = 2;
+export const TEXT_RESOLUTION = Math.max(2, Math.ceil(ZOOM));
 export const FONT_LG = 24;
 export const FONT_MD = 18;
 export const FONT_RG = 16;
 export const FONT_SM = 14;
 
-// A press that travels further than this is a drag, not a click.
-export const DRAG_THRESHOLD = 8;
+// A press that travels further than this (in design pixels) is a drag, not a
+// click. A fingertip wobbles more than a mouse.
+export const DRAG_THRESHOLD = MOBILE ? 10 : 8;
 // How long each turn shows during a played-back test run.
 export const PLAY_STEP_MS = 700;
 
@@ -38,6 +60,31 @@ export const PLAY_LAYOUT = {
   legend: { y: 562 },
   timeline: { x: 262, y: 588, w: 632, labelW: 190, rowH: 24, bottom: 784 },
   panel: { x: 914, y: 72, w: 350, h: 712, inspectH: 250 },
+};
+
+// The mobile layouts: one column, the grid on top, what you drag from under
+// it, and a tabbed panel at the bottom for everything else (the readout, the
+// inspector, the test run and the saved machines). `panel` runs to the bottom
+// of the screen, however tall the phone makes it.
+const panelTo = (y) => ({ x: 16, y, w: GAME_WIDTH - 32, h: GAME_HEIGHT - 8 - y });
+
+export const MOBILE_LAYOUT = {
+  header: { y: 24 },
+  machineBar: { y: 62, status: 80 },
+  bench: { x: 30, y: 130, tile: 58 },
+  legend: { y: 436 },
+  palette: { x: 16, y: 452, w: GAME_WIDTH - 32, chipH: 30, rowH: 42, gap: 6, cols: 4 },
+  tabs: { y: 606 },
+  panel: panelTo(628),
+};
+
+export const MOBILE_PLAY_LAYOUT = {
+  header: { y: 24 },
+  world: { x: 30, y: 68, tile: 41 },
+  legend: { y: 372 },
+  machines: { x: 16, y: 386, w: GAME_WIDTH - 32, rowH: 40, rows: 2, cols: 2 },
+  tabs: { y: 526 },
+  panel: panelTo(548),
 };
 
 export const COLORS = {

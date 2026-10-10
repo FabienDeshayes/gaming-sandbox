@@ -1,6 +1,7 @@
 // The right-hand panel. The top half says, in sentences, what the machine (or
 // the round) does, what is wrong with it and what else is worth knowing; the
-// bottom half is an inspector for whatever is under the pointer.
+// bottom half is an inspector for whatever is under the pointer. On a phone the
+// two halves are two tabs over the same area, so each can be shown on its own.
 
 import { COLORS, FONT, FONT_MD, FONT_SM, TEXT_RESOLUTION } from '../config.js';
 
@@ -8,29 +9,43 @@ const PAD = 14;
 const LINE_FONT = 15;
 
 export class Readout {
-  // layout: { x, y, w, h, inspectH }; titles: the three section headings.
+  // layout: { x, y, w, h, inspectH } stacks the two halves, framed; { x, y,
+  // w, h, stacked: false } puts both on the same unframed area (the mobile
+  // panel draws the frame). titles: the three section headings.
   constructor(scene, layout, onHoverLine, titles = ['What this machine does', 'Problems', 'Notes']) {
     this.scene = scene;
     this.onHoverLine = onHoverLine;
     this.titles = titles;
-    const { x, y, w, h, inspectH } = layout;
+    const { x, y, w, h, inspectH, stacked = true } = layout;
     this.x = x;
     this.w = w;
     this.top = y;
-    this.bottom = y + h - inspectH - 12;
-    this.inspectTop = y + h - inspectH;
+    this.bottom = stacked ? y + h - inspectH - 12 : y + h;
+    this.inspectTop = stacked ? y + h - inspectH : y;
     this.inspectBottom = y + h;
+    this.summaryShown = true;
+    this.inspectShown = true;
 
-    const g = scene.add.graphics().setDepth(0);
-    g.fillStyle(COLORS.panelHex, 1);
-    g.lineStyle(2, COLORS.panelEdgeHex, 1);
-    g.fillRoundedRect(x, y, w, this.bottom - y, 10);
-    g.strokeRoundedRect(x, y, w, this.bottom - y, 10);
-    g.fillRoundedRect(x, this.inspectTop, w, inspectH, 10);
-    g.strokeRoundedRect(x, this.inspectTop, w, inspectH, 10);
+    if (stacked) {
+      const g = scene.add.graphics().setDepth(0);
+      g.fillStyle(COLORS.panelHex, 1);
+      g.lineStyle(2, COLORS.panelEdgeHex, 1);
+      g.fillRoundedRect(x, y, w, this.bottom - y, 10);
+      g.strokeRoundedRect(x, y, w, this.bottom - y, 10);
+      g.fillRoundedRect(x, this.inspectTop, w, inspectH, 10);
+      g.strokeRoundedRect(x, this.inspectTop, w, inspectH, 10);
+    }
 
     this.texts = [];
     this.inspectTexts = [];
+    // Each half as something a tab can show or hide.
+    this.summary = { setShown: (on) => this.show('summaryShown', this.texts, on) };
+    this.inspector = { setShown: (on) => this.show('inspectShown', this.inspectTexts, on) };
+  }
+
+  show(flag, list, on) {
+    this[flag] = on;
+    for (const t of list) t.setVisible(on);
   }
 
   add(list, x, y, s, style = {}) {
@@ -44,7 +59,8 @@ export class Readout {
         resolution: TEXT_RESOLUTION,
         ...style,
       })
-      .setDepth(2);
+      .setDepth(2)
+      .setVisible(list === this.texts ? this.summaryShown : this.inspectShown);
     list.push(t);
     return t;
   }

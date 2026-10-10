@@ -1,4 +1,10 @@
-import { COLORS, FONT, FONT_RG, TEXT_RESOLUTION } from '../config.js';
+import { COLORS, DRAG_THRESHOLD, FONT, FONT_RG, TEXT_RESOLUTION, ZOOM } from '../config.js';
+
+// Whether a press has travelled far enough to be a drag. Pointer distances are
+// in canvas pixels, which are ZOOM design pixels each.
+export function isDrag(pointer) {
+  return pointer.getDistance() >= DRAG_THRESHOLD * ZOOM;
+}
 
 // A text button with a rounded panel behind it. Fires on release, and only if
 // the press didn't turn into a drag. Returns the Text object (the harness finds
@@ -59,7 +65,7 @@ export function createButton(scene, x, y, label, onClick, style = {}) {
   text.on('pointerover', () => paint(COLORS.buttonHoverHex));
   text.on('pointerout', () => paint(text.baseFill));
   text.on('pointerup', (pointer) => {
-    if (pointer.getDistance() > 8) return;
+    if (isDrag(pointer)) return;
     onClick?.();
   });
   return text;

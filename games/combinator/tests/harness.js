@@ -136,9 +136,16 @@ export function launchBrowser() {
 
 // `viewport` defaults to the design size, where every design coordinate is a
 // screen coordinate. Pass a real device size to test Phaser's FIT scaling.
-export async function openGame(browser, port, { viewport = { width: 1280, height: 800 } } = {}) {
+// `phone: true` opens it as a phone held upright (a touch screen, portrait,
+// three device pixels per CSS pixel), which gets the mobile layout.
+export const PHONE = { width: 390, height: 844 };
+export async function openGame(browser, port, { viewport, phone = false, query = '' } = {}) {
   const errors = [];
-  const page = await browser.newPage({ viewport });
+  const page = await browser.newPage(
+    phone
+      ? { viewport: viewport ?? PHONE, hasTouch: true, isMobile: true, deviceScaleFactor: 3 }
+      : { viewport: viewport ?? { width: 1280, height: 800 } }
+  );
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (m) => {
     const from = m.location()?.url || '';
@@ -175,15 +182,17 @@ export async function openGame(browser, port, { viewport = { width: 1280, height
       const s = shown[0];
       return shown.length === 1 && (!key || s.sys.settings.key === key) && typeof s.testState === 'function' && !!s.readout;
     }, key);
-  await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle' });
+  await page.goto(`http://localhost:${port}/${query}`, { waitUntil: 'networkidle' });
   await ready();
 
-  // Design coords -> screen coords, through Phaser's FIT scaling.
+  // Design coords -> screen coords, through Phaser's FIT scaling and the
+  // camera zoom the mobile layout draws with.
   const rect = () =>
     page.evaluate(() => {
       const r = document.querySelector('canvas').getBoundingClientRect();
       const g = window.__game;
-      return { left: r.left, top: r.top, sx: r.width / g.scale.width, sy: r.height / g.scale.height };
+      const zoom = g.scene.getScenes(true)[0].cameras.main.zoom;
+      return { left: r.left, top: r.top, sx: (r.width / g.scale.width) * zoom, sy: (r.height / g.scale.height) * zoom };
     });
   const toScreen = async (px, py) => {
     const R = await rect();
@@ -213,6 +222,29 @@ export async function openGame(browser, port, { viewport = { width: 1280, height
       await frame();
       await page.mouse.up();
       await frame();
+    },
+
+    // A finger: a tap, and a press that slides and lifts, as touch events.
+    tap: async (px, py) => {
+      const [x, y] = await toScreen(px, py);
+      await page.touchscreen.tap(x, y);
+      await frame();
+    },
+    swipe: async ([x1, y1], [x2, y2]) => {
+      const [a, b] = await toScreen(x1, y1);
+      const [c, d] = await toScreen(x2, y2);
+      const cdp = await page.context().newCDPSession(page);
+      const touch = (type, x, y) =>
+        cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+      await touch('touchStart', a, b);
+      await frame();
+      for (let i = 1; i <= 8; i++) {
+        await touch('touchMove', a + ((c - a) * i) / 8, b + ((d - b) * i) / 8);
+        await frame();
+      }
+      await touch('touchEnd');
+      await frame();
+      await cdp.detach();
     },
 
     hover: async (px, py) => {
@@ -277,6 +309,20 @@ export async function openGame(browser, port, { viewport = { width: 1280, height
       if (!pos) throw new Error(`no text "${label}" on screen`);
       await game.clickAt(...pos);
     },
+    tapText: async (label) => {
+      const pos = await game.textAt(label);
+      if (!pos) throw new Error(`no text "${label}" on screen`);
+      await game.tap(...pos);
+    },
+    textAt: (label) =>
+      page.evaluate((label) => {
+        const o = window.__game.scene
+          .getScenes(true)[0]
+          .children.list.find((c) => c.visible && c.text === label);
+        if (!o) return null;
+        const b = o.getBounds();
+        return [b.centerX, b.centerY];
+      }, label),
 
     // Flip to a screen by its tab, and wait for it to draw.
     open: async (tab) => {

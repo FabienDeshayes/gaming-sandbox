@@ -5,7 +5,7 @@
 
 import { assert, assertEqual, run, test } from './harness.js';
 
-const at = (state, x, y) => state.placements.find((p) => p.x === x && p.y === y);
+const types = (state) => state.placements.map((p) => p.type);
 const placedAt = (state, x, y) => state.placed.find((p) => p.x === x && p.y === y);
 const idOf = (state, name) => state.library.find((m) => m.name === name).id;
 
@@ -17,9 +17,8 @@ async function fresh(game) {
 }
 
 async function buildSprinkler(game) {
-  await game.drag(await game.paletteItem('tank'), await game.tile(1, 2));
-  await game.drag(await game.paletteItem('bend'), await game.tile(2, 2));
-  await game.drag(await game.paletteItem('sprinkler'), await game.tile(2, 1));
+  await game.drag(await game.paletteItem('tank'), await game.slot(0));
+  await game.drag(await game.paletteItem('sprinkler'), await game.slot(1));
 }
 
 async function rename(game, name) {
@@ -28,6 +27,13 @@ async function rename(game, name) {
   for (let i = 0; i < 30; i++) await game.page.keyboard.press('Backspace');
   await game.page.keyboard.type(name);
   await game.key('Enter');
+}
+
+// Between slots i and i + 1 of the row.
+async function between(game, i) {
+  const [a, y] = await game.slot(i);
+  const [b] = await game.slot(i + 1);
+  return [(a + b) / 2, y];
 }
 
 // --- Workbench -----------------------------------------------------------------
@@ -39,80 +45,67 @@ test('opens on the Workbench with a saved machine that already works, and no err
   assert(s.desc.result.some((l) => l.good), 'and the readout says what it does');
   const texts = await game.texts();
   assert(texts.includes('WHAT THIS MACHINE DOES') && texts.includes('SAVED MACHINES'), 'readout and library on screen');
+  assert(texts.includes('#1 Running') && texts.includes('#2 Running'), 'each piece says how it is doing under it');
 });
 
-test('building tank → pipe bend → sprinkler by dragging from the palette', async (game) => {
+test('building tank → sprinkler by dragging into the row', async (game) => {
   await fresh(game);
-  await game.drag(await game.paletteItem('tank'), await game.tile(1, 2));
+  await game.drag(await game.paletteItem('tank'), await game.slot(0));
   let s = await game.state();
-  assert(at(s, 1, 2)?.type === 'tank', 'tank placed on B3');
-  assert(s.desc.notes.some((l) => /open Matter output: it spills onto the machine's tile/.test(l.text)), 'an unconnected tank spills');
+  assertEqual(types(s), ['tank'], 'tank in the row');
+  assert(s.desc.notes.some((l) => /gives Matter that no piece to its right takes: it spills onto the machine's tile/.test(l.text)), 'a tank on its own spills');
 
-  await game.drag(await game.paletteItem('bend'), await game.tile(2, 2));
-  await game.drag(await game.paletteItem('sprinkler'), await game.tile(2, 1));
+  await game.drag(await game.paletteItem('sprinkler'), await game.slot(3));
   s = await game.state();
-  assert(s.active[at(s, 2, 1).id], 'sprinkler runs on turn 1');
+  assertEqual(types(s), ['tank', 'sprinkler'], 'dropped past the end, it lands at the end');
+  assert(s.active[s.placements[1].id], 'sprinkler runs on turn 1');
   assert(
-    s.desc.result.some((l) => /Sprinkler \(C2\) wets the machine's tile and the 4 around it on turns 1–4/.test(l.text)),
+    s.desc.result.some((l) => /^Sprinkler wets the machine's tile and the 4 around it on turns 1–4/.test(l.text)),
     'readout: ' + JSON.stringify(s.desc.result)
   );
   assertEqual(Object.keys(s.worldTiles).filter((k) => s.worldTiles[k].wet.length).length, 5, 'five tiles wet in the world round it');
+  assert((await game.texts()).includes('◂ Matter from Water Tank'), 'the sprinkler says where its water comes from');
 });
 
-test('clicking a placed module turns it', async (game) => {
+test('a module dropped between two pieces goes in between, and flow passes by it', async (game) => {
   await fresh(game);
-  await game.drag(await game.paletteItem('tank'), await game.tile(1, 2));
-  await game.drag(await game.paletteItem('pipe'), await game.tile(2, 2));
-  let s = await game.state();
-  assert(s.active[at(s, 2, 2).id], 'pipe carries the tank’s water');
-
-  await game.clickAt(...(await game.tile(2, 2)));
-  s = await game.state();
-  assertEqual(at(s, 2, 2).rot, 1, 'one click is a quarter turn');
-  assert(!s.active[at(s, 2, 2).id], 'turned pipe no longer faces the tank');
+  await buildSprinkler(game);
+  await game.drag(await game.paletteItem('battery'), await between(game, 0));
+  const s = await game.state();
+  assertEqual(types(s), ['tank', 'battery', 'sprinkler'], 'inserted between');
+  assert(s.active[s.placements[2].id], 'the water still reaches the sprinkler');
 });
 
-test('a port touching the wrong flow is reported as a problem', async (game) => {
+test('an input with nothing to its left is reported as a problem', async (game) => {
   await fresh(game);
-  await game.drag(await game.paletteItem('tank'), await game.tile(1, 2));
-  await game.drag(await game.paletteItem('shaft'), await game.tile(2, 2));
+  await game.drag(await game.paletteItem('sprinkler'), await game.slot(0));
+  await game.drag(await game.paletteItem('tank'), await game.slot(1));
   const s = await game.state();
   assert(
-    s.desc.problems.some((l) => /touch but can't connect: Matter meets Motion/.test(l.text)),
+    s.desc.problems.some((l) => /Sprinkler never runs: its Matter input gets nothing: no piece to its left has Matter to spare/.test(l.text)),
     'problems: ' + JSON.stringify(s.desc.problems)
   );
 });
 
-test('dragging a module off the Workbench removes it; dragging within it moves it', async (game) => {
+test('dragging a piece along the row moves it; dragging it out of the row removes it', async (game) => {
   await fresh(game);
-  await game.drag(await game.paletteItem('battery'), await game.tile(3, 3));
-  await game.drag(await game.tile(3, 3), await game.tile(4, 4));
+  await game.drag(await game.paletteItem('battery'), await game.slot(0));
+  await game.drag(await game.paletteItem('tank'), await game.slot(1));
+  await game.drag(await game.slot(0), await game.slot(2));
   let s = await game.state();
-  assert(at(s, 4, 4)?.type === 'battery' && !at(s, 3, 3), 'moved to E5');
+  assertEqual(types(s), ['tank', 'battery'], 'battery moved past the tank');
 
-  await game.drag(await game.tile(4, 4), [700, 790]);
+  await game.drag(await game.slot(1), [700, 790]);
   s = await game.state();
-  assertEqual(s.placements.length, 0, 'dropped off the Workbench, gone');
+  assertEqual(types(s), ['tank'], 'dropped out of the row, gone');
 });
 
-test('R while dragging turns the module before it lands', async (game) => {
-  await fresh(game);
-  const [x1, y1] = await game.paletteItem('pipe');
-  const [x2, y2] = await game.tile(3, 2);
-  await game.hover(x1, y1);
-  await game.page.mouse.down();
-  await game.hover(x2, y2);
-  await game.key('r');
-  await game.page.mouse.up();
-  assertEqual(at(await game.state(), 3, 2)?.rot, 1, 'landed turned');
-});
-
-test('tapping a palette module and then a cell places it', async (game) => {
+test('tapping a palette module and then the row adds it at the end, up to a full row', async (game) => {
   await fresh(game);
   await game.clickAt(...(await game.paletteItem('fan')));
   assertEqual((await game.state()).armed, 'fan', 'fan armed');
-  await game.clickAt(...(await game.tile(0, 0)));
-  assert(at(await game.state(), 0, 0)?.type === 'fan', 'fan placed on A1');
+  for (let i = 0; i < 9; i++) await game.clickAt(...(await game.slot(6)));
+  assertEqual(types(await game.state()), Array(7).fill('fan'), 'seven fans and no more');
 });
 
 test('the timeline steps through the test run and the Workbench follows it', async (game) => {
@@ -140,7 +133,7 @@ test('the ground under the machine decides what its open inputs draw', async (ga
   await game.clickText('Bare');
   s = await game.state();
   assertEqual(s.ground, null, 'now on bare ground');
-  assert(s.desc.problems.some((l) => /Sprinkler \(C3\) never runs: .*bare ground under the machine has no Matter/.test(l.text)), JSON.stringify(s.desc.problems));
+  assert(s.desc.problems.some((l) => /Sprinkler never runs: .*bare ground under the machine has none to give/.test(l.text)), JSON.stringify(s.desc.problems));
   assert(s.dirty, 'changing the ground is an unsaved change');
 });
 
@@ -171,7 +164,7 @@ test('Escape while naming keeps the old name, and typing a name never edits the 
 });
 
 test('opening another machine over unsaved changes takes a second click', async (game) => {
-  await game.drag(await game.paletteItem('battery'), await game.tile(6, 4));
+  await game.drag(await game.paletteItem('battery'), await game.slot(6));
   const edited = await game.state();
   assert(edited.dirty, 'Tank Sprinkler has unsaved changes');
   const fan = idOf(edited, 'Steam Fan');
@@ -204,14 +197,14 @@ test('deleting a machine takes two clicks and takes it off the Playground too', 
 });
 
 test('unsaved work survives flipping to the Playground and back, and a reload', async (game) => {
-  await game.drag(await game.paletteItem('battery'), await game.tile(6, 4));
+  await game.drag(await game.paletteItem('battery'), await game.slot(6));
   await game.open('Playground');
   await game.open('Workbench');
   let s = await game.state();
-  assert(s.dirty && at(s, 6, 4)?.type === 'battery', 'still there after a flip');
+  assert(s.dirty && types(s).at(-1) === 'battery', 'still there after a flip');
   await game.reload();
   s = await game.state();
-  assert(s.dirty && at(s, 6, 4)?.type === 'battery', 'still there after a reload');
+  assert(s.dirty && types(s).at(-1) === 'battery', 'still there after a reload');
 });
 
 // --- Playground ------------------------------------------------------------------
@@ -235,8 +228,8 @@ test('a machine that burns out on its own survives beside a sprinkler, and burns
   await game.drag(await game.tile(4, 3), await game.tile(5, 6));
   s = await game.state();
   assert(placedAt(s, 5, 6)?.id === fan.id, 'moved to F7');
-  assertEqual(s.burnt[fan.id].length, 1, 'out on its own its shaft burns');
-  assert(s.desc.problems.some((l) => /Steam Fan \(F7\): Shaft is wooden and burns down after turn 2, from waste heat from Steam Engine/.test(l.text)), JSON.stringify(s.desc.problems));
+  assertEqual(s.burnt[fan.id].length, 1, 'out on its own its fan burns');
+  assert(s.desc.problems.some((l) => /Steam Fan \(F7\): Fan is wooden and burns down after turn 2, from waste heat from Steam Engine/.test(l.text)), JSON.stringify(s.desc.problems));
 });
 
 test('placing a saved machine by dragging, turning it by clicking, removing it by dragging off', async (game) => {
@@ -257,8 +250,9 @@ test('placing a saved machine by dragging, turning it by clicking, removing it b
 });
 
 test('saving a change on the Workbench changes every copy on the Playground', async (game) => {
-  // Turn the Tank Sprinkler's sprinkler away from its pipe: it stops working.
-  await game.clickAt(...(await game.tile(3, 1)));
+  // Move the Tank Sprinkler's sprinkler in front of its tank: it stops working.
+  const [x, y] = await game.slot(0);
+  await game.drag(await game.slot(1), [x - 30, y]);
   await game.clickText('Save');
   await game.open('Playground');
   const s = await game.state();
@@ -322,40 +316,40 @@ test('a phone held upright gets the mobile layout, and all of it is on screen', 
 test('on a phone: building a sprinkler by dragging modules off the shelves with a finger', async (game) => {
   await game.tapText('New');
   assertEqual((await game.state()).placements.length, 0, 'a new machine starts empty');
-  await game.swipe(await shelfItem(game, 'Sources', 'tank'), await game.tile(1, 2));
-  await game.swipe(await shelfItem(game, 'Carriers', 'bend'), await game.tile(2, 2));
-  await game.swipe(await shelfItem(game, 'Effectors', 'sprinkler'), await game.tile(2, 1));
+  await game.swipe(await shelfItem(game, 'Sources', 'tank'), await game.slot(0));
+  await game.swipe(await shelfItem(game, 'Effectors', 'sprinkler'), await game.slot(1));
+  await game.swipe(await shelfItem(game, 'Sources', 'battery'), await between(game, 0));
   const s = await game.state();
-  assertEqual(s.placements.map((p) => p.type), ['tank', 'bend', 'sprinkler'], 'three modules placed');
-  assert(s.active[at(s, 2, 1).id], 'and the sprinkler runs');
+  assertEqual(types(s), ['tank', 'battery', 'sprinkler'], 'three modules in the row');
+  assert(s.active[s.placements[2].id], 'and the sprinkler runs');
 }, phone);
 
-test('on a phone: a tap inspects a module, a second tap turns it, Remove removes it', async (game) => {
+test('on a phone: a tap inspects a piece, and Inspect moves it along the row or removes it', async (game) => {
   const before = await game.state();
-  const sprinkler = before.placements.find((p) => p.type === 'sprinkler');
-  await game.tap(...(await game.tile(sprinkler.x, sprinkler.y)));
-  let s = await game.state();
-  assertEqual(at(s, sprinkler.x, sprinkler.y).rot, sprinkler.rot, 'the first tap does not turn it');
-  assert((await game.texts()).includes(`Sprinkler (${String.fromCharCode(65 + sprinkler.x)}${sprinkler.y + 1})`), 'Inspect shows it');
+  assertEqual(types(before), ['tank', 'sprinkler'], 'the Tank Sprinkler');
+  await game.tap(...(await game.slot(1)));
+  assert((await game.texts()).includes('#2 Sprinkler'), 'Inspect shows it');
+  assertEqual(types(await game.state()), ['tank', 'sprinkler'], 'a tap changes nothing');
 
-  await game.tap(...(await game.tile(sprinkler.x, sprinkler.y)));
-  assertEqual(at(await game.state(), sprinkler.x, sprinkler.y).rot, (sprinkler.rot + 1) % 4, 'the second tap turns it');
-  await game.tapText('⟳ Turn');
-  assertEqual(at(await game.state(), sprinkler.x, sprinkler.y).rot, (sprinkler.rot + 2) % 4, 'so does Turn');
+  await game.tapText('◀');
+  let s = await game.state();
+  assertEqual(types(s), ['sprinkler', 'tank'], '◀ moves it left');
+  assert(!s.active[s.placements[0].id], 'where nothing feeds it');
+  await game.tapText('▶');
+  assertEqual(types(await game.state()), ['tank', 'sprinkler'], '▶ moves it back');
   await game.tapText('✕ Remove');
   s = await game.state();
-  assert(!at(s, sprinkler.x, sprinkler.y), 'Remove takes it off');
+  assertEqual(types(s), ['tank'], 'Remove takes it out');
   assert(s.dirty, 'an unsaved change');
 }, phone);
 
-test('on a phone: tap a module, then tap cells to place it', async (game) => {
+test('on a phone: tap a module, then tap the row to add it', async (game) => {
   await game.tapText('New');
   await game.tap(...(await shelfItem(game, 'Effectors', 'fan')));
   assertEqual((await game.state()).armed, 'fan', 'fan armed');
-  await game.tap(...(await game.tile(0, 0)));
-  await game.tap(...(await game.tile(1, 0)));
-  const s = await game.state();
-  assert(at(s, 0, 0)?.type === 'fan' && at(s, 1, 0)?.type === 'fan', 'two fans placed');
+  await game.tap(...(await game.slot(0)));
+  await game.tap(...(await game.slot(1)));
+  assertEqual(types(await game.state()), ['fan', 'fan'], 'two fans added');
 }, phone);
 
 test('on a phone: the test run, the ground and the saved machines are under their tabs', async (game) => {

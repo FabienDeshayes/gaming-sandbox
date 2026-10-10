@@ -1,5 +1,5 @@
 // The Workbench: where machines are built, named, saved and deleted. A palette
-// of modules, the grid a machine is built on, the ground it is tested
+// of modules, the row a machine is built in, the ground it is tested
 // standing on, the small world round it showing what it does there, a readout
 // in sentences and a turn-by-turn timeline of its test run. Every edit re-runs
 // the test at once, so what the screen shows is always what the machine will
@@ -26,11 +26,9 @@ import { FLOWS, MODULES, PALETTE } from '../data/modules.js';
 import {
   BENCH_UNIT,
   FLOW_NAMES,
-  SIDE_WORDS,
-  canPlace,
   causeNamer,
   describe,
-  label,
+  labelFor,
   portsOf,
   testMachine,
   tileKey,
@@ -51,22 +49,21 @@ import { Timeline } from '../ui/Timeline.js';
 import { WorldView } from '../ui/WorldView.js';
 
 const HELP = [
-  'Drag a module from the left onto a cell.',
-  'Click a placed module to turn it. R turns whatever is under the pointer, or the one you are dragging.',
-  'Drag a module to move it; drag it off the Workbench (or press Delete) to remove it.',
-  'Touching ports connect when they carry the same flow, one out (solid) and one in (hollow).',
-  'The whole machine stands on one tile. Open inputs draw from its ground; pick it under "Test on".',
+  'A machine is a row of modules. Drag one from the left into the row, between two pieces or at the end.',
+  'Flow runs left to right. An input (hollow) takes the nearest flow of its kind from a piece to its left that nothing else has taken.',
+  'Drag a piece along the row to move it; drag it out of the row (or press Delete) to remove it.',
+  'An input with nothing to take draws from the ground; an output nobody takes spills onto the tile. Pick the ground under "Test on".',
+  'Effectors act towards the front of the machine, which is north until it is turned on the Playground.',
   'Save the machine, then place it on the Playground.',
 ];
-// The same, for a finger: a tap picks a thing out, so turning and removing
-// are a second tap or the buttons in Inspect.
+// The same, for a finger: a tap picks a thing out, and Inspect has buttons to
+// move it along the row or remove it.
 const HELP_TOUCH = [
-  'Drag a module from the shelf below onto a cell, or tap it and then tap cells.',
-  'Tap a placed module to inspect it; tap it again (or Turn) to turn it.',
-  'Drag a module to move it; drag it off the Workbench (or tap Remove) to remove it.',
-  'Touching ports connect when they carry the same flow, one out (solid) and one in (hollow).',
-  'The whole machine stands on one tile. Pick its ground under Test run.',
-  'Save the machine, then place it on the Playground.',
+  'A machine is a row of modules. Drag one from the shelf into the row, or tap it and then tap the row.',
+  'Flow runs left to right. An input (hollow) takes the nearest flow of its kind from a piece to its left.',
+  'Tap a piece to inspect it. Drag it along the row to move it, or out of the row to remove it.',
+  'An input with nothing to take draws from the ground (pick it under Test run); an output nobody takes spills.',
+  'Effectors act towards the front of the machine, which is north until it is turned on the Playground.',
 ];
 // Mouse or finger, in the words the screen uses.
 const CLICK = MOBILE ? 'Tap' : 'Click';
@@ -110,6 +107,17 @@ export class WorkbenchScene extends Phaser.Scene {
     this.drawPalette();
     this.drawLegend();
     this.view = new BenchView(this, WORKBENCH);
+    if (!MOBILE) {
+      this.add
+        .text(LAYOUT.bench.x - 6, LAYOUT.bench.top + 8, 'THE MACHINE · flow runs left to right ▸', {
+          fontFamily: FONT,
+          fontSize: `${FONT_SM}px`,
+          fontStyle: 'bold',
+          color: COLORS.muted,
+          resolution: TEXT_RESOLUTION,
+        })
+        .setOrigin(0, 0.5);
+    }
     if (MOBILE) this.drawMobilePanel();
     else this.drawDesktopPanel();
     this.library.reveal(this.machineId);
@@ -205,11 +213,18 @@ export class WorkbenchScene extends Phaser.Scene {
       onPage: () => this.refresh(),
     });
 
-    // Turn and Remove for the module picked out, beside its name in Inspect.
-    this.turnButton = createButton(this, 0, P.y + 24, '⟳ Turn', () => this.actOnFocus('turn'), { fontSize: FONT_SM, padX: 10, padY: 6 });
-    this.removeButton = createButton(this, 0, P.y + 24, '✕ Remove', () => this.actOnFocus('remove'), { fontSize: FONT_SM, padX: 10, padY: 6 });
-    this.removeButton.moveX(right - this.removeButton.width / 2);
-    this.turnButton.moveX(this.removeButton.x - this.removeButton.width / 2 - 8 - this.turnButton.width / 2);
+    // Move and Remove for the piece picked out, beside its name in Inspect.
+    const small = { fontSize: FONT_SM, padX: 10, padY: 6 };
+    this.focusButtons = [
+      createButton(this, 0, P.y + 24, '◀', () => this.actOnFocus('left'), small),
+      createButton(this, 0, P.y + 24, '▶', () => this.actOnFocus('right'), small),
+      createButton(this, 0, P.y + 24, '✕ Remove', () => this.actOnFocus('remove'), small),
+    ];
+    let edge = right;
+    for (const b of [...this.focusButtons].reverse()) {
+      b.moveX(edge - b.width / 2);
+      edge -= b.width + 6;
+    }
 
     this.tabs.add('readout', this.readout.summary);
     this.tabs.add('inspect', this.readout.inspector);
@@ -224,18 +239,24 @@ export class WorkbenchScene extends Phaser.Scene {
   // --- State -----------------------------------------------------------------
 
   // The machine as it stands, or as it would stand with the dragged module
-  // dropped on the cell under the pointer.
+  // dropped into the row where the pointer is.
   shownPlacements() {
     const d = this.drag;
-    if (!d || !d.moved || !d.target) return { placements: this.placements, ghostId: null };
-    const [x, y] = d.target;
-    if (d.kind === 'new') {
-      return { placements: [...this.placements, { id: 'ghost', type: d.type, x, y, rot: d.rot }], ghostId: 'ghost' };
-    }
-    return {
-      placements: this.placements.map((p) => (p.id === d.id ? { ...p, x, y, rot: d.rot } : p)),
-      ghostId: d.id,
-    };
+    if (!d || !d.moved || d.target === null) return { placements: this.placements, ghostId: null };
+    const rest = this.placements.filter((p) => p.id !== d.id);
+    const piece = d.kind === 'new' ? { id: 'ghost', type: d.type } : this.placements.find((p) => p.id === d.id);
+    rest.splice(d.target, 0, piece);
+    return { placements: rest, ghostId: piece.id };
+  }
+
+  // Where a piece dragged to px would land, or null if it would not: out of
+  // the row, or a new one into a full row.
+  dropTarget(pointer) {
+    const d = this.drag;
+    if (!this.view.inBand(pointer.worldX, pointer.worldY)) return null;
+    if (d.kind === 'new' && this.placements.length >= WORKBENCH.slots) return null;
+    const others = this.placements.filter((p) => p.id !== d.id).length;
+    return this.view.insertIndex(pointer.worldX, others);
   }
 
   saved() {
@@ -284,7 +305,7 @@ export class WorkbenchScene extends Phaser.Scene {
     this.renderInspect();
     if (MOBILE) {
       const on = this.tabs.shown('inspect') && !!this.placements.find((p) => p.id === this.hoverId);
-      for (const b of [this.turnButton, this.removeButton]) {
+      for (const b of this.focusButtons) {
         b.setVisible(on);
         b.panel.setVisible(on);
       }
@@ -303,14 +324,15 @@ export class WorkbenchScene extends Phaser.Scene {
   timelineRows() {
     const burns = new Set(Object.keys(this.sim.burntAfter));
     const rank = (p) => ({ effector: 0, source: 1 })[MODULES[p.type].role] ?? 2;
+    const pos = (p) => this.shown.indexOf(p);
     return this.shown
       .filter((p) => ['source', 'effector'].includes(MODULES[p.type].role) || burns.has(p.id))
-      .sort((a, b) => rank(a) - rank(b))
+      .sort((a, b) => rank(a) - rank(b) || pos(a) - pos(b))
       .map((p) => {
         const def = MODULES[p.type];
         const role = ROLE_STYLE[roleKey(def)];
         return {
-          label: `${def.name} ${tileName(p.x, p.y)}`,
+          label: `#${pos(p) + 1} ${def.name}`,
           labelColor: role.css,
           onColor: def.effect ? EFFECT_STYLE[def.effect.kind] : role.color,
           cells: this.sim.turns.map((r) => ({
@@ -321,9 +343,11 @@ export class WorkbenchScene extends Phaser.Scene {
       });
   }
 
-  place(type, x, y, rot = 0) {
-    const p = { id: `m${this.nextId++}`, type, x, y, rot };
-    this.placements.push(p);
+  // Puts a new piece into the row at `index` (the end if left out).
+  place(type, index = this.placements.length) {
+    if (this.placements.length >= WORKBENCH.slots) return null;
+    const p = { id: `m${this.nextId++}`, type };
+    this.placements.splice(index, 0, p);
     return p;
   }
 
@@ -332,9 +356,12 @@ export class WorkbenchScene extends Phaser.Scene {
     if (this.hoverId === id) this.hoverId = null;
   }
 
-  rotate(id) {
+  // Moves a piece to `index` in the row, counted without it.
+  moveTo(id, index) {
     const p = this.placements.find((q) => q.id === id);
-    if (p) p.rot = (p.rot + 1) % 4;
+    if (!p) return;
+    this.placements = this.placements.filter((q) => q !== p);
+    this.placements.splice(Phaser.Math.Clamp(index, 0, this.placements.length), 0, p);
   }
 
   setTurn(turn) {
@@ -487,22 +514,14 @@ export class WorkbenchScene extends Phaser.Scene {
   }
 
   moduleAt(px, py) {
-    const tile = this.view.tileAt(px, py);
-    if (!tile) return null;
-    return this.placements.find((p) => p.x === tile[0] && p.y === tile[1]) ?? null;
+    const i = this.view.slotAt(px, py);
+    return i === null ? null : (this.placements[i] ?? null);
   }
 
   onDown(pointer, over) {
     if (this.editing && !over.includes(this.nameText)) this.finishEdit(true);
     if (over.some((o) => o.isButton)) return;
-    if (pointer.rightButtonDown()) {
-      const p = this.moduleAt(pointer.worldX, pointer.worldY);
-      if (p) {
-        this.rotate(p.id);
-        this.changed();
-      }
-      return;
-    }
+    if (pointer.rightButtonDown()) return;
     const lib = this.library.itemAt(pointer.worldX, pointer.worldY);
     if (lib) {
       this.openMachine(lib.key);
@@ -510,17 +529,16 @@ export class WorkbenchScene extends Phaser.Scene {
     }
     const item = this.paletteAt(pointer.worldX, pointer.worldY);
     if (item) {
-      this.drag = { kind: 'new', type: item.type, rot: 0, moved: false, target: null };
+      this.drag = { kind: 'new', type: item.type, moved: false, target: null };
       return;
     }
     const p = this.moduleAt(pointer.worldX, pointer.worldY);
     if (p) {
-      this.drag = { kind: 'move', id: p.id, type: p.type, rot: p.rot, moved: false, target: null };
+      this.drag = { kind: 'move', id: p.id, type: p.type, moved: false, target: null };
       return;
     }
-    const tile = this.view.tileAt(pointer.worldX, pointer.worldY);
-    if (tile && this.armed) {
-      this.place(this.armed, tile[0], tile[1]);
+    if (this.armed && this.view.inBand(pointer.worldX, pointer.worldY)) {
+      this.place(this.armed);
       this.changed();
       return;
     }
@@ -539,10 +557,8 @@ export class WorkbenchScene extends Phaser.Scene {
         this.armed = null;
       }
       if (d.moved) {
-        const tile = this.view.tileAt(pointer.worldX, pointer.worldY);
-        const ok = tile && canPlace(WORKBENCH, this.placements, tile[0], tile[1], d.kind === 'move' ? d.id : null);
-        const target = ok ? tile : null;
-        const changed = String(target) !== String(d.target);
+        const target = this.dropTarget(pointer);
+        const changed = target !== d.target;
         d.target = target;
         this.drawDragged(pointer);
         if (changed) this.refresh();
@@ -563,28 +579,21 @@ export class WorkbenchScene extends Phaser.Scene {
       return;
     }
     if (!d.moved) {
-      // A click, not a drag. On a phone the first tap on a placed module
-      // picks it out; tapping it again turns it.
+      // A click, not a drag: on a palette module it picks the module up to
+      // tap into the row; on a phone a tap on a piece picks it out.
       if (d.kind === 'new') {
         this.armed = this.armed === d.type ? null : d.type;
         if (MOBILE) this.focus(pointer);
         else this.refresh();
-      } else if (MOBILE && this.hoverId !== d.id) {
-        this.focus(pointer);
-      } else {
-        this.rotate(d.id);
-        this.changed();
-      }
+      } else if (MOBILE) this.focus(pointer);
+      else this.refresh();
       return;
     }
-    const tile = this.view.tileAt(pointer.worldX, pointer.worldY);
     if (d.kind === 'new') {
-      if (d.target) this.place(d.type, d.target[0], d.target[1], d.rot);
-    } else if (d.target) {
-      const p = this.placements.find((q) => q.id === d.id);
-      [p.x, p.y] = d.target;
-      p.rot = d.rot;
-    } else if (!tile) {
+      if (d.target !== null) this.place(d.type, d.target);
+    } else if (d.target !== null) {
+      this.moveTo(d.id, d.target);
+    } else if (!this.view.inBand(pointer.worldX, pointer.worldY)) {
       this.remove(d.id);
     }
     this.updateHover(pointer, false);
@@ -597,16 +606,7 @@ export class WorkbenchScene extends Phaser.Scene {
       return;
     }
     const key = event.key;
-    if (key === 'r' || key === 'R') {
-      if (this.drag) {
-        this.drag.rot = (this.drag.rot + 1) % 4;
-        this.drawDragged(this.input.activePointer);
-        this.refresh();
-      } else if (this.hoverId) {
-        this.rotate(this.hoverId);
-        this.changed();
-      }
-    } else if ((key === 'Delete' || key === 'Backspace') && this.hoverId && !this.drag) {
+    if ((key === 'Delete' || key === 'Backspace') && this.hoverId && !this.drag) {
       this.remove(this.hoverId);
       this.changed();
     } else if (key === 'Escape') {
@@ -623,11 +623,11 @@ export class WorkbenchScene extends Phaser.Scene {
     }
   }
 
-  // Mobile: a tap on the Workbench, the shelf or the test world picks out what
-  // it landed on and shows it in Inspect. A tap anywhere else leaves it be.
+  // Mobile: a tap on the row, the shelf or the test world picks out what it
+  // landed on and shows it in Inspect. A tap anywhere else leaves it be.
   focus(pointer) {
     const [px, py] = [pointer.worldX, pointer.worldY];
-    const onBench = this.paletteAt(px, py) || this.view.tileAt(px, py);
+    const onBench = this.paletteAt(px, py) || this.view.slotAt(px, py) !== null;
     if (!onBench && !this.preview.tileAt(px, py)) return;
     this.updateHover(pointer, false);
     if (onBench) this.tabs.set('inspect');
@@ -635,8 +635,10 @@ export class WorkbenchScene extends Phaser.Scene {
   }
 
   actOnFocus(action) {
-    if (!this.placements.some((p) => p.id === this.hoverId)) return;
-    if (action === 'turn') this.rotate(this.hoverId);
+    const i = this.placements.findIndex((p) => p.id === this.hoverId);
+    if (i < 0) return;
+    if (action === 'left') this.moveTo(this.hoverId, i - 1);
+    else if (action === 'right') this.moveTo(this.hoverId, i + 1);
     else this.remove(this.hoverId);
     this.changed();
   }
@@ -644,13 +646,13 @@ export class WorkbenchScene extends Phaser.Scene {
   updateHover(pointer, redraw = true) {
     const item = this.paletteAt(pointer.worldX, pointer.worldY);
     const p = this.moduleAt(pointer.worldX, pointer.worldY);
-    const tile = this.view.tileAt(pointer.worldX, pointer.worldY);
+    const slot = this.view.slotAt(pointer.worldX, pointer.worldY);
     const lib = this.library.itemAt(pointer.worldX, pointer.worldY);
     const world = this.preview.tileAt(pointer.worldX, pointer.worldY);
     const next = {
       type: item?.type ?? null,
       id: p?.id ?? null,
-      tile: !p && tile ? tileKey(...tile) : null,
+      tile: !p && slot !== null ? slot : null,
       lib: lib?.key ?? null,
       world: world ? tileKey(...world) : null,
     };
@@ -669,13 +671,15 @@ export class WorkbenchScene extends Phaser.Scene {
     const d = this.drag;
     this.dragGfx.clear();
     this.dragLabel.setText('');
-    if (d.target) return; // shown as a ghost on the Workbench instead
-    const off = !this.view.tileAt(pointer.worldX, pointer.worldY);
-    drawModule(this.dragGfx, d.type, d.rot, pointer.worldX, pointer.worldY, 66, { alpha: 0.85 });
+    if (d.target !== null) return; // shown as a ghost in the row instead
+    const off = !this.view.inBand(pointer.worldX, pointer.worldY);
+    drawModule(this.dragGfx, d.type, pointer.worldX, pointer.worldY, 66, { alpha: 0.85 });
     if (d.kind === 'move' && off) {
       this.dragGfx.lineStyle(3, COLORS.badHex, 1);
       this.dragGfx.strokeRoundedRect(pointer.worldX - 36, pointer.worldY - 36, 72, 72, 10);
       this.dragLabel.setText('drop to remove').setPosition(pointer.worldX, pointer.worldY + 50).setColor(COLORS.bad);
+    } else if (d.kind === 'new' && !off) {
+      this.dragLabel.setText(`the row is full (${WORKBENCH.slots})`).setPosition(pointer.worldX, pointer.worldY + 50).setColor(COLORS.bad);
     } else {
       this.dragLabel.setText(MODULES[d.type].name).setPosition(pointer.worldX, pointer.worldY + 50).setColor(COLORS.text);
     }
@@ -722,7 +726,8 @@ export class WorkbenchScene extends Phaser.Scene {
       return;
     }
 
-    let right = LAYOUT.bench.x + WORKBENCH.cols * LAYOUT.bench.tile + 24;
+    const { x: bx, slot, gap } = LAYOUT.bench;
+    let right = bx + WORKBENCH.slots * slot + (WORKBENCH.slots - 1) * gap;
     this.groundButtons = [];
     for (const ground of [...GROUNDS].reverse()) {
       const b = createButton(this, 0, y, ground ? TERRAIN[ground].name : 'Bare', () => this.setGround(ground), {
@@ -901,22 +906,22 @@ export class WorkbenchScene extends Phaser.Scene {
       g.fillRoundedRect(item.x, item.y, item.w, item.h, 6);
       g.lineStyle(on ? 2 : 1, on ? COLORS.highlightHex : COLORS.panelEdgeHex, 1);
       g.strokeRoundedRect(item.x, item.y, item.w, item.h, 6);
-      if (MOBILE) drawModule(g, item.type, 0, item.x + 17, item.y + item.h / 2, 24);
-      else drawModule(g, item.type, 0, item.x + 20, item.y + item.h / 2, 26);
+      if (MOBILE) drawModule(g, item.type, item.x + 17, item.y + item.h / 2, 24);
+      else drawModule(g, item.type, item.x + 20, item.y + item.h / 2, 26);
     }
   }
 
   drawLegend() {
     const y = L.legend.y;
     const g = this.add.graphics().setDepth(1);
-    let x = MOBILE ? 16 : LAYOUT.bench.x - 20;
+    let x = MOBILE ? 16 : LAYOUT.bench.x - 6;
     const style = { fontFamily: FONT, fontSize: `${FONT_SM}px`, color: COLORS.muted, resolution: TEXT_RESOLUTION };
     for (const flow of FLOWS) {
       flowShape(g, flow, x + 8, y, 7, true);
       const t = this.add
         .text(x + 20, y, FLOW_NAMES[flow], { ...style, color: FLOW_STYLE[flow].css })
         .setOrigin(0, 0.5);
-      x += t.width + (MOBILE ? 26 : 40);
+      x += t.width + (MOBILE ? 26 : 32);
     }
     this.add.text(x, y, MOBILE ? 'solid out · hollow in' : 'solid = output · hollow = input', style).setOrigin(0, 0.5);
   }
@@ -959,7 +964,7 @@ export class WorkbenchScene extends Phaser.Scene {
     if (placed) return this.readout.inspect(this.moduleInfo(placed.type, placed, record));
     const type = this.hoverType ?? this.armed;
     if (type) return this.readout.inspect(this.moduleInfo(type, null, null));
-    if (this.hoverTile) return this.readout.inspect(this.cellInfo(this.hoverTile, record));
+    if (this.hoverTile !== null) return this.readout.inspect(this.slotInfo(this.hoverTile));
     if (this.hoverWorld) return this.readout.inspect(this.worldInfo(this.hoverWorld));
     if (this.hoverLib) {
       const m = store.machine(this.hoverLib);
@@ -983,12 +988,24 @@ export class WorkbenchScene extends Phaser.Scene {
     const def = MODULES[type];
     const role = ROLE_STYLE[roleKey(def)];
     const lines = [{ text: def.blurb }];
+    const labelOf = labelFor(this.shown);
+    const ground = this.ground ? TERRAIN[this.ground].name.toLowerCase() : null;
     const ports = p ? portsOf(p) : def.ports.map((port, index) => ({ ...port, index }));
     for (const port of ports) {
-      lines.push({
-        text: `${port.dir === 'in' ? 'In' : 'Out'}: ${FLOW_NAMES[port.flow]} ${port.dir === 'in' ? 'from the' : 'to the'} ${SIDE_WORDS[port.side]}`,
-        color: FLOW_STYLE[port.flow].css,
-      });
+      const flow = FLOW_NAMES[port.flow];
+      const info = p && this.sim.net.ports.get(port.key);
+      const other = info?.status === 'linked' ? this.shown.find((q) => q.id === info.partnerId) : null;
+      const where = (q) => `${labelOf(q)} (#${this.shown.indexOf(q) + 1})`;
+      let text;
+      if (port.dir === 'in') {
+        if (!p) text = `Takes ${flow} from a piece to its left.`;
+        else if (other) text = `Takes ${flow} from ${where(other)}.`;
+        else if (this.sim.ground?.provides === port.flow) text = `Takes ${flow} from the ${ground} under the machine: nothing to its left has any to spare.`;
+        else text = `Needs ${flow}, but nothing to its left has any to spare and the ground gives none.`;
+      } else if (!p) text = `Gives ${flow} to a piece on its right.`;
+      else if (other) text = `Gives ${flow} to ${where(other)}.`;
+      else text = `Gives ${flow} that no piece on its right takes: it ${port.flow === 'matter' || port.flow === 'heat' ? "spills onto the machine's tile" : 'goes to waste'}.`;
+      lines.push({ text, color: FLOW_STYLE[port.flow].css });
     }
     lines.push({ text: MATERIAL_STYLE[def.material].label, color: COLORS.muted });
     if (p && record) {
@@ -1002,32 +1019,24 @@ export class WorkbenchScene extends Phaser.Scene {
         lines.push({ text: `Turn ${turn}: idle, because ${whyIdle(this.shown, this.sim, p.id, turn)}.`, color: COLORS.bad });
       }
     }
-    return { title: p ? label(p) : def.name, color: role.css, subtitle: role.label, lines };
+    const title = p ? `#${this.shown.indexOf(p) + 1} ${def.name}` : def.name;
+    return { title, color: role.css, subtitle: role.label, lines };
   }
 
-  cellInfo(key, record) {
-    const [x, y] = key.split(',').map(Number);
+  // An empty slot of the row.
+  slotInfo(i) {
     const ground = this.ground ? TERRAIN[this.ground] : null;
     const lines = [
       {
         text: ground
-          ? `The machine stands on ${ground.name.toLowerCase()}: an open ${FLOW_NAMES[ground.provides]} input anywhere in it draws from it.${ground.hot ? ' Embers are always hot.' : ''}`
-          : 'The machine stands on bare ground. Open inputs have nothing to draw from.',
+          ? `The machine stands on ${ground.name.toLowerCase()}: an input with nothing to its left to take from draws ${FLOW_NAMES[ground.provides]} from it.${ground.hot ? ' Embers are always hot.' : ''}`
+          : 'The machine stands on bare ground: an input with nothing to its left to take from gets nothing.',
         color: COLORS.muted,
       },
     ];
-    const cell = record.tiles[key];
-    const name = causeNamer([this.test.unit]);
-    const from = (causes) => [...new Set(causes.map((c) => name(c, BENCH_UNIT)))].join(', ');
-    if (cell) {
-      if (cell.steam) lines.push({ text: `Steaming: water from ${from(cell.wet)} cools the heat from ${from(cell.hot)}.` });
-      else {
-        if (cell.wet.length) lines.push({ text: `Wet, from ${from(cell.wet)}.`, color: FLOW_STYLE.matter.css });
-        if (cell.isHot) lines.push({ text: `Hot, from ${from(cell.hot)}. Wood here burns after 2 hot turns.`, color: FLOW_STYLE.heat.css });
-      }
-    }
-    if (this.armed) lines.push({ text: `${CLICK} to place a ${MODULES[this.armed].name} here.`, color: COLORS.good });
-    return { title: `Cell ${tileName(x, y)}`, subtitle: `Turn ${record.turn}`, lines };
+    if (this.placements.length >= WORKBENCH.slots) lines.unshift({ text: `The row is full: a machine has at most ${WORKBENCH.slots} pieces.` });
+    else lines.unshift({ text: this.armed ? `${CLICK} to add a ${MODULES[this.armed].name} at the end of the row.` : 'Drag a module here to add it at the end of the row.', color: this.armed ? COLORS.good : COLORS.text });
+    return { title: `Slot ${i + 1}, empty`, lines };
   }
 
   worldInfo(key) {

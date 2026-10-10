@@ -3,17 +3,19 @@
 // Workbench (saved or not). Both screens read and write through here, so
 // flipping between them never loses anything.
 //
-// A machine is { id, name, ground, parts }; a Playground placement is
-// { id, machineId, x, y, rot } and always shows the machine as last saved.
+// A machine is { id, name, ground, parts } with its parts ({ id, type }) in
+// order, left to right; a Playground placement is { id, machineId, x, y, rot }
+// and always shows the machine as last saved.
 
-import { EXAMPLES, PLAYGROUND_START } from './data/world.js';
+import { MODULES } from './data/modules.js';
+import { EXAMPLES, PLAYGROUND_START, WORKBENCH } from './data/world.js';
 
 const KEY = 'combinator.v1';
 let data = null;
 
 export const copy = (v) => JSON.parse(JSON.stringify(v));
 
-const partsOf = (example) => example.parts.map(([type, x, y, rot], i) => ({ id: `m${i + 1}`, type, x, y, rot }));
+const partsOf = (example) => example.parts.map((type, i) => ({ id: `m${i + 1}`, type }));
 
 function seed() {
   const machines = EXAMPLES.map((ex, i) => ({ id: `k${i + 1}`, name: ex.name, ground: ex.ground, parts: partsOf(ex) }));
@@ -35,7 +37,22 @@ function load() {
     data = null;
   }
   if (!data || !Array.isArray(data.machines) || !Array.isArray(data.placed) || !data.draft) data = seed();
+  for (const m of [...data.machines, data.draft]) m.parts = asRow(m.parts);
   return data;
+}
+
+// Machines saved before they were rows were built on a grid, with an x and a
+// y on each part. They are read left to right (top to bottom where two share
+// a column), and modules that no longer exist (the carriers and corners, which
+// the row made pointless) are left out.
+function asRow(parts) {
+  if (!Array.isArray(parts)) return [];
+  const gridded = parts.some((p) => p.x !== undefined);
+  const ordered = gridded ? [...parts].sort((a, b) => a.x - b.x || a.y - b.y) : parts;
+  return ordered
+    .filter((p) => MODULES[p.type])
+    .slice(0, WORKBENCH.slots)
+    .map(({ id, type }) => ({ id, type }));
 }
 
 function persist() {

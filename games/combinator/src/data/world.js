@@ -1,7 +1,7 @@
 // The ground machines stand on, the two grids of the game, and the machines a
 // new player starts with.
 //
-// A machine is built on the Workbench grid out of modules, and then fills one
+// A machine is built on the Workbench as a row of modules, and then fills one
 // tile of the Playground. The tile it stands on is its ground: an open input
 // anywhere in the machine draws from that ground (DESIGN.md §4, "Open ports"),
 // so a pump machine standing in a puddle can pull water out of it. Embers are
@@ -17,8 +17,8 @@ export const TERRAIN = {
 // What the Workbench can test a machine standing on. null is bare ground.
 export const GROUNDS = [null, 'puddle', 'embers', 'draft'];
 
-// The grid a machine is built on. Every machine has this footprint inside.
-export const WORKBENCH = { cols: 7, rows: 5 };
+// A machine is a row of at most this many modules, side by side.
+export const WORKBENCH = { slots: 7 };
 
 // The grid machines are placed on. One machine per tile.
 export const PLAYGROUND = {
@@ -36,48 +36,17 @@ export const PLAYGROUND = {
   },
 };
 
-// The machines a new player finds saved. Each part is [type, x, y, rotation]
-// on the Workbench grid; rotation is quarter turns clockwise from the
-// catalogue's north-facing drawing. `ground` is what the Workbench tests the
-// machine standing on.
+// The machines a new player finds saved: their modules, left to right.
+// `ground` is what the Workbench tests the machine standing on.
 export const EXAMPLES = [
-  {
-    name: 'Tank Sprinkler',
-    ground: null,
-    parts: [
-      ['tank', 1, 2, 0],
-      ['pipe', 2, 2, 0],
-      ['bend', 3, 2, 0],
-      ['sprinkler', 3, 1, 0],
-    ],
-  },
-  {
-    name: 'Puddle Pump',
-    ground: 'puddle',
-    parts: [
-      ['spring', 0, 3, 0],
-      ['pump', 1, 3, 0],
-      ['bend', 2, 3, 0],
-      ['sprinkler', 2, 2, 0],
-    ],
-  },
-  {
-    name: 'Steam Fan',
-    ground: null,
-    parts: [
-      ['burner', 0, 2, 0],
-      ['engine', 1, 2, 0],
-      ['shaft', 2, 2, 0],
-      ['shaft', 3, 2, 0],
-      ['gear', 4, 2, 0],
-      ['fan', 4, 1, 0],
-    ],
-  },
+  { name: 'Tank Sprinkler', ground: null, parts: ['tank', 'sprinkler'] },
+  { name: 'Puddle Pump', ground: 'puddle', parts: ['spring', 'pump', 'sprinkler'] },
+  { name: 'Steam Fan', ground: null, parts: ['burner', 'engine', 'fan'] },
 ];
 
 // What the Playground holds the first time: [example index, x, y, rotation].
 // The Steam Fan burns itself out on the Workbench; here, next to the Tank
-// Sprinkler, its tile is wet and its shaft survives.
+// Sprinkler, its tile is wet and its wooden fan survives.
 export const PLAYGROUND_START = [
   [0, 3, 3, 0],
   [2, 4, 3, 0],

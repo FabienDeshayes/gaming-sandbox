@@ -38,16 +38,18 @@ export const DRAG_THRESHOLD = MOBILE ? 10 : 8;
 // How long each turn shows during a played-back test run.
 export const PLAY_STEP_MS = 700;
 
-// The Workbench: modules on the left, the machine in the middle with its test
-// world and run below it, saved machines and the readout on the right.
+// The Workbench: modules on the left, the machine's row in the middle with a
+// few words under each piece and its test world and run below that, saved
+// machines and the readout on the right. `bench.top` is where the row starts
+// taking drops; links that skip pieces run over it between `top` and `y`.
 export const LAYOUT = {
   header: { h: 56 },
   machineBar: { y: 78 },
   palette: { x: 16, y: 72, w: 224, rowH: 40, headingH: 26, gap: 6 },
-  bench: { x: 282, y: 124, tile: 84 },
-  legend: { y: 566 },
-  preview: { x: 262, y: 620, tile: 30 },
-  timeline: { x: 436, y: 588, w: 458, labelW: 132, rowH: 24, bottom: 784 },
+  bench: { x: 268, y: 172, slot: 84, gap: 6, top: 112, captionH: 168 },
+  legend: { y: 444 },
+  preview: { x: 262, y: 500, tile: 34 },
+  timeline: { x: 454, y: 474, w: 440, labelW: 150, rowH: 26, bottom: 784 },
   library: { x: 914, y: 72, w: 350, rowH: 30, rows: 4 },
   panel: { x: 914, y: 256, w: 350, h: 528, inspectH: 210 },
 };
@@ -71,11 +73,11 @@ const panelTo = (y) => ({ x: 16, y, w: GAME_WIDTH - 32, h: GAME_HEIGHT - 8 - y }
 export const MOBILE_LAYOUT = {
   header: { y: 24 },
   machineBar: { y: 62, status: 80 },
-  bench: { x: 30, y: 130, tile: 58 },
-  legend: { y: 436 },
-  palette: { x: 16, y: 452, w: GAME_WIDTH - 32, chipH: 30, rowH: 42, gap: 6, cols: 4 },
-  tabs: { y: 606 },
-  panel: panelTo(628),
+  bench: { x: 17, y: 128, slot: 56, gap: 4, top: 100, captionH: 106 },
+  legend: { y: 306 },
+  palette: { x: 16, y: 322, w: GAME_WIDTH - 32, chipH: 30, rowH: 42, gap: 6, cols: 4 },
+  tabs: { y: 478 },
+  panel: panelTo(500),
 };
 
 export const MOBILE_PLAY_LAYOUT = {
@@ -119,7 +121,6 @@ export const FLOW_STYLE = {
 
 export const ROLE_STYLE = {
   source: { color: 0x3f9b62, css: '#5cc985', label: 'Source' },
-  carrier: { color: 0x56637a, css: '#a9b6cc', label: 'Transmission · Carrier' },
   converter: { color: 0x7a55c9, css: '#b593ff', label: 'Transmission · Converter' },
   control: { color: 0x3d6f9e, css: '#7fb2e5', label: 'Transmission · Control' },
   effector: { color: 0xb8456a, css: '#ff7aa2', label: 'Effector' },

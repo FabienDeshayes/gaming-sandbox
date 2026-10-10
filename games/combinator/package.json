@@ -1,0 +1,15 @@
+{
+  "name": "combinator",
+  "private": true,
+  "type": "module",
+  "description": "Tests for the Combinator prototype — the game itself needs no build step.",
+  "scripts": {
+    "test": "npm run test:rules && npm run test:ui",
+    "test:rules": "node --test tests/rules.test.mjs",
+    "test:ui": "node tests/game.test.js"
+  },
+  "devDependencies": {
+    "phaser": "^3.90.0",
+    "playwright-core": "^1.62.1"
+  }
+}

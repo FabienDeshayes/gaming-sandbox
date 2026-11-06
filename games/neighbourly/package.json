@@ -1,0 +1,16 @@
+{
+  "name": "neighbourly",
+  "private": true,
+  "type": "module",
+  "description": "Tests and tuning simulator for the Neighbourly prototype — the game itself needs no build step.",
+  "scripts": {
+    "test": "npm run test:rules && npm run test:ui",
+    "test:rules": "node --test tests/rules.test.mjs",
+    "test:ui": "node tests/game.test.js",
+    "sim": "node sim/simulate.mjs"
+  },
+  "devDependencies": {
+    "phaser": "^3.90.0",
+    "playwright-core": "^1.62.1"
+  }
+}

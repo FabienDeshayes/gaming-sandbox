@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neighbourly · Palette</title>
+  <style>
+    .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .sw { background: var(--panel); border: 1px solid var(--edge); padding: 6px; display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: center; }
+    .sw.edited { border-color: var(--accent); }
+    .sw input[type=color] { width: 44px; height: 44px; padding: 0; border: 0; background: none; }
+    .sw input[type=text] { width: 100%; padding: 2px 4px; font: 12px monospace; }
+    .sw .name { font-size: 13px; } .sw .key { font: 11px monospace; color: var(--dim); }
+    .sprites { display: flex; flex-wrap: wrap; gap: 6px; }
+    .roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; font-size: 13px; }
+    .chip { display: inline-block; width: 16px; height: 16px; border: 1px solid #000; vertical-align: middle; margin-right: 6px; }
+    .bgs button { padding: 2px 8px; }
+  </style>
+</head>
+<body>
+  <nav id="tools"></nav>
+  <main>
+    <h1>The palette</h1>
+    <p class="about">The 32 colours everything is drawn in, in ramps from dark to light. Change a colour and every sprite below and every role the game gives it follows at once; export the file when you like it. A colour's one-letter key is what a sprite is written in, and its name is what <code>src/config.js</code> calls it, so both stay put: only the colour moves. Unsaved changes are kept in this browser.</p>
+    <div class="row" style="margin-bottom:10px"><button id="reset">RESET TO FILE</button><span id="state" class="muted"></span></div>
+    <div id="swatches" class="swatches"></div>
+    <h2>Every sprite in it</h2>
+    <div class="row bgs" style="margin-bottom:8px"><span class="muted">on</span></div>
+    <div id="sprites" class="sprites"></div>
+    <h2>The parts the game gives each colour</h2>
+    <div id="roles" class="roles"></div>
+    <div id="export"></div>
+  </main>
+  <script type="module">
+    import './dev/nav.js';
+    import { PALETTE } from './src/data/palette.js';
+    import { SPRITES } from './src/data/sprites.js';
+    import { ROLES, RARITY_ROLES } from './src/config.js';
+    import { serializePalette } from './dev/serialize.js';
+    import { draft, exportBox, hexByKey, spriteCanvas } from './dev/common.js';
+
+    const $ = (id) => document.getElementById(id);
+    const ORIGINAL = PALETTE.map((c) => ({ ...c }));
+    const saved = draft.load('palette');
+    let pal = ORIGINAL.map((c) => ({ ...c, hex: saved?.[c.key] ?? c.hex }));
+    let bg = 'slate';
+
+    const edited = () => pal.filter((c, i) => c.hex.toLowerCase() !== ORIGINAL[i].hex.toLowerCase()).length;
+    const refreshExport = exportBox($('export'), { file: 'src/data/palette.js', build: () => serializePalette(pal), changed: () => (edited() ? `${edited()} colour(s)` : 0) });
+
+    function swatches() {
+      const host = $('swatches');
+      host.innerHTML = '';
+      pal.forEach((c, i) => {
+        const el = document.createElement('div');
+        el.className = 'sw' + (c.hex.toLowerCase() !== ORIGINAL[i].hex.toLowerCase() ? ' edited' : '');
+        el.innerHTML = `<input type="color" value="${c.hex}"><div><div class="name">${c.name}</div><div class="key">key ${c.key}</div><input type="text" value="${c.hex}" maxlength="7"></div>`;
+        const [picker, text] = el.querySelectorAll('input');
+        const set = (v) => {
+          if (!/^#[0-9a-f]{6}$/i.test(v)) return;
+          c.hex = v.toLowerCase();
+          draft.save('palette', Object.fromEntries(pal.map((x) => [x.key, x.hex])));
+          picker.value = c.hex;
+          text.value = c.hex;
+          el.classList.toggle('edited', c.hex !== ORIGINAL[i].hex.toLowerCase());
+          live();
+        };
+        picker.addEventListener('input', () => set(picker.value));
+        text.addEventListener('change', () => set(text.value.trim()));
+        host.append(el);
+      });
+    }
+
+    function live() {
+      const HEX = hexByKey(pal);
+      const byName = Object.fromEntries(pal.map((c) => [c.name, c.hex]));
+      const sp = $('sprites');
+      sp.innerHTML = '';
+      for (const [id, rows] of Object.entries(SPRITES)) {
+        const c = spriteCanvas(rows, 3, HEX, byName[bg]);
+        c.title = id;
+        sp.append(c);
+      }
+      const roles = { ...ROLES, ...Object.fromEntries(Object.entries(RARITY_ROLES).map(([r, n]) => [`rarity: ${r}`, n])) };
+      $('roles').innerHTML = Object.entries(roles)
+        .map(([role, name]) => `<div><span class="chip" style="background:${byName[name]}"></span>${role} <span class="muted">→ ${name}</span></div>`)
+        .join('');
+      $('state').textContent = edited() ? `${edited()} colour(s) changed from the file` : 'as in the file';
+      refreshExport();
+    }
+
+    const bgs = document.querySelector('.bgs');
+    for (const name of ['ink', 'night', 'slate', 'bone']) {
+      const b = document.createElement('button');
+      b.textContent = name;
+      b.onclick = () => {
+        bg = name;
+        live();
+      };
+      bgs.append(b);
+    }
+    $('reset').onclick = () => {
+      draft.clear('palette');
+      pal = ORIGINAL.map((c) => ({ ...c }));
+      swatches();
+      live();
+    };
+    swatches();
+    live();
+  </script>
+</body>
+</html>

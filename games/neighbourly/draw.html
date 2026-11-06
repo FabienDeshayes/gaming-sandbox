@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neighbourly · Draw</title>
+  <style>
+    .layout { display: grid; grid-template-columns: 200px auto 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 4px; max-height: 70vh; overflow: auto; }
+    #list button { padding: 4px; display: grid; justify-items: center; font-size: 10px; gap: 2px; }
+    #list button[aria-pressed=true] { border-color: var(--accent); }
+    #list button.missing { border-style: dashed; }
+    #grid { touch-action: none; cursor: crosshair; border: 1px solid var(--edge); max-width: 100%; }
+    #colours { display: grid; grid-template-columns: repeat(8, 28px); gap: 3px; }
+    #colours button { width: 28px; height: 28px; padding: 0; border: 2px solid transparent; }
+    #colours button[aria-pressed=true] { border-color: var(--fg); outline: 2px solid #000; }
+    .tools button[aria-pressed=true] { border-color: var(--accent); }
+    #previews { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <nav id="tools"></nav>
+  <main>
+    <h1>Draw a sprite</h1>
+    <p class="about">Every sprite is 16×16 pixels in palette colours. Pick one on the left (a dashed one is a piece with no sprite yet), draw on the grid, and see it at the sizes the game draws it. Right-click picks a colour up. Unsaved drawings are kept in this browser; export writes <code>src/data/sprites.js</code>.</p>
+    <div class="layout">
+      <div id="list"></div>
+      <div>
+        <canvas id="grid" width="512" height="512"></canvas>
+        <div id="previews"></div>
+      </div>
+      <div>
+        <div class="row tools">
+          <button data-tool="pen" aria-pressed="true">PEN</button>
+          <button data-tool="fill">FILL</button>
+          <button data-tool="erase">ERASE</button>
+          <label class="row"><input type="checkbox" id="mirror" /> mirror</label>
+        </div>
+        <h2>Colour</h2>
+        <div id="colours"></div>
+        <div id="picked" class="muted" style="margin-top:6px"></div>
+        <h2>Whole sprite</h2>
+        <div class="row">
+          <button id="undo">UNDO</button>
+          <button id="flipH">FLIP ↔</button><button id="flipV">FLIP ↕</button>
+          <button id="left">←</button><button id="right">→</button><button id="up">↑</button><button id="down">↓</button>
+          <button id="outline">OUTLINE</button>
+          <button id="clear">CLEAR</button>
+          <button id="revert">REVERT</button>
+        </div>
+        <p class="muted">OUTLINE rings every drawn shape with ink, the way the shipped sprites are finished.</p>
+      </div>
+    </div>
+    <div id="export"></div>
+  </main>
+  <script type="module">
+    import './dev/nav.js';
+    import { PALETTE } from './src/data/palette.js';
+    import { SPRITES } from './src/data/sprites.js';
+    import { PIECES } from './src/data/pieces.js';
+    import { serializeSprites } from './dev/serialize.js';
+    import { draft, exportBox, hexByKey, spriteCanvas } from './dev/common.js';
+
+    const $ = (id) => document.getElementById(id);
+    const N = 16;
+    const HEX = hexByKey(PALETTE);
+    const ORIGINAL = JSON.parse(JSON.stringify(SPRITES));
+    const blank = () => Array.from({ length: N }, () => '.'.repeat(N));
+    // Every sprite in the file, then a blank one for every piece that has none.
+    let sprites = { ...JSON.parse(JSON.stringify(SPRITES)), ...(draft.load('sprites') || {}) };
+    for (const p of PIECES) if (!sprites[p.id]) sprites[p.id] = blank();
+    let current = Object.keys(sprites)[0];
+    let colour = 'a';
+    let tool = 'pen';
+    const undo = [];
+
+    const isEmpty = (rows) => rows.every((r) => /^\.+$/.test(r));
+    // What gets written: the file's own sprites in their order, then new ones,
+    // and never a blank for a piece nobody has drawn yet.
+    const toWrite = () => Object.fromEntries(Object.entries(sprites).filter(([id, rows]) => ORIGINAL[id] || !isEmpty(rows)));
+    const changed = () => Object.keys(toWrite()).filter((id) => JSON.stringify(sprites[id]) !== JSON.stringify(ORIGINAL[id])).length;
+    const refreshExport = exportBox($('export'), { file: 'src/data/sprites.js', build: () => serializeSprites(toWrite()), changed: () => (changed() ? `${changed()} sprite(s)` : 0) });
+
+    const grid = $('grid');
+    const ctx = grid.getContext('2d');
+    const CELL = grid.width / N;
+
+    function rows() {
+      return sprites[current].map((r) => [...r]);
+    }
+    function commit(g, push = true) {
+      if (push) undo.push({ id: current, rows: sprites[current].slice() });
+      sprites[current] = g.map((r) => r.join(''));
+      draft.save('sprites', Object.fromEntries(Object.entries(sprites).filter(([id, r]) => JSON.stringify(r) !== JSON.stringify(ORIGINAL[id]) && !(isEmpty(r) && !ORIGINAL[id]))));
+      draw();
+    }
+
+    function draw() {
+      const g = sprites[current];
+      for (let y = 0; y < N; y++)
+        for (let x = 0; x < N; x++) {
+          ctx.fillStyle = (x + y) % 2 ? '#3a3550' : '#2f2b44';
+          ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+          const ch = g[y][x];
+          if (ch !== '.') {
+            ctx.fillStyle = HEX[ch];
+            ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+          }
+        }
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      for (let i = 0; i <= N; i++) {
+        ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, grid.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(grid.width, i * CELL); ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.strokeRect(grid.width / 2, 0, 0.5, grid.height);
+      const pv = $('previews');
+      pv.innerHTML = '';
+      for (const [s, bg] of [[1, '#45405e'], [2, '#45405e'], [3, '#45405e'], [3, '#2a2440'], [3, '#e6dfd0']]) pv.append(spriteCanvas(g, s, HEX, bg));
+      list();
+      refreshExport();
+    }
+
+    function list() {
+      const host = $('list');
+      host.innerHTML = '';
+      for (const [id, r] of Object.entries(sprites)) {
+        const b = document.createElement('button');
+        b.setAttribute('aria-pressed', id === current);
+        if (isEmpty(r)) b.className = 'missing';
+        b.append(spriteCanvas(r, 2, HEX));
+        b.append(id);
+        b.onclick = () => {
+          current = id;
+          draw();
+        };
+        host.append(b);
+      }
+    }
+
+    function colours() {
+      const host = $('colours');
+      host.innerHTML = '';
+      for (const c of PALETTE) {
+        const b = document.createElement('button');
+        b.style.background = c.hex;
+        b.title = `${c.name} (${c.key})`;
+        b.setAttribute('aria-pressed', c.key === colour);
+        b.onclick = () => pick(c.key);
+        host.append(b);
+      }
+      const c = PALETTE.find((x) => x.key === colour);
+      $('picked').textContent = `${c.name} · key ${c.key}`;
+    }
+    function pick(k) {
+      colour = k;
+      if (tool === 'erase') setTool('pen');
+      colours();
+    }
+    function setTool(t) {
+      tool = t;
+      document.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tool === t));
+    }
+    document.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
+
+    const cellAt = (e) => {
+      const r = grid.getBoundingClientRect();
+      return [Math.floor(((e.clientX - r.left) / r.width) * N), Math.floor(((e.clientY - r.top) / r.height) * N)];
+    };
+    let painting = null;
+    function paintAt(x, y) {
+      if (x < 0 || y < 0 || x >= N || y >= N) return;
+      const ch = tool === 'erase' ? '.' : colour;
+      const g = painting;
+      if (tool === 'fill') {
+        const from = g[y][x];
+        if (from === ch) return;
+        const stack = [[x, y]];
+        while (stack.length) {
+          const [cx, cy] = stack.pop();
+          if (cx < 0 || cy < 0 || cx >= N || cy >= N || g[cy][cx] !== from) continue;
+          g[cy][cx] = ch;
+          stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+        }
+      } else {
+        g[y][x] = ch;
+        if ($('mirror').checked) g[y][N - 1 - x] = ch;
+      }
+      sprites[current] = g.map((r) => r.join(''));
+      draw();
+    }
+    grid.addEventListener('contextmenu', (e) => e.preventDefault());
+    grid.addEventListener('pointerdown', (e) => {
+      const [x, y] = cellAt(e);
+      if (e.button === 2) {
+        const ch = sprites[current][y]?.[x];
+        if (ch && ch !== '.') pick(ch);
+        return;
+      }
+      undo.push({ id: current, rows: sprites[current].slice() });
+      painting = rows();
+      grid.setPointerCapture(e.pointerId);
+      paintAt(x, y);
+    });
+    grid.addEventListener('pointermove', (e) => {
+      if (!painting || tool === 'fill') return;
+      paintAt(...cellAt(e));
+    });
+    grid.addEventListener('pointerup', () => {
+      if (painting) commit(painting, false);
+      painting = null;
+    });
+
+    const transform = (fn) => commit(fn(rows()));
+    $('flipH').onclick = () => transform((g) => g.map((r) => r.reverse()));
+    $('flipV').onclick = () => transform((g) => g.reverse());
+    $('left').onclick = () => transform((g) => g.map((r) => [...r.slice(1), '.']));
+    $('right').onclick = () => transform((g) => g.map((r) => ['.', ...r.slice(0, -1)]));
+    $('up').onclick = () => transform((g) => [...g.slice(1), Array(N).fill('.')]);
+    $('down').onclick = () => transform((g) => [Array(N).fill('.'), ...g.slice(0, -1)]);
+    $('clear').onclick = () => transform(() => blank().map((r) => [...r]));
+    $('revert').onclick = () => transform(() => (ORIGINAL[current] || blank()).map((r) => [...r]));
+    $('outline').onclick = () =>
+      transform((g) => {
+        const out = g.map((r) => r.slice());
+        for (let y = 0; y < N; y++)
+          for (let x = 0; x < N; x++)
+            if (g[y][x] === '.' && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => g[y + dy]?.[x + dx] && g[y + dy][x + dx] !== '.'))
+              out[y][x] = 'a';
+        return out;
+      });
+    $('undo').onclick = () => {
+      const u = undo.pop();
+      if (!u) return;
+      current = u.id;
+      sprites[current] = u.rows;
+      commit(rows(), false);
+    };
+
+    colours();
+    draw();
+  </script>
+</body>
+</html>

@@ -4,11 +4,13 @@
 // Interaction: tap an offer to pick it, tap a tile to see what placing it
 // there would do (the info panel and +n/-n on every tile that moves), then
 // PLACE. Tapping a tile with no offer picked inspects what is there. Every
-// number shown comes from src/core/rules.js; this scene holds no rule.
+// number shown comes from src/core/rules.js and every word from src/text.js;
+// this scene holds neither.
 
 import {
   BOARD_X,
   BOARD_Y,
+  CARD_SCALE,
   CELL,
   COLORS,
   FONT,
@@ -20,31 +22,29 @@ import {
   HEADER_Y,
   INFO_H,
   INFO_Y,
+  LIST_SCALE,
   OFFER_H,
   OFFER_W,
   OFFER_XS,
   OFFER_Y,
+  PIECE_SCALE,
   PLACE_Y,
   RARITY_COLORS,
-  RARITY_LABELS,
+  RARITY_TEXT_COLORS,
   SCORE_BAR_H,
   SCORE_BAR_Y,
+  SPRITE,
+  TEXT,
 } from '../config.js';
-import { PIECES, pieceDef } from '../data/pieces.js';
-import {
-  createRun,
-  currentOffer,
-  nextLevel,
-  place,
-  previewPlacement,
-  scoreBoard,
-  targetFor,
-  turnsLeft,
-} from '../core/rules.js';
-import { breakdown } from '../ui/describe.js';
+import { pieceDef, piecesIn } from '../data/catalogue.js';
+import { createRun, currentOffer, nextLevel, place, previewPlacement, scoreBoard, targetFor, turnsLeft } from '../core/rules.js';
+import { HUD, INFO, LEVEL_END, RARITY_TEXT, SET_LIST, SET_TEXT } from '../text.js';
+import { breakdown, pieceName, pieceRule } from '../ui/describe.js';
 import { button } from '../ui/button.js';
+import { PX, pixelBox, pixelRim } from '../ui/pixel.js';
+import { bakeSprites, spriteKey } from '../ui/textures.js';
 
-const text = (scene, x, y, s, size = FONT_SM, color = COLORS.text, extra = {}) =>
+const text = (scene, x, y, s, size = FONT_SM, color = TEXT.text, extra = {}) =>
   scene.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color, ...extra });
 
 export class PlayScene extends Phaser.Scene {
@@ -54,10 +54,15 @@ export class PlayScene extends Phaser.Scene {
 
   init(data) {
     this.seed = data && data.seed != null ? data.seed : null;
+    this.special = data && data.special ? data.special : null;
   }
 
   create() {
-    this.run = createRun(this.seed == null ? {} : { seed: this.seed });
+    bakeSprites(this);
+    const opts = {};
+    if (this.seed != null) opts.seed = this.seed;
+    if (this.special) opts.special = this.special;
+    this.run = createRun(opts);
     this.selOffer = null;
     this.selTile = null;
     this.overlay = null;
@@ -65,19 +70,21 @@ export class PlayScene extends Phaser.Scene {
     const { cols, rows } = this.run.tuning;
 
     // Header: level and turn on the left, score against target on the right.
-    this.levelText = text(this, 20, HEADER_Y, '', FONT_MD, COLORS.text, { fontStyle: 'bold' });
-    this.turnText = text(this, 20, HEADER_Y + 26, '', FONT_SM, COLORS.dim);
-    this.scoreText = text(this, GAME_WIDTH - 86, HEADER_Y, '', FONT_MD, COLORS.text, { fontStyle: 'bold' }).setOrigin(1, 0);
-    this.targetText = text(this, GAME_WIDTH - 86, HEADER_Y + 26, '', FONT_SM, COLORS.dim).setOrigin(1, 0);
-    this.setButton = button(this, GAME_WIDTH - 42, HEADER_Y + 20, 'SET', () => this.openSetList(), {
-      w: 60,
-      h: 40,
+    this.levelText = text(this, 20, HEADER_Y, '', FONT_MD, TEXT.text, { fontStyle: 'bold' });
+    this.turnText = text(this, 20, HEADER_Y + 26, '', FONT_SM, TEXT.dim);
+    this.scoreText = text(this, GAME_WIDTH - 92, HEADER_Y, '', FONT_MD, TEXT.text, { fontStyle: 'bold' }).setOrigin(1, 0);
+    this.targetText = text(this, GAME_WIDTH - 92, HEADER_Y + 26, '', FONT_SM, TEXT.dim).setOrigin(1, 0);
+    this.setButton = button(this, GAME_WIDTH - 46, HEADER_Y + 22, HUD.sets, () => this.openSetList(), {
+      w: 72,
+      h: 42,
       size: FONT_SM,
-      color: COLORS.panel,
+      fill: COLORS.panel,
+      light: COLORS.panelEdge,
     });
     this.scoreBar = this.add.graphics();
 
-    // The board.
+    // The board: tiles and frames in one graphics layer, a sprite per tile
+    // above it, then the numbers.
     this.boardGfx = this.add.graphics();
     this.tiles = [];
     for (let i = 0; i < cols * rows; i++) {
@@ -86,24 +93,30 @@ export class PlayScene extends Phaser.Scene {
       zone.on('pointerup', () => this.tapTile(i));
       this.tiles.push({
         zone,
-        glyph: text(this, x, y - 4, '', 30, COLORS.pieceText).setOrigin(0.5),
-        score: text(this, x + CELL / 2 - 8, y + CELL / 2 - 6, '', FONT_SM, COLORS.pieceText, { fontStyle: 'bold' }).setOrigin(1, 1),
-        // The preview's +n/-n, on a dark tab across the tile's top edge so it
-        // reads over any piece or terrain.
-        delta: text(this, x, y - CELL / 2 + 1, '', 14, COLORS.gain, {
+        sprite: this.add.image(x, y - 6, spriteKey('basic')).setScale(PIECE_SCALE).setVisible(false),
+        score: text(this, x + CELL / 2 - 7, y + CELL / 2 - 5, '', FONT_SM, TEXT.text, {
           fontStyle: 'bold',
-          backgroundColor: '#000000',
+          backgroundColor: TEXT.badge,
+          padding: { x: 3, y: 0 },
+        }).setOrigin(1, 1),
+        // The preview's +n/-n, on a dark tab across the tile's top edge so it
+        // reads over any piece.
+        delta: text(this, x, y - CELL / 2 + 1, '', 14, TEXT.gain, {
+          fontStyle: 'bold',
+          backgroundColor: TEXT.badge,
           padding: { x: 4, y: 1 },
         })
           .setOrigin(0.5, 0)
           .setDepth(2),
       });
     }
+    this.selGfx = this.add.graphics().setDepth(1);
 
     // The info panel.
-    this.infoBox = this.add.rectangle(GAME_WIDTH / 2, INFO_Y + INFO_H / 2, GAME_WIDTH - 24, INFO_H, COLORS.panel).setStrokeStyle(1, COLORS.panelEdge);
-    this.infoTitle = text(this, 24, INFO_Y + 8, '', FONT_MD, COLORS.text, { fontStyle: 'bold' });
-    this.infoBody = text(this, 24, INFO_Y + 36, '', FONT_SM, COLORS.dim, { wordWrap: { width: GAME_WIDTH - 48 } });
+    this.infoGfx = this.add.graphics();
+    pixelBox(this.infoGfx, 12, INFO_Y, GAME_WIDTH - 24, INFO_H, { fill: COLORS.panel, light: COLORS.panelEdge, dark: COLORS.shadow });
+    this.infoTitle = text(this, 26, INFO_Y + 10, '', FONT_MD, TEXT.text, { fontStyle: 'bold' });
+    this.infoBody = text(this, 26, INFO_Y + 38, '', FONT_SM, TEXT.dim, { wordWrap: { width: GAME_WIDTH - 52 } });
 
     // The three offers.
     this.offerGfx = this.add.graphics();
@@ -113,14 +126,14 @@ export class PlayScene extends Phaser.Scene {
       const top = OFFER_Y - OFFER_H / 2;
       return {
         zone,
-        glyph: text(this, x, top + 30, '', 30, COLORS.pieceText).setOrigin(0.5),
-        name: text(this, x, top + 62, '', FONT_MD, COLORS.text, { fontStyle: 'bold' }).setOrigin(0.5, 0),
-        rarity: text(this, x, top + 86, '', FONT_SM, COLORS.dim).setOrigin(0.5, 0),
-        rule: text(this, x, top + 106, '', 14, COLORS.text, { align: 'center', wordWrap: { width: OFFER_W - 12 } }).setOrigin(0.5, 0),
+        sprite: this.add.image(x, top + 10 + (SPRITE * CARD_SCALE) / 2, spriteKey('basic')).setScale(CARD_SCALE),
+        name: text(this, x, top + 62, '', FONT_MD, TEXT.text, { fontStyle: 'bold' }).setOrigin(0.5, 0),
+        rarity: text(this, x, top + 86, '', 14, TEXT.dim).setOrigin(0.5, 0),
+        rule: text(this, x, top + 104, '', 13, TEXT.text, { align: 'center', wordWrap: { width: OFFER_W - 16 } }).setOrigin(0.5, 0),
       };
     });
 
-    this.placeButton = button(this, GAME_WIDTH / 2, PLACE_Y, 'PLACE', () => this.commit(), { w: 220, h: 54 });
+    this.placeButton = button(this, GAME_WIDTH / 2, PLACE_Y, HUD.place, () => this.commit(), { w: 220, h: 54 });
 
     this.refresh();
   }
@@ -158,72 +171,66 @@ export class PlayScene extends Phaser.Scene {
   refresh() {
     const run = this.run;
     const { tuning } = run;
-    const scored = scoreBoard(run.board, run.terrain, tuning);
+    const scored = scoreBoard(run.board, tuning);
     const offer = currentOffer(run);
     const picked = this.selOffer != null ? offer[this.selOffer] : null;
     const preview = picked && this.selTile != null ? previewPlacement(run, picked, this.selTile) : null;
 
     // Header.
     const level = Math.min(run.level, tuning.levels - 1);
-    this.levelText.setText(`LEVEL ${level + 1}/${tuning.levels}`);
+    this.levelText.setText(HUD.level(level + 1, tuning.levels));
     this.turnText.setText(
-      run.status === 'playing'
-        ? `Turn ${run.turn + 1}/${tuning.turnsPerLevel} · ${turnsLeft(run)} left`
-        : `Turn ${tuning.turnsPerLevel}/${tuning.turnsPerLevel}`
+      run.status === 'playing' ? HUD.turn(run.turn + 1, tuning.turnsPerLevel, turnsLeft(run)) : HUD.turnDone(tuning.turnsPerLevel)
     );
     const target = targetFor(run, level);
-    this.scoreText.setText(`SCORE ${scored.total}`);
-    this.targetText.setText(`target ${target}`);
-    this.scoreText.setColor(scored.total >= target ? COLORS.gain : COLORS.text);
+    this.scoreText.setText(HUD.score(scored.total));
+    this.targetText.setText(HUD.target(target));
+    this.scoreText.setColor(scored.total >= target ? TEXT.gain : TEXT.text);
 
+    const barX = 20;
     const barW = GAME_WIDTH - 40;
     const fill = Math.min(1, scored.total / target);
-    this.scoreBar.clear();
-    this.scoreBar.fillStyle(COLORS.panel).fillRect(20, SCORE_BAR_Y, barW, SCORE_BAR_H);
-    this.scoreBar.fillStyle(scored.total >= target ? 0x5fc46b : 0xe0c15a).fillRect(20, SCORE_BAR_Y, barW * fill, SCORE_BAR_H);
+    const bar = this.scoreBar;
+    bar.clear();
+    pixelBox(bar, barX, SCORE_BAR_Y, barW, SCORE_BAR_H, { fill: COLORS.panel });
+    const inner = barW - 2 * PX;
+    const met = scored.total >= target;
+    bar.fillStyle(met ? COLORS.barMet : COLORS.bar).fillRect(barX + PX, SCORE_BAR_Y + PX, Math.round(inner * fill), SCORE_BAR_H - 2 * PX);
     if (preview) {
       const after = Math.min(1, preview.after / target);
-      this.scoreBar.lineStyle(2, 0xffffff, 0.9).strokeRect(20 + barW * after - 1, SCORE_BAR_Y - 3, 2, SCORE_BAR_H + 6);
+      bar.fillStyle(COLORS.text).fillRect(barX + PX + Math.round(inner * after) - PX, SCORE_BAR_Y - PX, PX, SCORE_BAR_H + 2 * PX);
     }
 
     // Board.
     const g = this.boardGfx;
     g.clear();
+    this.selGfx.clear();
     const changed = new Map(preview ? preview.changes.map((c) => [c.i, c]) : []);
     for (let i = 0; i < run.board.length; i++) {
       const { x, y } = this.tileCentre(i);
       const left = x - CELL / 2;
       const top = y - CELL / 2;
-      g.fillStyle(COLORS[run.terrain[i]]).fillRect(left + 1, top + 1, CELL - 2, CELL - 2);
-      if (run.terrain[i] === 'water') {
-        g.lineStyle(2, 0x6fa3d6, 0.5);
-        g.lineBetween(left + 12, top + 18, left + 30, top + 18);
-        g.lineBetween(left + 38, top + 50, left + 58, top + 50);
-      } else if (run.terrain[i] === 'rock') {
-        g.fillStyle(0x857f78).fillTriangle(left + 8, top + 60, left + 22, top + 40, left + 36, top + 60);
-      }
       // What would stand here after the preview, else what stands here.
-      const shownId = preview && i === this.selTile ? picked : run.board[i];
+      const ghost = preview && i === this.selTile;
+      const shownId = ghost ? picked : run.board[i];
+      pixelBox(g, left + 1, top + 1, CELL - 2, CELL - 2, { fill: COLORS.tile, light: COLORS.tileLight, dark: COLORS.tileDark });
       const t = this.tiles[i];
       if (shownId) {
         const def = pieceDef(shownId);
-        const ghost = preview && i === this.selTile;
-        g.fillStyle(COLORS.piece, ghost ? 0.7 : 1).fillRoundedRect(left + 6, top + 6, CELL - 12, CELL - 12, 8);
-        g.lineStyle(4, RARITY_COLORS[def.rarity], 1).strokeRoundedRect(left + 6, top + 6, CELL - 12, CELL - 12, 8);
-        t.glyph.setText(def.glyph);
+        pixelRim(g, left + 1 + PX, top + 1 + PX, CELL - 2 - 2 * PX, CELL - 2 - 2 * PX, RARITY_COLORS[def.rarity]);
+        t.sprite.setTexture(spriteKey(shownId)).setVisible(true).setAlpha(ghost ? 0.6 : 1);
         const c = changed.get(i);
-        const s = c ? c.to : scored.tiles[i].score;
-        t.score.setText(String(s));
+        t.score.setText(String(c ? c.to : scored.tiles[i].score)).setVisible(true);
       } else {
-        t.glyph.setText('');
-        t.score.setText('');
+        t.sprite.setVisible(false);
+        t.score.setText('').setVisible(false);
       }
       const c = changed.get(i);
       const d = c ? c.to - c.from : 0;
       const label = c && d !== 0 ? (d > 0 ? `+${d}` : `${d}`) : '';
       t.delta.setText(label).setVisible(label !== '');
-      t.delta.setColor(d >= 0 ? COLORS.gain : COLORS.loss);
-      if (i === this.selTile) g.lineStyle(4, COLORS.select, 1).strokeRect(left + 2, top + 2, CELL - 4, CELL - 4);
+      t.delta.setColor(d >= 0 ? TEXT.gain : TEXT.loss);
+      if (i === this.selTile) pixelRim(this.selGfx, left, top, CELL, CELL, COLORS.select, 4);
     }
 
     // Info panel.
@@ -237,18 +244,18 @@ export class PlayScene extends Phaser.Scene {
       const x = OFFER_XS[k];
       const top = OFFER_Y - OFFER_H / 2;
       if (!id) {
-        for (const o of [card.glyph, card.name, card.rarity, card.rule]) o.setText('');
+        card.sprite.setVisible(false);
+        for (const o of [card.name, card.rarity, card.rule]) o.setText('');
         return;
       }
       const def = pieceDef(id);
       const sel = this.selOffer === k;
-      og.fillStyle(COLORS.panel).fillRoundedRect(x - OFFER_W / 2, top, OFFER_W, OFFER_H, 10);
-      og.lineStyle(sel ? 4 : 2, sel ? COLORS.select : RARITY_COLORS[def.rarity], 1).strokeRoundedRect(x - OFFER_W / 2, top, OFFER_W, OFFER_H, 10);
-      og.fillStyle(COLORS.piece).fillRoundedRect(x - 22, top + 8, 44, 44, 6);
-      card.glyph.setText(def.glyph);
-      card.name.setText(def.name);
-      card.rarity.setText(RARITY_LABELS[def.rarity]).setColor('#' + RARITY_COLORS[def.rarity].toString(16).padStart(6, '0'));
-      card.rule.setText(def.text);
+      pixelBox(og, x - OFFER_W / 2, top, OFFER_W, OFFER_H, { fill: COLORS.panel, light: COLORS.panelEdge, dark: COLORS.shadow });
+      pixelRim(og, x - OFFER_W / 2, top, OFFER_W, OFFER_H, sel ? COLORS.select : RARITY_COLORS[def.rarity], sel ? 2 * PX : PX);
+      card.sprite.setTexture(spriteKey(id)).setVisible(true);
+      card.name.setText(pieceName(id));
+      card.rarity.setText(RARITY_TEXT[def.rarity]).setColor(RARITY_TEXT_COLORS[def.rarity]);
+      card.rule.setText(pieceRule(id));
     });
 
     this.placeButton.setEnabled(run.status === 'playing' && this.selOffer != null && this.selTile != null);
@@ -257,35 +264,30 @@ export class PlayScene extends Phaser.Scene {
   drawInfo(scored, picked, preview) {
     const run = this.run;
     if (preview) {
-      const def = pieceDef(picked);
-      const where = run.terrain[this.selTile];
-      const replacing = preview.replaces ? `, replacing ${pieceDef(preview.replaces).name}` : '';
       const d = preview.delta;
-      this.infoTitle.setText(`${def.name} on ${where}${replacing}: ${d >= 0 ? '+' : ''}${d}`);
-      this.infoTitle.setColor(d > 0 ? COLORS.gain : d < 0 ? COLORS.loss : COLORS.text);
-      this.infoBody.setText(`Board ${preview.before} → ${preview.after}. It scores ${breakdown(preview.piece)}`);
+      this.infoTitle.setText(INFO.preview(pieceName(picked), preview.replaces ? pieceName(preview.replaces) : null, d));
+      this.infoTitle.setColor(d > 0 ? TEXT.gain : d < 0 ? TEXT.loss : TEXT.text);
+      this.infoBody.setText(INFO.previewBody(preview.before, preview.after, breakdown(preview.piece)));
       return;
     }
-    this.infoTitle.setColor(COLORS.text);
+    this.infoTitle.setColor(TEXT.text);
     if (this.selTile != null) {
-      const where = run.terrain[this.selTile];
       const tile = scored.tiles[this.selTile];
       if (tile) {
-        const def = pieceDef(tile.id);
-        this.infoTitle.setText(`${def.name} on ${where}`);
-        this.infoBody.setText(`Scores ${breakdown(tile)}. ${def.text}`);
+        this.infoTitle.setText(INFO.inspect(pieceName(tile.id)));
+        this.infoBody.setText(INFO.inspectBody(breakdown(tile), pieceRule(tile.id)));
       } else {
-        this.infoTitle.setText(`Empty ${where}`);
-        this.infoBody.setText(picked ? '' : 'Pick a piece below to see what it would score here.');
+        this.infoTitle.setText(INFO.empty);
+        this.infoBody.setText(picked ? '' : INFO.emptyBody);
       }
       return;
     }
     if (picked) {
-      this.infoTitle.setText(pieceDef(picked).name);
-      this.infoBody.setText('Tap a tile to preview the score. Placing replaces whatever is there.');
+      this.infoTitle.setText(INFO.picked(pieceName(picked)));
+      this.infoBody.setText(INFO.pickedBody);
     } else if (run.status === 'playing') {
-      this.infoTitle.setText('Pick a piece');
-      this.infoBody.setText('Choose one of the three offers, then tap a tile to see what it would score.');
+      this.infoTitle.setText(INFO.idle);
+      this.infoBody.setText(INFO.idleBody);
     } else {
       this.infoTitle.setText('');
       this.infoBody.setText('');
@@ -302,9 +304,14 @@ export class PlayScene extends Phaser.Scene {
       parts.push(o);
       return o;
     };
-    const blocker = add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.65));
+    const blocker = add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, COLORS.shadow, 0.75));
     blocker.setInteractive(); // swallows taps meant for the board underneath
-    add(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH - 40, height, COLORS.panel).setStrokeStyle(2, COLORS.panelEdge));
+    const panel = add(this.add.graphics());
+    pixelBox(panel, 20, (GAME_HEIGHT - height) / 2, GAME_WIDTH - 40, height, {
+      fill: COLORS.panel,
+      light: COLORS.panelEdge,
+      dark: COLORS.shadow,
+    });
     this.overlay = {
       add,
       addButton: (b) => {
@@ -326,47 +333,76 @@ export class PlayScene extends Phaser.Scene {
     const ov = this.openOverlay(330);
     const cx = GAME_WIDTH / 2;
     const top = GAME_HEIGHT / 2 - 150;
-    const title = { levelEnd: `LEVEL ${res.level + 1} CLEARED`, won: 'RUN COMPLETE', lost: 'RUN OVER' }[run.status];
-    ov.add(text(this, cx, top, title, FONT_LG, run.status === 'lost' ? COLORS.loss : COLORS.gain, { fontStyle: 'bold' }).setOrigin(0.5, 0));
-    ov.add(text(this, cx, top + 50, `Board ${res.score} · target ${res.target}`, FONT_MD).setOrigin(0.5, 0));
+    const title = { levelEnd: LEVEL_END.cleared(res.level + 1), won: LEVEL_END.won, lost: LEVEL_END.lost }[run.status];
+    ov.add(text(this, cx, top, title, FONT_LG, run.status === 'lost' ? TEXT.loss : TEXT.gain, { fontStyle: 'bold' }).setOrigin(0.5, 0));
+    ov.add(text(this, cx, top + 50, LEVEL_END.result(res.score, res.target), FONT_MD).setOrigin(0.5, 0));
     let line;
-    if (run.status === 'levelEnd') {
-      line = `Level ${res.level + 2} needs ${targetFor(run, res.level + 1)} in ${run.tuning.turnsPerLevel} more turns. The board stays as it is.`;
-    } else if (run.status === 'won') {
-      line = `All ${run.tuning.levels} levels cleared with a board worth ${res.score}.`;
-    } else {
-      line = `${res.target - res.score} short on level ${res.level + 1} of ${run.tuning.levels}.`;
-    }
-    ov.add(text(this, cx, top + 90, line, FONT_SM, COLORS.dim, { align: 'center', wordWrap: { width: GAME_WIDTH - 90 } }).setOrigin(0.5, 0));
+    if (run.status === 'levelEnd') line = LEVEL_END.next(res.level + 2, targetFor(run, res.level + 1), run.tuning.turnsPerLevel);
+    else if (run.status === 'won') line = LEVEL_END.wonLine(run.tuning.levels, res.score);
+    else line = LEVEL_END.lostLine(res.target - res.score, res.level + 1, run.tuning.levels);
+    ov.add(text(this, cx, top + 90, line, FONT_SM, TEXT.dim, { align: 'center', wordWrap: { width: GAME_WIDTH - 90 } }).setOrigin(0.5, 0));
     if (run.status === 'levelEnd') {
       ov.addButton(
-        button(this, cx, top + 230, 'NEXT LEVEL', () => {
+        button(this, cx, top + 230, LEVEL_END.nextLevel, () => {
           ov.close();
           nextLevel(run);
           this.refresh();
         })
       );
     } else {
-      ov.addButton(button(this, cx, top + 200, 'PLAY AGAIN', () => this.scene.restart({ seed: this.seed })));
-      ov.addButton(button(this, cx, top + 264, 'TITLE', () => this.scene.start('TitleScene'), { color: COLORS.buttonOff }));
+      ov.addButton(button(this, cx, top + 200, LEVEL_END.again, () => this.scene.restart({ seed: this.seed, special: this.special })));
+      ov.addButton(
+        button(this, cx, top + 264, LEVEL_END.title, () => this.scene.start('TitleScene'), {
+          fill: COLORS.buttonOff,
+          light: COLORS.tileLight,
+        })
+      );
     }
   }
 
-  // Every piece in the set and its rule: the whole set is knowable, even the
-  // pieces that haven't been offered yet.
-  openSetList() {
+  // Every piece this run can offer and its rule, one tab per set in play: the
+  // whole pool is knowable, even the pieces that haven't been offered yet.
+  openSetList(tab = 0) {
     if (this.overlay) return;
-    const ov = this.openOverlay(GAME_HEIGHT - 60);
-    const top = 50;
-    ov.add(text(this, GAME_WIDTH / 2, top, 'THE SET', FONT_LG, COLORS.text, { fontStyle: 'bold' }).setOrigin(0.5, 0));
-    PIECES.forEach((p, k) => {
-      const y = top + 52 + k * 54;
-      const col = '#' + RARITY_COLORS[p.rarity].toString(16).padStart(6, '0');
-      ov.add(text(this, 44, y, p.glyph, 24, col).setOrigin(0.5, 0));
-      ov.add(text(this, 70, y, `${p.name}`, FONT_SM, COLORS.text, { fontStyle: 'bold' }));
-      ov.add(text(this, GAME_WIDTH - 36, y, RARITY_LABELS[p.rarity], 14, col).setOrigin(1, 0));
-      ov.add(text(this, 70, y + 20, p.text, 14, COLORS.dim, { wordWrap: { width: GAME_WIDTH - 110 } }));
+    const ov = this.openOverlay(GAME_HEIGHT - 40);
+    this.setTab = tab;
+    const top = 36;
+    ov.add(text(this, GAME_WIDTH / 2, top, SET_LIST.heading, FONT_LG, TEXT.text, { fontStyle: 'bold' }).setOrigin(0.5, 0));
+    const sets = this.run.sets;
+    const tabW = Math.min(160, (GAME_WIDTH - 80) / sets.length);
+    sets.forEach((id, k) => {
+      const x = GAME_WIDTH / 2 + (k - (sets.length - 1) / 2) * (tabW + 8);
+      const on = k === tab;
+      ov.addButton(
+        button(
+          this,
+          x,
+          top + 64,
+          SET_TEXT[id].name,
+          () => {
+            if (k === this.setTab) return;
+            ov.close();
+            this.openSetList(k);
+          },
+          on ? { w: tabW, h: 40, size: FONT_SM } : { w: tabW, h: 40, size: FONT_SM, fill: COLORS.tile, light: COLORS.tileLight }
+        )
+      );
     });
-    ov.addButton(button(this, GAME_WIDTH / 2, GAME_HEIGHT - 66, 'CLOSE', () => ov.close(), { w: 160, h: 46 }));
+    const setId = sets[tab];
+    ov.add(
+      text(this, GAME_WIDTH / 2, top + 96, SET_TEXT[setId].about, 14, TEXT.dim, {
+        align: 'center',
+        wordWrap: { width: GAME_WIDTH - 80 },
+      }).setOrigin(0.5, 0)
+    );
+    piecesIn(setId).forEach((id, k) => {
+      const p = pieceDef(id);
+      const y = top + 130 + k * 50;
+      ov.add(this.add.image(52, y + 18, spriteKey(id)).setScale(LIST_SCALE));
+      ov.add(text(this, 80, y, pieceName(id), FONT_SM, TEXT.text, { fontStyle: 'bold' }));
+      ov.add(text(this, GAME_WIDTH - 40, y, RARITY_TEXT[p.rarity], 14, RARITY_TEXT_COLORS[p.rarity]).setOrigin(1, 0));
+      ov.add(text(this, 80, y + 20, pieceRule(id), 14, TEXT.dim, { wordWrap: { width: GAME_WIDTH - 124 } }));
+    });
+    ov.addButton(button(this, GAME_WIDTH / 2, GAME_HEIGHT - 58, SET_LIST.close, () => ov.close(), { w: 160, h: 46 }));
   }
 }

@@ -129,6 +129,17 @@ Combinator is a machine-building game: modules pass four elements (Liquid, Solid
 - **Two layouts, picked once at load.** A portrait screen gets the mobile one (`MOBILE` in `src/config.js`; `?layout=` forces either): a 450-wide design with the panels under bottom tabs (`src/ui/panelTabs.js`), drawn at the phone's pixel density through a camera zoom. So scenes read pointers as `pointer.worldX/worldY`, never `pointer.x`, and drag distances go through `isDrag` in `ui/button.js`. Fabien mostly tests on his phone: a change to either screen has to work in both layouts.
 - `npm test` runs `test:rules` (`node --test`) and `test:ui` (Playwright, the same CDN-rewriting harness as Pitchou).
 
+## Working in `games/neighbourly/`
+
+Neighbourly is a placement puzzle: each turn the player puts one of three offered pieces on a 6×6 terrain board, and the board must reach a rising target every ten turns, over six levels on the same board. Read `games/neighbourly/DESIGN.md` before changing it and `games/neighbourly/TESTING.md` before adding a test.
+
+- **Scoring is one pure function.** `scoreBoard` in `src/core/rules.js` is what the tap preview, the tile numbers and the level judgement all read, so they can't disagree. A piece scores `base + terms + neighbours' auras`, floored at 0 on the final sum.
+- **Pieces are data.** `src/data/pieces.js` holds the set; the term vocabulary is the switch in `termValue`. A new piece that recombines it touches nothing else. Every piece keeps a `rarity` even though the offers don't use it yet.
+- **Every gameplay number is `DEFAULT_TUNING` in `src/data/tuning.js`**, including the terrain map and the targets. The targets come from `npm run sim`; DESIGN.md §8 records the pass rates they gave.
+- **Offers are a fixed script** drawn once from `offerSeed` (`?seed=` overrides it). No odds or pool yet; those are the next layer.
+
+`cd games/neighbourly && npm install && npm test`, with the same CDN-rewriting harness as Pitchou.
+
 ## Working in `games/bibou/` (the reference prototype)
 
 Bibou is a turn-based grid puzzle game (move tiles to get a character to a goal). It's the most fleshed-out prototype and the one with a real test suite — read its docs before making changes:

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neighbourly · Browse</title>
+  <style>
+    .filters { margin-bottom: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+    .card { background: var(--panel); border: 3px solid var(--edge); padding: 10px; display: grid; grid-template-columns: 72px 1fr; gap: 10px; cursor: pointer; }
+    .card:hover { border-color: var(--accent); }
+    .card .art { width: 72px; height: 72px; display: grid; place-items: center; }
+    .card b { font-size: 15px; }
+    .card .meta { font-size: 12px; }
+    .card .rule { font-size: 13px; margin-top: 4px; }
+    .set-head { display: flex; gap: 10px; align-items: center; margin: 22px 0 8px; }
+    .set-head h2 { margin: 0; }
+    #detail { position: sticky; top: 0; }
+    .layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } #detail { position: static; } }
+    .scales { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+    .swatch { display: inline-block; width: 14px; height: 14px; border: 1px solid #000; vertical-align: middle; margin-right: 3px; }
+    pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8px; margin: 8px 0 0; }
+  </style>
+</head>
+<body>
+  <nav id="tools"></nav>
+  <main>
+    <h1>Every piece</h1>
+    <p class="about">Every piece in every set, as the game draws it and as the rules read it. Click one for the detail: its sprite at every size the game uses, the colours it is drawn in, and its rule as data. Read-only: change a piece in SETS, its words in WORDS, its pixels in DRAW.</p>
+    <div class="row filters">
+      <select id="f-set"><option value="">every set</option></select>
+      <select id="f-rarity"><option value="">every rarity</option></select>
+      <input id="f-q" placeholder="search name or rule" />
+      <span id="count" class="muted"></span>
+    </div>
+    <div class="layout">
+      <div id="sets"></div>
+      <aside id="detail" class="panel"><span class="muted">Pick a piece.</span></aside>
+    </div>
+  </main>
+  <script type="module">
+    import './dev/nav.js';
+    import { PALETTE } from './src/data/palette.js';
+    import { PIECES, SETS } from './src/data/pieces.js';
+    import { SPRITES } from './src/data/sprites.js';
+    import { RARITIES } from './src/data/catalogue.js';
+    import { PIECE_TEXT, RARITY_TEXT, SET_TEXT } from './src/text.js';
+    import { RARITY_ROLES, PIECE_SCALE, CARD_SCALE, LIST_SCALE } from './src/config.js';
+    import { hexByKey, spriteCanvas } from './dev/common.js';
+
+    const HEX = hexByKey(PALETTE);
+    const byName = Object.fromEntries(PALETTE.map((c) => [c.name, c]));
+    const rarityHex = (r) => byName[RARITY_ROLES[r]].hex;
+    const $ = (id) => document.getElementById(id);
+
+    for (const s of SETS) $('f-set').append(new Option(`${SET_TEXT[s.id].name}${s.core ? ' (core)' : ''}`, s.id));
+    for (const r of RARITIES) $('f-rarity').append(new Option(RARITY_TEXT[r], r));
+
+    function art(id, scale, bg) {
+      return SPRITES[id] ? spriteCanvas(SPRITES[id], scale, HEX, bg) : Object.assign(document.createElement('span'), { className: 'bad', textContent: 'no sprite' });
+    }
+
+    function render() {
+      const fs = $('f-set').value;
+      const fr = $('f-rarity').value;
+      const q = $('f-q').value.trim().toLowerCase();
+      const host = $('sets');
+      host.innerHTML = '';
+      let shown = 0;
+      for (const s of SETS) {
+        if (fs && s.id !== fs) continue;
+        const pieces = PIECES.filter((p) => p.set === s.id)
+          .filter((p) => !fr || p.rarity === fr)
+          .filter((p) => !q || `${PIECE_TEXT[p.id]?.name} ${PIECE_TEXT[p.id]?.rule} ${p.id}`.toLowerCase().includes(q));
+        if (!pieces.length) continue;
+        const head = document.createElement('div');
+        head.className = 'set-head';
+        head.append(art(s.emblem, 2));
+        head.insertAdjacentHTML('beforeend', `<h2>${SET_TEXT[s.id].name} · ${pieces.length}</h2><span class="muted">${s.core ? 'core, in every game. ' : ''}${SET_TEXT[s.id].about}</span>`);
+        host.append(head);
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+        for (const p of pieces) {
+          shown++;
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.style.borderColor = rarityHex(p.rarity);
+          const a = document.createElement('div');
+          a.className = 'art';
+          a.style.background = byName.slate.hex;
+          a.append(art(p.id, 4));
+          card.append(a);
+          card.insertAdjacentHTML(
+            'beforeend',
+            `<div><b>${PIECE_TEXT[p.id]?.name ?? '<span class=bad>no name</span>'}</b>
+             <div class="meta" style="color:${rarityHex(p.rarity)}">${RARITY_TEXT[p.rarity]} · <code>${p.id}</code></div>
+             <div class="rule">${PIECE_TEXT[p.id]?.rule ?? '<span class=bad>no rule text</span>'}</div></div>`
+          );
+          card.onclick = () => detail(p);
+          grid.append(card);
+        }
+        host.append(grid);
+      }
+      $('count').textContent = `${shown} of ${PIECES.length}`;
+    }
+
+    function detail(p) {
+      const d = $('detail');
+      d.innerHTML = `<h1>${PIECE_TEXT[p.id]?.name ?? p.id}</h1>
+        <div class="muted" style="color:${rarityHex(p.rarity)}">${RARITY_TEXT[p.rarity]} · ${SET_TEXT[p.set].name} · <code>${p.id}</code></div>
+        <p>${PIECE_TEXT[p.id]?.rule ?? ''}</p><h2>As drawn</h2><div class="scales" id="d-scales"></div>
+        <h2>Colours</h2><div id="d-colours"></div><h2>As data</h2>
+        <pre>${JSON.stringify({ base: p.base, terms: p.terms, aura: p.aura }, null, 1)}</pre>`;
+      const scales = [
+        [1, 'raw'],
+        [LIST_SCALE, 'set list'],
+        [PIECE_SCALE, 'board'],
+        [CARD_SCALE, 'card'],
+        [6, '×6'],
+      ];
+      for (const [s, label] of scales) {
+        const box = document.createElement('div');
+        box.append(art(p.id, s, byName.slate.hex));
+        box.insertAdjacentHTML('beforeend', `<div class="muted" style="font-size:11px">${label} ×${s}</div>`);
+        $('d-scales').append(box);
+      }
+      const used = {};
+      for (const row of SPRITES[p.id] || []) for (const ch of row) if (ch !== '.') used[ch] = (used[ch] || 0) + 1;
+      $('d-colours').innerHTML = Object.entries(used)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, n]) => {
+          const c = PALETTE.find((x) => x.key === k);
+          return `<div><span class="swatch" style="background:${c.hex}"></span>${c.name} <span class="muted">${k} · ${n}px</span></div>`;
+        })
+        .join('');
+    }
+
+    for (const id of ['f-set', 'f-rarity', 'f-q']) $(id).addEventListener('input', render);
+    render();
+  </script>
+</body>
+</html>

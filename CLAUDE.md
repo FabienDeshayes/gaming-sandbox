@@ -131,12 +131,17 @@ Combinator is a machine-building game: modules pass four elements (Liquid, Solid
 
 ## Working in `games/neighbourly/`
 
-Neighbourly is a placement puzzle: each turn the player puts one of three offered pieces on a 6×6 terrain board, and the board must reach a rising target every ten turns, over six levels on the same board. Read `games/neighbourly/DESIGN.md` before changing it and `games/neighbourly/TESTING.md` before adding a test.
+Neighbourly is a placement puzzle: each turn the player puts one of three offered pieces on a plain 6×6 board, and the board must reach a rising target every ten turns, over five levels on the same board. A run plays the base set (in every game) plus one special set drawn from its seed. Read `games/neighbourly/DESIGN.md` before changing it and `games/neighbourly/TESTING.md` before adding a test. `TODO.md` is the owner's notes and `STORY.md` is deliberately empty — don't implement from either unless asked.
 
-- **Scoring is one pure function.** `scoreBoard` in `src/core/rules.js` is what the tap preview, the tile numbers and the level judgement all read, so they can't disagree. A piece scores `base + terms + neighbours' auras`, floored at 0 on the final sum.
-- **Pieces are data.** `src/data/pieces.js` holds the set; the term vocabulary is the switch in `termValue`. A new piece that recombines it touches nothing else. Every piece keeps a `rarity` even though the offers don't use it yet.
-- **Every gameplay number is `DEFAULT_TUNING` in `src/data/tuning.js`**, including the terrain map and the targets. The targets come from `npm run sim`; DESIGN.md §8 records the pass rates they gave.
-- **Offers are a fixed script** drawn once from `offerSeed` (`?seed=` overrides it). No odds or pool yet; those are the next layer.
+- **Scoring is one pure function.** `scoreBoard` in `src/core/rules.js` is what the tap preview, the tile numbers, the level judgement, the simulator and `sets.html`'s try-it board all read, so they can't disagree. A piece scores `base + terms + every aura that reaches it`, floored at 0 on the final sum. There is no terrain: don't add a per-tile property back without a design reason.
+- **Pieces are data, written in a fixed vocabulary.** `src/data/pieces.js` holds the sets and each piece's set, rarity, base, terms and aura; the vocabulary is `COUNTS`, `CONDITIONS` and `REACHES` in `rules.js`. A new piece is a line there, its name and rule in `PIECE_TEXT` (`src/text.js`), a sprite, and a test in `tests/pieces.test.mjs` (the suite fails by name until it has one). A new word is a line in the right table plus its read-out in `SUM`.
+- **Three data files are written by the dev pages and must keep their shape.** `src/data/palette.js`, `pieces.js` and `sprites.js` are data only, in exactly the shape `dev/serialize.js` prints; `tests/data.test.mjs` fails if a hand edit drifts from it. Lookups (`pieceDef`, `piecesIn`) live in `src/data/catalogue.js` for that reason.
+- **Every colour is a palette name.** 32 colours in `src/data/palette.js`; `src/config.js` maps roles to names (`ROLES`, `RARITY_ROLES`) and never spells a hex. Sprites are 16×16 text in palette keys, baked to NEAREST-filtered textures at boot (`src/ui/textures.js`) and only ever drawn at whole multiples; panels, tiles, cards and buttons are `pixelBox` (`src/ui/pixel.js`).
+- **Every word is in `src/text.js`**, and tests read their strings from it. `text.html` edits it as source and must keep an unedited export byte-identical.
+- **Every gameplay number is `DEFAULT_TUNING` in `src/data/tuning.js`**, including the targets and `specialSets`. The targets come from `npm run sim -- --suggest 0.9`; DESIGN.md §8 records what it gave.
+- **`sim/` measures, and is never asserted on.** Five personas in `sim/personas.mjs` (none may read the offer script); `npm run sim`, `npm run sim:pieces`. See `sim/README.md`.
+- **Offers are a fixed script** drawn once from the seed over the run's pool (`?seed=` and `?set=` override). No odds or pool depletion yet.
+- **Dev pages** (`entities.html`, `sets.html`, `palette.html`, `draw.html`, `text.html`) share one menu, `dev/nav.js` (`TOOLS`); a new page is a line there and an empty `<nav id="tools">`. No tests on the pages themselves.
 
 `cd games/neighbourly && npm install && npm test`, with the same CDN-rewriting harness as Pitchou.
 

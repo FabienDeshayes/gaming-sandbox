@@ -146,12 +146,12 @@ export function launchBrowser() {
 // design coordinate is a screen coordinate. Pass a real device size to test what
 // Phaser's FIT scaling actually does with it.
 //
-// `seed` pins the offer script, the way the game itself lets one be replayed
-// (see TitleScene).
+// `seed` pins the offer script and `set` the special set, the way the game
+// itself lets a run be replayed (see TitleScene).
 export async function openGame(
   browser,
   port,
-  { viewport = { width: 480, height: 854 }, seed = null } = {}
+  { viewport = { width: 480, height: 854 }, seed = null, set = null } = {}
 ) {
   const errors = [];
   const page = await browser.newPage({ viewport });
@@ -186,7 +186,10 @@ export async function openGame(
     });
   });
 
-  const query = seed === null ? '' : `?seed=${seed}`;
+  const params = new URLSearchParams();
+  if (seed !== null) params.set('seed', seed);
+  if (set !== null) params.set('set', set);
+  const query = params.toString() ? `?${params}` : '';
   await page.goto(`http://localhost:${port}/${query}`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__game && window.__game.isBooted);
 
@@ -317,6 +320,7 @@ export async function openGame(
         const r = s.run;
         return {
           seed: r.seed,
+          sets: r.sets.slice(),
           level: r.level,
           turn: r.turn,
           status: r.status,
@@ -326,6 +330,9 @@ export async function openGame(
           selTile: s.selTile,
           overlay: !!s.overlay,
           deltas: s.tiles.map((t) => t.delta.text),
+          // The texture each tile and card is drawn with, or null when hidden.
+          sprites: s.tiles.map((t) => (t.sprite.visible ? t.sprite.texture.key : null)),
+          cardSprites: s.cards.map((c) => (c.sprite.visible ? c.sprite.texture.key : null)),
           info: [s.infoTitle.text, s.infoBody.text],
           score: s.scoreText.text,
         };

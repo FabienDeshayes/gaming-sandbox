@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neighbourly · Words</title>
+  <style>
+    .group { margin-bottom: 18px; }
+    .group > p { margin: 0 0 8px; }
+    .entry { display: grid; grid-template-columns: 220px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--edge); }
+    @media (max-width: 700px) { .entry { grid-template-columns: 1fr; } }
+    .entry .where { font: 12px monospace; color: var(--dim); overflow-wrap: anywhere; }
+    .entry input { width: 100%; }
+    .entry.edited input { border-color: var(--accent); }
+    .entry .ctx { font: 11px monospace; color: var(--dim); margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .entry .ctx mark { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--fg); }
+    .sticky { position: sticky; top: 0; background: var(--bg); padding: 8px 0; z-index: 1; }
+  </style>
+</head>
+<body>
+  <nav id="tools"></nav>
+  <main>
+    <h1>Every word</h1>
+    <p class="about">Every string in <code>src/text.js</code>, read from the file itself, under the part of the game it belongs to. Edit any of them; export rebuilds the file with your strings put back where they were and every other byte (code, comments, the numbers spliced into a sentence) untouched, so an export with no edits is the file on disk. Under each string is the line it sits on: a <code>${…}</code> there is a number or a word the game fills in, so keep the sentence around it. Unsaved edits are kept in this browser.</p>
+    <div class="row sticky"><input id="q" placeholder="search" /><label class="row"><input type="checkbox" id="only" /> edited only</label><button id="reset">RESET TO FILE</button><span id="status" class="muted"></span></div>
+    <div id="groups"></div>
+    <div id="export"></div>
+    <h2>Just the changes</h2>
+    <p class="muted">To hand back to Claude Code instead of the whole file.</p>
+    <textarea id="changes" rows="6" readonly></textarea>
+  </main>
+  <script type="module">
+    import './dev/nav.js';
+    import { draft, exportBox } from './dev/common.js';
+
+    const $ = (id) => document.getElementById(id);
+
+    // When the player reads each part of the file. A new `export const` in
+    // src/text.js wants a line here, or it is listed under "not described".
+    const LEGEND = {
+      PIECE_TEXT: 'A piece\'s name and its rule: on the offer cards, in the set list, and in the info panel when it is previewed or inspected.',
+      SET_TEXT: 'Each set\'s name (the title screen, the set list\'s tabs) and its one-line description (under the tabs).',
+      RARITY_TEXT: 'The rarity under a card\'s name and beside each piece in the set list.',
+      TITLE: 'The title screen.',
+      HUD: 'The header above the board, the SETS and PLACE buttons, and the sets line on the title screen.',
+      INFO: 'The panel under the board: what a tap previews or inspects.',
+      SUM: 'How the info panel reads a score out as a sum, one part per term a piece is written in.',
+      LEVEL_END: 'The panel at the end of each level and at the end of a run.',
+      SET_LIST: 'The set list overlay.',
+    };
+
+    // --- reading the source ---------------------------------------------------
+
+    // Every string literal in `src` with the offsets of its content, including
+    // each literal run of a template between its ${…} holes, nested ones too.
+    function scan(src) {
+      const out = [];
+      let i = 0;
+      const quoted = (q) => {
+        const start = ++i;
+        while (src[i] !== q) i += src[i] === '\\' ? 2 : 1;
+        out.push({ kind: q, start, end: i });
+        i++;
+      };
+      const template = () => {
+        const open = i;
+        let start = ++i;
+        for (;;) {
+          if (src[i] === '\\') i += 2;
+          else if (src[i] === '`') {
+            out.push({ kind: '`', start, end: i, open });
+            i++;
+            return;
+          } else if (src[i] === '$' && src[i + 1] === '{') {
+            out.push({ kind: '`', start, end: i, open });
+            i += 2;
+            code(true);
+            start = i;
+          } else i++;
+        }
+      };
+      const code = (untilBrace) => {
+        let depth = 0;
+        while (i < src.length) {
+          const c = src[i];
+          if (c === '/' && src[i + 1] === '/') i = src.indexOf('\n', i) < 0 ? src.length : src.indexOf('\n', i);
+          else if (c === '/' && src[i + 1] === '*') i = src.indexOf('*/', i) + 2;
+          else if (c === "'" || c === '"') quoted(c);
+          else if (c === '`') template();
+          else {
+            if (c === '{') depth++;
+            if (c === '}') {
+              if (depth === 0 && untilBrace) {
+                i++;
+                return;
+              }
+              depth--;
+            }
+            i++;
+          }
+        }
+      };
+      code(false);
+      return out;
+    }
+
+    const decode = (raw) => raw.replace(/\\(.)/g, (_, c) => ({ n: '\n', t: '\t' })[c] ?? c);
+    function encode(text, kind) {
+      let s = text.replace(/\\/g, '\\\\').replace(/\n/g, '\\n');
+      if (kind === '`') return s.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+      return s.replace(new RegExp(kind, 'g'), `\\${kind}`);
+    }
+
+    // Where a literal sits: the export it is under and the keys on its line
+    // before it ("PIECE_TEXT · basic · name").
+    function where(src, at) {
+      const before = src.slice(0, at);
+      const exp = [...before.matchAll(/export const (\w+)/g)].pop()?.[1] ?? '(top)';
+      const lineStart = before.lastIndexOf('\n') + 1;
+      // Keys on the line, nested by braces, with the strings already passed
+      // taken out: `basic: { name: 'Basic', rule: ` is basic · rule.
+      const prefix = before.slice(lineStart).replace(/'(\\.|[^'])*'|"(\\.|[^"])*"/g, '');
+      const stack = [];
+      let depth = 0;
+      for (const m of prefix.matchAll(/[{}]|(\w+)\s*:/g)) {
+        if (m[0] === '{') depth++;
+        else if (m[0] === '}') depth--;
+        else stack.splice(depth, Infinity, m[1]);
+      }
+      return { exp, path: [exp, ...stack.filter(Boolean)].join(' · ') };
+    }
+
+    // --- the page ---------------------------------------------------------------
+
+    const src = await (await fetch('src/text.js', { cache: 'no-store' })).text();
+    const literals = scan(src)
+      .filter((l) => l.end > l.start)
+      .map((l, n) => {
+        const raw = src.slice(l.start, l.end);
+        const w = where(src, l.start);
+        // The whole literal around it, for a template run, with this run marked.
+        const lineStart = src.lastIndexOf('\n', l.start) + 1;
+        const lineEnd = src.indexOf('\n', l.end);
+        return { ...l, n, raw, text: decode(raw), ...w, line: [src.slice(lineStart, l.start), raw, src.slice(l.end, lineEnd)] };
+      })
+      .filter((l) => /[A-Za-z]/.test(l.text) || l.kind === '`'); // punctuation-only quotes are code
+    const saved = draft.load('text') || {};
+    const edits = new Map(literals.filter((l) => saved[l.start] != null && saved[l.start] !== l.text && saved.__len === src.length).map((l) => [l.start, saved[l.start]]));
+
+    function rebuild() {
+      let out = '';
+      let at = 0;
+      for (const l of literals) {
+        if (!edits.has(l.start)) continue;
+        out += src.slice(at, l.start) + encode(edits.get(l.start), l.kind);
+        at = l.end;
+      }
+      return out + src.slice(at);
+    }
+
+    const refreshExport = exportBox($('export'), { file: 'src/text.js', build: rebuild, changed: () => (edits.size ? `${edits.size} string(s)` : 0) });
+
+    function persist() {
+      draft.save('text', { __len: src.length, ...Object.fromEntries(edits) });
+      // Read the rebuilt file back: every string must still be where it was.
+      const again = scan(rebuild()).filter((l) => l.end > l.start);
+      const ok = again.length === scan(src).filter((l) => l.end > l.start).length;
+      $('status').textContent = ok ? (edits.size ? `${edits.size} edited · reads back cleanly` : 'no edits') : 'an edit breaks the file: a quote or ${ is unbalanced';
+      $('status').className = ok ? 'muted' : 'bad';
+      $('changes').value = literals
+        .filter((l) => edits.has(l.start))
+        .map((l) => `${l.path}\n  - ${JSON.stringify(l.text)}\n  + ${JSON.stringify(edits.get(l.start))}`)
+        .join('\n');
+      refreshExport();
+    }
+
+    function render() {
+      const q = $('q').value.trim().toLowerCase();
+      const only = $('only').checked;
+      const host = $('groups');
+      host.innerHTML = '';
+      const groups = new Map();
+      for (const l of literals) {
+        const value = edits.get(l.start) ?? l.text;
+        if (only && !edits.has(l.start)) continue;
+        if (q && !`${l.path} ${value}`.toLowerCase().includes(q)) continue;
+        if (!groups.has(l.exp)) groups.set(l.exp, []);
+        groups.get(l.exp).push(l);
+      }
+      for (const [exp, list] of groups) {
+        const g = document.createElement('div');
+        g.className = 'group panel';
+        g.innerHTML = `<h2 style="margin-top:0">${exp} · ${list.length}</h2><p class="${LEGEND[exp] ? 'muted' : 'bad'}">${LEGEND[exp] ?? 'Not described: add a line for it to LEGEND in text.html.'}</p>`;
+        for (const l of list) {
+          const e = document.createElement('div');
+          e.className = 'entry' + (edits.has(l.start) ? ' edited' : '');
+          const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+          e.innerHTML = `<div class="where">${l.path.split(' · ').slice(1).join(' · ') || '—'}${l.kind === '`' ? '<br>part of a sentence the game fills in' : ''}</div>
+            <div><input><div class="ctx">${esc(l.line[0].trimStart())}<mark>${esc(l.line[1])}</mark>${esc(l.line[2])}</div></div>`;
+          const input = e.querySelector('input');
+          input.value = edits.get(l.start) ?? l.text;
+          input.addEventListener('input', () => {
+            if (input.value === l.text) edits.delete(l.start);
+            else edits.set(l.start, input.value);
+            e.classList.toggle('edited', edits.has(l.start));
+            persist();
+          });
+          g.append(e);
+        }
+        host.append(g);
+      }
+    }
+
+    $('q').addEventListener('input', render);
+    $('only').addEventListener('change', render);
+    $('reset').onclick = () => {
+      edits.clear();
+      draft.clear('text');
+      persist();
+      render();
+    };
+    persist();
+    render();
+  </script>
+</body>
+</html>

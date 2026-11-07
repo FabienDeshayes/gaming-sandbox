@@ -192,4 +192,14 @@ test('the game fits a phone screen with nothing off the edge', async (game) => {
   assertEqual((await game.state()).turn, 1, 'a tap on a scaled canvas lands');
 }, { viewport: { width: 390, height: 844 } });
 
+test('on a high-density phone the canvas has a pixel for every screen pixel', async (game) => {
+  await game.startRun();
+  const fit = await game.canvasFit();
+  assert(Math.abs(fit.stretch - 1) < 0.01, `canvas is not stretched by the browser (stretch ${fit.stretch})`);
+  const res = await game.page.evaluate(() => window.__game.scene.getScene('PlayScene').scoreText.style.resolution);
+  assert(res >= 2.4, `text is rasterised at the screen's density (resolution ${res})`);
+  await placeVia(game, 0, 35);
+  assertEqual((await game.state()).turn, 1, 'a tap on a zoomed canvas lands');
+}, { viewport: { width: 390, height: 844 }, dpr: 3 });
+
 await run();

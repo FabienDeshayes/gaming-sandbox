@@ -1,9 +1,10 @@
-import { FONT, FONT_MD, FONT_SM, GAME_WIDTH, TEXT } from '../config.js';
+import { FONT, FONT_MD, TEXT_RESOLUTION, FONT_SM, GAME_WIDTH, TEXT } from '../config.js';
 import { SPECIAL_SETS } from '../data/catalogue.js';
 import { DEFAULT_TUNING } from '../data/tuning.js';
 import { setsFor } from '../core/rules.js';
 import { SET_TEXT, TITLE, HUD } from '../text.js';
 import { button } from '../ui/button.js';
+import { sharpen } from '../ui/pixel.js';
 import { bakeSprites, spriteKey } from '../ui/textures.js';
 
 // `?seed=n` on the URL plays offer script n instead of the default one, so a
@@ -26,23 +27,24 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create() {
+    sharpen(this);
     bakeSprites(this);
     const cx = GAME_WIDTH / 2;
     const t = DEFAULT_TUNING;
     const { seed, special } = fromUrl();
     const sets = setsFor(seed ?? t.offerSeed, t, special);
 
-    this.add.text(cx, 130, TITLE.name, { fontFamily: FONT, fontSize: '52px', color: TEXT.text, fontStyle: 'bold' }).setOrigin(0.5);
-    this.add.text(cx, 182, TITLE.tagline, { fontFamily: FONT, fontSize: `${FONT_SM}px`, color: TEXT.dim }).setOrigin(0.5);
+    this.add.text(cx, 130, TITLE.name, { fontFamily: FONT, resolution: TEXT_RESOLUTION, fontSize: '52px', color: TEXT.text, fontStyle: 'bold' }).setOrigin(0.5);
+    this.add.text(cx, 182, TITLE.tagline, { fontFamily: FONT, resolution: TEXT_RESOLUTION, fontSize: `${FONT_SM}px`, color: TEXT.dim }).setOrigin(0.5);
     // A row of pieces: the emblem of every set, the art the game is drawn in.
     const row = ['basic', 'hub', 'monument', 'crossroads', 'twins', 'clearing'];
     row.forEach((id, k) => this.add.image(cx + (k - (row.length - 1) / 2) * 64, 250, spriteKey(id)).setScale(3));
 
     this.add
-      .text(cx, 440, TITLE.how(t).join('\n'), { fontFamily: FONT, fontSize: `${FONT_MD - 2}px`, color: TEXT.text, align: 'center', lineSpacing: 6 })
+      .text(cx, 440, TITLE.how(t).join('\n'), { fontFamily: FONT, resolution: TEXT_RESOLUTION, fontSize: `${FONT_MD - 2}px`, color: TEXT.text, align: 'center', lineSpacing: 6 })
       .setOrigin(0.5);
     this.add
-      .text(cx, 600, HUD.setsInPlay(sets.map((id) => SET_TEXT[id].name)), { fontFamily: FONT, fontSize: `${FONT_SM}px`, color: TEXT.select, fontStyle: 'bold' })
+      .text(cx, 600, HUD.setsInPlay(sets.map((id) => SET_TEXT[id].name)), { fontFamily: FONT, resolution: TEXT_RESOLUTION, fontSize: `${FONT_SM}px`, color: TEXT.select, fontStyle: 'bold' })
       .setOrigin(0.5);
     button(this, cx, 680, TITLE.play, () => this.scene.start('PlayScene', { seed, special }), { w: 220, h: 60, size: 26 });
   }

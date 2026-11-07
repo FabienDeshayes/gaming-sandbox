@@ -4,7 +4,7 @@
 // read as the same pixel art as the sprites on them. Colours are numbers from
 // COLORS / colour() in src/config.js.
 
-import { COLORS } from '../config.js';
+import { COLORS, ZOOM } from '../config.js';
 
 export const PX = 3; // one art pixel on screen, for frames
 
@@ -29,4 +29,11 @@ export function pixelRim(g, x, y, w, h, colour, px = PX) {
   g.fillStyle(colour).fillRect(x, y, px, h);
   g.fillStyle(colour).fillRect(x + w - px, y, px, h);
   return g;
+}
+
+// Every scene calls this first: the canvas is ZOOM times the design size (see
+// config.js), so the camera zooms in to match and the layout stays in design
+// coordinates.
+export function sharpen(scene) {
+  scene.cameras.main.setOrigin(0, 0).setZoom(ZOOM);
 }

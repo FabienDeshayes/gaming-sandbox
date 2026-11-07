@@ -8,6 +8,20 @@ import { PALETTE } from './data/palette.js';
 export const GAME_WIDTH = 480;
 export const GAME_HEIGHT = 854;
 
+// The layout above is in design pixels, but the canvas is drawn at the screen's
+// own resolution: ZOOM canvas pixels per design pixel, which is the device
+// pixel ratio times how much Phaser.Scale.FIT stretches the design to fill the
+// window. Each scene's camera zooms by the same amount (`sharpen` in
+// src/ui/pixel.js), and every Text is rasterised at TEXT_RESOLUTION, so the
+// canvas is never stretched by the browser and type comes out as crisp as the
+// rest of the page. Picked once, at load.
+const view = globalThis.window ?? { innerWidth: GAME_WIDTH, innerHeight: GAME_HEIGHT, devicePixelRatio: 1 };
+export const ZOOM = Math.min(
+  4,
+  Math.max(0.5, (view.devicePixelRatio || 1) * Math.min(view.innerWidth / GAME_WIDTH, view.innerHeight / GAME_HEIGHT))
+);
+export const TEXT_RESOLUTION = ZOOM;
+
 export const FONT = '"Trebuchet MS", Verdana, sans-serif';
 export const FONT_SM = 16; // the smallest type in the game
 export const FONT_MD = 20;

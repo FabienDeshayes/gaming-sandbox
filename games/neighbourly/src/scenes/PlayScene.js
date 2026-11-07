@@ -14,6 +14,7 @@ import {
   CELL,
   COLORS,
   FONT,
+  TEXT_RESOLUTION,
   FONT_LG,
   FONT_MD,
   FONT_SM,
@@ -41,11 +42,11 @@ import { createRun, currentOffer, nextLevel, place, previewPlacement, scoreBoard
 import { HUD, INFO, LEVEL_END, RARITY_TEXT, SET_LIST, SET_TEXT } from '../text.js';
 import { breakdown, pieceName, pieceRule } from '../ui/describe.js';
 import { button } from '../ui/button.js';
-import { PX, pixelBox, pixelRim } from '../ui/pixel.js';
+import { PX, pixelBox, pixelRim, sharpen } from '../ui/pixel.js';
 import { bakeSprites, spriteKey } from '../ui/textures.js';
 
 const text = (scene, x, y, s, size = FONT_SM, color = TEXT.text, extra = {}) =>
-  scene.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color, ...extra });
+  scene.add.text(x, y, s, { fontFamily: FONT, resolution: TEXT_RESOLUTION, fontSize: `${size}px`, color, ...extra });
 
 export class PlayScene extends Phaser.Scene {
   constructor() {
@@ -58,6 +59,7 @@ export class PlayScene extends Phaser.Scene {
   }
 
   create() {
+    sharpen(this);
     bakeSprites(this);
     const opts = {};
     if (this.seed != null) opts.seed = this.seed;

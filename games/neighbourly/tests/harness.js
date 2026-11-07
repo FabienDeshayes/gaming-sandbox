@@ -146,15 +146,17 @@ export function launchBrowser() {
 // design coordinate is a screen coordinate. Pass a real device size to test what
 // Phaser's FIT scaling actually does with it.
 //
+// `dpr` is the device pixel ratio, for a phone's high-density screen.
+//
 // `seed` pins the offer script and `set` the special set, the way the game
 // itself lets a run be replayed (see TitleScene).
 export async function openGame(
   browser,
   port,
-  { viewport = { width: 480, height: 854 }, seed = null, set = null } = {}
+  { viewport = { width: 480, height: 854 }, dpr = 1, seed = null, set = null } = {}
 ) {
   const errors = [];
-  const page = await browser.newPage({ viewport });
+  const page = await browser.newPage({ viewport, deviceScaleFactor: dpr });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   // The browser asks for /favicon.ico on its own and this server has none —
   // that 404 comes from the browser, not the game.
@@ -199,11 +201,13 @@ export async function openGame(
     page.evaluate(() => {
       const r = document.querySelector('canvas').getBoundingClientRect();
       const g = window.__game;
+      // The canvas is ZOOM times the design size and each camera zooms back.
+      const zoom = g.scene.getScenes(true).slice(-1)[0].cameras.main.zoom;
       return {
         left: r.left,
         top: r.top,
-        sx: r.width / g.scale.width,
-        sy: r.height / g.scale.height,
+        sx: (r.width * zoom) / g.scale.width,
+        sy: (r.height * zoom) / g.scale.height,
       };
     });
 
@@ -229,6 +233,9 @@ export async function openGame(
           right: r.right,
           bottom: r.bottom,
           viewport: { width: window.innerWidth, height: window.innerHeight },
+          // Canvas pixels per screen pixel: 1 means the browser never stretches
+          // the canvas, which is what keeps the type sharp.
+          stretch: (r.width * window.devicePixelRatio) / window.__game.canvas.width,
           pageScrollsX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
           pageScrollsY:
             document.documentElement.scrollHeight > document.documentElement.clientHeight,

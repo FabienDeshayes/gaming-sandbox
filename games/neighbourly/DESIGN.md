@@ -206,6 +206,10 @@ The other values: 5 levels × 10 turns, 3 offers per turn, 1 special set per run
   rarity colour (mist, leaf, sky, gold). Colour is used freely and loudly: the palette is the
   limit, not a small number of colours.
 - **Type:** the system sans-serif for now; a pixel font is on the TODO.
+- **Sharpness:** the layout is written in 480×854 design pixels, but the canvas is drawn at the
+  screen's own resolution (`ZOOM` in `src/config.js`: device pixel ratio × the fit to the window)
+  and every scene's camera zooms by the same amount, so the browser never stretches the canvas and
+  type is as crisp as on any web page. Every Text is made with `resolution: TEXT_RESOLUTION`.
 - **Audio:** none for the prototype.
 
 ## 10. Story
@@ -242,7 +246,7 @@ Not written yet: see `STORY.md` and `TODO.md`.
 | `src/core/rules.js` | Scoring and its vocabulary, preview, sets and the offer script, a run's levels. Pure; no Phaser |
 | `src/config.js` | Layout, type, and which palette colour plays which part |
 | `src/ui/textures.js` | Bakes the sprites into textures at boot |
-| `src/ui/pixel.js` | The pixel box every panel, tile, card and button is drawn as |
+| `src/ui/pixel.js` | The pixel box every panel, tile, card and button is drawn as, and `sharpen`, the camera zoom every scene starts with |
 | `src/ui/describe.js` | A tile's score read out as a sum, for the info panel |
 | `src/ui/button.js` | The text button |
 | `src/scenes/TitleScene.js` | Title, how to play, which sets this run plays |

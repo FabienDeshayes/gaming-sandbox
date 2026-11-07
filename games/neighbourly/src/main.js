@@ -1,4 +1,4 @@
-import { COLORS, GAME_HEIGHT, GAME_WIDTH } from './config.js';
+import { COLORS, GAME_HEIGHT, GAME_WIDTH, ZOOM } from './config.js';
 import { PlayScene } from './scenes/PlayScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
 
@@ -9,8 +9,10 @@ new Phaser.Game({
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: GAME_WIDTH,
-    height: GAME_HEIGHT,
+    // The canvas is ZOOM times the design size: one canvas pixel per screen
+    // pixel. Scenes zoom their camera to match (see ZOOM in config.js).
+    width: Math.round(GAME_WIDTH * ZOOM),
+    height: Math.round(GAME_HEIGHT * ZOOM),
   },
   scene: [TitleScene, PlayScene],
 });

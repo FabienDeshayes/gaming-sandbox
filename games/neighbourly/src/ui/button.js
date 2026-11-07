@@ -2,7 +2,7 @@
 // and makes taps do nothing, so a scene can leave it on screen while it can't
 // be used.
 
-import { COLORS, FONT, FONT_MD, TEXT } from '../config.js';
+import { COLORS, FONT, TEXT_RESOLUTION, FONT_MD, TEXT } from '../config.js';
 import { pixelBox } from './pixel.js';
 
 export function button(
@@ -21,7 +21,7 @@ export function button(
   draw(true);
   const hit = scene.add.zone(x, y, w, h).setInteractive({ useHandCursor: true });
   const text = scene.add
-    .text(x, y, label, { fontFamily: FONT, fontSize: `${size}px`, color: TEXT.text, fontStyle: 'bold' })
+    .text(x, y, label, { fontFamily: FONT, resolution: TEXT_RESOLUTION, fontSize: `${size}px`, color: TEXT.text, fontStyle: 'bold' })
     .setOrigin(0.5);
   let enabled = true;
   hit.on('pointerup', () => enabled && onTap());
